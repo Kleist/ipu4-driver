@@ -705,6 +705,8 @@ static void calculate_stream_datarate(struct ipu6_isys_video *av)
 
 void ipu6_isys_update_stream_watermark(struct ipu6_isys_video *av, bool state)
 {
+	WARN(1, "%s Not implemented", __func__);
+	return;
 	struct isys_iwake_watermark *iwake_watermark =
 		&av->isys->iwake_watermark;
 
@@ -729,6 +731,8 @@ void ipu6_isys_update_stream_watermark(struct ipu6_isys_video *av, bool state)
 
 void ipu6_isys_put_stream(struct ipu6_isys_stream *stream)
 {
+	WARN(1, "%s Not implemented", __func__);
+	return;
 	struct device *dev = &stream->isys->adev->auxdev.dev;
 	unsigned int i;
 	unsigned long flags;
@@ -868,6 +872,9 @@ static u64 get_stream_mask_by_pipeline(struct ipu6_isys_video *av)
 int ipu6_isys_video_set_streaming(struct ipu6_isys_video *av, int state,
 				  struct ipu6_isys_buffer_list *bl)
 {
+	WARN(1, "%s Not implemented", __func__);
+	return -ENODEV;
+
 	struct v4l2_subdev_krouting *routing;
 	struct ipu6_isys_stream *stream = av->stream;
 	struct v4l2_subdev_state *subdev_state;
@@ -1056,6 +1063,8 @@ out:
 
 void ipu6_isys_fw_close(struct ipu6_isys *isys)
 {
+	WARN(1, "%s Not implemented", __func__);
+	return;
 	mutex_lock(&isys->mutex);
 
 	isys->ref_count--;
@@ -1180,7 +1189,7 @@ int ipu6_isys_video_init(struct ipu6_isys_video *av)
 			.height = 1080,
 		},
 	};
-	int ret;
+	int ret = 0;
 
 	mutex_init(&av->mutex);
 	av->vdev.device_caps = V4L2_CAP_STREAMING | V4L2_CAP_IO_MC |

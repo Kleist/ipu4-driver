@@ -91,11 +91,15 @@ static u32 ipu6ep_mtl_csi_offsets[] = {
 	IPU6_CSI_PORT_F_ADDR_OFFSET
 };
 
-static u32 ipu6_csi_offsets[] = {
-	IPU6_CSI_PORT_A_ADDR_OFFSET,
-	IPU6_CSI_PORT_B_ADDR_OFFSET,
-	IPU6_CSI_PORT_C_ADDR_OFFSET,
-	IPU6_CSI_PORT_D_ADDR_OFFSET
+// static u32 ipu6_csi_offsets[] = {
+// 	IPU6_CSI_PORT_A_ADDR_OFFSET,
+// 	IPU6_CSI_PORT_B_ADDR_OFFSET,
+// 	IPU6_CSI_PORT_C_ADDR_OFFSET,
+// 	IPU6_CSI_PORT_D_ADDR_OFFSET,
+// };
+
+static unsigned int ipu4_csi_offsets[] = {
+	0x64000, 0x65000, 0x66000, 0x67000, 0x6C000, 0x6C800
 };
 
 
@@ -153,7 +157,6 @@ static const struct ipu6_isys_internal_pdata ipu4_isys_ipdata = {
 		.dmem_offset = IPU4_ISYS_DMEM_OFFSET,
 		.spc_offset = IPU4_ISYS_SPC_OFFSET,
 	},
-	.num_parallel_streams = IPU4_ISYS_NUM_STREAMS,
 	.isys_dma_overshoot = IPU4_ISYS_OVERALLOC_MIN,
 };
 
@@ -487,23 +490,28 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
 	u8 hw_ver = isp->hw_ver;
 
 	if (is_ipu4(hw_ver)) {
+		// HACK: replace base struct values
 		memcpy(&isys_ipdata, &ipu4_isys_ipdata, sizeof(isys_ipdata));
 		memcpy(&psys_ipdata, &ipu4_psys_ipdata, sizeof(psys_ipdata));
+		isys_ipdata.num_parallel_streams = IPU6_STREAM_ID_MAX; // HACK: IPU4 only
+		isys_ipdata.csi2.nports = ARRAY_SIZE(ipu4_csi_offsets);
+		isys_ipdata.csi2.offsets = ipu4_csi_offsets;
+		psys_ipdata.hw_variant.spc_offset = IPU6_PSYS_SPC_OFFSET;
 		return;
 	}
 
-	isys_ipdata.num_parallel_streams = IPU6_ISYS_NUM_STREAMS;
+	isys_ipdata.num_parallel_streams = IPU6_STREAM_ID_MAX; // HACK: IPU4 only
 	isys_ipdata.sram_gran_shift = IPU6_SRAM_GRANULARITY_SHIFT;
 	isys_ipdata.sram_gran_size = IPU6_SRAM_GRANULARITY_SIZE;
 	isys_ipdata.max_sram_size = IPU6_MAX_SRAM_SIZE;
 	isys_ipdata.sensor_type_start = IPU6_FW_ISYS_SENSOR_TYPE_START;
 	isys_ipdata.sensor_type_end = IPU6_FW_ISYS_SENSOR_TYPE_END;
-	isys_ipdata.max_streams = IPU6_ISYS_NUM_STREAMS;
+	isys_ipdata.max_streams = IPU6_STREAM_ID_MAX; // HACK: IPU4 only
 	isys_ipdata.max_send_queues = IPU6_N_MAX_SEND_QUEUES;
 	isys_ipdata.max_sram_blocks = IPU6_NOF_SRAM_BLOCKS_MAX;
 	isys_ipdata.max_devq_size = IPU6_DEV_SEND_QUEUE_SIZE;
-	isys_ipdata.csi2.nports = ARRAY_SIZE(ipu6_csi_offsets);
-	isys_ipdata.csi2.offsets = ipu6_csi_offsets;
+	isys_ipdata.csi2.nports = ARRAY_SIZE(ipu4_csi_offsets);
+	isys_ipdata.csi2.offsets = ipu4_csi_offsets;
 	isys_ipdata.csi2.irq_mask = IPU6_CSI_RX_ERROR_IRQ_MASK;
 	isys_ipdata.csi2.ctrl0_irq_edge = IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_EDGE;
 	isys_ipdata.csi2.ctrl0_irq_clear =
@@ -536,7 +544,7 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
 		isys_ipdata.csi2.ctrl0_irq_edge =
 			IPU6V6_REG_ISYS_CSI_TOP_CTRL0_IRQ_EDGE;
 		isys_ipdata.csi2.ctrl0_irq_clear =
-			IPU6V6_REG_ISYS_CSI_TOP_CTRL0_IRQ_CLEAR;
+			IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_CLEAR;
 		isys_ipdata.csi2.ctrl0_irq_mask =
 			IPU6V6_REG_ISYS_CSI_TOP_CTRL0_IRQ_MASK;
 		isys_ipdata.csi2.ctrl0_irq_enable =
@@ -544,7 +552,7 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
 		isys_ipdata.csi2.ctrl0_irq_lnp =
 			IPU6V6_REG_ISYS_CSI_TOP_CTRL0_IRQ_LEVEL_NOT_PULSE;
 		isys_ipdata.csi2.ctrl0_irq_status =
-			IPU6V6_REG_ISYS_CSI_TOP_CTRL0_IRQ_STATUS;
+			IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_STATUS;
 		isys_ipdata.csi2.fw_access_port_ofs =
 			CSI_REG_HUB_FW_ACCESS_PORT_V6OFS;
 		isys_ipdata.ltr = IPU6EP_MTL_LTR_VALUE;
@@ -1080,6 +1088,9 @@ static int ipu6_runtime_resume(struct device *dev)
 
 	ipu6_configure_vc_mechanism(isp);
 	ipu6_buttress_restore(isp);
+	
+	// HACK - not sure why we need to power up here (or do we even?)
+	ipu6_buttress_power(&isp->isys->auxdev.dev, isp->isys->ctrl, true);
 
 	if (isp->need_ipc_reset) {
 		struct ipu6_buttress *b = &isp->buttress;

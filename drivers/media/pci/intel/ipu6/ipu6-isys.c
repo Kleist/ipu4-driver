@@ -170,7 +170,7 @@ static int isys_csi2_register_subdevices(struct ipu6_isys *isys)
 		if (ret)
 			goto fail;
 
-		isys->isr_csi2_bits |= IPU6_ISYS_UNISPART_IRQ_CSI2(i);
+		isys->isr_csi2_bits |= IPU4_ISYS_UNISPART_IRQ_CSI2(i);
 	}
 
 	return 0;
@@ -254,38 +254,35 @@ void isys_setup_hw(struct ipu6_isys *isys)
 	void __iomem *base = isys->pdata->base;
 	const u8 *thd = isys->pdata->ipdata->hw_variant.cdc_fifo_threshold;
 	u32 irqs = 0;
-	unsigned int i, nports;
-
-	nports = isys->pdata->ipdata->csi2.nports;
+	unsigned int i;
 
 	/* Enable irqs for all MIPI ports */
-	for (i = 0; i < nports; i++)
-		irqs |= IPU6_ISYS_UNISPART_IRQ_CSI2(i);
+	irqs = IPU4_ISYS_UNISPART_IRQ_CSI2(0) |
+	    IPU4_ISYS_UNISPART_IRQ_CSI2(1) |
+	    IPU4_ISYS_UNISPART_IRQ_CSI2(2) |
+	    IPU4_ISYS_UNISPART_IRQ_CSI2(3) |
+	    IPU4_ISYS_UNISPART_IRQ_CSI2(4) | IPU4_ISYS_UNISPART_IRQ_CSI2(5);
 
-	writel(irqs, base + isys->pdata->ipdata->csi2.ctrl0_irq_edge);
-	writel(irqs, base + isys->pdata->ipdata->csi2.ctrl0_irq_lnp);
-	writel(irqs, base + isys->pdata->ipdata->csi2.ctrl0_irq_mask);
-	writel(irqs, base + isys->pdata->ipdata->csi2.ctrl0_irq_enable);
-	writel(GENMASK(19, 0),
-	       base + isys->pdata->ipdata->csi2.ctrl0_irq_clear);
+	irqs |= IPU4_ISYS_UNISPART_IRQ_SW;
 
-	irqs = ISYS_UNISPART_IRQS;
-	writel(irqs, base + IPU6_REG_ISYS_UNISPART_IRQ_EDGE);
-	writel(irqs, base + IPU6_REG_ISYS_UNISPART_IRQ_LEVEL_NOT_PULSE);
-	writel(GENMASK(28, 0), base + IPU6_REG_ISYS_UNISPART_IRQ_CLEAR);
-	writel(irqs, base + IPU6_REG_ISYS_UNISPART_IRQ_MASK);
-	writel(irqs, base + IPU6_REG_ISYS_UNISPART_IRQ_ENABLE);
+	writel(irqs, base + IPU4_REG_ISYS_UNISPART_IRQ_EDGE);
+	writel(irqs, base + IPU4_REG_ISYS_UNISPART_IRQ_LEVEL_NOT_PULSE);
+	writel(irqs, base + IPU4_REG_ISYS_UNISPART_IRQ_CLEAR);
+	writel(irqs, base + IPU4_REG_ISYS_UNISPART_IRQ_MASK);
+	writel(irqs, base + IPU4_REG_ISYS_UNISPART_IRQ_ENABLE);
 
-	writel(0, base + IPU6_REG_ISYS_UNISPART_SW_IRQ_REG);
-	writel(0, base + IPU6_REG_ISYS_UNISPART_SW_IRQ_MUX_REG);
+	writel(0, base + IPU4_REG_ISYS_UNISPART_SW_IRQ_REG);
+	writel(0, base + IPU4_REG_ISYS_UNISPART_SW_IRQ_MUX_REG);
 
 	/* Write CDC FIFO threshold values for isys */
 	for (i = 0; i < isys->pdata->ipdata->hw_variant.cdc_fifos; i++)
-		writel(thd[i], base + IPU6_REG_ISYS_CDC_THRESHOLD(i));
+		writel(thd[i], base + IPU4_REG_ISYS_CDC_THRESHOLD(i));
 }
 
 static void ipu6_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
 {
+	WARN(1, "%s: Not implemented", __func__);
+
 	struct ipu6_isys_stream *stream;
 	unsigned int i;
 	u32 status;
@@ -325,8 +322,7 @@ irqreturn_t isys_isr(struct ipu6_bus_device *adev)
 {
 	struct ipu6_isys *isys = ipu6_bus_get_drvdata(adev);
 	void __iomem *base = isys->pdata->base;
-	u32 status_sw, status_csi;
-	u32 ctrl0_status, ctrl0_clear;
+	u32 status;
 
 	spin_lock(&isys->power_lock);
 	if (!isys->power) {
@@ -334,49 +330,41 @@ irqreturn_t isys_isr(struct ipu6_bus_device *adev)
 		return IRQ_NONE;
 	}
 
-	ctrl0_status = isys->pdata->ipdata->csi2.ctrl0_irq_status;
-	ctrl0_clear = isys->pdata->ipdata->csi2.ctrl0_irq_clear;
-
-	status_csi = readl(isys->pdata->base + ctrl0_status);
-	status_sw = readl(isys->pdata->base +
-			  IPU6_REG_ISYS_UNISPART_IRQ_STATUS);
-
-	writel(ISYS_UNISPART_IRQS & ~IPU6_ISYS_UNISPART_IRQ_SW,
-	       base + IPU6_REG_ISYS_UNISPART_IRQ_MASK);
-
+	status = readl(base + IPU4_REG_ISYS_UNISPART_IRQ_STATUS);
 	do {
-		writel(status_csi, isys->pdata->base + ctrl0_clear);
+		mmiotrace_printk("%s: status=%x", __func__, status);
+		writel(status, base + IPU4_REG_ISYS_UNISPART_IRQ_CLEAR);
 
-		writel(status_sw, isys->pdata->base +
-		       IPU6_REG_ISYS_UNISPART_IRQ_CLEAR);
-
-		if (isys->isr_csi2_bits & status_csi) {
+		if (isys->isr_csi2_bits & status) {
 			unsigned int i;
 
 			for (i = 0; i < isys->pdata->ipdata->csi2.nports; i++) {
-				/* irq from not enabled port */
-				if (!isys->csi2[i].base)
-					continue;
-				if (status_csi & IPU6_ISYS_UNISPART_IRQ_CSI2(i))
+				if (IPU4_ISYS_UNISPART_IRQ_CSI2(i) & status)
 					ipu6_isys_csi2_isr(&isys->csi2[i]);
 			}
 		}
 
-		writel(0, base + IPU6_REG_ISYS_UNISPART_SW_IRQ_REG);
+		writel(0, base + IPU4_REG_ISYS_UNISPART_SW_IRQ_REG);
 
-		if (!isys_isr_one(adev))
-			status_sw = IPU6_ISYS_UNISPART_IRQ_SW;
+		/*
+		 * Handle a single FW event per checking the CSI-2
+		 * receiver SOF status. This is done in order to avoid
+		 * the case where events arrive to the event queue and
+		 * one of them is a SOF event which then could be
+		 * handled before the SOF interrupt. This would pose
+		 * issues in sequence numbering which is based on SOF
+		 * interrupts, always assumed to arrive before FW SOF
+		 * events.
+		 */
+		if (status & IPU4_ISYS_UNISPART_IRQ_SW && !isys_isr_one(adev))
+			status = IPU4_ISYS_UNISPART_IRQ_SW;
 		else
-			status_sw = 0;
+			status = 0;
 
-		status_csi = readl(isys->pdata->base + ctrl0_status);
-		status_sw |= readl(isys->pdata->base +
-				   IPU6_REG_ISYS_UNISPART_IRQ_STATUS);
-	} while ((status_csi & isys->isr_csi2_bits) ||
-		 (status_sw & IPU6_ISYS_UNISPART_IRQ_SW));
-
-	writel(ISYS_UNISPART_IRQS, base + IPU6_REG_ISYS_UNISPART_IRQ_MASK);
-
+		status |= readl(isys->pdata->base +
+				    IPU4_REG_ISYS_UNISPART_IRQ_STATUS);
+	} while (status & (isys->isr_csi2_bits | IPU4_ISYS_UNISPART_IRQ_SW));
+	
 	spin_unlock(&isys->power_lock);
 
 	return IRQ_HANDLED;
@@ -756,7 +744,7 @@ static int isys_register_devices(struct ipu6_isys *isys)
 
 	isys->media_dev.dev = dev;
 	media_device_pci_init(&isys->media_dev,
-			      pdev, IPU6_MEDIA_DEV_MODEL_NAME);
+			      pdev, IPU4_MEDIA_DEV_MODEL_NAME);
 
 	strscpy(isys->v4l2_dev.name, isys->media_dev.model,
 		sizeof(isys->v4l2_dev.name));
@@ -812,8 +800,8 @@ static void isys_unregister_devices(struct ipu6_isys *isys)
 {
 	isys_unregister_video_devices(isys);
 	isys_csi2_unregister_subdevices(isys);
-	v4l2_device_unregister(&isys->v4l2_dev);
-	media_device_unregister(&isys->media_dev);
+ 	v4l2_device_unregister(&isys->v4l2_dev);
+ 	media_device_unregister(&isys->media_dev);
 	media_device_cleanup(&isys->media_dev);
 }
 
@@ -844,7 +832,8 @@ static int isys_runtime_pm_resume(struct device *dev)
 
 	isys_setup_hw(isys);
 
-	set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_ON);
+//  Set IPU6_BUTTRESS_FABIC_CONTROL which is not on IPU4
+// 	set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_ON);
 
 	return 0;
 }
@@ -870,7 +859,8 @@ static int isys_runtime_pm_suspend(struct device *dev)
 	isys->phy_termcal_val = 0;
 	cpu_latency_qos_update_request(&isys->pm_qos, PM_QOS_DEFAULT_VALUE);
 
-	set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_OFF);
+//  Set IPU6_BUTTRESS_FABIC_CONTROL which is not on IPU4
+// 	set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_OFF);
 
 	ipu6_mmu_hw_cleanup(adev->mmu);
 
@@ -1007,6 +997,8 @@ struct isys_fw_msgs *ipu6_get_fw_msg_buf(struct ipu6_isys_stream *stream)
 
 void ipu6_cleanup_fw_msg_bufs(struct ipu6_isys *isys)
 {
+	WARN(1, "%s Not implemented", __func__);
+	return;
 	struct isys_fw_msgs *fwmsg, *fwmsg0;
 	unsigned long flags;
 
@@ -1030,6 +1022,7 @@ void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, u64 data)
 	list_move(&msg->head, &isys->framebuflist);
 	spin_unlock_irqrestore(&isys->listlock, flags);
 }
+
 
 static int isys_probe(struct auxiliary_device *auxdev,
 		      const struct auxiliary_device_id *auxdev_id)
@@ -1069,8 +1062,8 @@ static int isys_probe(struct auxiliary_device *auxdev,
 	mutex_init(&isys->mutex);
 	mutex_init(&isys->stream_mutex);
 
-	spin_lock_init(&isys->listlock);
-	INIT_LIST_HEAD(&isys->framebuflist);
+ 	spin_lock_init(&isys->listlock);
+ 	INIT_LIST_HEAD(&isys->framebuflist);
 	INIT_LIST_HEAD(&isys->framebuflist_fw);
 
 	isys->line_align = IPU6_ISYS_2600_MEM_LINE_ALIGN;
@@ -1078,7 +1071,7 @@ static int isys_probe(struct auxiliary_device *auxdev,
 
 	dev_set_drvdata(&auxdev->dev, isys);
 
-	isys_stream_init(isys);
+ 	isys_stream_init(isys);
 
 	if (!isp->secure_mode) {
 		fw = isp->cpd_fw;
@@ -1179,6 +1172,7 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 	struct ipu6_isys_csi2 *csi2 = NULL;
 	u64 ts;
 
+	WARN(1, "%s: Not implemented", __func__);
 	if (!isys->fwcom)
 		return 1;
 
@@ -1319,7 +1313,11 @@ static const struct auxiliary_device_id ipu6_isys_id_table[] = {
 		.name = "intel_ipu6.isys",
 		.driver_data = (kernel_ulong_t)&ipu6_isys_auxdrv_data,
 	},
-	{ }
+	{
+		.name = "intel_ipu4.isys",
+		.driver_data = (kernel_ulong_t)&ipu6_isys_auxdrv_data,
+	},
+	{},
 };
 MODULE_DEVICE_TABLE(auxiliary, ipu6_isys_id_table);
 

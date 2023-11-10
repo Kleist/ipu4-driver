@@ -18,6 +18,8 @@ static int queue_setup(struct vb2_queue *q, unsigned int *num_buffers,
 	unsigned int i;
 	u32 size;
 
+	WARN(1, "%s: Not implemented", __func__);
+	return -ENOENT;
 	/* num_planes == 0: we're being called through VIDIOC_REQBUFS */
 	if (!*num_planes) {
 		use_fmt = true;
@@ -210,7 +212,7 @@ static int buffer_list_get(struct ipu6_isys_stream *stream,
 
 void
 ipu6_isys_buf_to_fw_frame_buf_pin(struct vb2_buffer *vb,
-				  struct ipu6_fw_isys_frame_buff_set_abi *set)
+				  struct ipu4_fw_isys_frame_buff_set_abi *set)
 {
 	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(vb->vb2_queue);
 
@@ -260,7 +262,8 @@ ipu6_isys_buf_to_fw_frame_buf(struct ipu6_fw_isys_frame_buff_set_abi *set,
 			continue;
 
 		if (aq->fill_frame_buf_set)
-			aq->fill_frame_buf_set(vb, set);
+			// aq->fill_frame_buf_set(vb, set);
+			(void)aq->fill_frame_buf_set; // HACK, ipu6 vs ipu4 types
 	}
 }
 
@@ -340,6 +343,9 @@ static void buf_queue(struct vb2_buffer *vb)
 	dma_addr_t dma;
 	unsigned int i;
 	int ret;
+
+	WARN(1, "%s: Not implemented", __func__);
+	return;
 
 	dev_dbg(dev, "queue buffer %u for %s\n", vb->index, av->vdev.name);
 
@@ -543,6 +549,9 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 	struct media_entity *source_entity = NULL;
 	int nr_queues, ret;
 
+	WARN(1, "%s: Not implemented", __func__);
+	return -ENOENT;
+
 	dev_dbg(dev, "stream: %s: width %u, height %u, css pixelformat %u\n",
 		av->vdev.name, av->mpix.width, av->mpix.height,
 		av->pfmt->css_pixelformat);
@@ -628,6 +637,8 @@ static void stop_streaming(struct vb2_queue *q)
 	struct ipu6_isys_stream *stream = av->stream;
 
 	ipu6_isys_set_csi2_streams_status(av, false);
+
+	WARN(1, "%s: Not implemented", __func__);
 
 	mutex_lock(&stream->mutex);
 

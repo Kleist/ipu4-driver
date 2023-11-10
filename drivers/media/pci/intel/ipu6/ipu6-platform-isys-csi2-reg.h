@@ -120,6 +120,7 @@ enum CSI_PORT_CLK_GATING_SWITCH {
 #define IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_ENABLE			0x238210
 #define IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_LEVEL_NOT_PULSE		0x238214
 
+
 #define IPU6_REG_ISYS_CSI_TOP_CTRL1_IRQ_EDGE			0x238220
 #define IPU6_REG_ISYS_CSI_TOP_CTRL1_IRQ_MASK			0x238224
 #define IPU6_REG_ISYS_CSI_TOP_CTRL1_IRQ_STATUS			0x238228
@@ -149,8 +150,14 @@ enum CSI_PORT_CLK_GATING_SWITCH {
  * [2] CSI_PORT.IRQ_CTRL2_s2m_sids0to7
  * [3] CSI_PORT.IRQ_CTRL3_s2m_sids8to15
  */
-#define IPU6_ISYS_UNISPART_IRQ_CSI2(port)		\
-				   (0x3 << ((port) * IPU6_CSI_IRQ_NUM_PER_PIPE))
+#define IPU6_ISYS_UNISPART_IRQ_CSI2(port)	 		   (0x3 << ((port) * IPU6_CSI_IRQ_NUM_PER_PIPE))
+
+#define IPU4_ISYS_MAX_CSI2_LEGACY_PORTS	4
+#define IPU4_ISYS_UNISPART_IRQ_CSI2(port)		\
+	({ typeof(port) __port = (port); \
+	__port < IPU4_ISYS_MAX_CSI2_LEGACY_PORTS ?	\
+	((0x8) << __port) :					\
+	(0x800 << (__port - IPU4_ISYS_MAX_CSI2_LEGACY_PORTS)); })
 
 /*
  * ipu6se support 2 front ends, 2 port per front end, 4 ports 0..3

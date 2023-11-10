@@ -60,6 +60,7 @@ static inline void ipu_debug_writel(u32 value, volatile void __iomem *addr, cons
 #define IPU6EPMTL_FIRMWARE_NAME		"intel/ipu6epmtl_fw.bin"
 
 #define IPU4_PCI_ID	0x5a88
+#define IPU4_MEDIA_DEV_MODEL_NAME	"ipu4"
 
 enum ipu6_version {
 	IPU6_VER_INVALID = 0,
@@ -135,7 +136,7 @@ struct ipu6_device {
 	u32 cpd_metadata_cmpnt_size;
 
 	void __iomem *base;
-	struct ipu6_trace *trace;
+	// struct ipu6_trace *trace;
 	bool need_ipc_reset;
 	bool secure_mode;
 	u8 hw_ver;
@@ -155,7 +156,6 @@ struct ipu6_device {
 #define IPU6_MAX_LI_BLOCK_ADDR		128
 #define IPU6_MAX_L2_BLOCK_ADDR		64
 
-#define IPU6_ISYS_MAX_CSI2_LEGACY_PORTS	4
 #define IPU6_ISYS_MAX_CSI2_COMBO_PORTS	2
 
 #define IPU6_MAX_FRAME_COUNTER	0xff

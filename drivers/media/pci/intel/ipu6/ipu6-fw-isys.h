@@ -7,14 +7,18 @@
 struct ipu6_isys;
 
 /* Max number of Input/Output Pins */
-#define IPU6_MAX_IPINS 4
+#define IPU6_MAX_IPINS 4 // IPU4 OK
 
-#define IPU6_MAX_OPINS ((IPU6_MAX_IPINS) + 1)
+/* worst case is ISA use where a single input pin produces:
+ * Mipi output, NS Pixel Output, and Scaled Pixel Output.
+ * This is how the 2 is calculated
+ */
+#define IPU6_MAX_OPINS ((IPU6_MAX_IPINS) + 2) // HACK: IPU4 only
 
-#define IPU6_STREAM_ID_MAX 16
-#define IPU6_NONSECURE_STREAM_ID_MAX 12
-#define IPU6_DEV_SEND_QUEUE_SIZE (IPU6_STREAM_ID_MAX)
-#define IPU6_NOF_SRAM_BLOCKS_MAX (IPU6_STREAM_ID_MAX)
+#define IPU6_STREAM_ID_MAX 8 // HACK: IPU4 only
+#define IPU6_NONSECURE_STREAM_ID_MAX 12 // IPU4 not used
+#define IPU6_DEV_SEND_QUEUE_SIZE (IPU6_STREAM_ID_MAX) // IPU4 ok
+#define IPU6_NOF_SRAM_BLOCKS_MAX (IPU6_STREAM_ID_MAX) // IPU4 ok
 #define IPU6_N_MAX_MSG_SEND_QUEUES (IPU6_STREAM_ID_MAX)
 #define IPU6SE_STREAM_ID_MAX 8
 #define IPU6SE_NONSECURE_STREAM_ID_MAX 4
@@ -434,7 +438,7 @@ struct ipu6_fw_isys_stream_cfg_data_abi {
  * @send_resp_capture_ack: send response for capture ack event
  * @send_resp_capture_done: send response for capture done event
  */
-struct ipu6_fw_isys_frame_buff_set_abi {
+struct ipu6_fw_isys_frame_buff_set_abi { // HACK: Replaced by ipu4_fw_isys_frame_buff_set_abi
 	struct ipu6_fw_isys_output_pin_payload_abi output_pins[IPU6_MAX_OPINS];
 	u8 send_irq_sof;
 	u8 send_irq_eof;
@@ -445,6 +449,28 @@ struct ipu6_fw_isys_frame_buff_set_abi {
 	u8 send_resp_capture_ack;
 	u8 send_resp_capture_done;
 	u8 reserved[8];
+};
+
+/**
+ * struct ipu_fw_isys_param_pin_abi
+ * @param_buf_id: Points to param port buffer - buffer identifier
+ * @addr: Points to param pin buffer - CSS Virtual Address
+ */
+struct ipu_fw_isys_param_pin_abi { // HACK: From IPU4 driver
+	u64 param_buf_id;
+	u32 addr;
+};
+
+struct ipu4_fw_isys_frame_buff_set_abi { // TODO handle IPU4 differences
+	struct ipu6_fw_isys_output_pin_payload_abi output_pins[IPU6_MAX_OPINS];
+	struct ipu_fw_isys_param_pin_abi process_group_light;
+	u8 send_irq_sof;
+	u8 send_irq_eof;
+	u8 send_irq_capture_ack;
+	u8 send_irq_capture_done;
+	u8 send_resp_sof;
+	u8 send_resp_eof;
+	u8 reserved;
 };
 
 /**
