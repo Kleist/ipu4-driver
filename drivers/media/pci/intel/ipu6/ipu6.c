@@ -406,7 +406,7 @@ static int ipu6_isys_check_fwnode_graph(struct fwnode_handle *fwnode)
 
 static struct ipu6_bus_device *
 ipu6_isys_init(struct pci_dev *pdev, struct device *parent,
-	       struct ipu6_buttress_ctrl *ctrl, void __iomem *base,
+	       const struct ipu6_buttress_ctrl *ctrl, void __iomem *base,
 	       const struct ipu6_isys_internal_pdata *ipdata)
 {
 	struct fwnode_handle *fwnode = dev_fwnode(&pdev->dev);
@@ -471,7 +471,7 @@ ipu6_isys_init(struct pci_dev *pdev, struct device *parent,
 
 static struct ipu6_bus_device *
 ipu6_psys_init(struct pci_dev *pdev, struct device *parent,
-	       struct ipu6_buttress_ctrl *ctrl, void __iomem *base,
+	       const struct ipu6_buttress_ctrl *ctrl, void __iomem *base,
 	       const struct ipu6_psys_internal_pdata *ipdata)
 {
 	struct ipu6_bus_device *psys_adev;

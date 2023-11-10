@@ -25,7 +25,6 @@ struct ipu6_buttress_ctrl {
 	u32 freq_ctl, pwr_sts_shift, pwr_sts_mask, pwr_sts_on, pwr_sts_off;
 	unsigned int ratio;
 	unsigned int qos_floor;
-	bool started;
 };
 
 struct ipu6_buttress_fused_freqs {
@@ -86,8 +85,8 @@ int ipu6_buttress_map_fw_image(struct ipu6_bus_device *sys,
 			       const struct firmware *fw,
 			       struct sg_table *sgt);
 void ipu6_buttress_unmap_fw_image(struct ipu6_bus_device *sys,
-				  struct sg_table *sgt);
-int ipu6_buttress_power(struct device *dev, struct ipu6_buttress_ctrl *ctrl,
+				 struct sg_table *sgt);
+int ipu6_buttress_power(struct device *dev, const struct ipu6_buttress_ctrl *ctrl,
 			bool on);
 bool ipu6_buttress_get_secure_mode(struct ipu6_device *isp);
 int ipu6_buttress_authenticate(struct ipu6_device *isp);
