@@ -763,7 +763,7 @@ static int isys_register_devices(struct ipu6_isys *isys)
 
 	ret = media_device_register(&isys->media_dev);
 	if (ret < 0)
-		goto out_media_device_unregister;
+		goto out_failed_register;
 
 	isys->v4l2_dev.mdev = &isys->media_dev;
 	isys->v4l2_dev.ctrl_handler = NULL;
@@ -802,7 +802,7 @@ out_v4l2_device_unregister:
 out_media_device_unregister:
 	media_device_unregister(&isys->media_dev);
 	media_device_cleanup(&isys->media_dev);
-
+out_failed_register:
 	dev_err(dev, "failed to register isys devices\n");
 
 	return ret;
