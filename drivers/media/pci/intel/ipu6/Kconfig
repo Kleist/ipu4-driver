@@ -1,5 +1,5 @@
-config VIDEO_INTEL_IPU6
-	tristate "Intel IPU6 driver"
+config VIDEO_INTEL_IPU4
+	tristate "Intel IPU4 driver"
 	depends on ACPI || COMPILE_TEST
 	depends on MEDIA_SUPPORT
 	depends on MEDIA_PCI_SUPPORT
@@ -10,8 +10,8 @@ config VIDEO_INTEL_IPU6
 	select V4L2_FWNODE
 	select IPU_BRIDGE
 	help
-	  This is the 6th Gen Intel Image Processing Unit, found in Intel SoCs
+	  This is the 4th Gen Intel Image Processing Unit, found in Intel SoCs
 	  and used for capturing images and video from camera sensors.
 
-	  To compile this driver, say Y here! It contains 2 modules -
-	  intel_ipu6 and intel_ipu6_isys.
+	  To compile this driver, say Y/m here! It contains 2 modules -
+	  intel_ipu4 and intel_ipu4_isys.
