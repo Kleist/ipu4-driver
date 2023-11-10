@@ -15,7 +15,8 @@
 #include "ipu6-buttress.h"
 #include "ipu6-platform-buttress-regs.h"
 
-#define BOOTLOADER_STATUS_OFFSET       0x15c
+#define IPU4_BOOTLOADER_STATUS_OFFSET	0x8000
+#define IPU6_BOOTLOADER_STATUS_OFFSET   0x15c
 
 #define BOOTLOADER_MAGIC_KEY		0xb00710ad
 
@@ -328,7 +329,6 @@ irqreturn_t ipu6_buttress_isr(int irq, void *isp_ptr)
 	struct ipu6_device *isp = isp_ptr;
 	struct ipu6_bus_device *adev[] = { isp->isys, isp->psys };
 	struct ipu6_buttress *b = &isp->buttress;
-	u32 reg_irq_sts = BUTTRESS_REG_ISR_STATUS;
 	irqreturn_t ret = IRQ_NONE;
 	u32 disable_irqs = 0;
 	u32 irq_status;
@@ -336,7 +336,7 @@ irqreturn_t ipu6_buttress_isr(int irq, void *isp_ptr)
 
 	pm_runtime_get_noresume(&isp->pdev->dev);
 
-	irq_status = readl(isp->base + reg_irq_sts);
+	irq_status = readl(isp->base + b->reg_irq_sts);
 	if (!irq_status) {
 		pm_runtime_put_noidle(&isp->pdev->dev);
 		return IRQ_NONE;
@@ -407,7 +407,7 @@ irqreturn_t ipu6_buttress_isr(int irq, void *isp_ptr)
 			break;
 		}
 
-		irq_status = readl(isp->base + reg_irq_sts);
+		irq_status = readl(isp->base + b->reg_irq_sts);
 	} while (irq_status);
 
 	if (disable_irqs)
@@ -599,6 +599,8 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 	struct ipu6_psys_pdata *psys_pdata;
 	u32 data, mask, done, fail;
 	int ret;
+	u32 bootloader_status_offset = is_ipu4(isp->hw_ver) ?
+		IPU4_BOOTLOADER_STATUS_OFFSET : IPU6_BOOTLOADER_STATUS_OFFSET;
 
 	if (!isp->secure_mode) {
 		dev_dbg(&isp->pdev->dev, "Skip auth for non-secure mode\n");
@@ -658,7 +660,7 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 		goto out_unlock;
 	}
 
-	ret = readl_poll_timeout(psys_pdata->base + BOOTLOADER_STATUS_OFFSET,
+	ret = readl_poll_timeout(psys_pdata->base + bootloader_status_offset,
 				 data, data == BOOTLOADER_MAGIC_KEY, 500,
 				 BUTTRESS_CSE_BOOTLOAD_TIMEOUT_US);
 	if (ret) {

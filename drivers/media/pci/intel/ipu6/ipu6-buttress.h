@@ -55,6 +55,7 @@ struct ipu6_buttress {
 	u32 wdt_cached_value;
 	bool force_suspend;
 	u32 ref_clk;
+	u32 reg_irq_sts;
 };
 
 struct ipu6_buttress_sensor_clk_freq {

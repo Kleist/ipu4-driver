@@ -9,6 +9,8 @@
 
 #include "ipu6-buttress.h"
 
+#define PCI_DEVICE_ID_INTEL_IPU4		0x5a88
+
 #define PCI_DEVICE_ID_INTEL_IPU6		0x9a19
 #define PCI_DEVICE_ID_INTEL_IPU6SE		0x4e19
 #define PCI_DEVICE_ID_INTEL_IPU6EP_ADLP		0x465d
@@ -24,12 +26,15 @@
 #define IPU6_FIRMWARE_NAME		"intel/ipu6_fw.bin"
 #define IPU6EPMTL_FIRMWARE_NAME		"intel/ipu6epmtl_fw.bin"
 
+#define IPU4_PCI_ID	0x5a88
+
 enum ipu6_version {
 	IPU6_VER_INVALID = 0,
 	IPU6_VER_6 = 1,
 	IPU6_VER_6SE = 3,
 	IPU6_VER_6EP = 5,
 	IPU6_VER_6EP_MTL = 6,
+	IPU4_VER_4 = 7,
 };
 
 /*
@@ -58,12 +63,24 @@ static inline bool is_ipu6_tgl(u8 hw_ver)
 	return hw_ver == IPU6_VER_6;
 }
 
+static inline bool is_ipu4(u8 hw_ver)
+{
+	return hw_ver == IPU4_VER_4;
+}
+
 /*
  * ISYS DMA can overshoot. For higher resolutions over allocation is one line
  * but it must be at minimum 1024 bytes. Value could be different in
  * different versions / generations thus provide it via platform data.
  */
 #define IPU6_ISYS_OVERALLOC_MIN		1024
+
+/*
+ * ISYS DMA can overshoot. For higher resolutions over allocation is one line
+ * but it must be at minimum 1024 bytes. Value could be different in
+ * different versions / generations thus provide it via platform data.
+ */
+#define IPU4_ISYS_OVERALLOC_MIN		1024
 
 /* Physical pages in GDA is 128, page size is 2K for IPU6, 1K for others */
 #define IPU6_DEVICE_GDA_NR_PAGES		128
@@ -112,6 +129,9 @@ struct ipu6_device {
 
 #define IPU6SE_ISYS_NUM_STREAMS          IPU6SE_NONSECURE_STREAM_ID_MAX
 #define IPU6_ISYS_NUM_STREAMS            IPU6_NONSECURE_STREAM_ID_MAX
+
+#define IPU4_ISYS_NUM_STREAMS            8       /* Max 8 */
+#define IPU4_FIRMWARE_NAME               "ipu4_cpd_b0.bin"
 
 /*
  * To maximize the IOSF utlization, IPU6 need to send requests in bursts.

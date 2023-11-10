@@ -6,6 +6,45 @@
 
 #include <linux/bits.h>
 
+// From 4.19 ipu-platform-regs.h
+#define IPU4_ISYS_IOMMU0_OFFSET		0x000e0000
+#define IPU4_ISYS_IOMMU1_OFFSET		0x000e0100
+
+#define IPU4_ISYS_OFFSET			0x00100000
+#define IPU4_PSYS_OFFSET			0x00400000
+
+#define IPU4_PSYS_IOMMU0_OFFSET		0x000b0000
+#define IPU4_PSYS_IOMMU1_OFFSET		0x000b0100
+#define IPU4_PSYS_IOMMU1R_OFFSET	0x000b0600
+
+#define IPU4_ISYS_SPC_OFFSET			0x000000
+#define IPU4_PSYS_SPC_OFFSET			0x000000
+#define IPU4_ISYS_DMEM_OFFSET			0x008000
+#define IPU4_PSYS_DMEM_OFFSET			0x008000
+
+
+/* VC0 */
+#define IPU4_INFO_ENABLE_SNOOP			BIT(0)
+#define IPU4_INFO_IMR_DESTINED			BIT(1)
+#define IPU4_INFO_REQUEST_DESTINATION_BUT_REGS	0
+#define IPU4_INFO_REQUEST_DESTINATION_PRIMARY	BIT(4)
+#define IPU4_INFO_REQUEST_DESTINATION_P2P		(BIT(4) | BIT(5))
+/* VC1 */
+#define IPU4_INFO_DEADLINE_PTR                      BIT(1)
+#define IPU4_INFO_ZLW                               BIT(2)
+#define IPU4_INFO_STREAM_ID_SET(a)	((a & 0xF) << 4)
+#define IPU4_INFO_ADDRESS_SWIZZ                     BIT(8)
+
+#define IPU4_MMU_MAX_TLB_L1_STREAMS	16
+#define IPU4_MMU_MAX_TLB_L2_STREAMS	16
+#define IPU4_MAX_LI_BLOCK_ADDR		64
+#define IPU4_MAX_L2_BLOCK_ADDR		32
+
+#define IPU4_MMU_L1_STREAM_ID_REG_OFFSET IPU6_MMU_L1_STREAM_ID_REG_OFFSET
+#define IPU4_MMU_L2_STREAM_ID_REG_OFFSET IPU6_MMU_L2_STREAM_ID_REG_OFFSET
+
+
+
 /*
  * IPU6 uses uniform address within IPU6, therefore all subsystem registers
  * locates in one single space starts from 0 but in different sctions with
