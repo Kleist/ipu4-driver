@@ -9,6 +9,7 @@
 #include <linux/pm_runtime.h>
 
 #include <media/ipu-bridge.h>
+#include <linux/trace.h>
 
 #include "ipu6.h"
 #include "ipu6-cpd.h"
@@ -17,6 +18,9 @@
 #include "ipu6-platform-buttress-regs.h"
 #include "ipu6-platform-isys-csi2-reg.h"
 #include "ipu6-platform-regs.h"
+
+const char* ipu_last_rw_func;
+EXPORT_SYMBOL(ipu_last_rw_func);
 
 #define IPU6_PCI_BAR		0
 
@@ -779,6 +783,7 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	u32 val, version, sku_id;
 	int ret;
 
+	trace_printk_init_buffers();
 	isp = devm_kzalloc(&pdev->dev, sizeof(*isp), GFP_KERNEL);
 	if (!isp)
 		return -ENOMEM;
