@@ -323,6 +323,8 @@ struct ipu6_mmu_hw {
 	u8 l2_block_sz[IPU6_MMU_MAX_TLB_L2_STREAMS];
 	/* flag to track if WA is needed for successive invalidate HW bug */
 	bool insert_read_before_invalidate;
+	/* flag to track if zlw based mmu invalidation is needed */
+	bool zlw_invalidate;
 };
 
 struct ipu6_mmu_pdata {

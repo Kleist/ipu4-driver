@@ -207,6 +207,10 @@ static void *ipu6_dma_alloc(struct device *dev, size_t size,
 	info->size = size;
 	list_add(&info->list, &mmu->vma_list);
 
+	// IPU4 - 4.19 driver does this
+	// so let's add it to get same traces - not sure if it is needed
+	mmu->tlb_invalidate(mmu); 
+
 	return info->vaddr;
 
 out_unmap:
