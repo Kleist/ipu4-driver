@@ -16,6 +16,8 @@
 #include <media/v4l2-mediabus.h>
 #include <media/v4l2-subdev.h>
 
+#include "ambu-gen2-tc358748-regs.h"
+
 #define AMBU_TOSHIBA_REFCLK 19200000 // 19.2 MHz from aBox2/aView2 schematic
 
 /* 16-bit registers */
@@ -62,6 +64,11 @@ static bool tc358748_valid_reg(struct device *dev, unsigned int reg)
 	}
 }
 
+static inline struct tc358748 *to_tc358748(struct v4l2_subdev *sd)
+{
+	return container_of(sd, struct tc358748, sd);
+}
+
 static const struct regmap_config tc358748_regmap_config = {
 	.reg_bits = 16,
 	.val_bits = 16,
@@ -94,6 +101,35 @@ static int tc358748_write(struct tc358748 *tc358748, u32 reg, u32 val)
 			"Failed to write reg:0x%04x err:%d\n", reg, err);
 
 	return err;
+}
+
+static int tc358748_write_crl_reg(struct tc358748 *tc358748,
+	const struct crl_register_write_rep *reg)
+{
+	if (reg->len == CRL_REG_LEN_DELAY) {
+		msleep(reg->val);
+		return 0;
+	} else if (reg->len == CRL_REG_LEN_16BIT
+	     || reg->len == CRL_REG_LEN_32BIT) {
+		return tc358748_write(tc358748, reg->address, reg->val);
+	}
+	dev_err(&tc358748->client->dev, "Unhandled write op %d\n", reg->len);
+		return -EINVAL;
+}
+
+static int tc358748_write_crl_regs(struct tc358748 *tc358748,
+	const struct crl_register_write_rep *regs,
+	u32 len)
+{
+	u32 i;
+	int ret = 0;
+
+	for (i = 0; i < len; ++i) {
+		ret = tc358748_write_crl_reg(tc358748, &regs[i]);
+		if (ret)
+			break;
+	}
+	return ret;
 }
 
 static int tc358748_read(struct tc358748 *tc358748, u32 reg, u32 *val)
@@ -154,8 +190,22 @@ static int tc358748_sw_reset(struct tc358748 *tc358748)
 
 static int tc358748_s_stream(struct v4l2_subdev *sd, int enable)
 {
-	WARN(true, "Not implemented");
-	return -EINVAL;
+	struct tc358748 *tc358748 = to_tc358748(sd);
+	int ret = 0;
+
+	if (enable) {
+		// TODO - detect if it is 400 or 800
+		(void)ieib475_source_RGB_400_400;
+
+		ret = tc358748_write_crl_regs(tc358748,
+			ieib475_source_RGB_800_800,
+			ARRAY_SIZE(ieib475_source_RGB_800_800));
+	} else {
+		ret = tc358748_write_crl_regs(tc358748,
+			ieib475_streamoff_regs,
+			ARRAY_SIZE(ieib475_streamoff_regs));
+	}
+	return ret;
 }
 
 static int tc358748_init_cfg(struct v4l2_subdev *sd,
