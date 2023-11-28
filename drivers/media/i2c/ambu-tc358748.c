@@ -11,9 +11,10 @@
 #include <linux/i2c.h>
 #include <linux/regmap.h>
 
-#include <media/v4l2-fwnode.h>
-#include <media/v4l2-subdev.h>
 #include <media/v4l2-ctrls.h>
+#include <media/v4l2-fwnode.h>
+#include <media/v4l2-mediabus.h>
+#include <media/v4l2-subdev.h>
 
 #define AMBU_TOSHIBA_REFCLK 19200000 // 19.2 MHz from aBox2/aView2 schematic
 
@@ -29,6 +30,17 @@
 #define CLW_DPHYCONTTX_REG		0x0100
 
 #define CSI_START_REG			0x0518
+
+static const struct v4l2_mbus_framefmt tc358748_def_fmt = {
+	.width		= 800,
+	.height		= 800,
+	.code		= MEDIA_BUS_FMT_RGB888_1X24,
+	.field		= V4L2_FIELD_NONE,
+	.colorspace	= V4L2_COLORSPACE_DEFAULT,
+	.ycbcr_enc	= V4L2_YCBCR_ENC_DEFAULT,
+	.quantization	= V4L2_QUANTIZATION_DEFAULT,
+	.xfer_func	= V4L2_XFER_FUNC_DEFAULT,
+};
 
 struct tc358748 {
 	struct v4l2_subdev		sd;
@@ -140,6 +152,44 @@ static int tc358748_sw_reset(struct tc358748 *tc358748)
 	return tc358748_clear_bits(tc358748, SYSCTL_REG, SRESET);
 }
 
+static int tc358748_s_stream(struct v4l2_subdev *sd, int enable)
+{
+	WARN(true, "Not implemented");
+	return -EINVAL;
+}
+
+static int tc358748_init_cfg(struct v4l2_subdev *sd,
+			     struct v4l2_subdev_state *state)
+{
+	struct v4l2_mbus_framefmt *fmt;
+
+	fmt = v4l2_subdev_get_pad_format(sd, state, 0);
+	*fmt = tc358748_def_fmt;
+
+	return 0;
+}
+
+static int tc358748_enum_mbus_code(struct v4l2_subdev *sd,
+				   struct v4l2_subdev_state *sd_state,
+				   struct v4l2_subdev_mbus_code_enum *code)
+{
+	WARN(true, "Not implemented");
+	return -EINVAL;
+}
+
+static int tc358748_set_fmt(struct v4l2_subdev *sd,
+			    struct v4l2_subdev_state *sd_state,
+			    struct v4l2_subdev_format *format)
+{
+	struct v4l2_mbus_framefmt *src_fmt;
+
+	src_fmt = v4l2_subdev_get_pad_format(sd, sd_state, 0);
+
+	// From 4.19 crl_ieib475_configuration.h: struct crl_csi_data_fmt ieib475_crl_csi_data_fmt
+	src_fmt->code = MEDIA_BUS_FMT_RGB888_1X24;
+	return 0;
+}
+
 static int tc358748_init_hw(struct tc358748 *tc358748)
 {
 	struct device *dev = &tc358748->client->dev;
@@ -167,8 +217,42 @@ static int tc358748_init_hw(struct tc358748 *tc358748)
 	return 0;
 }
 
+static int
+tc358748_link_validate(struct v4l2_subdev *sd, struct media_link *link,
+		       struct v4l2_subdev_format *source_fmt,
+		       struct v4l2_subdev_format *sink_fmt)
+{
+	WARN(true, "Not implemented");
+	return -EINVAL;
+}
+
+static int tc358748_get_mbus_config(struct v4l2_subdev *sd, unsigned int pad,
+				    struct v4l2_mbus_config *config)
+{
+	WARN(true, "Not implemented");
+	return -EINVAL;
+}
+
+static const struct v4l2_subdev_core_ops tc358748_core_ops = {
+};
+
+static const struct v4l2_subdev_video_ops tc358748_video_ops = {
+	.s_stream = tc358748_s_stream,
+};
+
+static const struct v4l2_subdev_pad_ops tc358748_pad_ops = {
+	.init_cfg = tc358748_init_cfg,
+	.enum_mbus_code = tc358748_enum_mbus_code,
+	.set_fmt = tc358748_set_fmt,
+	.get_fmt = v4l2_subdev_get_fmt,
+	.link_validate = tc358748_link_validate,
+	.get_mbus_config = tc358748_get_mbus_config,
+};
+
 static const struct v4l2_subdev_ops tc358748_ops = {
-	0
+	.core = &tc358748_core_ops,
+	.video = &tc358748_video_ops,
+	.pad = &tc358748_pad_ops,
 };
 
 static const struct media_entity_operations tc358748_entity_ops = {
