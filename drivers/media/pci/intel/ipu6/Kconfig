@@ -8,7 +8,7 @@ config VIDEO_INTEL_IPU4
 	select VIDEO_V4L2_SUBDEV_API
 	select VIDEOBUF2_DMA_CONTIG
 	select V4L2_FWNODE
-	select IPU_BRIDGE
+	select AMBU_IPU_BRIDGE
 	help
 	  This is the 4th Gen Intel Image Processing Unit, found in Intel SoCs
 	  and used for capturing images and video from camera sensors.

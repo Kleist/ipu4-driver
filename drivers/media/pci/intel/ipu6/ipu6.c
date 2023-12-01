@@ -8,7 +8,7 @@
 #include <linux/pci-ats.h>
 #include <linux/pm_runtime.h>
 
-#include <media/ipu-bridge.h>
+#include <media/ambu-ipu-bridge.h>
 #include <linux/trace.h>
 
 #include "ipu6.h"
@@ -613,7 +613,7 @@ ipu6_isys_init(struct pci_dev *pdev, struct device *parent,
 			return ERR_PTR(-EINVAL);
 		}
 
-		ret = ipu_bridge_init(&pdev->dev, ipu_bridge_parse_ssdb);
+		ret = ambu_ipu_bridge_init(&pdev->dev);
 		if (ret) {
 			if (ret != -EPROBE_DEFER)
 				dev_err_probe(&pdev->dev, ret,
@@ -911,32 +911,32 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 				   psys_base, &psys_ipdata);
 	if (IS_ERR(isp->psys)) {
 		ret = PTR_ERR(isp->psys);
-		goto out_ipu6_bus_del_devices;
+		goto out_ipu_bridge_uninit;
 	}
 
 	ret = pm_runtime_resume_and_get(&isp->psys->auxdev.dev);
 	if (ret < 0)
-		goto out_ipu6_bus_del_devices;
+		goto out_ipu_bridge_uninit;
 
 	ret = ipu6_mmu_hw_init(isp->psys->mmu);
 	if (ret) {
 		dev_err_probe(&isp->pdev->dev, ret,
 			      "Failed to set MMU hardware\n");
-		goto out_ipu6_bus_del_devices;
+		goto out_ipu_bridge_uninit;
 	}
 
 	ret = ipu6_buttress_map_fw_image(isp->psys, isp->cpd_fw,
 					 &isp->psys->fw_sgt);
 	if (ret) {
 		dev_err_probe(&isp->pdev->dev, ret, "failed to map fw image\n");
-		goto out_ipu6_bus_del_devices;
+		goto out_ipu_bridge_uninit;
 	}
 
 	ret = ipu6_cpd_create_pkg_dir(isp->psys, isp->cpd_fw->data);
 	if (ret) {
 		dev_err_probe(&isp->pdev->dev, ret,
 			      "failed to create pkg dir\n");
-		goto out_ipu6_bus_del_devices;
+		goto out_ipu_bridge_uninit;
 	}
 
 	ret = devm_request_threaded_irq(&pdev->dev, pdev->irq,
@@ -945,14 +945,14 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 					IRQF_SHARED, IPU6_NAME, isp);
 	if (ret) {
 		dev_err_probe(&pdev->dev, ret, "Requesting irq failed\n");
-		goto out_ipu6_bus_del_devices;
+		goto out_ipu_bridge_uninit;
 	}
 
 	ret = ipu6_buttress_authenticate(isp);
 	if (ret) {
 		dev_err_probe(&isp->pdev->dev, ret,
 			      "FW authentication failed\n");
-		goto out_ipu6_bus_del_devices;
+		goto out_ipu_bridge_uninit;
 	}
 
 	ipu6_mmu_hw_cleanup(isp->psys->mmu);
@@ -974,6 +974,8 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	return 0;
 
+out_ipu_bridge_uninit:
+	ambu_ipu_bridge_uninit(&pdev->dev);
 out_ipu6_bus_del_devices:
 	if (isp->psys) {
 		ipu6_cpd_free_pkg_dir(isp->psys);
@@ -1015,6 +1017,8 @@ static void ipu6_pci_remove(struct pci_dev *pdev)
 
 	ipu6_mmu_cleanup(psys_mmu);
 	ipu6_mmu_cleanup(isys_mmu);
+
+	ambu_ipu_bridge_uninit(&pdev->dev);
 }
 
 static void ipu6_pci_reset_prepare(struct pci_dev *pdev)
