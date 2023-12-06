@@ -68,6 +68,8 @@ const struct ipu6_isys_pixelformat ipu6_isys_pfmts[] = {
 	 IPU6_FW_ISYS_FRAME_FORMAT_RGB565},
 	{V4L2_PIX_FMT_BGR24, 24, 24, MEDIA_BUS_FMT_RGB888_1X24,
 	 IPU6_FW_ISYS_FRAME_FORMAT_RGBA888},
+	{V4L2_PIX_FMT_XBGR32, 32, 24, MEDIA_BUS_FMT_RGB888_1X24,
+	 IPU6_FW_ISYS_FRAME_FORMAT_RGBA888},
 };
 
 static int video_open(struct file *file)
