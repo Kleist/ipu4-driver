@@ -792,9 +792,6 @@ static int ipu6_runtime_resume(struct device *dev)
 
 	ipu6_configure_vc_mechanism(isp);
 	ipu6_buttress_restore(isp);
-	
-	// HACK - not sure why we need to power up here (or do we even?)
-	ipu6_buttress_power(&isp->isys->auxdev.dev, isp->isys->ctrl, true);
 
 	if (isp->need_ipc_reset) {
 		struct ipu6_buttress *b = &isp->buttress;
