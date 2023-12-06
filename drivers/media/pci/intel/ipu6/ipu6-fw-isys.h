@@ -53,10 +53,6 @@ struct ipu6_isys;
 /* Max number of planes for frame formats supported by the FW */
 #define IPU6_PIN_PLANES_MAX 4
 
-#define IPU6_FW_ISYS_SENSOR_TYPE_START 14
-#define IPU6_FW_ISYS_SENSOR_TYPE_END 19
-#define IPU6SE_FW_ISYS_SENSOR_TYPE_START 6
-#define IPU6SE_FW_ISYS_SENSOR_TYPE_END 11
 /*
  * Device close takes some time from last ack message to actual stopping
  * of the SP processor. As long as the SP processor runs we can't proceed with

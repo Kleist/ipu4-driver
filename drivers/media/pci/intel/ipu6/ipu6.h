@@ -378,8 +378,6 @@ struct ipu6_isys_internal_pdata {
 	u32 max_send_queues;
 	u32 max_sram_blocks;
 	u32 max_devq_size;
-	u32 sensor_type_start;
-	u32 sensor_type_end;
 	u32 ltr;
 	u32 memopen_threshold;
 	bool enhanced_iwake;

@@ -774,9 +774,6 @@ static int isys_probe(struct auxiliary_device *auxdev,
 	isys->adev = adev;
 	isys->pdata = adev->pdata;
 
-	/* initial sensor type */
-	isys->sensor_type = isys->pdata->ipdata->sensor_type_start;
-
 	spin_lock_init(&isys->streams_lock);
 	spin_lock_init(&isys->power_lock);
 	isys->power = 0;
