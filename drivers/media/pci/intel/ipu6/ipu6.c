@@ -147,7 +147,7 @@ static const struct ipu6_isys_internal_pdata ipu4_isys_ipdata = {
 						2, 2, 2, 2, 2, 2
 				},
 				.insert_read_before_invalidate = false,
-				.zlw_invalidate = true,
+				.zlw_invalidate = false,
 				.l1_stream_id_reg_offset =
 					IPU4_MMU_L1_STREAM_ID_REG_OFFSET,
 				.l2_stream_id_reg_offset =
@@ -204,7 +204,7 @@ static const struct ipu6_psys_internal_pdata ipu4_psys_ipdata = {
 						   2, 2, 2, 2, 2, 2
 				   },
 				   .insert_read_before_invalidate = false,
-				   .zlw_invalidate = true,
+				   .zlw_invalidate = false,
 				   .l1_stream_id_reg_offset =
 				   IPU4_MMU_L1_STREAM_ID_REG_OFFSET,
 				   .l2_stream_id_reg_offset =
@@ -241,7 +241,7 @@ static const struct ipu6_psys_internal_pdata ipu4_psys_ipdata = {
 						   2, 2, 2, 2, 2, 2
 				   },
 				   .insert_read_before_invalidate = false,
-				   .zlw_invalidate = true,
+				   .zlw_invalidate = false,
 				   .l1_stream_id_reg_offset =
 				   IPU4_MMU_L1_STREAM_ID_REG_OFFSET,
 				   .l2_stream_id_reg_offset =
