@@ -368,272 +368,6 @@ irqreturn_t isys_isr(struct ipu6_bus_device *adev)
 	return IRQ_HANDLED;
 }
 
-static void get_lut_ltrdid(struct ipu6_isys *isys, struct ltr_did *pltr_did)
-{
-	struct isys_iwake_watermark *iwake_watermark = &isys->iwake_watermark;
-	struct ltr_did ltrdid_default;
-
-	ltrdid_default.lut_ltr.value = LTR_DEFAULT_VALUE;
-	ltrdid_default.lut_fill_time.value = FILL_TIME_DEFAULT_VALUE;
-
-	if (iwake_watermark->ltrdid.lut_ltr.value)
-		*pltr_did = iwake_watermark->ltrdid;
-	else
-		*pltr_did = ltrdid_default;
-}
-
-static int set_iwake_register(struct ipu6_isys *isys, u32 index, u32 value)
-{
-	struct device *dev = &isys->adev->auxdev.dev;
-	u32 req_id = index;
-	u32 offset = 0;
-	int ret;
-
-	ret = ipu6_fw_isys_send_proxy_token(isys, req_id, index, offset, value);
-	if (ret)
-		dev_err(dev, "write %d failed %d", index, ret);
-
-	return ret;
-}
-
-/*
- * When input system is powered up and before enabling any new sensor capture,
- * or after disabling any sensor capture the following values need to be set:
- * LTR_value = LTR(usec) from calculation;
- * LTR_scale = 2;
- * DID_value = DID(usec) from calculation;
- * DID_scale = 2;
- *
- * When input system is powered down, the LTR and DID values
- * must be returned to the default values:
- * LTR_value = 1023;
- * LTR_scale = 5;
- * DID_value = 1023;
- * DID_scale = 2;
- */
-static void set_iwake_ltrdid(struct ipu6_isys *isys, u16 ltr, u16 did,
-			     enum ltr_did_type use)
-{
-	struct device *dev = &isys->adev->auxdev.dev;
-	u16 ltr_val, ltr_scale = LTR_SCALE_1024NS;
-	u16 did_val, did_scale = DID_SCALE_1US;
-	struct ipu6_device *isp = isys->adev->isp;
-	union fabric_ctrl fc;
-
-	switch (use) {
-	case LTR_IWAKE_ON:
-		ltr_val = min_t(u16, ltr, (u16)LTR_DID_VAL_MAX);
-		did_val = min_t(u16, did, (u16)LTR_DID_VAL_MAX);
-		ltr_scale = (ltr == LTR_DID_VAL_MAX &&
-			     did == LTR_DID_VAL_MAX) ?
-			LTR_SCALE_DEFAULT : LTR_SCALE_1024NS;
-		break;
-	case LTR_ISYS_ON:
-	case LTR_IWAKE_OFF:
-		ltr_val = LTR_DID_PKGC_2R;
-		did_val = LTR_DID_PKGC_2R;
-		break;
-	case LTR_ISYS_OFF:
-		ltr_val   = LTR_DID_VAL_MAX;
-		did_val   = LTR_DID_VAL_MAX;
-		ltr_scale = LTR_SCALE_DEFAULT;
-		break;
-	case LTR_ENHANNCE_IWAKE:
-		if (ltr == LTR_DID_VAL_MAX && did == LTR_DID_VAL_MAX) {
-			ltr_val = LTR_DID_VAL_MAX;
-			did_val = LTR_DID_VAL_MAX;
-			ltr_scale = LTR_SCALE_DEFAULT;
-		} else if (did < ONE_THOUSAND_MICROSECOND) {
-			ltr_val = ltr;
-			did_val = did;
-		} else {
-			ltr_val = ltr;
-			/* div 90% value by 32 to account for scale change */
-			did_val = did / 32;
-			did_scale = DID_SCALE_32US;
-		}
-		break;
-	default:
-		ltr_val   = LTR_DID_VAL_MAX;
-		did_val   = LTR_DID_VAL_MAX;
-		ltr_scale = LTR_SCALE_DEFAULT;
-		break;
-	}
-
-	fc.value = readl(isp->base + IPU6_BUTTRESS_FABIC_CONTROL);
-	fc.bits.ltr_val = ltr_val;
-	fc.bits.ltr_scale = ltr_scale;
-	fc.bits.did_val = did_val;
-	fc.bits.did_scale = did_scale;
-
-	dev_dbg(dev, "ltr: value %u scale %u, did: value %u scale %u\n",
-		ltr_val, ltr_scale, did_val, did_scale);
-	writel(fc.value, isp->base + IPU6_BUTTRESS_FABIC_CONTROL);
-}
-
-/*
- * Driver may clear register GDA_ENABLE_IWAKE before FW configures the
- * stream for debug purpose. Otherwise driver should not access this register.
- */
-static void enable_iwake(struct ipu6_isys *isys, bool enable)
-{
-	struct isys_iwake_watermark *iwake_watermark = &isys->iwake_watermark;
-	int ret;
-
-	mutex_lock(&iwake_watermark->mutex);
-
-	if (iwake_watermark->iwake_enabled == enable) {
-		mutex_unlock(&iwake_watermark->mutex);
-		return;
-	}
-
-	ret = set_iwake_register(isys, GDA_ENABLE_IWAKE_INDEX, enable);
-	if (!ret)
-		iwake_watermark->iwake_enabled = enable;
-
-	mutex_unlock(&iwake_watermark->mutex);
-}
-
-void update_watermark_setting(struct ipu6_isys *isys)
-{
-	struct isys_iwake_watermark *iwake_watermark = &isys->iwake_watermark;
-	u32 iwake_threshold, iwake_critical_threshold, page_num;
-	struct device *dev = &isys->adev->auxdev.dev;
-	u32 calc_fill_time_us = 0, ltr = 0, did = 0;
-	struct video_stream_watermark *p_watermark;
-	enum ltr_did_type ltr_did_type;
-	struct list_head *stream_node;
-	u64 isys_pb_datarate_mbs = 0;
-	u32 mem_open_threshold = 0;
-	struct ltr_did ltrdid;
-	u64 threshold_bytes;
-	u32 max_sram_size;
-	u32 shift;
-
-	shift = isys->pdata->ipdata->sram_gran_shift;
-	max_sram_size = isys->pdata->ipdata->max_sram_size;
-
-	mutex_lock(&iwake_watermark->mutex);
-	if (iwake_watermark->force_iwake_disable) {
-		set_iwake_ltrdid(isys, 0, 0, LTR_IWAKE_OFF);
-		set_iwake_register(isys, GDA_IRQ_CRITICAL_THRESHOLD_INDEX,
-				   CRITICAL_THRESHOLD_IWAKE_DISABLE);
-		goto unlock_exit;
-	}
-
-	if (list_empty(&iwake_watermark->video_list)) {
-		isys_pb_datarate_mbs = 0;
-	} else {
-		list_for_each(stream_node, &iwake_watermark->video_list) {
-			p_watermark = list_entry(stream_node,
-						 struct video_stream_watermark,
-						 stream_node);
-			isys_pb_datarate_mbs += p_watermark->stream_data_rate;
-		}
-	}
-	mutex_unlock(&iwake_watermark->mutex);
-
-	if (!isys_pb_datarate_mbs) {
-		enable_iwake(isys, false);
-		set_iwake_ltrdid(isys, 0, 0, LTR_IWAKE_OFF);
-		mutex_lock(&iwake_watermark->mutex);
-		set_iwake_register(isys, GDA_IRQ_CRITICAL_THRESHOLD_INDEX,
-				   CRITICAL_THRESHOLD_IWAKE_DISABLE);
-		goto unlock_exit;
-	}
-
-	enable_iwake(isys, true);
-	calc_fill_time_us = max_sram_size / isys_pb_datarate_mbs;
-
-	if (isys->pdata->ipdata->enhanced_iwake) {
-		ltr = isys->pdata->ipdata->ltr;
-		did = calc_fill_time_us * DEFAULT_DID_RATIO / 100;
-		ltr_did_type = LTR_ENHANNCE_IWAKE;
-	} else {
-		get_lut_ltrdid(isys, &ltrdid);
-
-		if (calc_fill_time_us <= ltrdid.lut_fill_time.bits.th0)
-			ltr = 0;
-		else if (calc_fill_time_us <= ltrdid.lut_fill_time.bits.th1)
-			ltr = ltrdid.lut_ltr.bits.val0;
-		else if (calc_fill_time_us <= ltrdid.lut_fill_time.bits.th2)
-			ltr = ltrdid.lut_ltr.bits.val1;
-		else if (calc_fill_time_us <= ltrdid.lut_fill_time.bits.th3)
-			ltr = ltrdid.lut_ltr.bits.val2;
-		else
-			ltr = ltrdid.lut_ltr.bits.val3;
-
-		did = calc_fill_time_us - ltr;
-		ltr_did_type = LTR_IWAKE_ON;
-	}
-
-	set_iwake_ltrdid(isys, ltr, did, ltr_did_type);
-
-	/* calculate iwake threshold with 2KB granularity pages */
-	threshold_bytes = did * isys_pb_datarate_mbs;
-	iwake_threshold = max_t(u32, 1, threshold_bytes >> shift);
-	iwake_threshold = min_t(u32, iwake_threshold, max_sram_size);
-
-	mutex_lock(&iwake_watermark->mutex);
-	if (isys->pdata->ipdata->enhanced_iwake) {
-		set_iwake_register(isys, GDA_IWAKE_THRESHOLD_INDEX,
-				   DEFAULT_IWAKE_THRESHOLD);
-		/* calculate number of pages that will be filled in 10 usec */
-		page_num = (DEFAULT_MEM_OPEN_TIME * isys_pb_datarate_mbs) /
-			ISF_DMA_TOP_GDA_PROFERTY_PAGE_SIZE;
-		page_num += ((DEFAULT_MEM_OPEN_TIME * isys_pb_datarate_mbs) %
-			     ISF_DMA_TOP_GDA_PROFERTY_PAGE_SIZE) ? 1 : 0;
-		mem_open_threshold = isys->pdata->ipdata->memopen_threshold;
-		mem_open_threshold = max_t(u32, mem_open_threshold, page_num);
-		dev_dbg(dev, "mem_open_threshold: %u\n", mem_open_threshold);
-		set_iwake_register(isys, GDA_MEMOPEN_THRESHOLD_INDEX,
-				   mem_open_threshold);
-	} else {
-		set_iwake_register(isys, GDA_IWAKE_THRESHOLD_INDEX,
-				   iwake_threshold);
-	}
-
-	iwake_critical_threshold = iwake_threshold +
-		(IS_PIXEL_BUFFER_PAGES - iwake_threshold) / 2;
-
-	dev_dbg(dev, "threshold: %u critical: %u\n", iwake_threshold,
-		iwake_critical_threshold);
-
-	set_iwake_register(isys, GDA_IRQ_CRITICAL_THRESHOLD_INDEX,
-			   iwake_critical_threshold);
-
-	writel(VAL_PKGC_PMON_CFG_RESET,
-	       isys->adev->isp->base + REG_PKGC_PMON_CFG);
-	writel(VAL_PKGC_PMON_CFG_START,
-	       isys->adev->isp->base + REG_PKGC_PMON_CFG);
-unlock_exit:
-	mutex_unlock(&iwake_watermark->mutex);
-}
-
-static void isys_iwake_watermark_init(struct ipu6_isys *isys)
-{
-	struct isys_iwake_watermark *iwake_watermark = &isys->iwake_watermark;
-
-	INIT_LIST_HEAD(&iwake_watermark->video_list);
-	mutex_init(&iwake_watermark->mutex);
-
-	iwake_watermark->ltrdid.lut_ltr.value = 0;
-	iwake_watermark->isys = isys;
-	iwake_watermark->iwake_enabled = false;
-	iwake_watermark->force_iwake_disable = false;
-}
-
-static void isys_iwake_watermark_cleanup(struct ipu6_isys *isys)
-{
-	struct isys_iwake_watermark *iwake_watermark = &isys->iwake_watermark;
-
-	mutex_lock(&iwake_watermark->mutex);
-	list_del(&iwake_watermark->video_list);
-	mutex_unlock(&iwake_watermark->mutex);
-
-	mutex_destroy(&iwake_watermark->mutex);
-}
-
 /* The .bound() notifier callback when a match is found */
 static int isys_notifier_bound(struct v4l2_async_notifier *notifier,
 			       struct v4l2_subdev *sd,
@@ -830,9 +564,6 @@ static int isys_runtime_pm_resume(struct device *dev)
 
 	isys_setup_hw(isys);
 
-//  Set IPU6_BUTTRESS_FABIC_CONTROL which is not on IPU4
-// 	set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_ON);
-
 	return 0;
 }
 
@@ -856,9 +587,6 @@ static int isys_runtime_pm_suspend(struct device *dev)
 
 	isys->phy_termcal_val = 0;
 	cpu_latency_qos_update_request(&isys->pm_qos, PM_QOS_DEFAULT_VALUE);
-
-//  Set IPU6_BUTTRESS_FABIC_CONTROL which is not on IPU4
-// 	set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_OFF);
 
 	ipu6_mmu_hw_cleanup(adev->mmu);
 
@@ -907,7 +635,6 @@ static void isys_remove(struct auxiliary_device *auxdev)
 		dma_free_attrs(&auxdev->dev, sizeof(struct isys_fw_msgs),
 			       fwmsg, fwmsg->dma_addr, 0);
 
-	isys_iwake_watermark_cleanup(isys);
 	isys_notifier_cleanup(isys);
 	isys_unregister_devices(isys);
 
@@ -1085,8 +812,6 @@ static int isys_probe(struct auxiliary_device *auxdev,
 	ret = alloc_fw_msg_bufs(isys, 20);
 	if (ret < 0)
 		goto out_remove_pkg_dir_shared_buffer;
-
-	isys_iwake_watermark_init(isys);
 
 	ret = isys_register_devices(isys);
 	if (ret)

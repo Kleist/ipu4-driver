@@ -582,9 +582,6 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 
 	ipu6_isys_set_csi2_streams_status(av, true);
 
-	ipu6_isys_configure_stream_watermark(av, true);
-	ipu6_isys_update_stream_watermark(av, true);
-
 	if (stream->nr_streaming != stream->nr_queues)
 		goto out;
 
@@ -633,8 +630,6 @@ static void stop_streaming(struct vb2_queue *q)
 	WARN(1, "%s: Not implemented", __func__);
 
 	mutex_lock(&stream->mutex);
-
-	ipu6_isys_update_stream_watermark(av, false);
 
 	mutex_lock(&av->isys->stream_mutex);
 	if (stream->nr_streaming == stream->nr_queues && stream->streaming)

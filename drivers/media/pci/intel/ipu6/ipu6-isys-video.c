@@ -629,106 +629,6 @@ int ipu6_isys_video_prepare_stream(struct ipu6_isys_video *av,
 	return 0;
 }
 
-void ipu6_isys_configure_stream_watermark(struct ipu6_isys_video *av,
-					  bool state)
-{
-	struct ipu6_isys *isys = av->isys;
-	struct ipu6_isys_csi2 *csi2 = NULL;
-	struct isys_iwake_watermark *iwake_watermark = &isys->iwake_watermark;
-	struct device *dev = &isys->adev->auxdev.dev;
-	struct v4l2_mbus_framefmt format;
-	struct v4l2_subdev *esd;
-	struct v4l2_control hb = { .id = V4L2_CID_HBLANK, .value = 0 };
-	unsigned int bpp, lanes;
-	s64 link_freq = 0;
-	u64 pixel_rate = 0;
-	int ret;
-
-	if (!state)
-		return;
-
-	esd = media_entity_to_v4l2_subdev(av->stream->source_entity);
-
-	av->watermark.width = av->mpix.width;
-	av->watermark.height = av->mpix.height;
-	av->watermark.sram_gran_shift = isys->pdata->ipdata->sram_gran_shift;
-	av->watermark.sram_gran_size = isys->pdata->ipdata->sram_gran_size;
-
-	ret = v4l2_g_ctrl(esd->ctrl_handler, &hb);
-	if (!ret && hb.value >= 0)
-		av->watermark.hblank = hb.value;
-	else
-		av->watermark.hblank = 0;
-
-	csi2 = ipu6_isys_subdev_to_csi2(av->stream->asd);
-	link_freq = ipu6_isys_csi2_get_link_freq(csi2);
-	if (link_freq > 0) {
-		lanes = csi2->nlanes;
-		ret = ipu6_isys_get_stream_pad_fmt(&csi2->asd.sd, 0,
-						   av->source_stream, &format);
-		if (!ret) {
-			bpp = ipu6_isys_mbus_code_to_bpp(format.code);
-			pixel_rate = mul_u64_u32_div(link_freq, lanes * 2, bpp);
-		}
-	}
-
-	av->watermark.pixel_rate = pixel_rate;
-
-	if (!pixel_rate) {
-		mutex_lock(&iwake_watermark->mutex);
-		iwake_watermark->force_iwake_disable = true;
-		mutex_unlock(&iwake_watermark->mutex);
-		dev_warn(dev, "unexpected pixel_rate from %s, disable iwake.\n",
-			 av->stream->source_entity->name);
-	}
-}
-
-static void calculate_stream_datarate(struct ipu6_isys_video *av)
-{
-	struct video_stream_watermark *watermark = &av->watermark;
-	u32 bpp = av->pfmt->bpp;
-	u32 pages_per_line, pb_bytes_per_line, pixels_per_line, bytes_per_line;
-	u64 line_time_ns, stream_data_rate;
-	u16 shift, size;
-
-	shift = watermark->sram_gran_shift;
-	size = watermark->sram_gran_size;
-
-	pixels_per_line = watermark->width + watermark->hblank;
-	line_time_ns =  div_u64(pixels_per_line * NSEC_PER_SEC,
-				watermark->pixel_rate);
-	bytes_per_line = watermark->width * bpp / 8;
-	pages_per_line = DIV_ROUND_UP(bytes_per_line, size);
-	pb_bytes_per_line = pages_per_line << shift;
-	stream_data_rate = div64_u64(pb_bytes_per_line * 1000, line_time_ns);
-
-	watermark->stream_data_rate = stream_data_rate;
-}
-
-void ipu6_isys_update_stream_watermark(struct ipu6_isys_video *av, bool state)
-{
-	struct isys_iwake_watermark *iwake_watermark =
-		&av->isys->iwake_watermark;
-
-	if (!av->watermark.pixel_rate)
-		return;
-
-	if (state) {
-		calculate_stream_datarate(av);
-		mutex_lock(&iwake_watermark->mutex);
-		list_add(&av->watermark.stream_node,
-			 &iwake_watermark->video_list);
-		mutex_unlock(&iwake_watermark->mutex);
-	} else {
-		av->watermark.stream_data_rate = 0;
-		mutex_lock(&iwake_watermark->mutex);
-		list_del(&av->watermark.stream_node);
-		mutex_unlock(&iwake_watermark->mutex);
-	}
-
-	update_watermark_setting(av->isys);
-}
-
 void ipu6_isys_put_stream(struct ipu6_isys_stream *stream)
 {
 	struct device *dev = &stream->isys->adev->auxdev.dev;
@@ -936,7 +836,7 @@ int ipu6_isys_video_set_streaming(struct ipu6_isys_video *av, int state,
 		ret = start_stream_firmware(av, bl);
 		if (ret) {
 			dev_err(dev, "start stream of firmware failed\n");
-			goto out_clear_stream_watermark;
+			return ret;
 		}
 
 		/* start sub-device which connects with video */
@@ -970,10 +870,6 @@ out_media_entity_stop_streaming:
 
 out_media_entity_stop_streaming_firmware:
 	stop_streaming_firmware(av);
-
-out_clear_stream_watermark:
-	ipu6_isys_update_stream_watermark(av, 0);
-
 	return ret;
 }
 
