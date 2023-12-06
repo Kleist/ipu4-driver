@@ -18,8 +18,6 @@ static int queue_setup(struct vb2_queue *q, unsigned int *num_buffers,
 	unsigned int i;
 	u32 size;
 
-	WARN(1, "%s: Not implemented", __func__);
-	return -ENOENT;
 	/* num_planes == 0: we're being called through VIDIOC_REQBUFS */
 	if (!*num_planes) {
 		use_fmt = true;
@@ -344,9 +342,6 @@ static void buf_queue(struct vb2_buffer *vb)
 	unsigned int i;
 	int ret;
 
-	WARN(1, "%s: Not implemented", __func__);
-	return;
-
 	dev_dbg(dev, "queue buffer %u for %s\n", vb->index, av->vdev.name);
 
 	for (i = 0; i < vb->num_planes; i++) {
@@ -548,9 +543,6 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 	struct ipu6_isys_stream *stream;
 	struct media_entity *source_entity = NULL;
 	int nr_queues, ret;
-
-	WARN(1, "%s: Not implemented", __func__);
-	return -ENOENT;
 
 	dev_dbg(dev, "stream: %s: width %u, height %u, css pixelformat %u\n",
 		av->vdev.name, av->mpix.width, av->mpix.height,

@@ -281,8 +281,6 @@ void isys_setup_hw(struct ipu6_isys *isys)
 
 static void ipu6_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
 {
-	WARN(1, "%s: Not implemented", __func__);
-
 	struct ipu6_isys_stream *stream;
 	unsigned int i;
 	u32 status;
@@ -997,8 +995,6 @@ struct isys_fw_msgs *ipu6_get_fw_msg_buf(struct ipu6_isys_stream *stream)
 
 void ipu6_cleanup_fw_msg_bufs(struct ipu6_isys *isys)
 {
-	WARN(1, "%s Not implemented", __func__);
-	return;
 	struct isys_fw_msgs *fwmsg, *fwmsg0;
 	unsigned long flags;
 
