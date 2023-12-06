@@ -641,7 +641,7 @@ void ipu6_isys_put_stream(struct ipu6_isys_stream *stream)
 	}
 
 	spin_lock_irqsave(&stream->isys->streams_lock, flags);
-	for (i = 0; i < IPU6_ISYS_MAX_STREAMS; i++) {
+	for (i = 0; i < IPU4_ISYS_MAX_STREAMS; i++) {
 		if (&stream->isys->streams[i] == stream) {
 			if (stream->isys->streams_ref_count[i] > 0)
 				stream->isys->streams_ref_count[i]--;
@@ -667,7 +667,7 @@ ipu6_isys_get_stream(struct ipu6_isys_video *av, struct ipu6_isys_subdev *asd)
 		return NULL;
 
 	spin_lock_irqsave(&isys->streams_lock, flags);
-	for (i = 0; i < IPU6_ISYS_MAX_STREAMS; i++) {
+	for (i = 0; i < IPU4_ISYS_MAX_STREAMS; i++) {
 		if (isys->streams_ref_count[i] && isys->streams[i].vc == vc &&
 		    isys->streams[i].asd == asd) {
 			isys->streams_ref_count[i]++;
@@ -677,7 +677,7 @@ ipu6_isys_get_stream(struct ipu6_isys_video *av, struct ipu6_isys_subdev *asd)
 	}
 
 	if (!stream) {
-		for (i = 0; i < IPU6_ISYS_MAX_STREAMS; i++) {
+		for (i = 0; i < IPU4_ISYS_MAX_STREAMS; i++) {
 			if (!isys->streams_ref_count[i]) {
 				isys->streams_ref_count[i]++;
 				stream = &isys->streams[i];
@@ -701,7 +701,7 @@ ipu6_isys_query_stream_by_handle(struct ipu6_isys *isys, u8 stream_handle)
 	if (!isys)
 		return NULL;
 
-	if (stream_handle >= IPU6_ISYS_MAX_STREAMS) {
+	if (stream_handle >= IPU4_ISYS_MAX_STREAMS) {
 		dev_err(&isys->adev->auxdev.dev,
 			"stream_handle %d is invalid\n", stream_handle);
 		return NULL;
@@ -734,7 +734,7 @@ ipu6_isys_query_stream_by_source(struct ipu6_isys *isys, int source, u8 vc)
 	}
 
 	spin_lock_irqsave(&isys->streams_lock, flags);
-	for (i = 0; i < IPU6_ISYS_MAX_STREAMS; i++) {
+	for (i = 0; i < IPU4_ISYS_MAX_STREAMS; i++) {
 		if (!isys->streams_ref_count[i])
 			continue;
 

@@ -18,7 +18,7 @@
 
 #define IPU6_ISYS_ENTITY_PREFIX		"Intel IPU6"
 /* FW support max 16 streams */
-#define IPU6_ISYS_MAX_STREAMS		16
+#define IPU4_ISYS_MAX_STREAMS		8
 #define ISYS_UNISPART_IRQS	(IPU6_ISYS_UNISPART_IRQ_SW |	\
 				 IPU6_ISYS_UNISPART_IRQ_CSI0 |	\
 				 IPU6_ISYS_UNISPART_IRQ_CSI1)
@@ -131,8 +131,8 @@ struct ipu6_isys {
 	u32 isr_csi2_bits;
 	u32 csi2_rx_ctrl_cached;
 	spinlock_t streams_lock;
-	struct ipu6_isys_stream streams[IPU6_ISYS_MAX_STREAMS];
-	int streams_ref_count[IPU6_ISYS_MAX_STREAMS];
+	struct ipu6_isys_stream streams[IPU4_ISYS_MAX_STREAMS];
+	int streams_ref_count[IPU4_ISYS_MAX_STREAMS];
 	void *fwcom;
 	unsigned int line_align;
 	u32 phy_termcal_val;

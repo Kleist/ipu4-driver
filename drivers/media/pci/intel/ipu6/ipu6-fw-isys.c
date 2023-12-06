@@ -329,9 +329,6 @@ int ipu6_fw_isys_init(struct ipu6_isys *isys, unsigned int num_streams)
 	};
 	int ret;
 
-	WARN(1, "%s: Not implemented", __func__);
-	return -EINVAL;
-
 	ipu6_isys_fwcom_cfg_init(isys, &fwcom, num_streams);
 
 	isys->fwcom = ipu6_fw_com_prepare(&fwcom, isys->adev,

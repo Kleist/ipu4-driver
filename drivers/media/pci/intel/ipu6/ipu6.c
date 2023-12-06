@@ -59,45 +59,6 @@ struct ipu6_cell_program {
 	u32 dummy[2];
 };
 
-static u32 ipu6se_csi_offsets[] = {
-	IPU6_CSI_PORT_A_ADDR_OFFSET,
-	IPU6_CSI_PORT_B_ADDR_OFFSET,
-	IPU6_CSI_PORT_C_ADDR_OFFSET,
-	IPU6_CSI_PORT_D_ADDR_OFFSET
-};
-
-/*
- * IPU6 on TGL support maximum 8 csi2 ports
- * IPU6SE on JSL and IPU6EP on ADL support maximum 4 csi2 ports
- * IPU6EP on MTL support maximum 6 csi2 ports
- */
-static u32 ipu6_tgl_csi_offsets[] = {
-	IPU6_CSI_PORT_A_ADDR_OFFSET,
-	IPU6_CSI_PORT_B_ADDR_OFFSET,
-	IPU6_CSI_PORT_C_ADDR_OFFSET,
-	IPU6_CSI_PORT_D_ADDR_OFFSET,
-	IPU6_CSI_PORT_E_ADDR_OFFSET,
-	IPU6_CSI_PORT_F_ADDR_OFFSET,
-	IPU6_CSI_PORT_G_ADDR_OFFSET,
-	IPU6_CSI_PORT_H_ADDR_OFFSET
-};
-
-static u32 ipu6ep_mtl_csi_offsets[] = {
-	IPU6_CSI_PORT_A_ADDR_OFFSET,
-	IPU6_CSI_PORT_B_ADDR_OFFSET,
-	IPU6_CSI_PORT_C_ADDR_OFFSET,
-	IPU6_CSI_PORT_D_ADDR_OFFSET,
-	IPU6_CSI_PORT_E_ADDR_OFFSET,
-	IPU6_CSI_PORT_F_ADDR_OFFSET
-};
-
-// static u32 ipu6_csi_offsets[] = {
-// 	IPU6_CSI_PORT_A_ADDR_OFFSET,
-// 	IPU6_CSI_PORT_B_ADDR_OFFSET,
-// 	IPU6_CSI_PORT_C_ADDR_OFFSET,
-// 	IPU6_CSI_PORT_D_ADDR_OFFSET,
-// };
-
 static unsigned int ipu4_csi_offsets[] = {
 	0x64000, 0x65000, 0x66000, 0x67000, 0x6C000, 0x6C800
 };
@@ -493,88 +454,21 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
 		// HACK: replace base struct values
 		memcpy(&isys_ipdata, &ipu4_isys_ipdata, sizeof(isys_ipdata));
 		memcpy(&psys_ipdata, &ipu4_psys_ipdata, sizeof(psys_ipdata));
-		isys_ipdata.num_parallel_streams = IPU6_STREAM_ID_MAX; // HACK: IPU4 only
+		isys_ipdata.num_parallel_streams = IPU6_STREAM_ID_MAX; // TODO fix with fw-com changes
 		isys_ipdata.csi2.nports = ARRAY_SIZE(ipu4_csi_offsets);
 		isys_ipdata.csi2.offsets = ipu4_csi_offsets;
+		isys_ipdata.max_streams = IPU4_ISYS_MAX_STREAMS;
+		isys_ipdata.max_sram_blocks = IPU4_ISYS_MAX_STREAMS;
+		isys_ipdata.max_send_queues = IPU6_N_MAX_SEND_QUEUES; // TODO fix with fw-com changes
+
+		/* Consider 1 slot per stream since driver is not expected to pipeline
+		 * device commands for the same stream */
+		isys_ipdata.max_devq_size = IPU4_ISYS_MAX_STREAMS;
+
 		psys_ipdata.hw_variant.spc_offset = IPU6_PSYS_SPC_OFFSET;
-		return;
 	}
-
-	isys_ipdata.num_parallel_streams = IPU6_STREAM_ID_MAX; // HACK: IPU4 only
-	isys_ipdata.sram_gran_shift = IPU6_SRAM_GRANULARITY_SHIFT;
-	isys_ipdata.sram_gran_size = IPU6_SRAM_GRANULARITY_SIZE;
-	isys_ipdata.max_sram_size = IPU6_MAX_SRAM_SIZE;
-	isys_ipdata.sensor_type_start = IPU6_FW_ISYS_SENSOR_TYPE_START;
-	isys_ipdata.sensor_type_end = IPU6_FW_ISYS_SENSOR_TYPE_END;
-	isys_ipdata.max_streams = IPU6_STREAM_ID_MAX; // HACK: IPU4 only
-	isys_ipdata.max_send_queues = IPU6_N_MAX_SEND_QUEUES;
-	isys_ipdata.max_sram_blocks = IPU6_NOF_SRAM_BLOCKS_MAX;
-	isys_ipdata.max_devq_size = IPU6_DEV_SEND_QUEUE_SIZE;
-	isys_ipdata.csi2.nports = ARRAY_SIZE(ipu4_csi_offsets);
-	isys_ipdata.csi2.offsets = ipu4_csi_offsets;
-	isys_ipdata.csi2.irq_mask = IPU6_CSI_RX_ERROR_IRQ_MASK;
-	isys_ipdata.csi2.ctrl0_irq_edge = IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_EDGE;
-	isys_ipdata.csi2.ctrl0_irq_clear =
-		IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_CLEAR;
-	isys_ipdata.csi2.ctrl0_irq_mask = IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_MASK;
-	isys_ipdata.csi2.ctrl0_irq_enable =
-		IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_ENABLE;
-	isys_ipdata.csi2.ctrl0_irq_status =
-		IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_STATUS;
-	isys_ipdata.csi2.ctrl0_irq_lnp =
-		IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_LEVEL_NOT_PULSE;
-	isys_ipdata.enhanced_iwake = is_ipu6ep_mtl(hw_ver) || is_ipu6ep(hw_ver);
-	psys_ipdata.hw_variant.spc_offset = IPU6_PSYS_SPC_OFFSET;
-	isys_ipdata.csi2.fw_access_port_ofs = CSI_REG_HUB_FW_ACCESS_PORT_OFS;
-
-	if (is_ipu6ep(hw_ver)) {
-		isys_ipdata.ltr = IPU6EP_LTR_VALUE;
-		isys_ipdata.memopen_threshold = IPU6EP_MIN_MEMOPEN_TH;
-	}
-
-	if (is_ipu6_tgl(hw_ver)) {
-		isys_ipdata.csi2.nports = ARRAY_SIZE(ipu6_tgl_csi_offsets);
-		isys_ipdata.csi2.offsets = ipu6_tgl_csi_offsets;
-	}
-
-	if (is_ipu6ep_mtl(hw_ver)) {
-		isys_ipdata.csi2.nports = ARRAY_SIZE(ipu6ep_mtl_csi_offsets);
-		isys_ipdata.csi2.offsets = ipu6ep_mtl_csi_offsets;
-
-		isys_ipdata.csi2.ctrl0_irq_edge =
-			IPU6V6_REG_ISYS_CSI_TOP_CTRL0_IRQ_EDGE;
-		isys_ipdata.csi2.ctrl0_irq_clear =
-			IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_CLEAR;
-		isys_ipdata.csi2.ctrl0_irq_mask =
-			IPU6V6_REG_ISYS_CSI_TOP_CTRL0_IRQ_MASK;
-		isys_ipdata.csi2.ctrl0_irq_enable =
-			IPU6V6_REG_ISYS_CSI_TOP_CTRL0_IRQ_ENABLE;
-		isys_ipdata.csi2.ctrl0_irq_lnp =
-			IPU6V6_REG_ISYS_CSI_TOP_CTRL0_IRQ_LEVEL_NOT_PULSE;
-		isys_ipdata.csi2.ctrl0_irq_status =
-			IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_STATUS;
-		isys_ipdata.csi2.fw_access_port_ofs =
-			CSI_REG_HUB_FW_ACCESS_PORT_V6OFS;
-		isys_ipdata.ltr = IPU6EP_MTL_LTR_VALUE;
-		isys_ipdata.memopen_threshold = IPU6EP_MTL_MIN_MEMOPEN_TH;
-	}
-
-	if (is_ipu6se(hw_ver)) {
-		isys_ipdata.csi2.nports = ARRAY_SIZE(ipu6se_csi_offsets);
-		isys_ipdata.csi2.irq_mask = IPU6SE_CSI_RX_ERROR_IRQ_MASK;
-		isys_ipdata.csi2.offsets = ipu6se_csi_offsets;
-		isys_ipdata.num_parallel_streams = IPU6SE_ISYS_NUM_STREAMS;
-		isys_ipdata.sram_gran_shift = IPU6SE_SRAM_GRANULARITY_SHIFT;
-		isys_ipdata.sram_gran_size = IPU6SE_SRAM_GRANULARITY_SIZE;
-		isys_ipdata.max_sram_size = IPU6SE_MAX_SRAM_SIZE;
-		isys_ipdata.sensor_type_start =
-			IPU6SE_FW_ISYS_SENSOR_TYPE_START;
-		isys_ipdata.sensor_type_end = IPU6SE_FW_ISYS_SENSOR_TYPE_END;
-		isys_ipdata.max_streams = IPU6SE_ISYS_NUM_STREAMS;
-		isys_ipdata.max_send_queues = IPU6SE_N_MAX_SEND_QUEUES;
-		isys_ipdata.max_sram_blocks = IPU6SE_NOF_SRAM_BLOCKS_MAX;
-		isys_ipdata.max_devq_size = IPU6SE_DEV_SEND_QUEUE_SIZE;
-		psys_ipdata.hw_variant.spc_offset = IPU6SE_PSYS_SPC_OFFSET;
+	else {
+		WARN(0, "Only IPU4 supported");
 	}
 }
 
