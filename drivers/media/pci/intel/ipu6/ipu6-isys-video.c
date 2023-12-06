@@ -621,7 +621,7 @@ int ipu6_isys_video_prepare_stream(struct ipu6_isys_video *av,
 
 void ipu6_isys_put_stream(struct ipu6_isys_stream *stream)
 {
-	struct device *dev = &stream->isys->adev->auxdev.dev;
+	struct device *dev;
 	unsigned int i;
 	unsigned long flags;
 
@@ -629,6 +629,7 @@ void ipu6_isys_put_stream(struct ipu6_isys_stream *stream)
 		dev_err(dev, "no available stream\n");
 		return;
 	}
+	dev = &stream->isys->adev->auxdev.dev;
 
 	spin_lock_irqsave(&stream->isys->streams_lock, flags);
 	for (i = 0; i < IPU4_ISYS_MAX_STREAMS; i++) {
