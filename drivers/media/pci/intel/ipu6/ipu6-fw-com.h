@@ -31,7 +31,7 @@ struct ipu6_fw_com_cfg {
 	unsigned int buttress_boot_offset;
 };
 
-void *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
+struct ipu6_fw_com_context *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
 			  struct ipu6_bus_device *adev, void __iomem *base);
 
 int ipu6_fw_com_open(struct ipu6_fw_com_context *ctx);

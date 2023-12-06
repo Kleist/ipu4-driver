@@ -101,14 +101,18 @@ struct ipu6_fw_com_context {
 enum regmem_id {
 	/* pass pkg_dir address to SPC in non-secure mode */
 	PKG_DIR_ADDR_REG = 0,
-	/* Tunit CFG blob for secure - provided by host.*/
-	TUNIT_CFG_DWR_REG = 1,
+	/* pass syscom configuration to SPC */
+	SYSCOM_CONFIG_REG = 1,
+	/* syscom state - modified by SP */
+	SYSCOM_STATE_REG = 2,
 	/* syscom commands - modified by the host */
-	SYSCOM_COMMAND_REG = 2,
+	SYSCOM_COMMAND_REG = 3,
 	/* Store interrupt status - updated by SP */
-	SYSCOM_IRQ_REG = 3,
+	SYSCOM_IRQ_REG = 4,
+	/* Store VTL0_ADDR_MASK in trusted secure regision - provided by host.*/
+	SYSCOM_VTL0_ADDR_MASK = 5,
 	/* first syscom queue pointer register */
-	SYSCOM_QPR_BASE_REG = 4
+	SYSCOM_QPR_BASE_REG = 6
 };
 
 enum message_direction {
@@ -152,7 +156,7 @@ static void ipu6_sys_queue_init(struct ipu6_fw_sys_queue *q, unsigned int size,
 	res->reg++;
 }
 
-void *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
+struct ipu6_fw_com_context *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
 			  struct ipu6_bus_device *adev, void __iomem *base)
 {
 	size_t conf_size, inq_size, outq_size, specific_size;
@@ -263,26 +267,20 @@ EXPORT_SYMBOL_NS_GPL(ipu6_fw_com_prepare, INTEL_IPU6);
 
 int ipu6_fw_com_open(struct ipu6_fw_com_context *ctx)
 {
-	/* write magic pattern to disable the tunit trace */
-	writel(TUNIT_MAGIC_PATTERN, ctx->dmem_addr + TUNIT_CFG_DWR_REG * 4);
 	/* Check if SP is in valid state */
 	if (!ctx->cell_ready(ctx->adev))
 		return -EIO;
 
+	/* store syscom uninitialized state */
+	writel(SYSCOM_STATE_UNINIT, ctx->dmem_addr + SYSCOM_STATE_REG * 4);
+	// NB: Re-ordered because that is how 4.19 does it - not sure if it matters
 	/* store syscom uninitialized command */
 	writel(SYSCOM_COMMAND_UNINIT, ctx->dmem_addr + SYSCOM_COMMAND_REG * 4);
 
-	/* store syscom uninitialized state */
-	writel(SYSCOM_STATE_UNINIT,
-	       BUTTRESS_FW_BOOT_PARAM_REG(ctx->base_addr,
-					  ctx->buttress_boot_offset,
-					  SYSCOM_STATE_ID));
-
 	/* store firmware configuration address */
 	writel(ctx->config_vied_addr,
-	       BUTTRESS_FW_BOOT_PARAM_REG(ctx->base_addr,
-					  ctx->buttress_boot_offset,
-					  SYSCOM_CONFIG_ID));
+		   ctx->dmem_addr + SYSCOM_CONFIG_REG * 4);
+
 	ctx->cell_start(ctx->adev);
 
 	return 0;
@@ -293,9 +291,7 @@ int ipu6_fw_com_close(struct ipu6_fw_com_context *ctx)
 {
 	int state;
 
-	state = readl(BUTTRESS_FW_BOOT_PARAM_REG(ctx->base_addr,
-						 ctx->buttress_boot_offset,
-						 SYSCOM_STATE_ID));
+	state = readl(ctx->dmem_addr + SYSCOM_STATE_REG * 4);
 	if (state != SYSCOM_STATE_READY)
 		return -EBUSY;
 
@@ -324,9 +320,7 @@ bool ipu6_fw_com_ready(struct ipu6_fw_com_context *ctx)
 {
 	int state;
 
-	state = readl(BUTTRESS_FW_BOOT_PARAM_REG(ctx->base_addr,
-						 ctx->buttress_boot_offset,
-						 SYSCOM_STATE_ID));
+	state = readl(ctx->dmem_addr + SYSCOM_STATE_REG * 4);
 
 	return state == SYSCOM_STATE_READY;
 }
@@ -401,7 +395,10 @@ void ipu6_recv_put_token(struct ipu6_fw_com_context *ctx, int q_nbr)
 {
 	struct ipu6_fw_sys_queue *q = &ctx->output_queue[q_nbr];
 	void __iomem *q_dmem = ctx->dmem_addr + q->wr_reg * 4;
-	unsigned int rd = readl(q_dmem + FW_COM_RD_REG) + 1;
+	unsigned int rd;
+	
+	rd = readl(q_dmem + FW_COM_RD_REG) + 1;
+
 
 	if (rd >= q->size)
 		rd = 0;
