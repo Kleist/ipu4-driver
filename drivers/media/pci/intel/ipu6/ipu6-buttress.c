@@ -611,9 +611,15 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 
 	mutex_lock(&b->auth_mutex);
 
-	if (ipu6_buttress_auth_done(isp)) {
-		ret = 0;
+	ret = pm_runtime_resume_and_get(&isp->pdev->dev);
+	if (ret < 0) {
 		goto out_unlock;
+	}
+
+	if (ipu6_buttress_auth_done(isp)) {
+		dev_dbg(&isp->pdev->dev, "Buttress authentication already done\n");
+		ret = 0;
+		goto out_pm_put;
 	}
 
 	/*
@@ -639,7 +645,7 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 				     BUTTRESS_CSE2IUDATA0_IPC_BOOT_LOAD_DONE);
 	if (ret) {
 		dev_err(&isp->pdev->dev, "CSE boot_load failed\n");
-		goto out_unlock;
+		goto out_pm_put;
 	}
 
 	mask = BUTTRESS_SECURITY_CTL_FW_SETUP_MASK;
@@ -651,13 +657,13 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 				 BUTTRESS_CSE_BOOTLOAD_TIMEOUT_US);
 	if (ret) {
 		dev_err(&isp->pdev->dev, "CSE boot_load timeout\n");
-		goto out_unlock;
+		goto out_pm_put;
 	}
 
 	if ((data & mask) == fail) {
 		dev_err(&isp->pdev->dev, "CSE auth failed\n");
 		ret = -EINVAL;
-		goto out_unlock;
+		goto out_pm_put;
 	}
 
 	ret = readl_poll_timeout(psys_pdata->base + bootloader_status_offset,
@@ -666,7 +672,7 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 	if (ret) {
 		dev_err(&isp->pdev->dev, "Unexpected magic number 0x%x\n",
 			data);
-		goto out_unlock;
+		goto out_pm_put;
 	}
 
 	/*
@@ -681,7 +687,7 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 				     BUTTRESS_CSE2IUDATA0_IPC_AUTH_RUN_DONE);
 	if (ret) {
 		dev_err(&isp->pdev->dev, "CSE authenticate_run failed\n");
-		goto out_unlock;
+		goto out_pm_put;
 	}
 
 	done = BUTTRESS_SECURITY_CTL_AUTH_DONE;
@@ -691,22 +697,25 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 				 BUTTRESS_CSE_AUTHENTICATE_TIMEOUT_US);
 	if (ret) {
 		dev_err(&isp->pdev->dev, "CSE authenticate timeout\n");
-		goto out_unlock;
+		goto out_pm_put;
 	}
 
 	if ((data & mask) == fail) {
 		dev_err(&isp->pdev->dev, "CSE boot_load failed\n");
 		ret = -EINVAL;
-		goto out_unlock;
+		goto out_pm_put;
 	}
 
 	dev_info(&isp->pdev->dev, "CSE authenticate_run done\n");
 
+out_pm_put:
+	pm_runtime_put(&isp->pdev->dev);
 out_unlock:
 	mutex_unlock(&b->auth_mutex);
 
 	return ret;
 }
+EXPORT_SYMBOL_NS_GPL(ipu6_buttress_authenticate, INTEL_IPU6);
 
 static int ipu6_buttress_send_tsc_request(struct ipu6_device *isp)
 {

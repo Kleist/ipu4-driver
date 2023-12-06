@@ -77,21 +77,67 @@ static int video_open(struct file *file)
 	struct ipu6_isys_video *av = video_drvdata(file);
 	struct ipu6_isys *isys = av->isys;
 	struct ipu6_bus_device *adev = isys->adev;
+	struct device *dev = &adev->auxdev.dev;
+	int ret;
 
 	mutex_lock(&isys->mutex);
 	if (isys->need_reset) {
 		mutex_unlock(&isys->mutex);
-		dev_warn(&adev->auxdev.dev, "isys power cycle required\n");
+		dev_warn(dev, "isys power cycle required\n");
 		return -EIO;
 	}
 	mutex_unlock(&isys->mutex);
 
-	return v4l2_fh_open(file);
+	ret = ipu6_buttress_authenticate(adev->isp);
+	if (ret) {
+		dev_err(dev, "%s: FW authentication failed: %d\n", __func__, ret);
+		return ret;
+	}
+
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret < 0) {
+		dev_err(dev, "%s: runtime resume failed: %d\n", __func__, ret);
+		return ret;
+	}
+
+	ret = v4l2_fh_open(file);
+	if (ret) {
+		dev_err(dev, "%s: v4l2_fh_open failed: %d\n", __func__, ret);
+		goto out_power_down;
+	}
+
+	ret = v4l2_pipeline_pm_get(&av->vdev.entity);
+	if (ret) {
+		dev_err(dev, "%s: v4l2_pipeline_pm_get failed: %d\n", __func__, ret);
+		goto out_v4l2_fh_release;
+	}
+
+	return 0;
+
+out_v4l2_fh_release:
+	v4l2_fh_release(file);
+out_power_down:
+	pm_runtime_put(dev);
+
+	return ret;
 }
 
 static int video_release(struct file *file)
 {
-	return vb2_fop_release(file);
+	struct ipu6_isys_video *av = video_drvdata(file);
+	struct device *dev = &av->isys->adev->auxdev.dev;
+	int ret = 0;
+
+	v4l2_fh_release(file);
+
+	v4l2_pipeline_pm_put(&av->vdev.entity);
+
+	if (av->isys->need_reset)
+		pm_runtime_put_sync(dev);
+	else
+		pm_runtime_put(dev);
+
+	return ret;
 }
 
 static const struct ipu6_isys_pixelformat *
