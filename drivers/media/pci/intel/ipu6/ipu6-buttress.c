@@ -841,7 +841,6 @@ int ipu6_buttress_init(struct ipu6_device *isp)
 
 	/* no ISH on IPU6 */
 	memset(&b->ish, 0, sizeof(b->ish));
-	INIT_LIST_HEAD(&b->constraints);
 
 	isp->secure_mode = ipu6_buttress_get_secure_mode(isp);
 

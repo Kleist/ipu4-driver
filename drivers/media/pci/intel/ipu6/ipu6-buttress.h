@@ -51,7 +51,6 @@ struct ipu6_buttress {
 	struct mutex power_mutex, auth_mutex, cons_mutex, ipc_mutex;
 	struct ipu6_buttress_ipc cse;
 	struct ipu6_buttress_ipc ish;
-	struct list_head constraints;
 	u32 wdt_cached_value;
 	bool force_suspend;
 	u32 reg_irq_sts;
