@@ -10,7 +10,6 @@ struct ipu6_isys_video;
 struct ipu6_isys_stream;
 struct ipu6_fw_isys_resp_info_abi;
 struct ipu4_fw_isys_frame_buff_set_abi;
-struct ipu6_fw_isys_frame_buff_set_abi; // TODO join with above, or duplicate functions?
 
 enum ipu6_isys_buffer_type {
 	IPU6_ISYS_VIDEO_BUFFER,
@@ -78,7 +77,7 @@ void
 ipu6_isys_buf_to_fw_frame_buf_pin(struct vb2_buffer *vb,
  				  struct ipu4_fw_isys_frame_buff_set_abi *set);
 void
-ipu6_isys_buf_to_fw_frame_buf(struct ipu6_fw_isys_frame_buff_set_abi *set,
+ipu6_isys_buf_to_fw_frame_buf(struct ipu4_fw_isys_frame_buff_set_abi *set,
 			      struct ipu6_isys_stream *stream,
 			      struct ipu6_isys_buffer_list *bl);
 int ipu6_isys_link_fmt_validate(struct ipu6_isys_queue *aq);

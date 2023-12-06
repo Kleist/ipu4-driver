@@ -225,7 +225,7 @@ ipu6_isys_buf_to_fw_frame_buf_pin(struct vb2_buffer *vb,
  */
 #define IPU6_ISYS_FRAME_NUM_THRESHOLD  (30)
 void
-ipu6_isys_buf_to_fw_frame_buf(struct ipu6_fw_isys_frame_buff_set_abi *set,
+ipu6_isys_buf_to_fw_frame_buf(struct ipu4_fw_isys_frame_buff_set_abi *set,
 			      struct ipu6_isys_stream *stream,
 			      struct ipu6_isys_buffer_list *bl)
 {
@@ -235,21 +235,11 @@ ipu6_isys_buf_to_fw_frame_buf(struct ipu6_fw_isys_frame_buff_set_abi *set,
 
 	set->send_irq_sof = 1;
 	set->send_resp_sof = 1;
-	set->send_irq_eof = 0;
-	set->send_resp_eof = 0;
 
-	if (stream->streaming)
-		set->send_irq_capture_ack = 0;
-	else
-		set->send_irq_capture_ack = 1;
-	set->send_irq_capture_done = 0;
-
-	set->send_resp_capture_ack = 1;
-	set->send_resp_capture_done = 1;
-	if (atomic_read(&stream->sequence) >= IPU6_ISYS_FRAME_NUM_THRESHOLD) {
-		set->send_resp_capture_ack = 0;
-		set->send_resp_capture_done = 0;
-	}
+	set->send_irq_capture_ack = 1;
+	set->send_irq_capture_done = 1;
+	set->send_irq_eof = 1;
+	set->send_resp_eof = 1;
 
 	list_for_each_entry(ib, &bl->head, head) {
 		struct vb2_buffer *vb = ipu6_isys_buffer_to_vb2_buffer(ib);
@@ -260,8 +250,7 @@ ipu6_isys_buf_to_fw_frame_buf(struct ipu6_fw_isys_frame_buff_set_abi *set,
 			continue;
 
 		if (aq->fill_frame_buf_set)
-			// aq->fill_frame_buf_set(vb, set);
-			(void)aq->fill_frame_buf_set; // HACK, ipu6 vs ipu4 types
+			aq->fill_frame_buf_set(vb, set);
 	}
 }
 
@@ -285,7 +274,7 @@ static int ipu6_isys_stream_start(struct ipu6_isys_video *av,
 	bl = &__bl;
 
 	do {
-		struct ipu6_fw_isys_frame_buff_set_abi *buf = NULL;
+		struct ipu4_fw_isys_frame_buff_set_abi *buf = NULL;
 		struct isys_fw_msgs *msg;
 		u16 send_type = IPU6_FW_ISYS_SEND_TYPE_STREAM_CAPTURE;
 
@@ -333,7 +322,7 @@ static void buf_queue(struct vb2_buffer *vb)
 	struct device *dev = &av->isys->adev->auxdev.dev;
 	struct media_pipeline *media_pipe =
 		media_entity_pipeline(&av->vdev.entity);
-	struct ipu6_fw_isys_frame_buff_set_abi *buf = NULL;
+	struct ipu4_fw_isys_frame_buff_set_abi *buf = NULL;
 	struct ipu6_isys_stream *stream = av->stream;
 	struct ipu6_isys_buffer_list bl;
 	struct isys_fw_msgs *msg;

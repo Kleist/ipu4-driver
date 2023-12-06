@@ -330,7 +330,7 @@ irqreturn_t isys_isr(struct ipu6_bus_device *adev)
 
 	status = readl(base + IPU4_REG_ISYS_UNISPART_IRQ_STATUS);
 	do {
-		mmiotrace_printk("%s: status=%x", __func__, status);
+		mmiotrace_printk("%s: status=0x%x\n", __func__, status);
 		writel(status, base + IPU4_REG_ISYS_UNISPART_IRQ_CLEAR);
 
 		if (isys->isr_csi2_bits & status) {
@@ -890,7 +890,7 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 	if (!isys->fwcom)
 		return 1;
 
-	resp = ipu6_fw_isys_get_resp(isys->fwcom, IPU6_BASE_MSG_RECV_QUEUES);
+	resp = ipu6_fw_isys_get_resp(isys->fwcom, IPU4_BASE_MSG_RECV_QUEUES);
 	if (!resp)
 		return 1;
 
@@ -1012,7 +1012,7 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 
 	ipu6_isys_put_stream(stream);
 leave:
-	ipu6_fw_isys_put_resp(isys->fwcom, IPU6_BASE_MSG_RECV_QUEUES);
+	ipu6_fw_isys_put_resp(isys->fwcom, IPU4_BASE_MSG_RECV_QUEUES);
 	return 0;
 }
 

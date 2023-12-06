@@ -327,12 +327,12 @@ static void put_stream_opened(struct ipu6_isys_video *av)
 }
 
 static int ipu6_isys_fw_pin_cfg(struct ipu6_isys_video *av,
-				struct ipu6_fw_isys_stream_cfg_data_abi *cfg)
+				struct ipu4_fw_isys_stream_cfg_data_abi *cfg)
 {
 	struct media_pad *src_pad = media_pad_remote_pad_first(&av->pad);
 	struct v4l2_subdev *sd = media_entity_to_v4l2_subdev(src_pad->entity);
-	struct ipu6_fw_isys_input_pin_info_abi *input_pin;
-	struct ipu6_fw_isys_output_pin_info_abi *output_pin;
+	struct ipu4_fw_isys_input_pin_info_abi *input_pin;
+	struct ipu4_fw_isys_output_pin_info_abi *output_pin;
 	struct ipu6_isys_stream *stream = av->stream;
 	struct ipu6_isys_queue *aq = &av->aq;
 	struct v4l2_mbus_framefmt fmt;
@@ -365,12 +365,9 @@ static int ipu6_isys_fw_pin_cfg(struct ipu6_isys_video *av,
 	input_pin->dt = av->dt;
 	input_pin->bits_per_pix = av->pfmt->bpp_packed;
 	input_pin->mapped_dt = 0x40; /* invalid mipi data type */
-	input_pin->mipi_decompression = 0;
-	input_pin->capture_mode = IPU6_FW_ISYS_CAPTURE_MODE_REGULAR;
 	input_pin->mipi_store_mode = av->pfmt->bpp == av->pfmt->bpp_packed ?
 		IPU6_FW_ISYS_MIPI_STORE_MODE_DISCARD_LONG_HEADER :
 		IPU6_FW_ISYS_MIPI_STORE_MODE_NORMAL;
-	input_pin->crop_first_and_last_lines = v4l2_crop.top & 1;
 
 	output_pins = cfg->nof_output_pins++;
 	aq->fw_output = output_pins;
@@ -389,17 +386,11 @@ static int ipu6_isys_fw_pin_cfg(struct ipu6_isys_video *av,
 		output_pin->pt = IPU6_FW_ISYS_PIN_TYPE_MIPI;
 	output_pin->ft = av->pfmt->css_pixelformat;
 	output_pin->send_irq = 1;
-	memset(output_pin->ts_offsets, 0, sizeof(output_pin->ts_offsets));
-	output_pin->s2m_pixel_soc_pixel_remapping =
-		S2M_PIXEL_SOC_PIXEL_REMAPPING_FLAG_NO_REMAPPING;
-	output_pin->csi_be_soc_pixel_remapping =
-		CSI_BE_SOC_PIXEL_REMAPPING_FLAG_NO_REMAPPING;
 
-	output_pin->snoopable = true;
-	output_pin->error_handling_enable = false;
-	output_pin->sensor_type = isys->sensor_type++;
-	if (isys->sensor_type > isys->pdata->ipdata->sensor_type_end)
-		isys->sensor_type = isys->pdata->ipdata->sensor_type_start;
+	/* Though payload_buf_size was added for compression, set sane value for
+	 * payload_buf_size, just in case...
+	 */
+	output_pin->payload_buf_size = output_pin->stride * output_pin->output_res.height;
 
 	return 0;
 }
@@ -407,8 +398,8 @@ static int ipu6_isys_fw_pin_cfg(struct ipu6_isys_video *av,
 static int start_stream_firmware(struct ipu6_isys_video *av,
 				 struct ipu6_isys_buffer_list *bl)
 {
-	struct ipu6_fw_isys_stream_cfg_data_abi *stream_cfg;
-	struct ipu6_fw_isys_frame_buff_set_abi *buf = NULL;
+	struct ipu4_fw_isys_stream_cfg_data_abi *stream_cfg;
+	struct ipu4_fw_isys_frame_buff_set_abi *buf = NULL;
 	struct ipu6_isys_stream *stream = av->stream;
 	struct device *dev = &av->isys->adev->auxdev.dev;
 	struct isys_fw_msgs *msg = NULL;
@@ -424,7 +415,6 @@ static int start_stream_firmware(struct ipu6_isys_video *av,
 	stream_cfg->src = stream->stream_source;
 	stream_cfg->vc = stream->vc;
 	stream_cfg->isl_use = 0;
-	stream_cfg->sensor_type = IPU6_FW_ISYS_SENSOR_MODE_NORMAL;
 
 	list_for_each_entry(aq, &stream->queues, node) {
 		struct ipu6_isys_video *__av = ipu6_isys_queue_to_video(aq);

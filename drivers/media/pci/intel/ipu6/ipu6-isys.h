@@ -162,8 +162,8 @@ struct ipu6_isys {
 struct isys_fw_msgs {
 	union {
 		u64 dummy;
-		struct ipu6_fw_isys_frame_buff_set_abi frame;
-		struct ipu6_fw_isys_stream_cfg_data_abi stream;
+		struct ipu4_fw_isys_frame_buff_set_abi frame;
+		struct ipu4_fw_isys_stream_cfg_data_abi stream;
 	} fw_msg;
 	struct list_head head;
 	dma_addr_t dma_addr;

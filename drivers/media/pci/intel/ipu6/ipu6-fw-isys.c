@@ -13,7 +13,8 @@
 #include "ipu6-platform-isys-csi2-reg.h"
 #include "ipu6-platform-regs.h"
 
-static const char send_msg_types[N_IPU6_FW_ISYS_SEND_TYPE][32] = {
+#define MAX_SEND_MSG_LEN 32
+static const char send_msg_types[N_IPU6_FW_ISYS_SEND_TYPE][MAX_SEND_MSG_LEN] = {
 	"STREAM_OPEN",
 	"STREAM_START",
 	"STREAM_START_AND_CAPTURE",
@@ -29,7 +30,7 @@ static int handle_proxy_response(struct ipu6_isys *isys, unsigned int req_id)
 	struct ipu6_fw_isys_proxy_resp_info_abi *resp;
 	int ret;
 
-	resp = ipu6_recv_get_token(isys->fwcom, IPU6_BASE_PROXY_RECV_QUEUES);
+	resp = ipu6_recv_get_token(isys->fwcom, IPU4_BASE_PROXY_RECV_QUEUES);
 	if (!resp)
 		return 1;
 
@@ -39,7 +40,7 @@ static int handle_proxy_response(struct ipu6_isys *isys, unsigned int req_id)
 
 	ret = req_id == resp->request_id ? 0 : -EIO;
 
-	ipu6_recv_put_token(isys->fwcom, IPU6_BASE_PROXY_RECV_QUEUES);
+	ipu6_recv_put_token(isys->fwcom, IPU4_BASE_PROXY_RECV_QUEUES);
 
 	return ret;
 }
@@ -59,7 +60,7 @@ int ipu6_fw_isys_send_proxy_token(struct ipu6_isys *isys,
 		"proxy send: req_id 0x%x, index %d, offset 0x%x, value 0x%x\n",
 		req_id, index, offset, value);
 
-	token = ipu6_send_get_token(ctx, IPU6_BASE_PROXY_SEND_QUEUES);
+	token = ipu6_send_get_token(ctx, IPU4_BASE_PROXY_SEND_QUEUES);
 	if (!token)
 		return -EBUSY;
 
@@ -67,7 +68,7 @@ int ipu6_fw_isys_send_proxy_token(struct ipu6_isys *isys,
 	token->region_index = index;
 	token->offset = offset;
 	token->value = value;
-	ipu6_send_put_token(ctx, IPU6_BASE_PROXY_SEND_QUEUES);
+	ipu6_send_put_token(ctx, IPU4_BASE_PROXY_SEND_QUEUES);
 
 	do {
 		usleep_range(100, 110);
@@ -94,13 +95,10 @@ int ipu6_fw_isys_complex_cmd(struct ipu6_isys *isys,
 			     size_t size, u16 send_type)
 {
 	struct ipu6_fw_com_context *ctx = isys->fwcom;
-	struct device *dev = &isys->adev->auxdev.dev;
 	struct ipu6_fw_send_queue_token *token;
 
 	if (send_type >= N_IPU6_FW_ISYS_SEND_TYPE)
 		return -EINVAL;
-
-	dev_dbg(dev, "send_token: %s\n", send_msg_types[send_type]);
 
 	/*
 	 * Time to flush cache in case we have some payload. Not all messages
@@ -110,15 +108,14 @@ int ipu6_fw_isys_complex_cmd(struct ipu6_isys *isys,
 		clflush_cache_range(cpu_mapped_buf, size);
 
 	token = ipu6_send_get_token(ctx,
-				    stream_handle + IPU6_BASE_MSG_SEND_QUEUES);
+				    stream_handle + IPU4_BASE_MSG_SEND_QUEUES);
 	if (!token)
 		return -EBUSY;
 
 	token->payload = dma_mapped_buf;
 	token->buf_handle = (unsigned long)cpu_mapped_buf;
 	token->send_type = send_type;
-
-	ipu6_send_put_token(ctx, stream_handle + IPU6_BASE_MSG_SEND_QUEUES);
+	ipu6_send_put_token(ctx, stream_handle + IPU4_BASE_MSG_SEND_QUEUES);
 
 	return 0;
 }
@@ -219,9 +216,9 @@ static int ipu6_isys_fwcom_cfg_init(struct ipu6_isys *isys,
 	int type_proxy = IPU6_FW_ISYS_QUEUE_TYPE_PROXY;
 	int type_dev = IPU6_FW_ISYS_QUEUE_TYPE_DEV;
 	int type_msg = IPU6_FW_ISYS_QUEUE_TYPE_MSG;
-	int base_dev_send = IPU6_BASE_DEV_SEND_QUEUES;
-	int base_msg_send = IPU6_BASE_MSG_SEND_QUEUES;
-	int base_msg_recv = IPU6_BASE_MSG_RECV_QUEUES;
+	int base_dev_send = IPU4_BASE_DEV_SEND_QUEUES;
+	int base_msg_send = IPU4_BASE_MSG_SEND_QUEUES;
+	int base_msg_recv = IPU4_BASE_MSG_RECV_QUEUES;
 	struct ipu6_fw_isys_fw_config *isys_fw_cfg;
 	u32 num_in_message_queues;
 	unsigned int max_streams;
@@ -237,10 +234,10 @@ static int ipu6_isys_fwcom_cfg_init(struct ipu6_isys *isys,
 	if (!isys_fw_cfg)
 		return -ENOMEM;
 
-	isys_fw_cfg->num_send_queues[type_proxy] = IPU6_N_MAX_PROXY_SEND_QUEUES;
-	isys_fw_cfg->num_send_queues[type_dev] = IPU6_N_MAX_DEV_SEND_QUEUES;
+	isys_fw_cfg->num_send_queues[type_proxy] = IPU4_N_MAX_PROXY_SEND_QUEUES;
+	isys_fw_cfg->num_send_queues[type_dev] = IPU4_N_MAX_DEV_SEND_QUEUES;
 	isys_fw_cfg->num_send_queues[type_msg] = num_in_message_queues;
-	isys_fw_cfg->num_recv_queues[type_proxy] = IPU6_N_MAX_PROXY_RECV_QUEUES;
+	isys_fw_cfg->num_recv_queues[type_proxy] = IPU4_N_MAX_PROXY_RECV_QUEUES;
 	/* Common msg/dev return queue */
 	isys_fw_cfg->num_recv_queues[type_dev] = 0;
 	isys_fw_cfg->num_recv_queues[type_msg] = 1;
@@ -250,7 +247,7 @@ static int ipu6_isys_fwcom_cfg_init(struct ipu6_isys *isys,
 	if (!input_queue_cfg)
 		return -ENOMEM;
 
-	size = sizeof(*output_queue_cfg) * IPU6_N_MAX_RECV_QUEUES;
+	size = sizeof(*output_queue_cfg) * IPU4_N_MAX_RECV_QUEUES;
 	output_queue_cfg = devm_kzalloc(dev, size, GFP_KERNEL);
 	if (!output_queue_cfg)
 		return -ENOMEM;
@@ -372,92 +369,84 @@ void ipu6_fw_isys_put_resp(void *context, unsigned int queue)
 }
 
 void ipu6_fw_isys_dump_stream_cfg(struct device *dev,
-				  struct ipu6_fw_isys_stream_cfg_data_abi *cfg)
+			     struct ipu4_fw_isys_stream_cfg_data_abi *stream_cfg)
 {
 	unsigned int i;
 
-	dev_dbg(dev, "-----------------------------------------------------\n");
-	dev_dbg(dev, "IPU6_FW_ISYS_STREAM_CFG_DATA\n");
+	dev_dbg(dev, "---------------------------\n");
+	dev_dbg(dev, "IPU_FW_ISYS_STREAM_CFG_DATA\n");
+	dev_dbg(dev, "---------------------------\n");
 
-	dev_dbg(dev, "compfmt = %d\n", cfg->vc);
-	dev_dbg(dev, "src = %d\n", cfg->src);
-	dev_dbg(dev, "vc = %d\n", cfg->vc);
-	dev_dbg(dev, "isl_use = %d\n", cfg->isl_use);
-	dev_dbg(dev, "sensor_type = %d\n", cfg->sensor_type);
+	dev_dbg(dev, "crop[0] offset: %lx", (uintptr_t)&stream_cfg->crop[0]-(uintptr_t)stream_cfg);
+	dev_dbg(dev, "input_pins[0] offset: %lx", (uintptr_t)&stream_cfg->input_pins[0]-(uintptr_t)stream_cfg);
+	dev_dbg(dev, "output_pins[0] offset: %lx", (uintptr_t)&stream_cfg->output_pins[0]-(uintptr_t)stream_cfg);
+	dev_dbg(dev, "compfmt offset: %lx", (uintptr_t)&stream_cfg->compfmt-(uintptr_t)stream_cfg);
+	
+	dev_dbg(dev, "Source %d\n", stream_cfg->src);
+	dev_dbg(dev, "VC %d\n", stream_cfg->vc);
+	dev_dbg(dev, "Nof input pins %d\n", stream_cfg->nof_input_pins);
+	dev_dbg(dev, "Nof output pins %d\n", stream_cfg->nof_output_pins);
 
-	dev_dbg(dev, "send_irq_sof_discarded = %d\n",
-		cfg->send_irq_sof_discarded);
-	dev_dbg(dev, "send_irq_eof_discarded = %d\n",
-		cfg->send_irq_eof_discarded);
-	dev_dbg(dev, "send_resp_sof_discarded = %d\n",
-		cfg->send_resp_sof_discarded);
-	dev_dbg(dev, "send_resp_eof_discarded = %d\n",
-		cfg->send_resp_eof_discarded);
-
-	dev_dbg(dev, "crop:\n");
-	dev_dbg(dev, "\t.left_top = [%d, %d]\n", cfg->crop.left_offset,
-		cfg->crop.top_offset);
-	dev_dbg(dev, "\t.right_bottom = [%d, %d]\n", cfg->crop.right_offset,
-		cfg->crop.bottom_offset);
-
-	dev_dbg(dev, "nof_input_pins = %d\n", cfg->nof_input_pins);
-	for (i = 0; i < cfg->nof_input_pins; i++) {
-		dev_dbg(dev, "input pin[%d]:\n", i);
-		dev_dbg(dev, "\t.dt = 0x%0x\n", cfg->input_pins[i].dt);
-		dev_dbg(dev, "\t.mipi_store_mode = %d\n",
-			cfg->input_pins[i].mipi_store_mode);
-		dev_dbg(dev, "\t.bits_per_pix = %d\n",
-			cfg->input_pins[i].bits_per_pix);
-		dev_dbg(dev, "\t.mapped_dt = 0x%0x\n",
-			cfg->input_pins[i].mapped_dt);
-		dev_dbg(dev, "\t.input_res = %dx%d\n",
-			cfg->input_pins[i].input_res.width,
-			cfg->input_pins[i].input_res.height);
-		dev_dbg(dev, "\t.mipi_decompression = %d\n",
-			cfg->input_pins[i].mipi_decompression);
-		dev_dbg(dev, "\t.capture_mode = %d\n",
-			cfg->input_pins[i].capture_mode);
+	for (i = 0; i < stream_cfg->nof_input_pins; i++) {
+		dev_dbg(dev, "Input pin %d\n", i);
+		dev_dbg(dev, "Mipi data type 0x%0x\n",
+			stream_cfg->input_pins[i].dt);
+		dev_dbg(dev, "Mipi store mode %d\n",
+			stream_cfg->input_pins[i].mipi_store_mode);
+		dev_dbg(dev, "Bits per pixel %d\n",
+			stream_cfg->input_pins[i].bits_per_pix);
+		dev_dbg(dev, "Mapped data type 0x%0x\n",
+			stream_cfg->input_pins[i].mapped_dt);
+		dev_dbg(dev, "Input res width %d\n",
+			stream_cfg->input_pins[i].input_res.width);
+		dev_dbg(dev, "Input res height %d\n",
+			stream_cfg->input_pins[i].input_res.height);
 	}
 
-	dev_dbg(dev, "nof_output_pins = %d\n", cfg->nof_output_pins);
-	for (i = 0; i < cfg->nof_output_pins; i++) {
-		dev_dbg(dev, "output_pin[%d]:\n", i);
-		dev_dbg(dev, "\t.input_pin_id = %d\n",
-			cfg->output_pins[i].input_pin_id);
-		dev_dbg(dev, "\t.output_res = %dx%d\n",
-			cfg->output_pins[i].output_res.width,
-			cfg->output_pins[i].output_res.height);
-		dev_dbg(dev, "\t.stride = %d\n", cfg->output_pins[i].stride);
-		dev_dbg(dev, "\t.pt = %d\n", cfg->output_pins[i].pt);
-		dev_dbg(dev, "\t.payload_buf_size = %d\n",
-			cfg->output_pins[i].payload_buf_size);
-		dev_dbg(dev, "\t.ft = %d\n", cfg->output_pins[i].ft);
-		dev_dbg(dev, "\t.watermark_in_lines = %d\n",
-			cfg->output_pins[i].watermark_in_lines);
-		dev_dbg(dev, "\t.send_irq = %d\n",
-			cfg->output_pins[i].send_irq);
-		dev_dbg(dev, "\t.reserve_compression = %d\n",
-			cfg->output_pins[i].reserve_compression);
-		dev_dbg(dev, "\t.snoopable = %d\n",
-			cfg->output_pins[i].snoopable);
-		dev_dbg(dev, "\t.error_handling_enable = %d\n",
-			cfg->output_pins[i].error_handling_enable);
-		dev_dbg(dev, "\t.sensor_type = %d\n",
-			cfg->output_pins[i].sensor_type);
+	for (i = 0; i < N_IPU_FW_ISYS_CROPPING_LOCATION; i++) {
+		dev_dbg(dev, "Crop info %d\n", i);
+		dev_dbg(dev, "Crop.top_offset %d\n",
+			stream_cfg->crop[i].top_offset);
+		dev_dbg(dev, "Crop.left_offset %d\n",
+			stream_cfg->crop[i].left_offset);
+		dev_dbg(dev, "Crop.bottom_offset %d\n",
+			stream_cfg->crop[i].bottom_offset);
+		dev_dbg(dev, "Crop.right_offset %d\n",
+			stream_cfg->crop[i].right_offset);
+		dev_dbg(dev, "----------------\n");
 	}
-	dev_dbg(dev, "-----------------------------------------------------\n");
+
+	for (i = 0; i < stream_cfg->nof_output_pins; i++) {
+		dev_dbg(dev, "Output pin %d\n", i);
+		dev_dbg(dev, "Output input pin id %d\n",
+			stream_cfg->output_pins[i].input_pin_id);
+		dev_dbg(dev, "Output res width %d\n",
+			stream_cfg->output_pins[i].output_res.width);
+		dev_dbg(dev, "Output res height %d\n",
+			stream_cfg->output_pins[i].output_res.height);
+		dev_dbg(dev, "Payload buf size: %d\n", stream_cfg->output_pins[i].payload_buf_size);
+		dev_dbg(dev, "Stride %d\n", stream_cfg->output_pins[i].stride);
+		dev_dbg(dev, "Pin type %d\n", stream_cfg->output_pins[i].pt);
+		dev_dbg(dev, "Ft %d\n", stream_cfg->output_pins[i].ft);
+		dev_dbg(dev, "Watermar in lines %d\n",
+			stream_cfg->output_pins[i].watermark_in_lines);
+		dev_dbg(dev, "Send irq %d\n",
+			stream_cfg->output_pins[i].send_irq);
+		dev_dbg(dev, "Reserve compression %d\n",
+			stream_cfg->output_pins[i].reserve_compression);
+		dev_dbg(dev, "----------------\n");
+	}
 }
 
 void
 ipu6_fw_isys_dump_frame_buff_set(struct device *dev,
-				 struct ipu6_fw_isys_frame_buff_set_abi *buf,
+				 struct ipu4_fw_isys_frame_buff_set_abi *buf,
 				 unsigned int outputs)
 {
 	unsigned int i;
 
 	dev_dbg(dev, "-----------------------------------------------------\n");
-	dev_dbg(dev, "IPU6_FW_ISYS_FRAME_BUFF_SET\n");
-
+	dev_dbg(dev, "FRAME_BUFF_SET with %d outputs\n", outputs);
 	for (i = 0; i < outputs; i++) {
 		dev_dbg(dev, "output_pin[%d]:\n", i);
 		dev_dbg(dev, "\t.out_buf_id = %llu\n",
@@ -475,10 +464,6 @@ ipu6_fw_isys_dump_frame_buff_set(struct device *dev,
 		buf->send_irq_capture_ack);
 	dev_dbg(dev, "send_irq_capture_done = 0x%x\n",
 		buf->send_irq_capture_done);
-	dev_dbg(dev, "send_resp_capture_ack = 0x%x\n",
-		buf->send_resp_capture_ack);
-	dev_dbg(dev, "send_resp_capture_done = 0x%x\n",
-		buf->send_resp_capture_done);
 
 	dev_dbg(dev, "-----------------------------------------------------\n");
 }

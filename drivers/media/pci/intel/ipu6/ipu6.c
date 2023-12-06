@@ -454,12 +454,12 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
 		// HACK: replace base struct values
 		memcpy(&isys_ipdata, &ipu4_isys_ipdata, sizeof(isys_ipdata));
 		memcpy(&psys_ipdata, &ipu4_psys_ipdata, sizeof(psys_ipdata));
-		isys_ipdata.num_parallel_streams = IPU6_STREAM_ID_MAX; // TODO fix with fw-com changes
+		isys_ipdata.num_parallel_streams = IPU4_STREAM_ID_MAX;
 		isys_ipdata.csi2.nports = ARRAY_SIZE(ipu4_csi_offsets);
 		isys_ipdata.csi2.offsets = ipu4_csi_offsets;
 		isys_ipdata.max_streams = IPU4_ISYS_MAX_STREAMS;
 		isys_ipdata.max_sram_blocks = IPU4_ISYS_MAX_STREAMS;
-		isys_ipdata.max_send_queues = IPU6_N_MAX_SEND_QUEUES; // TODO fix with fw-com changes
+		isys_ipdata.max_send_queues = IPU4_N_MAX_SEND_QUEUES;
 
 		/* Consider 1 slot per stream since driver is not expected to pipeline
 		 * device commands for the same stream */
