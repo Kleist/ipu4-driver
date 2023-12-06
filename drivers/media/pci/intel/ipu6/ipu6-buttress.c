@@ -24,6 +24,7 @@
 #define EXIT	BUTTRESS_IU2CSECSR_IPC_PEER_COMP_ACTIONS_RST_PHASE2
 #define QUERY	BUTTRESS_IU2CSECSR_IPC_PEER_QUERIED_IP_COMP_ACTIONS_RST_PHASE
 
+#define IPU4_BUTTRESS_TSC_CLOCK_FREQUENCY	192
 #define BUTTRESS_TSC_SYNC_RESET_TRIAL_MAX	10
 
 #define BUTTRESS_POWER_TIMEOUT_US		(200 * USEC_PER_MSEC)
@@ -802,7 +803,7 @@ u64 ipu6_buttress_tsc_ticks_to_ns(u64 ticks, const struct ipu6_device *isp)
 	 *    = ticks * 1000 000 000 / 19200000Hz
 	 *    = ticks * 10000 / 192 ns
 	 */
-	return div_u64(ns, isp->buttress.ref_clk);
+	return div_u64(ns, IPU4_BUTTRESS_TSC_CLOCK_FREQUENCY);
 }
 EXPORT_SYMBOL_NS_GPL(ipu6_buttress_tsc_ticks_to_ns, INTEL_IPU6);
 
@@ -819,7 +820,6 @@ int ipu6_buttress_init(struct ipu6_device *isp)
 {
 	int ret, ipc_reset_retry = BUTTRESS_CSE_IPC_RESET_RETRY;
 	struct ipu6_buttress *b = &isp->buttress;
-	u32 val;
 
 	mutex_init(&b->power_mutex);
 	mutex_init(&b->auth_mutex);
@@ -844,35 +844,10 @@ int ipu6_buttress_init(struct ipu6_device *isp)
 	INIT_LIST_HEAD(&b->constraints);
 
 	isp->secure_mode = ipu6_buttress_get_secure_mode(isp);
-	dev_info(&isp->pdev->dev, "IPU6 in %s mode touch 0x%x mask 0x%x\n",
-		 isp->secure_mode ? "secure" : "non-secure",
-		 readl(isp->base + BUTTRESS_REG_SECURITY_TOUCH),
-		 readl(isp->base + BUTTRESS_REG_CAMERA_MASK));
 
 	b->wdt_cached_value = readl(isp->base + BUTTRESS_REG_WDT);
 	writel(BUTTRESS_IRQS, isp->base + BUTTRESS_REG_ISR_CLEAR);
 	writel(BUTTRESS_IRQS, isp->base + BUTTRESS_REG_ISR_ENABLE);
-
-	/* get ref_clk frequency by reading the indication in btrs control */
-	val = readl(isp->base + BUTTRESS_REG_BTRS_CTRL);
-	val = FIELD_GET(BUTTRESS_REG_BTRS_CTRL_REF_CLK_IND, val);
-
-	switch (val) {
-	case 0x0:
-		b->ref_clk = 240;
-		break;
-	case 0x1:
-		b->ref_clk = 192;
-		break;
-	case 0x2:
-		b->ref_clk = 384;
-		break;
-	default:
-		dev_warn(&isp->pdev->dev,
-			 "Unsupported ref clock, use 19.2Mhz by default.\n");
-		b->ref_clk = 192;
-		break;
-	}
 
 	/* Retry couple of times in case of CSE initialization is delayed */
 	do {
