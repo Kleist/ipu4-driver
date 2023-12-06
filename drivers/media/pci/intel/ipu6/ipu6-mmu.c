@@ -889,6 +889,7 @@ static void ipu6_mmu_destroy(struct ipu6_mmu *mmu)
 			 PAGE_SIZE, DMA_BIDIRECTIONAL);
 	free_page((unsigned long)mmu_info->dummy_l2_pt);
 	free_page((unsigned long)mmu_info->l1_pt);
+	vfree(mmu_info->l2_pts);
 	kfree(mmu_info);
 }
 
