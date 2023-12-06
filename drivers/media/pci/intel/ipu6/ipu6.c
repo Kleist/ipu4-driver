@@ -264,6 +264,70 @@ static const struct ipu6_buttress_ctrl ipu4_psys_buttress_ctrl = {
 	.pwr_sts_off = IPU4_BUTTRESS_PWR_STATE_PS_PWR_FSM_IDLE,
 };
 
+// List of all registers that the old and new driver reads, created from mmiotrace's
+static const u32 readable_regs[] = {
+	// 0x90000000 offset removed since it is "included" in isp->base
+	0x000008,
+	0x00000c,
+	0x00005c,
+	0x000094,
+	0x000098,
+	0x00009c,
+	0x000164,
+	0x000168,
+	0x000300,
+	0x000308,
+	0x00030c,
+	0x100000,
+	0x108008,
+	0x108028,
+	0x10802c,
+	0x108070,
+	0x108074,
+	0x164000,
+	0x164008,
+	0x164400,
+	0x164404,
+	0x164408,
+	0x16440c,
+	0x164410,
+	0x164414,
+	0x164500,
+	0x164504,
+	0x164508,
+	0x16450c,
+	0x164510,
+	0x164514,
+	0x164600,
+	0x164604,
+	0x164608,
+	0x16460c,
+	0x164610,
+	0x164614,
+	0x17c000,
+	0x17c004,
+	0x17c008,
+	0x17c00c,
+	0x17c010,
+	0x17c414,
+	0x17c418,
+	0x1e0004,
+	0x408000,
+	0x4b0004,
+};
+
+void ipu_dump_state(struct ipu6_device *isp, const char* context)
+{
+	int i;
+
+	mmiotrace_printk("%s in context %s\n", __func__, context);
+	for (i = 0; i < ARRAY_SIZE(readable_regs); ++i)
+	{
+		(void)readl(isp->base + readable_regs[i]);
+	}
+}
+EXPORT_SYMBOL_GPL(ipu_dump_state);
+
 void ipu6_configure_spc(struct ipu6_device *isp,
 			const struct ipu6_hw_variants *hw_variant,
 			int pkg_dir_idx, void __iomem *base, u64 *pkg_dir,
