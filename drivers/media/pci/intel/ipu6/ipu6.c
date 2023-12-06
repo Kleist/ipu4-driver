@@ -685,7 +685,6 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	void __iomem *psys_base = NULL;
 	struct ipu6_device *isp;
 	phys_addr_t phys;
-	u32 val, version, sku_id;
 	int ret;
 
 	trace_printk_init_buffers();
@@ -836,7 +835,7 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	ret = devm_request_threaded_irq(&pdev->dev, pdev->irq,
 					ipu6_buttress_isr,
 					ipu6_buttress_isr_threaded,
-					IRQF_SHARED, IPU6_NAME, isp);
+					IRQF_SHARED, IPU4_NAME, isp);
 	if (ret) {
 		dev_err_probe(&pdev->dev, ret, "Requesting irq failed\n");
 		goto out_ipu_bridge_uninit;
@@ -855,11 +854,8 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	/* Configure the arbitration mechanisms for VC requests */
 	ipu6_configure_vc_mechanism(isp);
 
-	val = readl(isp->base + BUTTRESS_REG_SKU);
-	sku_id = FIELD_GET(GENMASK(6, 4), val);
-	version = FIELD_GET(GENMASK(3, 0), val);
-	dev_info(&pdev->dev, "IPU%u-v%u[%x] hardware version %d\n",
-		 version, sku_id, pdev->device, isp->hw_ver);
+	// NB: Don't change, currently used as done signal in test
+	dev_info(&pdev->dev, "IPU4 PCI driver ready\n");
 
 	pm_runtime_put_noidle(&pdev->dev);
 	pm_runtime_allow(&pdev->dev);
@@ -1025,7 +1021,7 @@ static const struct pci_error_handlers pci_err_handlers = {
 };
 
 static struct pci_driver ipu6_pci_driver = {
-	.name = IPU6_NAME,
+	.name = IPU4_NAME,
 	.id_table = ipu6_pci_tbl,
 	.probe = ipu6_pci_probe,
 	.remove = ipu6_pci_remove,

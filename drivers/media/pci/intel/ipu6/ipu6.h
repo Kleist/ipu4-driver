@@ -51,8 +51,8 @@ static inline void ipu_debug_writel(u32 value, volatile void __iomem *addr, cons
 #define PCI_DEVICE_ID_INTEL_IPU6EP_RPLP		0xa75d
 #define PCI_DEVICE_ID_INTEL_IPU6EP_MTL		0x7d19
 
-#define IPU6_NAME			"intel-ipu6"
-#define IPU6_MEDIA_DEV_MODEL_NAME	"ipu6"
+#define IPU4_NAME			"intel-ipu4"
+#define IPU4_MEDIA_DEV_MODEL_NAME	"ipu4"
 
 #define IPU6SE_FIRMWARE_NAME		"intel/ipu6se_fw.bin"
 #define IPU6EP_FIRMWARE_NAME		"intel/ipu6ep_fw.bin"
