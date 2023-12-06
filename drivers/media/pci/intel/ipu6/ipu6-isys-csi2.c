@@ -253,8 +253,6 @@ static int ipu6_isys_csi2_set_stream(struct v4l2_subdev *sd,
 		       csi2->base + CSI_PORT_REG_BASE_IRQ_CSI_SYNC +
 		       CSI_PORT_REG_BASE_IRQ_CLEAR_OFFSET);
 
-		isys->phy_set_power(isys, &cfg, timing, false);
-
 		writel(0, isys->pdata->base + CSI_REG_HUB_FW_ACCESS_PORT
 		       (isys->pdata->ipdata->csi2.fw_access_port_ofs,
 			csi2->port));
@@ -319,11 +317,6 @@ static int ipu6_isys_csi2_set_stream(struct v4l2_subdev *sd,
 
 	writel(1, csi2->base + CSI_REG_PPI2CSI_ENABLE);
 	writel(1, csi2->base + CSI_REG_CSI_FE_ENABLE);
-
-	ret = isys->phy_set_power(isys, &cfg, timing, true);
-	if (ret)
-		dev_err(dev, "csi-%d phy power up failed %d\n", csi2->port,
-			ret);
 
 	return ret;
 }

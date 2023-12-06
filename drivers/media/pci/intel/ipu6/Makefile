@@ -15,9 +15,6 @@ intel-ipu4-isys-objs			+= ipu6-isys.o \
 					ipu6-fw-isys.o \
 					ipu6-isys-video.o \
 					ipu6-isys-queue.o \
-					ipu6-isys-subdev.o \
-					ipu6-isys-mcd-phy.o \
-					ipu6-isys-jsl-phy.o \
-					ipu6-isys-dwc-phy.o
+					ipu6-isys-subdev.o
 
 obj-$(CONFIG_VIDEO_INTEL_IPU4)		+= intel-ipu4-isys.o
