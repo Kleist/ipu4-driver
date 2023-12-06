@@ -616,8 +616,6 @@ static void stop_streaming(struct vb2_queue *q)
 
 	ipu6_isys_set_csi2_streams_status(av, false);
 
-	WARN(1, "%s: Not implemented", __func__);
-
 	mutex_lock(&stream->mutex);
 
 	mutex_lock(&av->isys->stream_mutex);

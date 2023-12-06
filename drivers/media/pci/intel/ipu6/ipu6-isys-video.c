@@ -761,9 +761,6 @@ static u64 get_stream_mask_by_pipeline(struct ipu6_isys_video *av)
 int ipu6_isys_video_set_streaming(struct ipu6_isys_video *av, int state,
 				  struct ipu6_isys_buffer_list *bl)
 {
-	WARN(1, "%s Not implemented", __func__);
-	return -ENODEV;
-
 	struct v4l2_subdev_krouting *routing;
 	struct ipu6_isys_stream *stream = av->stream;
 	struct v4l2_subdev_state *subdev_state;
@@ -824,15 +821,16 @@ int ipu6_isys_video_set_streaming(struct ipu6_isys_video *av, int state,
 		}
 		close_streaming_firmware(av);
 	} else {
+		/* start sub-device which connects with video */
+		dev_dbg(dev, "stream on %s pad %d\n", sd->name, r_pad->index);
+		ret = v4l2_subdev_call(sd, video, s_stream, state);
+
 		ret = start_stream_firmware(av, bl);
 		if (ret) {
 			dev_err(dev, "start stream of firmware failed\n");
 			return ret;
 		}
 
-		/* start sub-device which connects with video */
-		dev_dbg(dev, "stream on %s pad %d\n", sd->name, r_pad->index);
-		ret = v4l2_subdev_call(sd, video, s_stream, state);
 		if (ret) {
 			dev_err(dev, "stream on %s failed with %d\n", sd->name,
 				ret);

@@ -886,7 +886,6 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 	struct ipu6_isys_csi2 *csi2 = NULL;
 	u64 ts;
 
-	WARN(1, "%s: Not implemented", __func__);
 	if (!isys->fwcom)
 		return 1;
 
