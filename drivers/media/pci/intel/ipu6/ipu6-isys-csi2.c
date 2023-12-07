@@ -221,104 +221,74 @@ static int ipu6_isys_csi2_set_stream(struct v4l2_subdev *sd,
 	struct ipu6_isys_csi2 *csi2 = to_ipu6_isys_csi2(sd);
 	struct ipu6_isys *isys = csi2->isys;
 	struct device *dev = &isys->adev->auxdev.dev;
-	struct ipu6_isys_csi2_config cfg;
-	unsigned int nports;
-	int ret = 0;
-	u32 mask = 0;
-	u32 i;
+	u32 i = 0;
+	u32 val = 0;
+	u32 csi2part = 0;
+	u32 csi2csirx = 0;
 
 	dev_dbg(dev, "stream %s CSI2-%u with %u lanes\n", enable ? "on" : "off",
 		csi2->port, nlanes);
 
-	cfg.port = csi2->port;
-	cfg.nlanes = nlanes;
-
-	mask = isys->pdata->ipdata->csi2.irq_mask;
-	nports = isys->pdata->ipdata->csi2.nports;
-
 	if (!enable) {
-		writel(0, csi2->base + CSI_REG_CSI_FE_ENABLE);
-		writel(0, csi2->base + CSI_REG_PPI2CSI_ENABLE);
+		ipu6_isys_csi2_error(csi2);
 
-		writel(0,
-		       csi2->base + CSI_PORT_REG_BASE_IRQ_CSI +
-		       CSI_PORT_REG_BASE_IRQ_ENABLE_OFFSET);
-		writel(mask,
-		       csi2->base + CSI_PORT_REG_BASE_IRQ_CSI +
-		       CSI_PORT_REG_BASE_IRQ_CLEAR_OFFSET);
-		writel(0,
-		       csi2->base + CSI_PORT_REG_BASE_IRQ_CSI_SYNC +
-		       CSI_PORT_REG_BASE_IRQ_ENABLE_OFFSET);
-		writel(0xffffffff,
-		       csi2->base + CSI_PORT_REG_BASE_IRQ_CSI_SYNC +
-		       CSI_PORT_REG_BASE_IRQ_CLEAR_OFFSET);
+		val = readl(csi2->base + CSI2_REG_CSI_RX_CONFIG);
+		val &= ~(CSI2_CSI_RX_CONFIG_DISABLE_BYTE_CLK_GATING |
+			 CSI2_CSI_RX_CONFIG_RELEASE_LP11);
+		writel(val, csi2->base + CSI2_REG_CSI_RX_CONFIG);
 
-		writel(0, isys->pdata->base + CSI_REG_HUB_FW_ACCESS_PORT
-		       (isys->pdata->ipdata->csi2.fw_access_port_ofs,
-			csi2->port));
-		writel(0, isys->pdata->base +
-		       CSI_REG_HUB_DRV_ACCESS_PORT(csi2->port));
+		writel(0, csi2->base + CSI2_REG_CSI_RX_ENABLE);
 
-		return ret;
+		/* Disable interrupts */
+		writel(0, csi2->base + CSI2_REG_CSI2S2M_IRQ_MASK);
+		writel(0, csi2->base + CSI2_REG_CSI2S2M_IRQ_ENABLE);
+		writel(0, csi2->base + CSI2_REG_CSI2PART_IRQ_MASK);
+		writel(0, csi2->base + CSI2_REG_CSI2PART_IRQ_ENABLE);
+		return 0;
 	}
 
-	/* reset port reset */
-	writel(0x1, csi2->base + CSI_REG_PORT_GPREG_SRST);
-	usleep_range(100, 200);
-	writel(0x0, csi2->base + CSI_REG_PORT_GPREG_SRST);
+	writel(timing->ctermen,
+		   csi2->base + CSI2_REG_CSI_RX_DLY_CNT_TERMEN_CLANE);
+	writel(timing->csettle,
+		   csi2->base + CSI2_REG_CSI_RX_DLY_CNT_SETTLE_CLANE);
 
-	/* enable port clock */
-	for (i = 0; i < nports; i++) {
-		writel(1, isys->pdata->base + CSI_REG_HUB_DRV_ACCESS_PORT(i));
-		writel(1, isys->pdata->base + CSI_REG_HUB_FW_ACCESS_PORT
-		       (isys->pdata->ipdata->csi2.fw_access_port_ofs, i));
+	for (i = 0; i < nlanes; i++) {
+		writel(timing->dtermen,
+			   csi2->base +
+			   CSI2_REG_CSI_RX_DLY_CNT_TERMEN_DLANE(i));
+		writel(timing->dsettle,
+			   csi2->base +
+			   CSI2_REG_CSI_RX_DLY_CNT_SETTLE_DLANE(i));
 	}
 
-	/* enable all error related irq */
-	writel(mask,
-	       csi2->base + CSI_PORT_REG_BASE_IRQ_CSI +
-	       CSI_PORT_REG_BASE_IRQ_STATUS_OFFSET);
-	writel(mask,
-	       csi2->base + CSI_PORT_REG_BASE_IRQ_CSI +
-	       CSI_PORT_REG_BASE_IRQ_MASK_OFFSET);
-	writel(mask,
-	       csi2->base + CSI_PORT_REG_BASE_IRQ_CSI +
-	       CSI_PORT_REG_BASE_IRQ_CLEAR_OFFSET);
-	writel(mask,
-	       csi2->base + CSI_PORT_REG_BASE_IRQ_CSI +
-	       CSI_PORT_REG_BASE_IRQ_LEVEL_NOT_PULSE_OFFSET);
-	writel(mask,
-	       csi2->base + CSI_PORT_REG_BASE_IRQ_CSI +
-	       CSI_PORT_REG_BASE_IRQ_ENABLE_OFFSET);
+	val = readl(csi2->base + CSI2_REG_CSI_RX_CONFIG);
+	val |= CSI2_CSI_RX_CONFIG_DISABLE_BYTE_CLK_GATING |
+	    CSI2_CSI_RX_CONFIG_RELEASE_LP11;
+	writel(val, csi2->base + CSI2_REG_CSI_RX_CONFIG);
 
-	/*
-	 * Using event from firmware instead of irq to handle CSI2 sync event
-	 * which can reduce system wakeups. If CSI2 sync irq enabled, we need
-	 * disable the firmware CSI2 sync event to avoid duplicate handling.
-	 */
-	writel(0xffffffff, csi2->base + CSI_PORT_REG_BASE_IRQ_CSI_SYNC +
-	       CSI_PORT_REG_BASE_IRQ_STATUS_OFFSET);
-	writel(0, csi2->base + CSI_PORT_REG_BASE_IRQ_CSI_SYNC +
-	       CSI_PORT_REG_BASE_IRQ_MASK_OFFSET);
-	writel(0xffffffff, csi2->base + CSI_PORT_REG_BASE_IRQ_CSI_SYNC +
-	       CSI_PORT_REG_BASE_IRQ_CLEAR_OFFSET);
-	writel(0, csi2->base + CSI_PORT_REG_BASE_IRQ_CSI_SYNC +
-	       CSI_PORT_REG_BASE_IRQ_LEVEL_NOT_PULSE_OFFSET);
-	writel(0xffffffff, csi2->base + CSI_PORT_REG_BASE_IRQ_CSI_SYNC +
-	       CSI_PORT_REG_BASE_IRQ_ENABLE_OFFSET);
+	writel(nlanes, csi2->base + CSI2_REG_CSI_RX_NOF_ENABLED_LANES);
+	writel(CSI2_CSI_RX_ENABLE_ENABLE,
+		   csi2->base + CSI2_REG_CSI_RX_ENABLE);
 
-	/* configure to enable FE and PPI2CSI */
-	writel(0, csi2->base + CSI_REG_CSI_FE_MODE);
-	writel(CSI_SENSOR_INPUT, csi2->base + CSI_REG_CSI_FE_MUX_CTRL);
-	writel(CSI_CNTR_SENSOR_LINE_ID | CSI_CNTR_SENSOR_FRAME_ID,
-	       csi2->base + CSI_REG_CSI_FE_SYNC_CNTR_SEL);
-	writel(FIELD_PREP(PPI_INTF_CONFIG_NOF_ENABLED_DLANES_MASK, nlanes - 1),
-	       csi2->base + CSI_REG_PPI2CSI_CONFIG_PPI_INTF);
+	/* SOF/EOF of VC0-VC3 enabled from CSI2PART register in B0 */
+	for (i = 0; i < NR_OF_CSI2_VC; i++)
+		csi2part |= CSI2_IRQ_FS_VC(i) | CSI2_IRQ_FE_VC(i);
 
-	writel(1, csi2->base + CSI_REG_PPI2CSI_ENABLE);
-	writel(1, csi2->base + CSI_REG_CSI_FE_ENABLE);
+	/* Enable csi2 receiver error interrupts */
+	csi2csirx = BIT(CSI2_CSIRX_NUM_ERRORS) - 1;
+	writel(csi2csirx, csi2->base + CSI2_REG_CSIRX_IRQ_EDGE);
+	writel(0, csi2->base + CSI2_REG_CSIRX_IRQ_LEVEL_NOT_PULSE);
+	writel(csi2csirx, csi2->base + CSI2_REG_CSIRX_IRQ_CLEAR);
+	writel(csi2csirx, csi2->base + CSI2_REG_CSIRX_IRQ_MASK);
+	writel(csi2csirx, csi2->base + CSI2_REG_CSIRX_IRQ_ENABLE);
 
-	return ret;
+	/* Enable csi2 error and SOF-related irqs */
+	writel(csi2part, csi2->base + CSI2_REG_CSI2PART_IRQ_EDGE);
+	writel(0, csi2->base + CSI2_REG_CSI2PART_IRQ_LEVEL_NOT_PULSE);
+	writel(csi2part, csi2->base + CSI2_REG_CSI2PART_IRQ_CLEAR);
+	writel(csi2part, csi2->base + CSI2_REG_CSI2PART_IRQ_MASK);
+	writel(csi2part, csi2->base + CSI2_REG_CSI2PART_IRQ_ENABLE);
+	return 0;
 }
 
 static int set_stream(struct v4l2_subdev *sd, int enable)

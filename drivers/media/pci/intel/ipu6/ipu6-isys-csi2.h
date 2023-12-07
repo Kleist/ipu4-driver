@@ -15,7 +15,7 @@ struct ipu6_isys_csi2_pdata;
 struct ipu6_isys_csi2_timing;
 struct ipu6_isys_stream;
 
-#define NR_OF_CSI2_VC			16
+#define NR_OF_CSI2_VC			4 // HACK IPU4
 #define INVALID_VC_ID			-1
 #define NR_OF_CSI2_SINK_PADS		1
 #define CSI2_PAD_SINK			0

@@ -10,13 +10,6 @@
 #ifndef IPU6_PLATFORM_ISYS_CSI2_REG_H
 #define IPU6_PLATFORM_ISYS_CSI2_REG_H
 
-#define CSI_REG_BASE			0x220000
-
-/* CSI Port Genral Purpose Registers */
-#define CSI_REG_PORT_GPREG_SRST                 0x0
-#define CSI_REG_PORT_GPREG_CSI2_SLV_REG_SRST    0x4
-#define CSI_REG_PORT_GPREG_CSI2_PORT_CONTROL    0x8
-
 /*
  * Port IRQs mapping events:
  * IRQ0 - CSI_FE event
@@ -35,43 +28,6 @@
 #define CSI_PORT_REG_BASE_IRQ_LEVEL_NOT_PULSE_OFFSET	0x14
 
 #define CSI_RX_NUM_ERRORS_IN_IRQ		20
-
-#define IPU_CSI_RX_IRQ_FS_VC(chn)	(1 << ((chn) * 2))
-#define IPU_CSI_RX_IRQ_FE_VC(chn)	(2 << ((chn) * 2))
-
-/* PPI2CSI */
-#define CSI_REG_PPI2CSI_ENABLE				0x200
-#define CSI_REG_PPI2CSI_CONFIG_PPI_INTF			0x204
-#define PPI_INTF_CONFIG_NOF_ENABLED_DLANES_MASK		GENMASK(4, 3)
-
-/* CSI_FE */
-#define CSI_REG_CSI_FE_ENABLE                   0x280
-#define CSI_REG_CSI_FE_MODE                     0x284
-#define CSI_REG_CSI_FE_MUX_CTRL                 0x288
-#define CSI_REG_CSI_FE_SYNC_CNTR_SEL            0x290
-
-enum CSI_FE_INPUT_SELECTOR {
-	CSI_SENSOR_INPUT = 0,
-	CSI_MIPIGEN_INPUT = 1,
-};
-
-enum CSI_FE_SYNC_CNTR_SEL_TYPE {
-	CSI_CNTR_SENSOR_LINE_ID = BIT(0),
-	CSI_CNTR_INT_LINE_PKT_ID = ~CSI_CNTR_SENSOR_LINE_ID,
-	CSI_CNTR_SENSOR_FRAME_ID = BIT(1),
-	CSI_CNTR_INT_FRAME_PKT_ID = ~CSI_CNTR_SENSOR_FRAME_ID,
-};
-
-#define CSI_REG_HUB_DRV_ACCESS_PORT(id)	(CSI_REG_BASE + 0x18018 + (id) * 4)
-#define CSI_REG_HUB_FW_ACCESS_PORT(ofs, id)	\
-					(CSI_REG_BASE + (ofs) + (id) * 4)
-
-#define IPU4_ISYS_MAX_CSI2_LEGACY_PORTS	4
-#define IPU4_ISYS_UNISPART_IRQ_CSI2(port)		\
-	({ typeof(port) __port = (port); \
-	__port < IPU4_ISYS_MAX_CSI2_LEGACY_PORTS ?	\
-	((0x8) << __port) :					\
-	(0x800 << (__port - IPU4_ISYS_MAX_CSI2_LEGACY_PORTS)); })
 
 /* IRQ-related registers specific to each of the four CSI receivers */
 #define CSI2_REG_CSI2PART_IRQ_EDGE			0x400

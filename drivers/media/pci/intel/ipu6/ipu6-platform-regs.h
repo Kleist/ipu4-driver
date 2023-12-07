@@ -23,6 +23,14 @@
 #define IPU4_PSYS_DMEM_OFFSET			0x008000
 
 
+#define IPU4_ISYS_MAX_CSI2_LEGACY_PORTS	4
+#define IPU4_ISYS_UNISPART_IRQ_CSI2(port)		\
+	({ typeof(port) __port = (port); \
+	__port < IPU4_ISYS_MAX_CSI2_LEGACY_PORTS ?	\
+	((0x8) << __port) :					\
+	(0x800 << (__port - IPU4_ISYS_MAX_CSI2_LEGACY_PORTS)); })
+
+
 #define IPU4_INFO_REQUEST_DESTINATION_PRIMARY	BIT(4)
 #define IPU4_INFO_STREAM_ID_SET(a)	((a & 0xF) << 4)
 
