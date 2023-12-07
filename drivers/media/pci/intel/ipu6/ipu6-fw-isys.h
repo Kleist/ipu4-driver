@@ -457,7 +457,7 @@ struct ipu4_fw_isys_stream_cfg_data_abi { // AKA ia_css_isys_stream_cfg_data_com
  * @param_buf_id: Points to param port buffer - buffer identifier
  * @addr: Points to param pin buffer - CSS Virtual Address
  */
-struct ipu_fw_isys_param_pin_abi { // HACK: From IPU4 driver
+struct ipu_fw_isys_param_pin_abi { // AKA ia_css_isys_param_pin_comm
 	u64 param_buf_id;
 	u32 addr;
 };
