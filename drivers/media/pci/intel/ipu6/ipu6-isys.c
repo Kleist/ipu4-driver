@@ -330,7 +330,6 @@ irqreturn_t isys_isr(struct ipu6_bus_device *adev)
 
 	status = readl(base + IPU4_REG_ISYS_UNISPART_IRQ_STATUS);
 	do {
-		mmiotrace_printk("%s: status=0x%x\n", __func__, status);
 		writel(status, base + IPU4_REG_ISYS_UNISPART_IRQ_CLEAR);
 
 		if (isys->isr_csi2_bits & status) {
