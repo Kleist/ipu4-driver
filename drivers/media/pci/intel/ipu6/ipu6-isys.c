@@ -286,17 +286,15 @@ static void ipu6_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
 	u32 status;
 	int source;
 
-	ipu6_isys_register_errors(csi2);
+	status = readl(csi2->base + CSI2_REG_CSI2PART_IRQ_STATUS);
+	writel(status, csi2->base + CSI2_REG_CSI2PART_IRQ_CLEAR);
 
-	status = readl(csi2->base + CSI_PORT_REG_BASE_IRQ_CSI_SYNC +
-		       CSI_PORT_REG_BASE_IRQ_STATUS_OFFSET);
-
-	writel(status, csi2->base + CSI_PORT_REG_BASE_IRQ_CSI_SYNC +
-	       CSI_PORT_REG_BASE_IRQ_CLEAR_OFFSET);
+	if (status & CSI2_CSI2PART_IRQ_CSIRX)
+		ipu6_isys_register_errors(csi2);
 
 	source = csi2->asd.source;
 	for (i = 0; i < NR_OF_CSI2_VC; i++) {
-		if (status & IPU_CSI_RX_IRQ_FS_VC(i)) {
+		if ((status & CSI2_IRQ_FS_VC(i))) {
 			stream = ipu6_isys_query_stream_by_source(csi2->isys,
 								  source, i);
 			if (stream) {
@@ -305,7 +303,7 @@ static void ipu6_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
 			}
 		}
 
-		if (status & IPU_CSI_RX_IRQ_FE_VC(i)) {
+		if ((status & CSI2_IRQ_FE_VC(i))) {
 			stream = ipu6_isys_query_stream_by_source(csi2->isys,
 								  source, i);
 			if (stream) {
