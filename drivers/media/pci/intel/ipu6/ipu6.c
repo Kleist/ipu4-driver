@@ -121,7 +121,7 @@ static const struct ipu6_isys_internal_pdata ipu4_isys_ipdata = {
 	.isys_dma_overshoot = IPU4_ISYS_OVERALLOC_MIN,
 };
 
-static const struct ipu6_psys_internal_pdata ipu4_psys_ipdata = {
+static const struct ipu6_psys_internal_pdata psys_ipdata = {
 	.hw_variant = {
 		       .offset = IPU4_PSYS_OFFSET,
 		       .nr_mmus = 3,
@@ -273,85 +273,6 @@ static struct ipu6_isys_internal_pdata isys_ipdata = {
 	.isys_dma_overshoot = IPU6_ISYS_OVERALLOC_MIN,
 };
 
-static struct ipu6_psys_internal_pdata psys_ipdata = {
-	.hw_variant = {
-		.offset = IPU6_UNIFIED_OFFSET,
-		.nr_mmus = 4,
-		.mmu_hw = {
-			{
-				.offset = IPU6_PSYS_IOMMU0_OFFSET,
-				.info_bits =
-				IPU6_INFO_REQUEST_DESTINATION_IOSF,
-				.nr_l1streams = 16,
-				.l1_block_sz = {
-					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-					2, 2, 2, 2, 2, 2
-				},
-				.nr_l2streams = 16,
-				.l2_block_sz = {
-					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-					2, 2, 2, 2, 2, 2
-				},
-				.insert_read_before_invalidate = false,
-				.l1_stream_id_reg_offset =
-				IPU6_MMU_L1_STREAM_ID_REG_OFFSET,
-				.l2_stream_id_reg_offset =
-				IPU6_MMU_L2_STREAM_ID_REG_OFFSET,
-			},
-			{
-				.offset = IPU6_PSYS_IOMMU1_OFFSET,
-				.info_bits = 0,
-				.nr_l1streams = 32,
-				.l1_block_sz = {
-					1, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-					2, 2, 2, 2, 2, 10,
-					5, 4, 14, 6, 4, 14, 6, 4, 8,
-					4, 2, 1, 1, 1, 1, 14
-				},
-				.nr_l2streams = 32,
-				.l2_block_sz = {
-					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-					2, 2, 2, 2, 2, 2,
-					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-					2, 2, 2, 2, 2, 2
-				},
-				.insert_read_before_invalidate = false,
-				.l1_stream_id_reg_offset =
-				IPU6_MMU_L1_STREAM_ID_REG_OFFSET,
-				.l2_stream_id_reg_offset =
-				IPU6_PSYS_MMU1W_L2_STREAM_ID_REG_OFFSET,
-			},
-			{
-				.offset = IPU6_PSYS_IOMMU1R_OFFSET,
-				.info_bits = 0,
-				.nr_l1streams = 16,
-				.l1_block_sz = {
-					1, 4, 4, 4, 4, 16, 8, 4, 32,
-					16, 16, 2, 2, 2, 1, 12
-				},
-				.nr_l2streams = 16,
-				.l2_block_sz = {
-					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-					2, 2, 2, 2, 2, 2
-				},
-				.insert_read_before_invalidate = false,
-				.l1_stream_id_reg_offset =
-				IPU6_MMU_L1_STREAM_ID_REG_OFFSET,
-				.l2_stream_id_reg_offset =
-				IPU6_MMU_L2_STREAM_ID_REG_OFFSET,
-			},
-			{
-				.offset = IPU6_PSYS_IOMMUI_OFFSET,
-				.info_bits = 0,
-				.nr_l1streams = 0,
-				.nr_l2streams = 0,
-				.insert_read_before_invalidate = false,
-			},
-		},
-		.dmem_offset = IPU6_PSYS_DMEM_OFFSET,
-	},
-};
-
 static const struct ipu6_buttress_ctrl ipu6_isys_buttress_ctrl = {
 	.ratio = IPU6_IS_FREQ_CTL_DEFAULT_RATIO,
 	.qos_floor = IPU6_IS_FREQ_CTL_DEFAULT_QOS_FLOOR_RATIO,
@@ -453,7 +374,6 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
 	if (is_ipu4(hw_ver)) {
 		// HACK: replace base struct values
 		memcpy(&isys_ipdata, &ipu4_isys_ipdata, sizeof(isys_ipdata));
-		memcpy(&psys_ipdata, &ipu4_psys_ipdata, sizeof(psys_ipdata));
 		isys_ipdata.num_parallel_streams = IPU4_STREAM_ID_MAX;
 		isys_ipdata.csi2.nports = ARRAY_SIZE(ipu4_csi_offsets);
 		isys_ipdata.csi2.offsets = ipu4_csi_offsets;
@@ -464,8 +384,6 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
 		/* Consider 1 slot per stream since driver is not expected to pipeline
 		 * device commands for the same stream */
 		isys_ipdata.max_devq_size = IPU4_ISYS_MAX_STREAMS;
-
-		psys_ipdata.hw_variant.spc_offset = IPU6_PSYS_SPC_OFFSET;
 	}
 	else {
 		WARN(0, "Only IPU4 supported");
