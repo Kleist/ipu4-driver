@@ -65,7 +65,7 @@ static unsigned int ipu4_csi_offsets[] = {
 
 
 // From iei-4.19.217 ipu4.c
-static const struct ipu6_isys_internal_pdata ipu4_isys_ipdata = {
+static const struct ipu6_isys_internal_pdata isys_ipdata = {
 	.hw_variant = {
 		       .offset = IPU4_ISYS_OFFSET,
 		       .nr_mmus = 2,
@@ -119,6 +119,16 @@ static const struct ipu6_isys_internal_pdata ipu4_isys_ipdata = {
 		.spc_offset = IPU4_ISYS_SPC_OFFSET,
 	},
 	.isys_dma_overshoot = IPU4_ISYS_OVERALLOC_MIN,
+	.num_parallel_streams = IPU4_STREAM_ID_MAX,
+	.csi2.nports = ARRAY_SIZE(ipu4_csi_offsets),
+	.csi2.offsets = ipu4_csi_offsets,
+	.max_streams = IPU4_ISYS_MAX_STREAMS,
+	.max_sram_blocks = IPU4_ISYS_MAX_STREAMS,
+	.max_send_queues = IPU4_N_MAX_SEND_QUEUES,
+
+	/* Consider 1 slot per stream since driver is not expected to pipeline
+		* device commands for the same stream */
+	.max_devq_size = IPU4_ISYS_MAX_STREAMS,
 };
 
 static const struct ipu6_psys_internal_pdata psys_ipdata = {
@@ -214,65 +224,6 @@ static const struct ipu6_psys_internal_pdata psys_ipdata = {
 	},
 };
 
-static struct ipu6_isys_internal_pdata isys_ipdata = {
-	.hw_variant = {
-		.offset = IPU6_UNIFIED_OFFSET,
-		.nr_mmus = 3,
-		.mmu_hw = {
-			{
-				.offset = IPU6_ISYS_IOMMU0_OFFSET,
-				.info_bits = IPU6_INFO_REQUEST_DESTINATION_IOSF,
-				.nr_l1streams = 16,
-				.l1_block_sz = {
-					3, 8, 2, 2, 2, 2, 2, 2, 1, 1,
-					1, 1, 1, 1, 1, 1
-				},
-				.nr_l2streams = 16,
-				.l2_block_sz = {
-					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-					2, 2, 2, 2, 2, 2
-				},
-				.insert_read_before_invalidate = false,
-				.l1_stream_id_reg_offset =
-				IPU6_MMU_L1_STREAM_ID_REG_OFFSET,
-				.l2_stream_id_reg_offset =
-				IPU6_MMU_L2_STREAM_ID_REG_OFFSET,
-			},
-			{
-				.offset = IPU6_ISYS_IOMMU1_OFFSET,
-				.info_bits = 0,
-				.nr_l1streams = 16,
-				.l1_block_sz = {
-					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-					2, 2, 2, 1, 1, 4
-				},
-				.nr_l2streams = 16,
-				.l2_block_sz = {
-					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-					2, 2, 2, 2, 2, 2
-				},
-				.insert_read_before_invalidate = false,
-				.l1_stream_id_reg_offset =
-				IPU6_MMU_L1_STREAM_ID_REG_OFFSET,
-				.l2_stream_id_reg_offset =
-				IPU6_MMU_L2_STREAM_ID_REG_OFFSET,
-			},
-			{
-				.offset = IPU6_ISYS_IOMMUI_OFFSET,
-				.info_bits = 0,
-				.nr_l1streams = 0,
-				.nr_l2streams = 0,
-				.insert_read_before_invalidate = false,
-			},
-		},
-		.cdc_fifos = 3,
-		.cdc_fifo_threshold = {6, 8, 2},
-		.dmem_offset = IPU6_ISYS_DMEM_OFFSET,
-		.spc_offset = IPU6_ISYS_SPC_OFFSET,
-	},
-	.isys_dma_overshoot = IPU6_ISYS_OVERALLOC_MIN,
-};
-
 static const struct ipu6_buttress_ctrl ipu6_isys_buttress_ctrl = {
 	.ratio = IPU6_IS_FREQ_CTL_DEFAULT_RATIO,
 	.qos_floor = IPU6_IS_FREQ_CTL_DEFAULT_QOS_FLOOR_RATIO,
@@ -366,29 +317,6 @@ void ipu6_configure_spc(struct ipu6_device *isp,
 					   pkg_dir, pkg_dir_dma_addr);
 }
 EXPORT_SYMBOL_NS_GPL(ipu6_configure_spc, INTEL_IPU6);
-
-static void ipu6_internal_pdata_init(struct ipu6_device *isp)
-{
-	u8 hw_ver = isp->hw_ver;
-
-	if (is_ipu4(hw_ver)) {
-		// HACK: replace base struct values
-		memcpy(&isys_ipdata, &ipu4_isys_ipdata, sizeof(isys_ipdata));
-		isys_ipdata.num_parallel_streams = IPU4_STREAM_ID_MAX;
-		isys_ipdata.csi2.nports = ARRAY_SIZE(ipu4_csi_offsets);
-		isys_ipdata.csi2.offsets = ipu4_csi_offsets;
-		isys_ipdata.max_streams = IPU4_ISYS_MAX_STREAMS;
-		isys_ipdata.max_sram_blocks = IPU4_ISYS_MAX_STREAMS;
-		isys_ipdata.max_send_queues = IPU4_N_MAX_SEND_QUEUES;
-
-		/* Consider 1 slot per stream since driver is not expected to pipeline
-		 * device commands for the same stream */
-		isys_ipdata.max_devq_size = IPU4_ISYS_MAX_STREAMS;
-	}
-	else {
-		WARN(0, "Only IPU4 supported");
-	}
-}
 
 static int ipu6_isys_check_fwnode_graph(struct fwnode_handle *fwnode)
 {
@@ -668,8 +596,6 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 				     "Unsupported IPU6 device %x\n",
 				     id->device);
 	}
-
-	ipu6_internal_pdata_init(isp);
 
 	isys_base = isp->base + isys_ipdata.hw_variant.offset;
 	psys_base = isp->base + psys_ipdata.hw_variant.offset;

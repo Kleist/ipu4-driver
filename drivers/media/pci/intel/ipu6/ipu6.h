@@ -136,7 +136,6 @@ struct ipu6_device {
 	u32 cpd_metadata_cmpnt_size;
 
 	void __iomem *base;
-	// struct ipu6_trace *trace;
 	bool need_ipc_reset;
 	bool secure_mode;
 	u8 hw_ver;
@@ -371,16 +370,10 @@ struct ipu6_isys_internal_pdata {
 	struct ipu6_hw_variants hw_variant;
 	u32 num_parallel_streams;
 	u32 isys_dma_overshoot;
-	u32 sram_gran_shift;
-	u32 sram_gran_size;
-	u32 max_sram_size;
 	u32 max_streams;
 	u32 max_send_queues;
 	u32 max_sram_blocks;
 	u32 max_devq_size;
-	u32 ltr;
-	u32 memopen_threshold;
-	bool enhanced_iwake;
 };
 
 struct ipu6_isys_pdata {
