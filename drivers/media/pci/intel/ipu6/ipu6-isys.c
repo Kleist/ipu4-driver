@@ -290,7 +290,7 @@ static void ipu6_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
 	writel(status, csi2->base + CSI2_REG_CSI2PART_IRQ_CLEAR);
 
 	if (status & CSI2_CSI2PART_IRQ_CSIRX)
-		ipu6_isys_register_errors(csi2);
+		ipu4_isys_register_errors(csi2);
 
 	source = csi2->asd.source;
 	for (i = 0; i < NR_OF_CSI2_VC; i++) {
@@ -967,7 +967,7 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 				 "%d:No data pin ready handler for pin id %d\n",
 				 resp->stream_handle, resp->pin_id);
 		if (csi2)
-			ipu6_isys_csi2_error(csi2);
+			ipu4_isys_csi2_error(csi2);
 
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_CAPTURE_ACK:

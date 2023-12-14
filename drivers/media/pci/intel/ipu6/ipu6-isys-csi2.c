@@ -181,36 +181,64 @@ ipu6_isys_csi2_calc_timing(struct ipu6_isys_csi2 *csi2,
 	return 0;
 }
 
-void ipu6_isys_register_errors(struct ipu6_isys_csi2 *csi2)
+void ipu4_isys_register_errors(struct ipu6_isys_csi2 *csi2)
 {
-	u32 irq = readl(csi2->base + CSI_PORT_REG_BASE_IRQ_CSI +
-			CSI_PORT_REG_BASE_IRQ_STATUS_OFFSET);
-	struct ipu6_isys *isys = csi2->isys;
-	u32 mask;
+	u32 status = readl(csi2->base + CSI2_REG_CSIRX_IRQ_STATUS);
 
-	mask = isys->pdata->ipdata->csi2.irq_mask;
-	writel(irq & mask, csi2->base + CSI_PORT_REG_BASE_IRQ_CSI +
-	       CSI_PORT_REG_BASE_IRQ_CLEAR_OFFSET);
-	csi2->receiver_errors |= irq & mask;
+	writel(status, csi2->base + CSI2_REG_CSIRX_IRQ_CLEAR);
+	csi2->receiver_errors |= status;
 }
 
-void ipu6_isys_csi2_error(struct ipu6_isys_csi2 *csi2)
+void ipu4_isys_csi2_error(struct ipu6_isys_csi2 *csi2)
 {
 	struct device *dev = &csi2->isys->adev->auxdev.dev;
-	const struct ipu6_csi2_error *errors;
+	/*
+	 * Strings corresponding to CSI-2 receiver errors are here.
+	 * Corresponding macros are defined in the header file.
+	 */
+	static const struct ipu_isys_csi2_error {
+		const char *error_string;
+		bool is_info_only;
+	} errors[] = {
+		{"Single packet header error corrected", true},
+		{"Multiple packet header errors detected", true},
+		{"Payload checksum (CRC) error", true},
+		{"FIFO overflow", false},
+		{"Reserved short packet data type detected", true},
+		{"Reserved long packet data type detected", true},
+		{"Incomplete long packet detected", false},
+		{"Frame sync error", false},
+		{"Line sync error", false},
+		{"DPHY recoverable synchronization error", true},
+		{"DPHY non-recoverable synchronization error", false},
+		{"Escape mode error", true},
+		{"Escape mode trigger event", true},
+		{"Escape mode ultra-low power state for data lane(s)", true},
+		{"Escape mode ultra-low power state exit for clock lane", true},
+		{"Inter-frame short packet discarded", true},
+		{"Inter-frame long packet discarded", true},
+	};
 	u32 status;
-	u32 i;
+	unsigned int i;
 
-	/* register errors once more in case of interrupts are disabled */
-	ipu6_isys_register_errors(csi2);
+	/* Register errors once more in case of error interrupts are disabled */
+	ipu4_isys_register_errors(csi2);
 	status = csi2->receiver_errors;
 	csi2->receiver_errors = 0;
-	errors = dphy_rx_errors;
 
-	for (i = 0; i < CSI_RX_NUM_ERRORS_IN_IRQ; i++) {
-		if (status & BIT(i))
-			dev_err_ratelimited(dev, "csi2-%i error: %s\n",
-					    csi2->port, errors[i].error_string);
+	for (i = 0; i < ARRAY_SIZE(errors); i++) {
+		if (!(status & BIT(i)))
+			continue;
+
+		if (errors[i].is_info_only)
+			dev_dbg(dev,
+				"csi2-%i info: %s\n",
+				csi2->port, errors[i].error_string);
+		else
+			dev_err_ratelimited(dev,
+					    "csi2-%i error: %s\n",
+					    csi2->port,
+					    errors[i].error_string);
 	}
 }
 
@@ -230,7 +258,7 @@ static int ipu6_isys_csi2_set_stream(struct v4l2_subdev *sd,
 		csi2->port, nlanes);
 
 	if (!enable) {
-		ipu6_isys_csi2_error(csi2);
+		ipu4_isys_csi2_error(csi2);
 
 		val = readl(csi2->base + CSI2_REG_CSI_RX_CONFIG);
 		val &= ~(CSI2_CSI_RX_CONFIG_DISABLE_BYTE_CLK_GATING |
