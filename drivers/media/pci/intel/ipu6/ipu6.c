@@ -912,4 +912,4 @@ MODULE_AUTHOR("Qingwu Zhang <qingwu.zhang@intel.com>");
 MODULE_AUTHOR("Yunliang Ding <yunliang.ding@intel.com>");
 MODULE_AUTHOR("Hongju Wang <hongju.wang@intel.com>");
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("Intel IPU6 PCI driver");
+MODULE_DESCRIPTION("Intel IPU4 PCI driver");

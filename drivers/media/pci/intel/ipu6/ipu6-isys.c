@@ -1046,5 +1046,5 @@ MODULE_AUTHOR("Bingbu Cao <bingbu.cao@intel.com>");
 MODULE_AUTHOR("Yunliang Ding <yunliang.ding@intel.com>");
 MODULE_AUTHOR("Hongju Wang <hongju.wang@intel.com>");
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("Intel IPU6 input system driver");
+MODULE_DESCRIPTION("Intel IPU4 input system driver");
 MODULE_IMPORT_NS(INTEL_IPU6);

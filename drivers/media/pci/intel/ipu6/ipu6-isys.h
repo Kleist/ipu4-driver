@@ -16,7 +16,7 @@
 #include "ipu6-isys-csi2.h"
 #include "ipu6-isys-video.h"
 
-#define IPU6_ISYS_ENTITY_PREFIX		"Intel IPU6"
+#define IPU6_ISYS_ENTITY_PREFIX		"Intel IPU4"
 /* FW support max 16 streams */
 #define IPU4_ISYS_MAX_STREAMS		8
 #define ISYS_UNISPART_IRQS	(IPU6_ISYS_UNISPART_IRQ_SW |	\
