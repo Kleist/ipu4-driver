@@ -751,8 +751,8 @@ void ipu6_isys_queue_buf_ready(struct ipu6_isys_stream *stream,
 
 		if (info->pin.addr != addr) {
 			if (first)
-				dev_err(dev, "Unexpected buffer address %pad\n",
-					&addr);
+				dev_err(dev, "Unexpected buffer address 0x%x != 0x%llx\n",
+					info->pin.addr, addr);
 			first = false;
 			continue;
 		}
