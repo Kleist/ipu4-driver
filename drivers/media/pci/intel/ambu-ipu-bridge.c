@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Author: Dan Scally <djrscally@gmail.com> */
+/* Author: Andreas Helbech Kleist <andreaskleist@gmail.com> */
 
 #include <linux/device.h>
 #include <linux/i2c.h>
