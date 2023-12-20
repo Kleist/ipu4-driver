@@ -20,14 +20,14 @@ static const struct mipi_bridge_config mipi_bridge_configs[] = {
 	{
 		.compatible = "ambu,tc358748",
 		.i2c_addr = 0x0e,
-		.i2c_adapter = 0, 
+		.i2c_adapter = 0,
 		.link_freq = 317250000, // ieib475_pll_configurations op_sys_clk from 4.19 driver
 		.mcsi_port = 0, 
 	},
 	{
 		.compatible = "ambu,tc358748",
 		.i2c_addr = 0x0e,
-		.i2c_adapter = 3, 
+		.i2c_adapter = 3,
 		.link_freq = 317250000, // ieib475_pll_configurations op_sys_clk from 4.19 driver
 		.mcsi_port = 1, 
 	},
