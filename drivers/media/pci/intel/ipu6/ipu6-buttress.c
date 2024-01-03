@@ -347,10 +347,12 @@ irqreturn_t ipu6_buttress_isr(int irq, void *isp_ptr)
 		writel(irq_status, isp->base + BUTTRESS_REG_ISR_CLEAR);
 
 		for (i = 0; i < ARRAY_SIZE(ipu6_adev_irq_mask); i++) {
-			irqreturn_t r = ipu6_buttress_call_isr(adev[i]);
+			irqreturn_t r;
 
 			if (!(irq_status & ipu6_adev_irq_mask[i]))
 				continue;
+
+			r = ipu6_buttress_call_isr(adev[i]);
 
 			if (r == IRQ_WAKE_THREAD) {
 				ret = IRQ_WAKE_THREAD;
