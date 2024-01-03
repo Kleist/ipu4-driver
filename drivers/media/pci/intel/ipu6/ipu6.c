@@ -763,9 +763,12 @@ static void ipu6_pci_remove(struct pci_dev *pdev)
 	struct ipu6_mmu *isys_mmu = isp->isys->mmu;
 	struct ipu6_mmu *psys_mmu = isp->psys->mmu;
 
+	devm_free_irq(&pdev->dev, pdev->irq, isp);
 	ipu6_cpd_free_pkg_dir(isp->psys);
 
 	ipu6_buttress_unmap_fw_image(isp->psys, &isp->psys->fw_sgt);
+
+	ipu6_buttress_exit(isp);
 
 	ipu6_bus_del_devices(pdev);
 
@@ -774,8 +777,6 @@ static void ipu6_pci_remove(struct pci_dev *pdev)
 
 	pci_release_regions(pdev);
 	pci_disable_device(pdev);
-
-	ipu6_buttress_exit(isp);
 
 	release_firmware(isp->cpd_fw);
 
