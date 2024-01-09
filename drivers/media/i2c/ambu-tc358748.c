@@ -188,23 +188,47 @@ static int tc358748_sw_reset(struct tc358748 *tc358748)
 	return tc358748_clear_bits(tc358748, SYSCTL_REG, SRESET);
 }
 
+static int tc358748_select_format_settings(struct v4l2_subdev *sd,
+	struct crl_register_write_rep **register_settings, int width, int height)
+{
+	if ((width == 400) && (height == 400)) {
+		dev_dbg(sd->dev, "%s : Select 400x400 settings (size=%ld)\n", __func__,
+			ARRAY_SIZE(ieib475_source_RGB_400_400));
+		*register_settings = ieib475_source_RGB_400_400;
+		return ARRAY_SIZE(ieib475_source_RGB_400_400);
+	}
+
+	// Default to 800x800
+	dev_dbg(sd->dev, "%s : Select 800x800 settings (size=%ld)\n", __func__,
+		ARRAY_SIZE(ieib475_source_RGB_800_800));
+	*register_settings = ieib475_source_RGB_800_800;
+	return ARRAY_SIZE(ieib475_source_RGB_800_800);
+}
+
 static int tc358748_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct tc358748 *tc358748 = to_tc358748(sd);
-	int ret = 0;
+	struct v4l2_subdev_state *sink_state;
+	const struct v4l2_mbus_framefmt *mbusfmt;
+	struct crl_register_write_rep *register_settings;
+	int settings_size, ret = 0;
 
 	if (enable) {
-		// TODO - detect if it is 400 or 800
-		(void)ieib475_source_RGB_400_400;
+		sink_state = v4l2_subdev_lock_and_get_active_state(sd);
+		mbusfmt = v4l2_subdev_get_pad_format(sd, sink_state, 0);
+		settings_size = tc358748_select_format_settings(sd, &register_settings,
+			mbusfmt->width, mbusfmt->height);
+		v4l2_subdev_unlock_state(sink_state);
 
 		ret = tc358748_write_crl_regs(tc358748,
-			ieib475_source_RGB_800_800,
-			ARRAY_SIZE(ieib475_source_RGB_800_800));
+			register_settings,
+			settings_size);
 	} else {
 		ret = tc358748_write_crl_regs(tc358748,
 			ieib475_streamoff_regs,
 			ARRAY_SIZE(ieib475_streamoff_regs));
 	}
+
 	return ret;
 }
 
@@ -214,6 +238,7 @@ static int tc358748_init_cfg(struct v4l2_subdev *sd,
 	struct v4l2_mbus_framefmt *fmt;
 
 	fmt = v4l2_subdev_get_pad_format(sd, state, 0);
+	dev_dbg(sd->dev, "%s : Format %dx%d\n", __func__, fmt->width, fmt->height);
 	*fmt = tc358748_def_fmt;
 
 	return 0;
@@ -235,8 +260,27 @@ static int tc358748_set_fmt(struct v4l2_subdev *sd,
 
 	src_fmt = v4l2_subdev_get_pad_format(sd, sd_state, 0);
 
+	if (!(((format->format.width == 400) && (format->format.height == 400)) || 
+		((format->format.width == 800) && (format->format.height == 800))) || 
+		!((format->format.field == V4L2_FIELD_NONE) || (format->format.field == V4L2_FIELD_ANY)))
+	{
+		// TODO: Find a strategy to fulfill the requirement. Returning an error is strictly not allowed here.
+		// "Drivers must not return an error solely because the requested format doesn’t match the device capabilities. 
+		// They must instead modify the format to match what the hardware can provide. The modified format should be as 
+		// close as possible to the original request."
+		//
+		// See https://www.kernel.org/doc/html/v4.9/media/uapi/v4l/vidioc-subdev-g-fmt.html
+		// https://www.kernel.org/doc/html/v6.6/driver-api/media/v4l2-subdev.html?#read-only-sub-device-userspace-api
+		// Currently only register settings for 400x400 and 800x800 are supported 
+		return -EINVAL;
+	}
+
+	src_fmt->width = format->format.width;
+	src_fmt->height = format->format.height;
+	
 	// From 4.19 crl_ieib475_configuration.h: struct crl_csi_data_fmt ieib475_crl_csi_data_fmt
 	src_fmt->code = MEDIA_BUS_FMT_RGB888_1X24;
+	format->format.code = MEDIA_BUS_FMT_RGB888_1X24;
 	return 0;
 }
 
