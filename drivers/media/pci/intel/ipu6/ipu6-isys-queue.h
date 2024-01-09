@@ -89,6 +89,5 @@ void ipu6_isys_queue_buf_done(struct ipu6_isys_buffer *ib);
 void ipu6_isys_queue_buf_ready(struct ipu6_isys_stream *stream,
 			       struct ipu6_fw_isys_resp_info_abi *info);
 int ipu6_isys_queue_init(struct ipu6_isys_queue *aq);
-void ipu6_isys_queue_cleanup(struct ipu6_isys_queue *aq);
 
 #endif /* IPU6_ISYS_QUEUE_H */

@@ -1130,7 +1130,7 @@ int ipu6_isys_video_init(struct ipu6_isys_video *av)
 	av->pad.flags = MEDIA_PAD_FL_SINK | MEDIA_PAD_FL_MUST_CONNECT;
 	ret = media_entity_pads_init(&av->vdev.entity, 1, &av->pad);
 	if (ret)
-		goto out_ipu6_isys_queue_cleanup;
+		goto out_free_watermark;
 
 	av->vdev.entity.ops = &entity_ops;
 	av->vdev.release = video_device_release_empty;
@@ -1154,11 +1154,8 @@ int ipu6_isys_video_init(struct ipu6_isys_video *av)
 	return ret;
 
 out_media_entity_cleanup:
-	video_unregister_device(&av->vdev);
+	vb2_video_unregister_device(&av->vdev);
 	media_entity_cleanup(&av->vdev.entity);
-
-out_ipu6_isys_queue_cleanup:
-	ipu6_isys_queue_cleanup(&av->aq);
 
 out_free_watermark:
 	mutex_destroy(&av->mutex);
@@ -1168,8 +1165,7 @@ out_free_watermark:
 
 void ipu6_isys_video_cleanup(struct ipu6_isys_video *av)
 {
-	video_unregister_device(&av->vdev);
+	vb2_video_unregister_device(&av->vdev);
 	media_entity_cleanup(&av->vdev.entity);
 	mutex_destroy(&av->mutex);
-	ipu6_isys_queue_cleanup(&av->aq);
 }

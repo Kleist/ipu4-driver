@@ -824,8 +824,3 @@ int ipu6_isys_queue_init(struct ipu6_isys_queue *aq)
 
 	return 0;
 }
-
-void ipu6_isys_queue_cleanup(struct ipu6_isys_queue *aq)
-{
-	vb2_queue_release(&aq->vbq);
-}
