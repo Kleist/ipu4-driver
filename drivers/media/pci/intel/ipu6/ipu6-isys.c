@@ -621,9 +621,6 @@ static void isys_remove(struct auxiliary_device *auxdev)
 	struct isys_fw_msgs *fwmsg, *safe;
 	unsigned int i;
 
-	for (i = 0; i < IPU4_ISYS_MAX_STREAMS; i++)
-		mutex_destroy(&isys->streams[i].mutex);
-
 	list_for_each_entry_safe(fwmsg, safe, &isys->framebuflist, head)
 		dma_free_attrs(&auxdev->dev, sizeof(struct isys_fw_msgs),
 			       fwmsg, fwmsg->dma_addr, 0);
@@ -632,8 +629,9 @@ static void isys_remove(struct auxiliary_device *auxdev)
 		dma_free_attrs(&auxdev->dev, sizeof(struct isys_fw_msgs),
 			       fwmsg, fwmsg->dma_addr, 0);
 
-	isys_notifier_cleanup(isys);
 	isys_unregister_devices(isys);
+
+	isys_notifier_cleanup(isys);
 
 	cpu_latency_qos_remove_request(&isys->pm_qos);
 
@@ -642,6 +640,9 @@ static void isys_remove(struct auxiliary_device *auxdev)
 		ipu6_buttress_unmap_fw_image(adev, &adev->fw_sgt);
 		release_firmware(adev->fw);
 	}
+
+	for (i = 0; i < IPU4_ISYS_MAX_STREAMS; i++)
+		mutex_destroy(&isys->streams[i].mutex);
 
 	mutex_destroy(&isys->stream_mutex);
 	mutex_destroy(&isys->mutex);
