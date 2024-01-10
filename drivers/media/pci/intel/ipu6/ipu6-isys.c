@@ -729,17 +729,14 @@ void ipu6_cleanup_fw_msg_bufs(struct ipu6_isys *isys)
 	spin_unlock_irqrestore(&isys->listlock, flags);
 }
 
-void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, u64 data)
+void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, struct isys_fw_msgs *msg)
 {
-	struct isys_fw_msgs *msg;
 	unsigned long flags;
-	u64 *ptr = (u64 *)data;
-
-	if (!ptr)
+	
+	if (!msg)
 		return;
 
 	spin_lock_irqsave(&isys->listlock, flags);
-	msg = container_of(ptr, struct isys_fw_msgs, fw_msg.dummy);
 	list_move(&msg->head, &isys->framebuflist);
 	spin_unlock_irqrestore(&isys->listlock, flags);
 }
@@ -958,7 +955,7 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 		 * firmware only release the capture msg until software
 		 * get pin_data_ready event
 		 */
-		ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev), resp->buf_id);
+		ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev), (struct isys_fw_msgs*)resp->buf_id);
 		if (resp->pin_id < IPU6_ISYS_OUTPUT_PINS &&
 		    stream->output_pins[resp->pin_id].pin_ready)
 			stream->output_pins[resp->pin_id].pin_ready(stream,

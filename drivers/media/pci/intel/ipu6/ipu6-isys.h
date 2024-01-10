@@ -160,7 +160,6 @@ struct ipu6_isys {
 
 struct isys_fw_msgs {
 	union {
-		u64 dummy;
 		struct ipu4_fw_isys_frame_buff_set_abi frame;
 		struct ipu4_fw_isys_stream_cfg_data_abi stream;
 	} fw_msg;
@@ -169,7 +168,7 @@ struct isys_fw_msgs {
 };
 
 struct isys_fw_msgs *ipu6_get_fw_msg_buf(struct ipu6_isys_stream *stream);
-void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, u64 data);
+void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, struct isys_fw_msgs *msg);
 void ipu6_cleanup_fw_msg_bufs(struct ipu6_isys *isys);
 
 extern const struct v4l2_ioctl_ops ipu6_isys_ioctl_ops;
