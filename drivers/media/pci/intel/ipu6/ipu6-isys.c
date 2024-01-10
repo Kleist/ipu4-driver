@@ -942,6 +942,7 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 		complete(&stream->stream_start_completion);
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_START_AND_CAPTURE_ACK:
+		ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev), (struct isys_fw_msgs*)resp->buf_handle);
 		complete(&stream->stream_start_completion);
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_STOP_ACK:
@@ -951,11 +952,6 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 		complete(&stream->stream_stop_completion);
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_PIN_DATA_READY:
-		/*
-		 * firmware only release the capture msg until software
-		 * get pin_data_ready event
-		 */
-		ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev), (struct isys_fw_msgs*)resp->buf_id);
 		if (resp->pin_id < IPU6_ISYS_OUTPUT_PINS &&
 		    stream->output_pins[resp->pin_id].pin_ready)
 			stream->output_pins[resp->pin_id].pin_ready(stream,
@@ -969,6 +965,7 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_CAPTURE_ACK:
+		ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev), (struct isys_fw_msgs*)resp->buf_handle);
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_START_AND_CAPTURE_DONE:
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_CAPTURE_DONE:

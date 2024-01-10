@@ -513,7 +513,7 @@ struct ipu6_fw_isys_error_info_abi { // AKA ia_css_isys_error_info_comm
  * @pin_id: pin id that the pin payload corresponds to
  */
 struct ipu6_fw_isys_resp_info_abi { // AKA ia_css_isys_resp_info_comm
-	u64 buf_id;
+	u64 buf_handle; // struct isys_fw_msgs*
 	struct ipu6_fw_isys_output_pin_payload_abi pin;
 	struct ipu_fw_isys_param_pin_abi process_group_light;
 	struct ipu6_fw_isys_error_info_abi error_info;
