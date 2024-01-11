@@ -83,7 +83,7 @@ struct ipu6_isys_video {
 	struct mutex mutex;
 	struct media_pad pad;
 	struct video_device vdev;
-	struct v4l2_pix_format_mplane mpix;
+	struct v4l2_pix_format pix;
 	const struct ipu6_isys_pixelformat *pfmt;
 	struct ipu6_isys *isys;
 	struct ipu6_isys_stream *stream;

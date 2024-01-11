@@ -13,29 +13,16 @@ static int queue_setup(struct vb2_queue *q, unsigned int *num_buffers,
 {
 	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(q);
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
-	struct device *dev = &av->isys->adev->auxdev.dev;
-	bool use_fmt = false;
-	unsigned int i;
 	u32 size;
 
 	/* num_planes == 0: we're being called through VIDIOC_REQBUFS */
 	if (!*num_planes) {
-		use_fmt = true;
-		*num_planes = av->mpix.num_planes;
+		*num_planes = 1;
 	}
 
-	for (i = 0; i < *num_planes; i++) {
-		size = av->mpix.plane_fmt[i].sizeimage;
-		if (use_fmt) {
-			sizes[i] = size;
-		} else if (sizes[i] < size) {
-			dev_err(dev, "%s: queue setup: plane %d size %u < %u\n",
-				av->vdev.name, i, sizes[i], size);
-			return -EINVAL;
-		}
-
-		alloc_devs[i] = aq->dev;
-	}
+	size = av->pix.sizeimage;
+	sizes[0] = size;
+	alloc_devs[0] = aq->dev;
 
 	return 0;
 }
@@ -47,14 +34,14 @@ int ipu6_isys_buf_prepare(struct vb2_buffer *vb)
 	struct device *dev = &av->isys->adev->auxdev.dev;
 
 	dev_dbg(dev, "buffer: %s: configured size %u, buffer size %lu\n",
-		av->vdev.name, av->mpix.plane_fmt[0].sizeimage,
+		av->vdev.name, av->pix.sizeimage,
 		vb2_plane_size(vb, 0));
 
-	if (av->mpix.plane_fmt[0].sizeimage > vb2_plane_size(vb, 0))
+	if (av->pix.sizeimage > vb2_plane_size(vb, 0))
 		return -EINVAL;
 
-	vb2_set_plane_payload(vb, 0, av->mpix.plane_fmt[0].bytesperline *
-			      av->mpix.height);
+	vb2_set_plane_payload(vb, 0, av->pix.bytesperline *
+			      av->pix.height);
 	vb->planes[0].data_offset = 0;
 
 	return 0;
@@ -429,17 +416,17 @@ int ipu6_isys_link_fmt_validate(struct ipu6_isys_queue *aq)
 		return ret;
 	}
 
-	if (format.width != av->mpix.width ||
-	    format.height != av->mpix.height) {
+	if (format.width != av->pix.width ||
+	    format.height != av->pix.height) {
 		dev_dbg(dev, "wrong width or height %ux%u (%ux%u expected)\n",
-			av->mpix.width, av->mpix.height,
+			av->pix.width, av->pix.height,
 			format.width, format.height);
 		return -EINVAL;
 	}
 
-	if (format.field != av->mpix.field) {
+	if (format.field != av->pix.field) {
 		dev_dbg(dev, "wrong field value 0x%8.8x (0x%8.8x expected)\n",
-			av->mpix.field, format.field);
+			av->pix.field, format.field);
 		return -EINVAL;
 	}
 
@@ -534,7 +521,7 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 	int nr_queues, ret;
 
 	dev_dbg(dev, "stream: %s: width %u, height %u, css pixelformat %u\n",
-		av->vdev.name, av->mpix.width, av->mpix.height,
+		av->vdev.name, av->pix.width, av->pix.height,
 		av->pfmt->css_pixelformat);
 
 	ret = ipu6_isys_setup_video(av, &source_entity, &nr_queues);
@@ -809,7 +796,7 @@ int ipu6_isys_queue_init(struct ipu6_isys_queue *aq)
 	aq->vbq.ops = &ipu6_isys_queue_ops;
 	aq->vbq.lock = &av->mutex;
 	aq->vbq.mem_ops = &vb2_dma_contig_memops;
-	aq->vbq.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	aq->vbq.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	aq->vbq.timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 
 	ret = vb2_queue_init(&aq->vbq);

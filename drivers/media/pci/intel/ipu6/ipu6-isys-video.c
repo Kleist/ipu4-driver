@@ -213,40 +213,39 @@ static int ipu6_isys_vidioc_enum_framesizes(struct file *file, void *fh,
 	return 0;
 }
 
-static int vidioc_g_fmt_vid_cap_mplane(struct file *file, void *fh,
+static int vidioc_g_fmt_vid_cap(struct file *file, void *fh,
 				       struct v4l2_format *fmt)
 {
 	struct ipu6_isys_video *av = video_drvdata(file);
 
-	fmt->fmt.pix_mp = av->mpix;
+	fmt->fmt.pix = av->pix;
 
 	return 0;
 }
 
 static const struct ipu6_isys_pixelformat *
-ipu6_isys_video_try_fmt_vid_mplane(struct ipu6_isys_video *av,
-				   struct v4l2_pix_format_mplane *mpix)
+ipu6_isys_video_try_fmt_vid(struct ipu6_isys_video *av,
+				   struct v4l2_pix_format *pix)
 {
 	const struct ipu6_isys_pixelformat *pfmt =
-		ipu6_isys_get_pixelformat(mpix->pixelformat);
+		ipu6_isys_get_pixelformat(pix->pixelformat);
 
-	mpix->pixelformat = pfmt->pixelformat;
-	mpix->num_planes = 1;
+	pix->pixelformat = pfmt->pixelformat;
 
-	mpix->width = clamp(mpix->width, IPU6_ISYS_MIN_WIDTH,
+	pix->width = clamp(pix->width, IPU6_ISYS_MIN_WIDTH,
 			    IPU6_ISYS_MAX_WIDTH);
-	mpix->height = clamp(mpix->height, IPU6_ISYS_MIN_HEIGHT,
+	pix->height = clamp(pix->height, IPU6_ISYS_MIN_HEIGHT,
 			     IPU6_ISYS_MAX_HEIGHT);
 
 	if (pfmt->bpp != pfmt->bpp_packed)
-		mpix->plane_fmt[0].bytesperline =
-			mpix->width * DIV_ROUND_UP(pfmt->bpp, BITS_PER_BYTE);
+		pix->bytesperline =
+			pix->width * DIV_ROUND_UP(pfmt->bpp, BITS_PER_BYTE);
 	else
-		mpix->plane_fmt[0].bytesperline =
-			DIV_ROUND_UP((unsigned int)mpix->width * pfmt->bpp,
+		pix->bytesperline =
+			DIV_ROUND_UP((unsigned int)pix->width * pfmt->bpp,
 				     BITS_PER_BYTE);
 
-	mpix->plane_fmt[0].bytesperline = ALIGN(mpix->plane_fmt[0].bytesperline,
+	pix->bytesperline = ALIGN(pix->bytesperline,
 						av->isys->line_align);
 
 	/*
@@ -258,26 +257,23 @@ ipu6_isys_video_try_fmt_vid_mplane(struct ipu6_isys_video *av,
 	 * resolution it gives a bigger number. Use larger one to avoid
 	 * memory corruption.
 	 */
-	mpix->plane_fmt[0].sizeimage =
-		max(max(mpix->plane_fmt[0].sizeimage,
-			mpix->plane_fmt[0].bytesperline * mpix->height +
-			max(mpix->plane_fmt[0].bytesperline,
+	pix->sizeimage =
+		max(max(pix->sizeimage,
+			pix->bytesperline * pix->height +
+			max(pix->bytesperline,
 			    av->isys->pdata->ipdata->isys_dma_overshoot)), 1U);
 
-	memset(mpix->plane_fmt[0].reserved, 0,
-	       sizeof(mpix->plane_fmt[0].reserved));
+	pix->field = V4L2_FIELD_NONE;
 
-	mpix->field = V4L2_FIELD_NONE;
-
-	mpix->colorspace = V4L2_COLORSPACE_RAW;
-	mpix->ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
-	mpix->quantization = V4L2_QUANTIZATION_DEFAULT;
-	mpix->xfer_func = V4L2_XFER_FUNC_DEFAULT;
+	pix->colorspace = V4L2_COLORSPACE_RAW;
+	pix->ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
+	pix->quantization = V4L2_QUANTIZATION_DEFAULT;
+	pix->xfer_func = V4L2_XFER_FUNC_DEFAULT;
 
 	return pfmt;
 }
 
-static int vidioc_s_fmt_vid_cap_mplane(struct file *file, void *fh,
+static int vidioc_s_fmt_vid_cap(struct file *file, void *fh,
 				       struct v4l2_format *f)
 {
 	struct ipu6_isys_video *av = video_drvdata(file);
@@ -285,18 +281,18 @@ static int vidioc_s_fmt_vid_cap_mplane(struct file *file, void *fh,
 	if (av->aq.vbq.streaming)
 		return -EBUSY;
 
-	av->pfmt = ipu6_isys_video_try_fmt_vid_mplane(av, &f->fmt.pix_mp);
-	av->mpix = f->fmt.pix_mp;
+	av->pfmt = ipu6_isys_video_try_fmt_vid(av, &f->fmt.pix);
+	av->pix = f->fmt.pix;
 
 	return 0;
 }
 
-static int vidioc_try_fmt_vid_cap_mplane(struct file *file, void *fh,
+static int vidioc_try_fmt_vid_cap(struct file *file, void *fh,
 					 struct v4l2_format *f)
 {
 	struct ipu6_isys_video *av = video_drvdata(file);
 
-	ipu6_isys_video_try_fmt_vid_mplane(av, &f->fmt.pix_mp);
+	ipu6_isys_video_try_fmt_vid(av, &f->fmt.pix);
 
 	return 0;
 }
@@ -337,11 +333,11 @@ static int link_validate(struct media_link *link)
 		goto unlock;
 	}
 
-	if (s_fmt->width != av->mpix.width ||
-	    s_fmt->height != av->mpix.height || s_fmt->code != av->pfmt->code) {
+	if (s_fmt->width != av->pix.width ||
+	    s_fmt->height != av->pix.height || s_fmt->code != av->pfmt->code) {
 		dev_err(dev, "format mismatch %dx%d,%x != %dx%d,%x\n",
 			s_fmt->width, s_fmt->height, s_fmt->code,
-			av->mpix.width, av->mpix.height, av->pfmt->code);
+			av->pix.width, av->pix.height, av->pfmt->code);
 		goto unlock;
 	}
 
@@ -422,10 +418,10 @@ static int ipu6_isys_fw_pin_cfg(struct ipu6_isys_video *av,
 
 	output_pin = &cfg->output_pins[output_pins];
 	output_pin->input_pin_id = input_pins;
-	output_pin->output_res.width = av->mpix.width;
-	output_pin->output_res.height = av->mpix.height;
+	output_pin->output_res.width = av->pix.width;
+	output_pin->output_res.height = av->pix.height;
 
-	output_pin->stride = av->mpix.plane_fmt[0].bytesperline;
+	output_pin->stride = av->pix.bytesperline;
 	if (av->pfmt->bpp != av->pfmt->bpp_packed)
 		output_pin->pt = IPU6_FW_ISYS_PIN_TYPE_RAW_SOC;
 	else
@@ -908,13 +904,13 @@ out_media_entity_stop_streaming_firmware:
 	return ret;
 }
 
-static const struct v4l2_ioctl_ops ioctl_ops_mplane = {
+static const struct v4l2_ioctl_ops ioctl_ops = {
 	.vidioc_querycap = ipu6_isys_vidioc_querycap,
 	.vidioc_enum_fmt_vid_cap = ipu6_isys_vidioc_enum_fmt,
 	.vidioc_enum_framesizes = ipu6_isys_vidioc_enum_framesizes,
-	.vidioc_g_fmt_vid_cap_mplane = vidioc_g_fmt_vid_cap_mplane,
-	.vidioc_s_fmt_vid_cap_mplane = vidioc_s_fmt_vid_cap_mplane,
-	.vidioc_try_fmt_vid_cap_mplane = vidioc_try_fmt_vid_cap_mplane,
+	.vidioc_g_fmt_vid_cap = vidioc_g_fmt_vid_cap,
+	.vidioc_s_fmt_vid_cap = vidioc_s_fmt_vid_cap,
+	.vidioc_try_fmt_vid_cap = vidioc_try_fmt_vid_cap,
 	.vidioc_reqbufs = vb2_ioctl_reqbufs,
 	.vidioc_create_bufs = vb2_ioctl_create_bufs,
 	.vidioc_prepare_buf = vb2_ioctl_prepare_buf,
@@ -1110,8 +1106,8 @@ int ipu6_isys_setup_video(struct ipu6_isys_video *av,
 int ipu6_isys_video_init(struct ipu6_isys_video *av)
 {
 	struct v4l2_format format = {
-		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
-		.fmt.pix_mp = {
+		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+		.fmt.pix = {
 			.width = 1920,
 			.height = 1080,
 		},
@@ -1120,7 +1116,7 @@ int ipu6_isys_video_init(struct ipu6_isys_video *av)
 
 	mutex_init(&av->mutex);
 	av->vdev.device_caps = V4L2_CAP_STREAMING | V4L2_CAP_IO_MC |
-			       V4L2_CAP_VIDEO_CAPTURE_MPLANE;
+			       V4L2_CAP_VIDEO_CAPTURE;
 	av->vdev.vfl_dir = VFL_DIR_RX;
 
 	ret = ipu6_isys_queue_init(&av->aq);
@@ -1137,12 +1133,12 @@ int ipu6_isys_video_init(struct ipu6_isys_video *av)
 	av->vdev.fops = &isys_fops;
 	av->vdev.v4l2_dev = &av->isys->v4l2_dev;
 	if (!av->vdev.ioctl_ops)
-		av->vdev.ioctl_ops = &ioctl_ops_mplane;
+		av->vdev.ioctl_ops = &ioctl_ops;
 	av->vdev.queue = &av->aq.vbq;
 	av->vdev.lock = &av->mutex;
 
-	ipu6_isys_video_try_fmt_vid_mplane(av, &format.fmt.pix_mp);
-	av->mpix = format.fmt.pix_mp;
+	ipu6_isys_video_try_fmt_vid(av, &format.fmt.pix);
+	av->pix = format.fmt.pix;
 
 	set_bit(V4L2_FL_USES_V4L2_FH, &av->vdev.flags);
 	video_set_drvdata(&av->vdev, av);
