@@ -23,6 +23,7 @@ static const struct mipi_bridge_config mipi_bridge_configs[] = {
 		.i2c_adapter = 0,
 		.link_freq = 317250000, // ieib475_pll_configurations op_sys_clk from 4.19 driver
 		.mcsi_port = 0, 
+		.csi2_device = 0,
 	},
 	{
 		.compatible = "ambu,tc358748",
@@ -30,6 +31,7 @@ static const struct mipi_bridge_config mipi_bridge_configs[] = {
 		.i2c_adapter = 3,
 		.link_freq = 317250000, // ieib475_pll_configurations op_sys_clk from 4.19 driver
 		.mcsi_port = 1, 
+		.csi2_device = 4,
 	},
 
 };
@@ -178,10 +180,10 @@ static int ipu_bridge_setup_mipi_bridge(const struct mipi_bridge_config *cfg,
 	sensor = &bridge->sensors[bridge->n_sensors];
 
 	sensor->lanes = 1; // from 4.19.217 dev_dbg(&csi2->isys->adev->dev, "lane nr %d.\n", nlanes) => "lane nr 1."
-	sensor->link = cfg->mcsi_port;
+	sensor->link = cfg->csi2_device;
 
 	snprintf(sensor->name, sizeof(sensor->name), "%s-%u",
-			cfg->compatible, sensor->link);
+			cfg->compatible, cfg->mcsi_port);
 
 	if (sensor->lanes > IPU_MAX_LANES) {
 		dev_err(&sensor->i2c_dev->dev, "Number of lanes is invalid\n");
