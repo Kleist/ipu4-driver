@@ -16,6 +16,15 @@
 #include "ipu6-platform-isys-csi2-reg.h"
 #include "ipu6-platform-regs.h"
 
+static int csi2_log_first_sof = 10;
+module_param(csi2_log_first_sof, int, 0644);
+MODULE_PARM_DESC(csi2_log_first_sof, "How many frames EOF should be logged during stream start");
+
+static int csi2_log_first_eof = 10;
+module_param(csi2_log_first_eof, int, 0644);
+MODULE_PARM_DESC(csi2_log_first_eof, "How many frames SOF should be logged during stream start");
+
+
 static const u32 csi2_supported_codes[] = {
 	MEDIA_BUS_FMT_RGB565_1X16,
 	MEDIA_BUS_FMT_RGB888_1X24,
@@ -540,8 +549,9 @@ void ipu6_isys_csi2_sof_event_by_stream(struct ipu6_isys_stream *stream)
 	ev.u.frame_sync.frame_sequence = atomic_inc_return(&stream->sequence);
 	v4l2_event_queue(vdev, &ev);
 
-	dev_dbg(dev, "sof_event::csi2-%i sequence: %i, vc: %d\n",
-		csi2->port, ev.u.frame_sync.frame_sequence, stream->vc);
+	if (ev.u.frame_sync.frame_sequence <= csi2_log_first_sof)
+		dev_info(dev, "sof_event::csi2-%i sequence: %i, vc: %d\n",
+			 csi2->port, ev.u.frame_sync.frame_sequence, stream->vc);
 }
 
 void ipu6_isys_csi2_eof_event_by_stream(struct ipu6_isys_stream *stream)
@@ -550,8 +560,9 @@ void ipu6_isys_csi2_eof_event_by_stream(struct ipu6_isys_stream *stream)
 	struct ipu6_isys_csi2 *csi2 = ipu6_isys_subdev_to_csi2(stream->asd);
 	u32 frame_sequence = atomic_read(&stream->sequence);
 
-	dev_dbg(dev, "eof_event::csi2-%i sequence: %i\n",
-		csi2->port, frame_sequence);
+	if (frame_sequence <= csi2_log_first_eof)
+		dev_info(dev, "eof_event::csi2-%i sequence: %i\n",
+			csi2->port, frame_sequence);
 }
 
 int ipu6_isys_csi2_get_remote_desc(u32 source_stream,
