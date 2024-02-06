@@ -26,6 +26,13 @@ struct crl_register_write_rep {
 	u32 mask;
 };
 
+struct crl_register_read_rep {
+	u16 address;
+	u8 len;
+	u32 mask;
+	u16 dev_i2c_addr;
+};
+
 static const struct crl_register_write_rep ieib475_source_RGB_800_800[] = {
   // Stream-off
 	// Set FrmStop to 1’b1 (Clear RstPtr to 1’b0)
@@ -141,6 +148,30 @@ static const struct crl_register_write_rep ieib475_streamoff_regs[] = {
 	{ 0x0000, CRL_REG_LEN_DELAY, 100}, // delay min 1 frame
 	{ 0x0004, CRL_REG_LEN_16BIT, 0x8004, IEIB475_MIPI_TC_I2C_ADDRESS}, // Clear PP_En to 1’b0
 	{ 0x0032, CRL_REG_LEN_16BIT, 0x4000, IEIB475_MIPI_TC_I2C_ADDRESS}, // Set RstPtr to 1’b1 - (Clear FrmStop to 1’b0)
+};
+
+
+/* Registers which are read - and the values log. Purely for diagnostic purposes.
+ * The register addresses are found by inspection of the full address space with
+ * and without a scope inserted.
+ * 
+ * With a scope inserted:
+ *  - 0x42 and 0x44 seem to increase and saturate at 0x1ff
+ *  - 0x46 seems to be 0
+ *
+ * Without a scope inserted:
+ *  - 0x42 is 0x101
+ *  - 0x44 is 0
+ *  - 0x46 is 0x160
+ * 
+ * The intention is to use these logged values to identify why we sometimes don't
+ * get a stream through to AMP in CI.
+ */
+static const struct crl_register_read_rep ieib475_log_regs[] = {
+	/*addr, bits,              mask, I2C address */
+	{ 0x42, CRL_REG_LEN_16BIT, 0, 	 IEIB475_MIPI_TC_I2C_ADDRESS},
+	{ 0x44, CRL_REG_LEN_16BIT, 0, 	 IEIB475_MIPI_TC_I2C_ADDRESS},
+	{ 0x46, CRL_REG_LEN_16BIT, 0, 	 IEIB475_MIPI_TC_I2C_ADDRESS},
 };
 
 #endif /* AMBU_GEN2_TC358748_REGS_ */

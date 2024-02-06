@@ -188,6 +188,31 @@ static int tc358748_sw_reset(struct tc358748 *tc358748)
 	return tc358748_clear_bits(tc358748, SYSCTL_REG, SRESET);
 }
 
+static void tc358748_log_regs(struct tc358748 *tc358748, const char* context)
+{
+	struct device *dev = tc358748->sd.dev;
+	size_t offset = 0;
+	char buffer[256];
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(ieib475_log_regs); ++i) {
+		const struct crl_register_read_rep *reg = &ieib475_log_regs[i];
+		int ret = 0;
+		u32 value;
+
+		ret = tc358748_read(tc358748, reg->address, &value);
+		if (ret) {
+			dev_warn(dev, "Failed to log registers 0x%x: %d", reg->address, ret);
+			break;
+		}
+
+		offset += snprintf(buffer+offset, sizeof(buffer)-offset, "r%02x=%02xh ", reg->address, value);
+	}
+	dev_info(dev, "%s registers: %s\n", context, buffer);
+}
+
+
+
 static int tc358748_select_format_settings(struct v4l2_subdev *sd,
 	const struct crl_register_write_rep **register_settings, int width, int height)
 {
@@ -213,6 +238,8 @@ static int tc358748_s_stream(struct v4l2_subdev *sd, int enable)
 	const struct crl_register_write_rep *register_settings;
 	int settings_size, ret = 0;
 
+	tc358748_log_regs(tc358748, enable ? "Start streaming" : "Stop streaming");
+
 	if (enable) {
 		sink_state = v4l2_subdev_lock_and_get_active_state(sd);
 		mbusfmt = v4l2_subdev_get_pad_format(sd, sink_state, 0);
@@ -228,6 +255,8 @@ static int tc358748_s_stream(struct v4l2_subdev *sd, int enable)
 			ieib475_streamoff_regs,
 			ARRAY_SIZE(ieib475_streamoff_regs));
 	}
+
+	tc358748_log_regs(tc358748, enable ? "Start streaming done" : "Stop streaming done");
 
 	return ret;
 }
