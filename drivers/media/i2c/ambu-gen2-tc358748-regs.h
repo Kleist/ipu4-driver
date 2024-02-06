@@ -26,7 +26,7 @@ struct crl_register_write_rep {
 	u32 mask;
 };
 
-static struct crl_register_write_rep ieib475_source_RGB_800_800[] = {
+static const struct crl_register_write_rep ieib475_source_RGB_800_800[] = {
   // Stream-off
 	// Set FrmStop to 1’b1 (Clear RstPtr to 1’b0)
 	{ 0x0032, CRL_REG_LEN_16BIT, 0x8000, IEIB475_MIPI_TC_I2C_ADDRESS},
@@ -77,7 +77,7 @@ static struct crl_register_write_rep ieib475_source_RGB_800_800[] = {
 	{ 0x0004, CRL_REG_LEN_16BIT, 0x8044, IEIB475_MIPI_TC_I2C_ADDRESS },
 };
 
-static struct crl_register_write_rep ieib475_source_RGB_400_400[] = {
+static const struct crl_register_write_rep ieib475_source_RGB_400_400[] = {
   // Stream-off - workaround to return from pattern mode
 	// Set FrmStop to 1’b1 (Clear RstPtr to 1’b0)
 	{ 0x0032, CRL_REG_LEN_16BIT, 0x8000, IEIB475_MIPI_TC_I2C_ADDRESS},
@@ -135,7 +135,7 @@ static struct crl_register_write_rep ieib475_source_RGB_400_400[] = {
 
 // Frame Stop - When this bit is asserted, TC358746A will stop outputting at the next Vvalid
 // Reset Pointers - When this bit is asserted, TC358746A resets its write/read pointers to Video Buffer
-struct crl_register_write_rep ieib475_streamoff_regs[] = {
+static const struct crl_register_write_rep ieib475_streamoff_regs[] = {
 	// Shutdown
 	{ 0x0032, CRL_REG_LEN_16BIT, 0x8000, IEIB475_MIPI_TC_I2C_ADDRESS}, // Set FrmStop to 1’b1 (Clear RstPtr to 1’b0)
 	{ 0x0000, CRL_REG_LEN_DELAY, 100}, // delay min 1 frame

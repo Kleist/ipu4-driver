@@ -189,7 +189,7 @@ static int tc358748_sw_reset(struct tc358748 *tc358748)
 }
 
 static int tc358748_select_format_settings(struct v4l2_subdev *sd,
-	struct crl_register_write_rep **register_settings, int width, int height)
+	const struct crl_register_write_rep **register_settings, int width, int height)
 {
 	if ((width == 400) && (height == 400)) {
 		dev_dbg(sd->dev, "%s : Select 400x400 settings (size=%ld)\n", __func__,
@@ -210,7 +210,7 @@ static int tc358748_s_stream(struct v4l2_subdev *sd, int enable)
 	struct tc358748 *tc358748 = to_tc358748(sd);
 	struct v4l2_subdev_state *sink_state;
 	const struct v4l2_mbus_framefmt *mbusfmt;
-	struct crl_register_write_rep *register_settings;
+	const struct crl_register_write_rep *register_settings;
 	int settings_size, ret = 0;
 
 	if (enable) {
