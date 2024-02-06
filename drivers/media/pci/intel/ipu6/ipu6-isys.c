@@ -621,6 +621,8 @@ static void isys_remove(struct auxiliary_device *auxdev)
 	struct isys_fw_msgs *fwmsg, *safe;
 	unsigned int i;
 
+	isys_unregister_devices(isys);
+
 	list_for_each_entry_safe(fwmsg, safe, &isys->framebuflist, head)
 		dma_free_attrs(&auxdev->dev, sizeof(struct isys_fw_msgs),
 			       fwmsg, fwmsg->dma_addr, 0);
@@ -628,8 +630,6 @@ static void isys_remove(struct auxiliary_device *auxdev)
 	list_for_each_entry_safe(fwmsg, safe, &isys->framebuflist_fw, head)
 		dma_free_attrs(&auxdev->dev, sizeof(struct isys_fw_msgs),
 			       fwmsg, fwmsg->dma_addr, 0);
-
-	isys_unregister_devices(isys);
 
 	isys_notifier_cleanup(isys);
 
@@ -646,6 +646,7 @@ static void isys_remove(struct auxiliary_device *auxdev)
 
 	mutex_destroy(&isys->stream_mutex);
 	mutex_destroy(&isys->mutex);
+
 }
 
 static int alloc_fw_msg_bufs(struct ipu6_isys *isys, int amount)
