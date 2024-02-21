@@ -1025,7 +1025,7 @@ int ipu6_isys_setup_video(struct ipu6_isys_video *av,
 
 	remote_pad = media_pad_remote_pad_first(&av->pad);
 	if (!remote_pad) {
-		dev_dbg(dev, "failed to get remote pad\n");
+		dev_info(dev, "failed to get remote pad\n");
 		return -ENODEV;
 	}
 
@@ -1033,7 +1033,7 @@ int ipu6_isys_setup_video(struct ipu6_isys_video *av,
 	asd = to_ipu6_isys_subdev(remote_sd);
 	source_pad = media_pad_remote_pad_first(&remote_pad->entity->pads[0]);
 	if (!source_pad) {
-		dev_dbg(dev, "No external source entity\n");
+		dev_info(dev, "No external source entity\n");
 		return -ENODEV;
 	}
 
@@ -1051,7 +1051,7 @@ int ipu6_isys_setup_video(struct ipu6_isys_video *av,
 
 	if (!route) {
 		v4l2_subdev_unlock_state(state);
-		dev_dbg(dev, "Failed to find route\n");
+		dev_info(dev, "Failed to find route\n");
 		return -ENODEV;
 	}
 	v4l2_subdev_unlock_state(state);
@@ -1083,7 +1083,7 @@ int ipu6_isys_setup_video(struct ipu6_isys_video *av,
 	else
 		ret = video_device_pipeline_start(&av->vdev, pipeline);
 	if (ret < 0) {
-		dev_dbg(dev, "media pipeline start failed\n");
+		dev_err(dev, "media pipeline start failed: %d\n", ret);
 		return ret;
 	}
 
