@@ -26,10 +26,6 @@ struct ipu6_isys_queue {
 	struct list_head active;
 	struct list_head incoming;
 	unsigned int fw_output;
-	int (*buf_prepare)(struct vb2_buffer *vb);
-	void (*fill_frame_buf_set)(struct vb2_buffer *vb,
-				   struct ipu4_fw_isys_frame_buff_set_abi *set);
-	int (*link_fmt_validate)(struct ipu6_isys_queue *aq);
 };
 
 struct ipu6_isys_buffer {
@@ -68,19 +64,13 @@ struct ipu6_isys_buffer_list {
 #define vb2_buffer_to_ipu6_isys_buffer(__vb) \
 	(&vb2_buffer_to_ipu6_isys_video_buffer(__vb)->ib)
 
-int ipu6_isys_buf_prepare(struct vb2_buffer *vb);
-
 void ipu6_isys_buffer_list_queue(struct ipu6_isys_buffer_list *bl,
 				 unsigned long op_flags,
 				 enum vb2_buffer_state state);
 void
-ipu6_isys_buf_to_fw_frame_buf_pin(struct vb2_buffer *vb,
- 				  struct ipu4_fw_isys_frame_buff_set_abi *set);
-void
 ipu6_isys_buf_to_fw_frame_buf(struct ipu4_fw_isys_frame_buff_set_abi *set,
 			      struct ipu6_isys_stream *stream,
 			      struct ipu6_isys_buffer_list *bl);
-int ipu6_isys_link_fmt_validate(struct ipu6_isys_queue *aq);
 
 void
 ipu6_isys_buf_calc_sequence_time(struct ipu6_isys_buffer *ib,

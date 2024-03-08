@@ -227,10 +227,6 @@ static int isys_register_video_devices(struct ipu6_isys *isys)
 		snprintf(isys->av[i].vdev.name, sizeof(isys->av[i].vdev.name),
 			 IPU6_ISYS_ENTITY_PREFIX " ISYS Capture %u", i);
 		isys->av[i].isys = isys;
-		isys->av[i].aq.buf_prepare = ipu6_isys_buf_prepare;
-		isys->av[i].aq.fill_frame_buf_set =
-			ipu6_isys_buf_to_fw_frame_buf_pin;
-		isys->av[i].aq.link_fmt_validate = ipu6_isys_link_fmt_validate;
 		isys->av[i].aq.vbq.buf_struct_size =
 			sizeof(struct ipu6_isys_video_buffer);
 		isys->av[i].pfmt = &ipu6_isys_pfmts[0];

@@ -27,7 +27,7 @@ static int queue_setup(struct vb2_queue *q, unsigned int *num_buffers,
 	return 0;
 }
 
-int ipu6_isys_buf_prepare(struct vb2_buffer *vb)
+static int ipu6_isys_buf_prepare(struct vb2_buffer *vb)
 {
 	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(vb->vb2_queue);
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
@@ -45,13 +45,6 @@ int ipu6_isys_buf_prepare(struct vb2_buffer *vb)
 	vb->planes[0].data_offset = 0;
 
 	return 0;
-}
-
-static int buf_prepare(struct vb2_buffer *vb)
-{
-	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(vb->vb2_queue);
-
-	return aq->buf_prepare(vb);
 }
 
 /*
@@ -230,14 +223,11 @@ ipu6_isys_buf_to_fw_frame_buf(struct ipu4_fw_isys_frame_buff_set_abi *set,
 
 	list_for_each_entry(ib, &bl->head, head) {
 		struct vb2_buffer *vb = ipu6_isys_buffer_to_vb2_buffer(ib);
-		struct ipu6_isys_queue *aq =
-			vb2_queue_to_isys_queue(vb->vb2_queue);
 
 		if (WARN_ON_ONCE(ib->type != IPU6_ISYS_VIDEO_BUFFER))
 			continue;
 
-		if (aq->fill_frame_buf_set)
-			aq->fill_frame_buf_set(vb, set);
+		ipu6_isys_buf_to_fw_frame_buf_pin(vb, set);
 	}
 }
 
@@ -390,7 +380,7 @@ out:
 	mutex_unlock(&stream->mutex);
 }
 
-int ipu6_isys_link_fmt_validate(struct ipu6_isys_queue *aq)
+static int ipu6_isys_link_fmt_validate(struct ipu6_isys_queue *aq)
 {
 	struct v4l2_mbus_framefmt format;
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
@@ -530,7 +520,7 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 		goto out_return_buffers;
 	}
 
-	ret = aq->link_fmt_validate(aq);
+	ret = ipu6_isys_link_fmt_validate(aq);
 	if (ret) {
 		dev_err(dev,
 			"%s: link format validation failed (%d)\n",
@@ -777,7 +767,7 @@ static const struct vb2_ops ipu6_isys_queue_ops = {
 	.queue_setup = queue_setup,
 	.wait_prepare = vb2_ops_wait_prepare,
 	.wait_finish = vb2_ops_wait_finish,
-	.buf_prepare = buf_prepare,
+	.buf_prepare = ipu6_isys_buf_prepare,
 	.start_streaming = start_streaming,
 	.stop_streaming = stop_streaming,
 	.buf_queue = buf_queue,
