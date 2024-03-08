@@ -307,7 +307,6 @@ static void ipu6_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
 			stream = ipu6_isys_query_stream_by_source(csi2->isys,
 								  source, i);
 			if (stream) {
-				ipu6_isys_csi2_eof_event_by_stream(stream);
 				ipu6_isys_put_stream(stream);
 			}
 		}
@@ -985,7 +984,6 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 			% IPU6_ISYS_MAX_PARALLEL_SOF;
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_FRAME_EOF:
-		ipu6_isys_csi2_eof_event_by_stream(stream);
 		dev_dbg(&adev->auxdev.dev,
 			"eof: handle %d: (index %u), timestamp 0x%16.16llx\n",
 			resp->stream_handle,
