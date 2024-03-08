@@ -110,6 +110,8 @@ int ipu6_isys_video_prepare_stream(struct ipu6_isys_video *av,
 				   int nr_queues);
 int ipu6_isys_video_set_streaming(struct ipu6_isys_video *av, int state,
 				  struct ipu6_isys_buffer_list *bl);
+int ipu6_isys_fw_get(struct ipu6_isys *isys);
+void ipu6_isys_fw_put(struct ipu6_isys *isys);
 int ipu6_isys_fw_open(struct ipu6_isys *isys);
 void ipu6_isys_fw_close(struct ipu6_isys *isys);
 int ipu6_isys_setup_video(struct ipu6_isys_video *av,

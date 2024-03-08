@@ -538,7 +538,7 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 		goto out_pipeline_stop;
 	}
 
-	ret = ipu6_isys_fw_open(av->isys);
+	ret = ipu6_isys_fw_get(av->isys);
 	if (ret)
 		goto out_pipeline_stop;
 
@@ -584,7 +584,7 @@ out_stream_start:
 
 out_fw_close:
 	mutex_unlock(&stream->mutex);
-	ipu6_isys_fw_close(av->isys);
+	ipu6_isys_fw_put(av->isys);
 
 out_pipeline_stop:
 	ipu6_isys_stream_cleanup(av);
@@ -600,15 +600,16 @@ static void stop_streaming(struct vb2_queue *q)
 	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(q);
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
 	struct ipu6_isys_stream *stream = av->stream;
+	struct ipu6_isys *isys = av->isys;
 
 	ipu6_isys_set_csi2_streams_status(av, false);
 
 	mutex_lock(&stream->mutex);
 
-	mutex_lock(&av->isys->stream_mutex);
+	mutex_lock(&isys->stream_mutex);
 	if (stream->nr_streaming == stream->nr_queues && stream->streaming)
 		ipu6_isys_video_set_streaming(av, 0, NULL);
-	mutex_unlock(&av->isys->stream_mutex);
+	mutex_unlock(&isys->stream_mutex);
 
 	stream->nr_streaming--;
 	list_del(&aq->node);
@@ -619,7 +620,7 @@ static void stop_streaming(struct vb2_queue *q)
 
 	return_buffers(aq, VB2_BUF_STATE_ERROR);
 
-	ipu6_isys_fw_close(av->isys);
+	ipu6_isys_fw_put(isys);
 }
 
 static unsigned int

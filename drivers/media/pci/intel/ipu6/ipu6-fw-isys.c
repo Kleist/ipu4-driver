@@ -8,11 +8,11 @@
 
 #include <media/mipi-csi2.h>
 
+#include "ipu6-cpd.h"
 #include "ipu6-fw-com.h"
 #include "ipu6-isys.h"
 #include "ipu6-platform-isys-csi2-reg.h"
 #include "ipu6-platform-regs.h"
-
 #define MAX_SEND_MSG_LEN 32
 static const char send_msg_types[N_IPU6_FW_ISYS_SEND_TYPE][MAX_SEND_MSG_LEN] = {
 	"STREAM_OPEN",
@@ -127,6 +127,38 @@ int ipu6_fw_isys_simple_cmd(struct ipu6_isys *isys,
 					send_type);
 }
 
+int ipu6_fw_isys_open(struct ipu6_isys *isys)
+{
+	const struct ipu6_isys_internal_pdata *ipdata = isys->pdata->ipdata;
+	struct ipu6_bus_device *adev = isys->adev;
+	int ret = 0;
+
+	lockdep_assert_held(&isys->mutex);
+
+	ipu6_configure_spc(adev->isp, &ipdata->hw_variant,
+			   IPU6_CPD_PKG_DIR_ISYS_SERVER_IDX, isys->pdata->base,
+			   adev->pkg_dir, adev->pkg_dir_dma_addr);
+
+	/*
+	 * Buffers could have been left to wrong queue at last closure.
+	 * Move them now back to empty buffer queue.
+	 */
+	ipu6_cleanup_fw_msg_bufs(isys);
+
+	if (isys->fwcom) {
+		/*
+		 * Something went wrong in previous shutdown. As we are now
+		 * restarting isys we can safely delete old context.
+		 */
+		dev_info(&adev->auxdev.dev, "Clearing old context\n");
+		ipu6_fw_isys_cleanup(isys);
+	}
+
+	ret = ipu6_fw_isys_init(isys, ipdata->num_parallel_streams);
+
+	return ret;
+}
+
 int ipu6_fw_isys_close(struct ipu6_isys *isys)
 {
 	struct device *dev = &isys->adev->auxdev.dev;
@@ -134,6 +166,8 @@ int ipu6_fw_isys_close(struct ipu6_isys *isys)
 	unsigned long flags;
 	void *fwcom;
 	int ret;
+
+	lockdep_assert_held(&isys->mutex);
 
 	/*
 	 * Stop the isys fw. Actual close takes

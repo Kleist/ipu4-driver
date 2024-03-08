@@ -935,10 +935,9 @@ static const struct v4l2_file_operations isys_fops = {
 	.release = video_release,
 };
 
-int ipu6_isys_fw_open(struct ipu6_isys *isys)
+int ipu6_isys_fw_get(struct ipu6_isys *isys)
 {
 	struct ipu6_bus_device *adev = isys->adev;
-	const struct ipu6_isys_internal_pdata *ipdata = isys->pdata->ipdata;
 	int ret;
 
 	ret = pm_runtime_resume_and_get(&adev->auxdev.dev);
@@ -950,26 +949,7 @@ int ipu6_isys_fw_open(struct ipu6_isys *isys)
 	if (isys->ref_count++)
 		goto unlock;
 
-	ipu6_configure_spc(adev->isp, &ipdata->hw_variant,
-			   IPU6_CPD_PKG_DIR_ISYS_SERVER_IDX, isys->pdata->base,
-			   adev->pkg_dir, adev->pkg_dir_dma_addr);
-
-	/*
-	 * Buffers could have been left to wrong queue at last closure.
-	 * Move them now back to empty buffer queue.
-	 */
-	ipu6_cleanup_fw_msg_bufs(isys);
-
-	if (isys->fwcom) {
-		/*
-		 * Something went wrong in previous shutdown. As we are now
-		 * restarting isys we can safely delete old context.
-		 */
-		dev_info(&adev->auxdev.dev, "Clearing old context\n");
-		ipu6_fw_isys_cleanup(isys);
-	}
-
-	ret = ipu6_fw_isys_init(isys, ipdata->num_parallel_streams);
+	ret = ipu6_fw_isys_open(isys);
 	if (ret < 0)
 		goto out;
 
@@ -986,14 +966,17 @@ out:
 	return ret;
 }
 
-void ipu6_isys_fw_close(struct ipu6_isys *isys)
+void ipu6_isys_fw_put(struct ipu6_isys *isys)
 {
+	struct device *dev = &isys->adev->auxdev.dev;
+
 	mutex_lock(&isys->mutex);
 
 	isys->ref_count--;
 	if (!isys->ref_count) {
 		ipu6_fw_isys_close(isys);
 		if (isys->fwcom) {
+			dev_info(dev, "%s: Setting need_reset\n", __func__);
 			isys->need_reset = true;
 			dev_warn(&isys->adev->auxdev.dev,
 				 "failed to close fw isys\n");

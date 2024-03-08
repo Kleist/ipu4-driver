@@ -600,6 +600,7 @@ ipu6_fw_isys_dump_frame_buff_set(struct device *dev,
 				 unsigned int outputs);
 int ipu6_fw_isys_init(struct ipu6_isys *isys, unsigned int num_streams);
 int ipu6_fw_isys_close(struct ipu6_isys *isys);
+int ipu6_fw_isys_open(struct ipu6_isys *isys);
 int ipu6_fw_isys_simple_cmd(struct ipu6_isys *isys,
 			    const unsigned int stream_handle, u16 send_type);
 int ipu6_fw_isys_complex_cmd(struct ipu6_isys *isys,
