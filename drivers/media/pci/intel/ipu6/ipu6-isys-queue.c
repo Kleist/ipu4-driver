@@ -47,6 +47,48 @@ static int ipu6_isys_buf_prepare(struct vb2_buffer *vb)
 	return 0;
 }
 
+static void _dump_queue_info(struct ipu6_isys_queue *aq, const char* context)
+{
+	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
+	struct ipu6_isys_buffer * ib;
+	char active_buffer[64] = {0};
+	char incoming_buffer[64] = {0};
+	size_t len=0;
+
+	lockdep_assert_held(&aq->lock);
+
+	list_for_each_entry(ib, &aq->incoming, head) {
+		struct vb2_buffer *vb =
+			ipu6_isys_buffer_to_vb2_buffer(ib);
+		len += snprintf(incoming_buffer+len, sizeof(incoming_buffer)-len, "%d, ", vb->index);
+	}
+
+	if (len > 2) {
+		incoming_buffer[len-2] = '\0';
+	}
+
+	len = 0;
+	list_for_each_entry(ib, &aq->active, head) {
+		struct vb2_buffer *vb =
+			ipu6_isys_buffer_to_vb2_buffer(ib);
+		len += snprintf(active_buffer+len, sizeof(active_buffer)-len, "%d, ", vb->index);
+	}
+	if (len > 2) {
+		active_buffer[len-2] = '\0';
+	}
+
+	dev_info(&av->isys->adev->auxdev.dev, "%s: %s: active: [%s], incoming: [%s]", context, av->vdev.name, active_buffer, incoming_buffer);
+
+}
+
+#define dump_queue_info(AQ, FMT, ...) 						\
+	do {									\
+		char _msg_buffer[128];						\
+										\
+		snprintf(_msg_buffer, sizeof(_msg_buffer), FMT, ##__VA_ARGS__);	\
+		_dump_queue_info(AQ, _msg_buffer);				\
+	} while (0)
+
 /*
  * Queue a buffer list back to incoming or active queues. The buffers
  * are removed from the buffer list.
