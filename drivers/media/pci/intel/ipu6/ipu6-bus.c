@@ -155,3 +155,17 @@ void ipu6_bus_del_devices(struct pci_dev *pdev)
 
 	mutex_unlock(&ipu6_bus_mutex);
 }
+
+int ipu6_bus_reset_device(struct ipu6_bus_device *adev)
+{
+	int ret = 0;
+	struct device *dev = &adev->auxdev.dev;
+	
+	ret = bus_pm_runtime_suspend(dev);
+	if (ret < 0)
+		return ret;
+
+	ret = bus_pm_runtime_resume(dev);
+	return ret;
+}
+EXPORT_SYMBOL(ipu6_bus_reset_device);

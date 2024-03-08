@@ -45,4 +45,6 @@ ipu6_bus_initialize_device(struct pci_dev *pdev, struct device *parent,
 int ipu6_bus_add_device(struct ipu6_bus_device *adev);
 void ipu6_bus_del_devices(struct pci_dev *pdev);
 
+int ipu6_bus_reset_device(struct ipu6_bus_device *adev);
+
 #endif
