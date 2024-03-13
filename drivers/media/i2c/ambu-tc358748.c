@@ -10,6 +10,7 @@
 #include <linux/bitfield.h>
 #include <linux/i2c.h>
 #include <linux/regmap.h>
+#include <linux/types.h>
 
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-fwnode.h>
@@ -17,6 +18,10 @@
 #include <media/v4l2-subdev.h>
 
 #include "ambu-gen2-tc358748-regs.h"
+
+static bool log_start_stream;
+module_param(log_start_stream, bool, 0644);
+MODULE_PARM_DESC(log_start_stream, "Debug log some registers when starting stream");
 
 #define AMBU_TOSHIBA_REFCLK 19200000 // 19.2 MHz from aBox2/aView2 schematic
 
@@ -194,6 +199,9 @@ static void tc358748_log_regs(struct tc358748 *tc358748, const char* context)
 	size_t offset = 0;
 	char buffer[256];
 	int i;
+
+	if (!log_start_stream)
+		return;
 
 	for (i = 0; i < ARRAY_SIZE(ieib475_log_regs); ++i) {
 		const struct crl_register_read_rep *reg = &ieib475_log_regs[i];
