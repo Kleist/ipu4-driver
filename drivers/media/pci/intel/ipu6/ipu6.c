@@ -315,12 +315,19 @@ static const u32 readable_regs[] = {
 void ipu_dump_state(struct ipu6_device *isp, const char* context)
 {
 	int i;
+	static int ipu_dump_state_iteration = 0;
+	static DEFINE_MUTEX(mutex);
 
-	mmiotrace_printk("%s in context %s\n", __func__, context);
+	mutex_lock(&mutex);
+	ipu_dump_state_iteration++;
+
+	mmiotrace_printk("%s in context %d %s begin\n", __func__, ipu_dump_state_iteration, context);
 	for (i = 0; i < ARRAY_SIZE(readable_regs); ++i)
 	{
 		(void)readl(isp->base + readable_regs[i]);
 	}
+	mmiotrace_printk("%s in context %d %s end\n", __func__, ipu_dump_state_iteration, context);
+	mutex_unlock(&mutex);
 }
 EXPORT_SYMBOL_GPL(ipu_dump_state);
 
