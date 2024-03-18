@@ -18,7 +18,7 @@
 
 static int csi2_log_first_sof = 2;
 module_param(csi2_log_first_sof, int, 0644);
-MODULE_PARM_DESC(csi2_log_first_sof, "How many frames EOF should be logged during stream start");
+MODULE_PARM_DESC(csi2_log_first_sof, "How many frames SOF should be logged during stream start");
 
 static const u32 csi2_supported_codes[] = {
 	MEDIA_BUS_FMT_RGB565_1X16,
