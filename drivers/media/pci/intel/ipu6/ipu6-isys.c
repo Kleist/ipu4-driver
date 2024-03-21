@@ -298,7 +298,6 @@ static void ipu6_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
 			stream = ipu6_isys_query_stream_by_source(csi2->isys,
 								  source, i);
 			if (stream) {
-				ipu6_isys_csi2_sof_event_by_stream(stream);
 				ipu6_isys_put_stream(stream);
 			}
 		}
