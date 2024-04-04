@@ -133,7 +133,8 @@ int ipu6_fw_isys_open(struct ipu6_isys *isys)
 	struct ipu6_bus_device *adev = isys->adev;
 	int ret = 0;
 
-	lockdep_assert_held(&isys->mutex);
+	if (!isys->resetting)
+		lockdep_assert_held(&isys->mutex);
 
 	ipu6_configure_spc(adev->isp, &ipdata->hw_variant,
 			   IPU6_CPD_PKG_DIR_ISYS_SERVER_IDX, isys->pdata->base,
@@ -167,7 +168,8 @@ int ipu6_fw_isys_close(struct ipu6_isys *isys)
 	void *fwcom;
 	int ret;
 
-	lockdep_assert_held(&isys->mutex);
+	if (!isys->resetting)
+		lockdep_assert_held(&isys->mutex);
 
 	/*
 	 * Stop the isys fw. Actual close takes

@@ -4,6 +4,8 @@
  */
 
 #include <media/videobuf2-dma-contig.h>
+#include <linux/delay.h>
+#include <linux/pm_runtime.h>
 
 #include "ipu6-isys.h"
 
@@ -142,6 +144,39 @@ void ipu6_isys_buffer_list_queue(struct ipu6_isys_buffer_list *bl,
 	}
 
 	WARN_ON(bl->nbufs);
+}
+
+/*
+ * When we're stopping the stream, wait for all buffers to be returned from
+ * the firmware.
+ */
+static bool wait_for_no_active_buffers(struct ipu6_isys_video *av)
+{
+	struct ipu6_isys_queue *aq;
+	unsigned long start = jiffies;
+	const unsigned long timeout = msecs_to_jiffies(1000);
+
+	lockdep_assert_held(&av->stream->mutex);
+
+	while (time_is_after_jiffies(start + timeout)) {
+		bool all_empty = true;
+
+		list_for_each_entry(aq, &av->stream->queues, node) {
+			unsigned long flags;
+
+			spin_lock_irqsave(&aq->lock, flags);
+			all_empty &= list_empty(&aq->active);
+			dump_queue_info(aq, __func__);
+			spin_unlock_irqrestore(&aq->lock, flags);
+		}
+
+		if (all_empty)
+			return true;
+
+		msleep_interruptible(10);
+	}
+	dev_err(&av->vdev.dev, "%s timed out\n", __func__);
+	return false;
 }
 
 /*
@@ -624,6 +659,103 @@ out_pipeline_stop:
 out_return_buffers:
 	return_buffers(aq, VB2_BUF_STATE_QUEUED);
 
+	return ret;
+}
+
+static int restart_stream(struct ipu6_isys_video *av)
+{
+	struct device *dev = &av->isys->adev->auxdev.dev;
+	struct ipu6_isys *isys = av->isys;
+	int ret = 0;
+	struct ipu6_isys_buffer_list bl;
+	struct ipu6_isys_buffer_list *bl_ptr = &bl;
+
+	dev_info(dev, "Restarting %s", av->vdev.name);
+
+	lockdep_assert_held(&av->stream->mutex);
+
+	mutex_lock(&isys->stream_mutex);
+	if (!wait_for_no_active_buffers(av)) {
+		// When stream buffers are lost, restarting would break the existing stream
+		dev_err(dev, "%s stream buffers lost during restart\n", av->vdev.name);
+		ret = -EIO;
+		goto err_unlock;
+	}
+
+	ret = ipu6_isys_video_set_streaming(av, 0, NULL);
+	if (ret) {
+		dev_err(dev, "ipu6_isys_video_set_streaming(%s, 0, NULL) failed: %d\n", av->vdev.name, ret);
+		goto err_unlock;
+	}
+
+	ret = ipu6_fw_isys_close(isys);
+	if (ret) {
+		dev_err(dev, "%s: fw close failed: %d", av->vdev.name, ret);
+		goto err_unlock;
+	}
+
+	ret = ipu6_bus_reset_device(isys->adev);
+
+	if (ret) {
+		dev_err(dev, "%s: bus reset failed: %d\n", av->vdev.name, ret);
+		goto err_unlock;
+	}
+
+	ret = ipu6_fw_isys_open(isys);
+	if (ret) {
+		dev_err(dev, "%s: fw re-open failed: %d", av->vdev.name, ret);
+		goto err_unlock;
+	}
+
+	ret = buffer_list_get(av->stream, &bl);
+	if (ret < 0) {
+		dev_warn(&av->vdev.dev, "no buffer available, postponing streamon\n");
+		bl_ptr = NULL;
+	}
+	ret = ipu6_isys_video_set_streaming(av, 1, bl_ptr);
+	if (ret) {
+		dev_err(dev, "ipu6_isys_video_set_streaming(%s, 1, %p) failed: %d\n", av->vdev.name, bl_ptr, ret);
+		goto err_unlock;
+	}
+
+err_unlock:
+	if (ret)
+		dev_info(dev, "Restarting %s failed: %d\n", av->vdev.name, ret);
+	else
+		dev_info(dev, "Restarting %s done\n", av->vdev.name);
+
+	mutex_unlock(&isys->stream_mutex);
+	return ret;
+}
+
+int ipu6_isys_queue_restart_streams(struct ipu6_isys_video *av)
+{
+	struct ipu6_isys *isys = av->isys;
+	int i;
+	int ret = 0;
+	bool stream_restarted = false;
+
+	ipu_dump_state(av->isys->adev->isp, "before restart");
+	for (i = 0; i < NR_OF_VIDEO_DEVICE; i++) {
+		struct ipu6_isys_video *other_av = &isys->av[i];
+
+		if (av == other_av || !other_av->stream)
+			continue;
+
+		mutex_lock(&other_av->stream->mutex);
+		if (other_av->streaming) {
+			dev_info(&other_av->vdev.dev, "Restarting stream\n");
+			if (!WARN(stream_restarted, "Restarting more than one stream not supported!")) {
+				ret = restart_stream(other_av);
+			}
+			stream_restarted = true;
+		}
+		mutex_unlock(&other_av->stream->mutex);
+
+		if (ret != 0)
+			break;
+	}
+	ipu_dump_state(av->isys->adev->isp, "after restart");
 	return ret;
 }
 

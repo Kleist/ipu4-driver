@@ -137,6 +137,7 @@ struct ipu6_isys {
 	unsigned int line_align;
 	u32 phy_termcal_val;
 	bool need_reset;
+	bool resetting; // Ambu HACK - true when resetting, protected by isys->mutex 
 	bool icache_prefetch;
 	bool csi2_cse_ipc_not_supported;
 	unsigned int ref_count;
@@ -176,5 +177,7 @@ extern const struct v4l2_ioctl_ops ipu6_isys_ioctl_ops;
 void isys_setup_hw(struct ipu6_isys *isys);
 irqreturn_t isys_isr(struct ipu6_bus_device *adev);
 void update_watermark_setting(struct ipu6_isys *isys);
+
+void ipu6_isys_wait_not_resetting(struct ipu6_isys *isys, const char* context);
 
 #endif /* IPU6_ISYS_H */

@@ -573,7 +573,10 @@ static int isys_runtime_pm_suspend(struct device *dev)
 	spin_unlock_irqrestore(&isys->power_lock, flags);
 
 	mutex_lock(&isys->mutex);
-	isys->need_reset = false;
+	if (isys->need_reset) {
+		isys->need_reset = false;
+		dev_info(dev, "%s: Cleared need_reset\n", __func__);
+	}
 	mutex_unlock(&isys->mutex);
 
 	isys->phy_termcal_val = 0;

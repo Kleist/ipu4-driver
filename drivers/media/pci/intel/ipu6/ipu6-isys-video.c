@@ -6,6 +6,7 @@
 #include <linux/delay.h>
 #include <linux/firmware.h>
 #include <linux/pm_runtime.h>
+#include <linux/types.h>
 
 #include <media/v4l2-device.h>
 #include <media/v4l2-ioctl.h>
@@ -18,6 +19,10 @@
 #include "ipu6-platform-buttress-regs.h"
 #include "ipu6-platform-isys-csi2-reg.h"
 #include "ipu6-platform-regs.h"
+
+int force_need_reset = 0;
+module_param(force_need_reset, int, 0644);
+MODULE_PARM_DESC(force_need_reset, "emulate 'isys power cycle required' on next video_open");
 
 const struct ipu6_isys_pixelformat ipu6_isys_pfmts[] = {
 	{V4L2_PIX_FMT_SBGGR12, 16, 12, MEDIA_BUS_FMT_SBGGR12_1X12,
@@ -72,6 +77,17 @@ const struct ipu6_isys_pixelformat ipu6_isys_pfmts[] = {
 	 IPU6_FW_ISYS_FRAME_FORMAT_RGBA888},
 };
 
+static void wait_for_not_resetting(struct ipu6_isys *isys, const char* context) {
+	struct device *dev = &isys->adev->auxdev.dev;
+
+	while (isys->resetting) {
+		mutex_unlock(&isys->mutex);
+		dev_info(dev, "%s: Waiting for isys resetting\n", context);
+		msleep_interruptible(100);
+		mutex_lock(&isys->mutex);
+	}
+}
+
 static int video_open(struct file *file)
 {
 	struct ipu6_isys_video *av = video_drvdata(file);
@@ -81,10 +97,26 @@ static int video_open(struct file *file)
 	int ret;
 
 	mutex_lock(&isys->mutex);
-	if (isys->need_reset) {
+	wait_for_not_resetting(isys, __func__);
+
+	if (isys->need_reset || force_need_reset) {
+		isys->resetting = true;
 		mutex_unlock(&isys->mutex);
-		dev_warn(dev, "isys power cycle required\n");
-		return -EIO;
+
+		dev_warn(dev, "restarting other streams (need_reset=%d, force_need_reset=%d)\n", isys->need_reset, force_need_reset);
+		force_need_reset = false;
+		ret = ipu6_isys_queue_restart_streams(av);
+
+		mutex_lock(&isys->mutex);
+		isys->resetting = false;
+		if (ret) {
+			dev_err(dev, "ipu6_isys_queue_restart_streams failed: %d\n", ret);
+			// Keeping original log message below, since it is widely known
+			dev_warn(dev, "isys power cycle required\n");
+			mutex_unlock(&isys->mutex);
+			return -EIO;
+		}
+		dev_info(dev, "restarting other streams done: %d\n", ret);
 	}
 	mutex_unlock(&isys->mutex);
 
@@ -278,8 +310,10 @@ static int vidioc_s_fmt_vid_cap(struct file *file, void *fh,
 {
 	struct ipu6_isys_video *av = video_drvdata(file);
 
-	if (av->aq.vbq.streaming)
+	if (vb2_is_busy(&av->aq.vbq)) {
+		dev_err(&av->vdev.dev, "%s called while av->aq.vbq.streaming\n", __func__);
 		return -EBUSY;
+	}
 
 	av->pfmt = ipu6_isys_video_try_fmt_vid(av, &f->fmt.pix);
 	av->pix = f->fmt.pix;
@@ -945,6 +979,7 @@ int ipu6_isys_fw_get(struct ipu6_isys *isys)
 		return ret;
 
 	mutex_lock(&isys->mutex);
+	wait_for_not_resetting(isys, __func__);
 
 	if (isys->ref_count++)
 		goto unlock;
@@ -971,6 +1006,7 @@ void ipu6_isys_fw_put(struct ipu6_isys *isys)
 	struct device *dev = &isys->adev->auxdev.dev;
 
 	mutex_lock(&isys->mutex);
+	wait_for_not_resetting(isys, __func__);
 
 	isys->ref_count--;
 	if (!isys->ref_count) {
