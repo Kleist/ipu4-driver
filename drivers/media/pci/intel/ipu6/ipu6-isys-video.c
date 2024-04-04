@@ -128,7 +128,7 @@ static int video_release(struct file *file)
 	struct device *dev = &av->isys->adev->auxdev.dev;
 	int ret = 0;
 
-	v4l2_fh_release(file);
+	vb2_fop_release(file);
 
 	v4l2_pipeline_pm_put(&av->vdev.entity);
 
