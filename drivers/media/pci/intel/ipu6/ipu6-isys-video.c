@@ -126,50 +126,17 @@ static int video_open(struct file *file)
 		return ret;
 	}
 
-	ret = pm_runtime_resume_and_get(dev);
-	if (ret < 0) {
-		dev_err(dev, "%s: runtime resume failed: %d\n", __func__, ret);
-		return ret;
-	}
-
 	ret = v4l2_fh_open(file);
 	if (ret) {
 		dev_err(dev, "%s: v4l2_fh_open failed: %d\n", __func__, ret);
-		goto out_power_down;
 	}
-
-	ret = v4l2_pipeline_pm_get(&av->vdev.entity);
-	if (ret) {
-		dev_err(dev, "%s: v4l2_pipeline_pm_get failed: %d\n", __func__, ret);
-		goto out_v4l2_fh_release;
-	}
-
-	return 0;
-
-out_v4l2_fh_release:
-	v4l2_fh_release(file);
-out_power_down:
-	pm_runtime_put(dev);
 
 	return ret;
 }
 
 static int video_release(struct file *file)
 {
-	struct ipu6_isys_video *av = video_drvdata(file);
-	struct device *dev = &av->isys->adev->auxdev.dev;
-	int ret = 0;
-
-	vb2_fop_release(file);
-
-	v4l2_pipeline_pm_put(&av->vdev.entity);
-
-	if (av->isys->need_reset)
-		pm_runtime_put_sync(dev);
-	else
-		pm_runtime_put(dev);
-
-	return ret;
+	return vb2_fop_release(file);
 }
 
 static const struct ipu6_isys_pixelformat *
