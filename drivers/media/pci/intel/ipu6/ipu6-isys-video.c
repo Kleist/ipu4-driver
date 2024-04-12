@@ -20,8 +20,8 @@
 #include "ipu6-platform-isys-csi2-reg.h"
 #include "ipu6-platform-regs.h"
 
-int force_need_reset = 0;
-module_param(force_need_reset, int, 0644);
+bool force_need_reset = false;
+module_param(force_need_reset, bool, 0644);
 MODULE_PARM_DESC(force_need_reset, "emulate 'isys power cycle required' on next video_open");
 
 const struct ipu6_isys_pixelformat ipu6_isys_pfmts[] = {
