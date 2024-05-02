@@ -638,13 +638,13 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 
 	ret = ipu6_isys_setup_video(av, &source_entity, &nr_queues);
 	if (ret < 0) {
-		dev_err(dev, "failed to setup video\n");
+		dev_dbg(dev, "failed to setup video\n");
 		goto out_return_buffers;
 	}
 
 	ret = ipu6_isys_link_fmt_validate(aq);
 	if (ret) {
-		dev_err(dev,
+		dev_dbg(dev,
 			"%s: link format validation failed (%d)\n",
 			av->vdev.name, ret);
 		goto out_pipeline_stop;
