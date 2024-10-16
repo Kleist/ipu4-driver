@@ -5,6 +5,7 @@
 
 #include "ipu6.h"
 #include "ipu6-bus.h"
+#include "ipu6-dma.h"
 #include "ipu6-fw-com.h"
 
 /*
@@ -81,7 +82,6 @@ struct ipu6_fw_com_context {
 	void *dma_buffer;
 	dma_addr_t dma_addr;
 	unsigned int dma_size;
-	unsigned long attrs;
 
 	struct ipu6_fw_sys_queue *input_queue;	/* array of host to SP queues */
 	struct ipu6_fw_sys_queue *output_queue;	/* array of SP to host */
@@ -167,7 +167,6 @@ struct ipu6_fw_com_context *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
 	struct ipu6_fw_com_context *ctx;
 	struct device *dev = &adev->auxdev.dev;
 	size_t sizeall, offset;
-	unsigned long attrs = 0;
 	void *specific_host_addr;
 	unsigned int i;
 
@@ -209,9 +208,8 @@ struct ipu6_fw_com_context *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
 
 	sizeall += sizeinput + sizeoutput;
 
-	ctx->dma_buffer = dma_alloc_attrs(dev, sizeall, &ctx->dma_addr,
-					  GFP_KERNEL, attrs);
-	ctx->attrs = attrs;
+	ctx->dma_buffer = ipu6_dma_alloc(adev, sizeall, &ctx->dma_addr,
+					 GFP_KERNEL, 0);
 	if (!ctx->dma_buffer) {
 		dev_err(dev, "failed to allocate dma memory\n");
 		kfree(ctx);
@@ -241,6 +239,8 @@ struct ipu6_fw_com_context *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
 	if (cfg->specific_addr && cfg->specific_size)
 		memcpy(specific_host_addr, cfg->specific_addr,
 		       cfg->specific_size);
+
+	ipu6_dma_sync_single(adev, ctx->config_vied_addr, sizeall);
 
 	/* initialize input queues */
 	offset += specific_size;
@@ -311,8 +311,8 @@ int ipu6_fw_com_release(struct ipu6_fw_com_context *ctx, unsigned int force)
 	if (!force && !ctx->cell_ready(ctx->adev))
 		return -EBUSY;
 
-	dma_free_attrs(&ctx->adev->auxdev.dev, ctx->dma_size,
-		       ctx->dma_buffer, ctx->dma_addr, ctx->attrs);
+	ipu6_dma_free(ctx->adev, ctx->dma_size,
+		      ctx->dma_buffer, ctx->dma_addr, 0);
 	kfree(ctx);
 	return 0;
 }
