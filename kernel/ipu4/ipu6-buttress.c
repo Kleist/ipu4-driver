@@ -447,8 +447,7 @@ irqreturn_t ipu6_buttress_isr_threaded(int irq, void *isp_ptr)
 }
 
 int ipu6_buttress_power(struct device *dev,
-			const struct ipu6_buttress_ctrl *ctrl,
-			bool on)
+			const struct ipu6_buttress_ctrl *ctrl, bool on)
 {
 	struct ipu6_device *isp = to_ipu6_bus_device(dev)->isp;
 	u32 pwr_sts, val;
