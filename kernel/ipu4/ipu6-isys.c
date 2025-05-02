@@ -1390,12 +1390,11 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_PIN_DATA_READY:
 		if (resp->pin_id < IPU6_ISYS_OUTPUT_PINS &&
-		    stream->output_pins[resp->pin_id].pin_ready)
-			stream->output_pins[resp->pin_id].pin_ready(stream,
-								    resp);
+		    stream->output_pins_queue[resp->pin_id])
+			ipu6_isys_queue_buf_ready(stream, resp);
 		else
 			dev_warn(&adev->auxdev.dev,
-				 "%d:No data pin ready handler for pin id %d\n",
+				 "%d:No queue for pin id %d\n",
 				 resp->stream_handle, resp->pin_id);
 		if (csi2)
 			ipu4_isys_csi2_error(csi2);
