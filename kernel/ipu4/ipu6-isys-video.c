@@ -876,6 +876,10 @@ int ipu6_isys_video_set_streaming(struct ipu6_isys_video *av, int state,
 		/* start sub-device which connects with video */
 		dev_dbg(dev, "stream on %s pad %d\n", sd->name, r_pad->index);
 		ret = v4l2_subdev_call(sd, video, s_stream, state);
+		if (ret) {
+			dev_err(dev, "s_stream failed: %d\n", ret);
+			return ret;
+		}
 
 		ret = start_stream_firmware(av, bl);
 		if (ret) {
