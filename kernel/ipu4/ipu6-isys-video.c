@@ -98,7 +98,7 @@ static int video_open(struct file *file)
 	struct ipu6_isys *isys = av->isys;
 	struct ipu6_bus_device *adev = isys->adev;
 	struct device *dev = &adev->auxdev.dev;
-	int ret;
+	int ret = 0;
 
 	mutex_lock(&isys->mutex);
 	wait_for_not_resetting(isys, __func__);
