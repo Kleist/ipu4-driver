@@ -7,10 +7,9 @@
 #include <linux/module.h>
 #include <linux/pci-ats.h>
 #include <linux/pm_runtime.h>
-
-#include <media/ambu-ipu-bridge.h>
 #include <linux/trace.h>
 
+#include "ambu-ipu-bridge.h"
 #include "ipu6.h"
 #include "ipu6-cpd.h"
 #include "ipu6-isys.h"

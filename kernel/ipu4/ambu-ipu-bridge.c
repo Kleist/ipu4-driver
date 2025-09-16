@@ -9,10 +9,9 @@
 #include <linux/property.h>
 #include <linux/string.h>
 #include <linux/workqueue.h>
-
-#include <media/ambu-ipu-bridge.h>
 #include <media/v4l2-fwnode.h>
 
+#include "ambu-ipu-bridge.h"
 
 static struct ipu_bridge *static_bridge;
 
