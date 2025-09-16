@@ -60,7 +60,7 @@ struct ipu6_isys;
  */
 #define IPU6_ISYS_OPEN_RETRY			2000
 #define IPU6_ISYS_CLOSE_RETRY			2000
-#define IPU6_FW_CALL_TIMEOUT_JIFFIES		msecs_to_jiffies(2000)
+#define IPU6_FW_CALL_TIMEOUT_JIFFIES		msecs_to_jiffies(500)
 
 enum ipu6_fw_isys_resp_type {
 	IPU6_FW_ISYS_RESP_TYPE_STREAM_OPEN_DONE = 0,
