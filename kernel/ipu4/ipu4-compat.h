@@ -17,6 +17,11 @@
 #define v4l2_subdev_state_get_crop(state, pad, stream) \
     v4l2_subdev_state_get_stream_crop(state, pad, stream)
 
+#else // >= 6.10
+// Converting old call to new, because old takes 3 args
+#define v4l2_subdev_get_pad_format(e1, e2, e3) \
+    v4l2_subdev_state_get_format(e2, e3)
+
 #endif // 6.10
 
 #endif // IPU4_COMPAT_H
