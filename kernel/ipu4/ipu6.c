@@ -8,6 +8,7 @@
 #include <linux/pci-ats.h>
 #include <linux/pm_runtime.h>
 #include <linux/trace.h>
+#include <linux/vmalloc.h>
 
 #include "ambu-ipu-bridge.h"
 #include "ipu6.h"

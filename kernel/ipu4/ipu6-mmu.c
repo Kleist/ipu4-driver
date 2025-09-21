@@ -5,6 +5,7 @@
 
 #include <linux/cacheflush.h>
 #include <linux/iova.h>
+#include <linux/vmalloc.h>
 
 #include "ipu6.h"
 #include "ipu6-dma.h"
