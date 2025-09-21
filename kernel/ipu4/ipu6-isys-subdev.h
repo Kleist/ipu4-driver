@@ -7,6 +7,8 @@
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-subdev.h>
 
+#include "ipu4-compat.h"
+
 struct ipu6_isys;
 
 struct ipu6_isys_subdev {
@@ -43,8 +45,10 @@ int ipu6_isys_get_stream_pad_fmt(struct v4l2_subdev *sd, u32 pad, u32 stream,
 				 struct v4l2_mbus_framefmt *format);
 int ipu6_isys_get_stream_pad_crop(struct v4l2_subdev *sd, u32 pad, u32 stream,
 				  struct v4l2_rect *crop);
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 int ipu6_isys_subdev_init_cfg(struct v4l2_subdev *sd,
 			      struct v4l2_subdev_state *state);
+#endif
 int ipu6_isys_subdev_set_routing(struct v4l2_subdev *sd,
 				 struct v4l2_subdev_state *state,
 				 enum v4l2_subdev_format_whence which,

@@ -13,6 +13,7 @@
 #include "ipu6-isys.h"
 #include "ipu6-platform-isys-csi2-reg.h"
 #include "ipu6-platform-regs.h"
+
 #define MAX_SEND_MSG_LEN 32
 static const char send_msg_types[N_IPU6_FW_ISYS_SEND_TYPE][MAX_SEND_MSG_LEN] = {
 	"STREAM_OPEN",

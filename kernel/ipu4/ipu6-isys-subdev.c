@@ -284,6 +284,9 @@ u32 ipu6_isys_get_src_stream_by_src_pad(struct v4l2_subdev *sd, u32 pad)
 	return source_stream;
 }
 
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+static // Only static if >=6.10, because ipu6-isys-csi2.c uses it before
+#endif
 int ipu6_isys_subdev_init_cfg(struct v4l2_subdev *sd,
 			      struct v4l2_subdev_state *state)
 {
@@ -310,6 +313,11 @@ int ipu6_isys_subdev_set_routing(struct v4l2_subdev *sd,
 	return subdev_set_routing(sd, state, routing);
 }
 
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+static const struct v4l2_subdev_internal_ops ipu6_isys_subdev_internal_ops = {
+	.init_state = ipu6_isys_subdev_init_cfg,
+};
+#endif
 int ipu6_isys_subdev_init(struct ipu6_isys_subdev *asd,
 			  const struct v4l2_subdev_ops *ops,
 			  unsigned int nr_ctrls,
@@ -326,8 +334,13 @@ int ipu6_isys_subdev_init(struct ipu6_isys_subdev *asd,
 			 V4L2_SUBDEV_FL_HAS_EVENTS |
 			 V4L2_SUBDEV_FL_STREAMS;
 	asd->sd.owner = THIS_MODULE;
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+	asd->sd.dev = &asd->isys->adev->auxdev.dev;
+#endif
 	asd->sd.entity.function = MEDIA_ENT_F_VID_IF_BRIDGE;
-
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+	asd->sd.internal_ops = &ipu6_isys_subdev_internal_ops;
+#endif
 	asd->pad = devm_kcalloc(&asd->isys->adev->auxdev.dev, num_pads,
 				sizeof(*asd->pad), GFP_KERNEL);
 

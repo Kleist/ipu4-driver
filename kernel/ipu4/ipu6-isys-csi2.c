@@ -460,7 +460,9 @@ static const struct v4l2_subdev_video_ops csi2_sd_video_ops = {
 };
 
 static const struct v4l2_subdev_pad_ops csi2_sd_pad_ops = {
+#if KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE
 	.init_cfg = ipu6_isys_subdev_init_cfg,
+#endif
 	.get_fmt = v4l2_subdev_get_fmt,
 	.set_fmt = ipu6_isys_subdev_set_fmt,
 	.get_selection = ipu6_isys_csi2_get_sel,
