@@ -8,6 +8,8 @@
 #include "ipu6-isys.h"
 #include "ipu6-isys-subdev.h"
 
+#include "ipu4-compat.h"
+
 unsigned int ipu6_isys_mbus_code_to_bpp(u32 code)
 {
 	switch (code) {
@@ -143,8 +145,7 @@ int ipu6_isys_subdev_set_fmt(struct v4l2_subdev *sd,
 	format->format.field = V4L2_FIELD_NONE;
 
 	/* Store the format and propagate it to the source pad. */
-	fmt = v4l2_subdev_state_get_stream_format(state, format->pad,
-						  format->stream);
+	fmt = v4l2_subdev_state_get_format(state, format->pad, format->stream);
 	if (!fmt)
 		return -EINVAL;
 
@@ -169,8 +170,7 @@ int ipu6_isys_subdev_set_fmt(struct v4l2_subdev *sd,
 	if (ret)
 		return -EINVAL;
 
-	crop = v4l2_subdev_state_get_stream_crop(state, other_pad,
-						 other_stream);
+	crop = v4l2_subdev_state_get_crop(state, other_pad, other_stream);
 	/* reset crop */
 	crop->left = 0;
 	crop->top = 0;
@@ -229,7 +229,7 @@ int ipu6_isys_get_stream_pad_fmt(struct v4l2_subdev *sd, u32 pad, u32 stream,
 		return -EINVAL;
 
 	state = v4l2_subdev_lock_and_get_active_state(sd);
-	fmt = v4l2_subdev_state_get_stream_format(state, pad, stream);
+	fmt = v4l2_subdev_state_get_format(state, pad, stream);
 	if (fmt) {
 		*format = *fmt;
 		ret = 0;
@@ -250,7 +250,7 @@ int ipu6_isys_get_stream_pad_crop(struct v4l2_subdev *sd, u32 pad, u32 stream,
 		return -EINVAL;
 
 	state = v4l2_subdev_lock_and_get_active_state(sd);
-	rect = v4l2_subdev_state_get_stream_crop(state, pad, stream);
+	rect = v4l2_subdev_state_get_crop(state, pad, stream);
 	if (rect) {
 		*crop = *rect;
 		ret = 0;

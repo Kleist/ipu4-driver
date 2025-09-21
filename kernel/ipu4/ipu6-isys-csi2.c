@@ -16,6 +16,8 @@
 #include "ipu6-platform-isys-csi2-reg.h"
 #include "ipu6-platform-regs.h"
 
+#include "ipu4-compat.h"
+
 static int csi2_log_first_sof = 2;
 module_param(csi2_log_first_sof, int, 0644);
 MODULE_PARM_DESC(csi2_log_first_sof, "How many frames SOF should be logged during stream start");
@@ -381,12 +383,12 @@ static int ipu6_isys_csi2_set_sel(struct v4l2_subdev *sd,
 	if (!sink_ffmt)
 		return -EINVAL;
 
-	src_ffmt = v4l2_subdev_state_get_stream_format(state, sel->pad,
-						       sel->stream);
+	src_ffmt = v4l2_subdev_state_get_format(state, sel->pad,
+						sel->stream);
 	if (!src_ffmt)
 		return -EINVAL;
 
-	crop = v4l2_subdev_state_get_stream_crop(state, sel->pad, sel->stream);
+	crop = v4l2_subdev_state_get_crop(state, sel->pad, sel->stream);
 	if (!crop)
 		return -EINVAL;
 
@@ -431,7 +433,7 @@ static int ipu6_isys_csi2_get_sel(struct v4l2_subdev *sd,
 	if (!sink_ffmt)
 		return -EINVAL;
 
-	crop = v4l2_subdev_state_get_stream_crop(state, sel->pad, sel->stream);
+	crop = v4l2_subdev_state_get_crop(state, sel->pad, sel->stream);
 	if (!crop)
 		return -EINVAL;
 
