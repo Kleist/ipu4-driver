@@ -280,17 +280,17 @@ static int ipu6_isys_csi2_set_stream(struct v4l2_subdev *sd,
 	}
 
 	writel(timing->ctermen,
-		   csi2->base + CSI2_REG_CSI_RX_DLY_CNT_TERMEN_CLANE);
+	       csi2->base + CSI2_REG_CSI_RX_DLY_CNT_TERMEN_CLANE);
 	writel(timing->csettle,
-		   csi2->base + CSI2_REG_CSI_RX_DLY_CNT_SETTLE_CLANE);
+	       csi2->base + CSI2_REG_CSI_RX_DLY_CNT_SETTLE_CLANE);
 
 	for (i = 0; i < nlanes; i++) {
 		writel(timing->dtermen,
-			   csi2->base +
-			   CSI2_REG_CSI_RX_DLY_CNT_TERMEN_DLANE(i));
+		       csi2->base +
+		       CSI2_REG_CSI_RX_DLY_CNT_TERMEN_DLANE(i));
 		writel(timing->dsettle,
-			   csi2->base +
-			   CSI2_REG_CSI_RX_DLY_CNT_SETTLE_DLANE(i));
+		       csi2->base +
+		       CSI2_REG_CSI_RX_DLY_CNT_SETTLE_DLANE(i));
 	}
 
 	val = readl(csi2->base + CSI2_REG_CSI_RX_CONFIG);
@@ -300,7 +300,7 @@ static int ipu6_isys_csi2_set_stream(struct v4l2_subdev *sd,
 
 	writel(nlanes, csi2->base + CSI2_REG_CSI_RX_NOF_ENABLED_LANES);
 	writel(CSI2_CSI_RX_ENABLE_ENABLE,
-		   csi2->base + CSI2_REG_CSI_RX_ENABLE);
+	       csi2->base + CSI2_REG_CSI_RX_ENABLE);
 
 	/* SOF/EOF of VC0-VC3 enabled from CSI2PART register in B0 */
 	for (i = 0; i < NR_OF_CSI2_VC; i++)
@@ -546,7 +546,9 @@ void ipu6_isys_csi2_sof_event_by_stream(struct ipu6_isys_stream *stream)
 
 	if (ev.u.frame_sync.frame_sequence <= csi2_log_first_sof)
 		dev_info(dev, "sof_event::csi2-%i sequence: %i, vc: %d\n",
-			 csi2->port, ev.u.frame_sync.frame_sequence, stream->vc);
+			 csi2->port,
+			 ev.u.frame_sync.frame_sequence,
+			 stream->vc);
 }
 
 int ipu6_isys_csi2_get_remote_desc(u32 source_stream,

@@ -157,7 +157,8 @@ static void ipu6_sys_queue_init(struct ipu6_fw_sys_queue *q, unsigned int size,
 }
 
 struct ipu6_fw_com_context *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
-			  struct ipu6_bus_device *adev, void __iomem *base)
+						struct ipu6_bus_device *adev,
+						void __iomem *base)
 {
 	size_t conf_size, inq_size, outq_size, specific_size;
 	struct ipu6_fw_syscom_config *config_host_addr;
@@ -273,13 +274,14 @@ int ipu6_fw_com_open(struct ipu6_fw_com_context *ctx)
 
 	/* store syscom uninitialized state */
 	writel(SYSCOM_STATE_UNINIT, ctx->dmem_addr + SYSCOM_STATE_REG * 4);
-	// NB: Re-ordered because that is how 4.19 does it - not sure if it matters
+	// NB: Re-ordered because that is how 4.19 does it
+	// - not sure if it matters
 	/* store syscom uninitialized command */
 	writel(SYSCOM_COMMAND_UNINIT, ctx->dmem_addr + SYSCOM_COMMAND_REG * 4);
 
 	/* store firmware configuration address */
 	writel(ctx->config_vied_addr,
-		   ctx->dmem_addr + SYSCOM_CONFIG_REG * 4);
+	       ctx->dmem_addr + SYSCOM_CONFIG_REG * 4);
 
 	ctx->cell_start(ctx->adev);
 
@@ -396,9 +398,8 @@ void ipu6_recv_put_token(struct ipu6_fw_com_context *ctx, int q_nbr)
 	struct ipu6_fw_sys_queue *q = &ctx->output_queue[q_nbr];
 	void __iomem *q_dmem = ctx->dmem_addr + q->wr_reg * 4;
 	unsigned int rd;
-	
-	rd = readl(q_dmem + FW_COM_RD_REG) + 1;
 
+	rd = readl(q_dmem + FW_COM_RD_REG) + 1;
 
 	if (rd >= q->size)
 		rd = 0;

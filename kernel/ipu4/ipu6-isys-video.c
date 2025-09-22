@@ -20,7 +20,7 @@
 #include "ipu6-platform-isys-csi2-reg.h"
 #include "ipu6-platform-regs.h"
 
-bool force_need_reset = false;
+bool force_need_reset;
 module_param(force_need_reset, bool, 0644);
 MODULE_PARM_DESC(force_need_reset, "emulate 'isys power cycle required' on next video_open");
 
@@ -81,7 +81,8 @@ const struct ipu6_isys_pixelformat ipu6_isys_pfmts[] = {
 	 IPU6_FW_ISYS_FRAME_FORMAT_RGBA888},
 };
 
-static void wait_for_not_resetting(struct ipu6_isys *isys, const char* context) {
+static void wait_for_not_resetting(struct ipu6_isys *isys, const char *context)
+{
 	struct device *dev = &isys->adev->auxdev.dev;
 
 	while (isys->resetting) {
@@ -108,19 +109,22 @@ static int video_open(struct file *file)
 			isys->resetting = true;
 			mutex_unlock(&isys->mutex);
 
-			dev_warn(dev, "restarting other streams (need_reset=%d, force_need_reset=%d)\n", isys->need_reset, force_need_reset);
+			dev_warn(dev, "restarting other streams (need_reset=%d, force_need_reset=%d)\n",
+				 isys->need_reset,
+				 force_need_reset);
 			force_need_reset = false;
 			ret = ipu6_isys_queue_restart_streams(av);
 
 			mutex_lock(&isys->mutex);
 			isys->resetting = false;
-			if (ret) {
-				dev_err(dev, "ipu6_isys_queue_restart_streams failed: %d\n", ret);
-			}
+			if (ret)
+				dev_err(dev, "ipu6_isys_queue_restart_streams failed: %d\n",
+					ret);
 		}
-		
+
 		if (ret || !silent_reset_enable) {
-			// Keeping original log message below, since it is widely known
+			// Keeping original log message below,
+			// since it is widely known
 			dev_warn(dev, "isys power cycle required\n");
 			mutex_unlock(&isys->mutex);
 			return -EIO;
@@ -131,14 +135,15 @@ static int video_open(struct file *file)
 
 	ret = ipu6_buttress_authenticate(adev->isp);
 	if (ret) {
-		dev_err(dev, "%s: FW authentication failed: %d\n", __func__, ret);
+		dev_err(dev, "%s: FW authentication failed: %d\n",
+			__func__,
+			ret);
 		return ret;
 	}
 
 	ret = v4l2_fh_open(file);
-	if (ret) {
+	if (ret)
 		dev_err(dev, "%s: v4l2_fh_open failed: %d\n", __func__, ret);
-	}
 
 	return ret;
 }
@@ -222,7 +227,7 @@ static int ipu6_isys_vidioc_enum_framesizes(struct file *file, void *fh,
 }
 
 static int vidioc_g_fmt_vid_cap(struct file *file, void *fh,
-				       struct v4l2_format *fmt)
+				struct v4l2_format *fmt)
 {
 	struct ipu6_isys_video *av = video_drvdata(file);
 
@@ -233,7 +238,7 @@ static int vidioc_g_fmt_vid_cap(struct file *file, void *fh,
 
 static const struct ipu6_isys_pixelformat *
 ipu6_isys_video_try_fmt_vid(struct ipu6_isys_video *av,
-				   struct v4l2_pix_format *pix)
+			    struct v4l2_pix_format *pix)
 {
 	const struct ipu6_isys_pixelformat *pfmt =
 		ipu6_isys_get_pixelformat(pix->pixelformat);
@@ -241,9 +246,9 @@ ipu6_isys_video_try_fmt_vid(struct ipu6_isys_video *av,
 	pix->pixelformat = pfmt->pixelformat;
 
 	pix->width = clamp(pix->width, IPU6_ISYS_MIN_WIDTH,
-			    IPU6_ISYS_MAX_WIDTH);
+			   IPU6_ISYS_MAX_WIDTH);
 	pix->height = clamp(pix->height, IPU6_ISYS_MIN_HEIGHT,
-			     IPU6_ISYS_MAX_HEIGHT);
+			    IPU6_ISYS_MAX_HEIGHT);
 
 	if (pfmt->bpp != pfmt->bpp_packed)
 		pix->bytesperline =
@@ -254,7 +259,7 @@ ipu6_isys_video_try_fmt_vid(struct ipu6_isys_video *av,
 				     BITS_PER_BYTE);
 
 	pix->bytesperline = ALIGN(pix->bytesperline,
-						av->isys->line_align);
+				  av->isys->line_align);
 
 	/*
 	 * (height + 1) * bytesperline due to a hardware issue: the DMA unit
@@ -282,12 +287,13 @@ ipu6_isys_video_try_fmt_vid(struct ipu6_isys_video *av,
 }
 
 static int vidioc_s_fmt_vid_cap(struct file *file, void *fh,
-				       struct v4l2_format *f)
+				struct v4l2_format *f)
 {
 	struct ipu6_isys_video *av = video_drvdata(file);
 
 	if (vb2_is_busy(&av->aq.vbq)) {
-		dev_err(&av->vdev.dev, "%s called while av->aq.vbq.streaming\n", __func__);
+		dev_err(&av->vdev.dev, "%s called while av->aq.vbq.streaming\n",
+			__func__);
 		return -EBUSY;
 	}
 
@@ -298,7 +304,7 @@ static int vidioc_s_fmt_vid_cap(struct file *file, void *fh,
 }
 
 static int vidioc_try_fmt_vid_cap(struct file *file, void *fh,
-					 struct v4l2_format *f)
+				  struct v4l2_format *f)
 {
 	struct ipu6_isys_video *av = video_drvdata(file);
 
@@ -442,7 +448,8 @@ static int ipu6_isys_fw_pin_cfg(struct ipu6_isys_video *av,
 	/* Though payload_buf_size was added for compression, set sane value for
 	 * payload_buf_size, just in case...
 	 */
-	output_pin->payload_buf_size = output_pin->stride * output_pin->output_res.height;
+	output_pin->payload_buf_size = output_pin->stride *
+				       output_pin->output_res.height;
 
 	return 0;
 }

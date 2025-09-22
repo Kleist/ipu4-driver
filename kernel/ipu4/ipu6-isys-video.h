@@ -40,7 +40,7 @@ struct output_pin_data {
  * May map to multiple video devices
  */
 struct ipu6_isys_stream {
-	struct mutex mutex;
+	struct mutex mutex; // Stream mutex
 	struct media_entity *source_entity;
 	atomic_t sequence;
 	unsigned int seq_index;

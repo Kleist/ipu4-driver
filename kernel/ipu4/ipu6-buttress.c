@@ -445,7 +445,8 @@ irqreturn_t ipu6_buttress_isr_threaded(int irq, void *isp_ptr)
 	return ret;
 }
 
-int ipu6_buttress_power(struct device *dev, const struct ipu6_buttress_ctrl *ctrl,
+int ipu6_buttress_power(struct device *dev,
+			const struct ipu6_buttress_ctrl *ctrl,
 			bool on)
 {
 	struct ipu6_device *isp = to_ipu6_bus_device(dev)->isp;
@@ -615,9 +616,8 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 	mutex_lock(&b->auth_mutex);
 
 	ret = pm_runtime_resume_and_get(&isp->pdev->dev);
-	if (ret < 0) {
+	if (ret < 0)
 		goto out_unlock;
-	}
 
 	if (ipu6_buttress_auth_done(isp)) {
 		dev_dbg(&isp->pdev->dev, "Buttress authentication already done\n");

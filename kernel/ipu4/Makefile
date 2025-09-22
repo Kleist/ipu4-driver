@@ -36,8 +36,8 @@ checkpatch:
 		--no-tree \
 		--quiet \
 		--file \
-		--ignore EMBEDDED_FILENAME,LINUX_VERSION_CODE,NEW_TYPEDEFS,BRACES,MSLEEP,POINTER_LOCATION \
-		--max-line-length=100 \
+		--max-line-length=80 \
+		--strict \
 		--color=always \
 		--showfile \
 		${SRC} \

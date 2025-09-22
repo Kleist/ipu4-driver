@@ -136,7 +136,7 @@ static void tlb_invalidate(struct ipu6_mmu *mmu)
 		 */
 		if (mmu->mmu_hw[i].insert_read_before_invalidate)
 			readl(mmu->mmu_hw[i].base + REG_L1_PHYS);
-	
+
 		/* Normal invalidate or zlw invalidate */
 		if (mmu->mmu_hw[i].zlw_invalidate) {
 			/* trash buffer must be mapped by now, just in case! */
@@ -145,7 +145,7 @@ static void tlb_invalidate(struct ipu6_mmu *mmu)
 			zlw_invalidate(mmu, &mmu->mmu_hw[i]);
 		} else {
 			u32 inv;
-			
+
 			if (mmu->mmu_hw[i].nr_l1streams == 32)
 				inv = 0xffffffff;
 			else if (mmu->mmu_hw[i].nr_l1streams == 0)
@@ -557,31 +557,31 @@ int ipu6_mmu_hw_init(struct ipu6_mmu *mmu)
 
 			/* Enable ZLW for streams based on the init table */
 			writel(mmu->mmu_hw[i].l1_zlw_en[j],
-				   mmu_hw->base +
-				   MMUV2_AT_REG_L1_ZLW_EN_SID(j));
+			       mmu_hw->base +
+			       MMUV2_AT_REG_L1_ZLW_EN_SID(j));
 
 			/* To track if zlw is enabled in any streams */
 			zlw_invalidate_in_any |= mmu->mmu_hw[i].l1_zlw_en[j];
 
 			/* Enable ZLW 1D mode for streams from the init table */
 			writel(mmu->mmu_hw[i].l1_zlw_1d_mode[j],
-				   mmu_hw->base +
-				   MMUV2_AT_REG_L1_ZLW_1DMODE_SID(j));
+			       mmu_hw->base +
+			       MMUV2_AT_REG_L1_ZLW_1DMODE_SID(j));
 
 			/* Set when the ZLW insertion will happen */
 			writel(mmu->mmu_hw[i].l1_ins_zlw_ahead_pages[j],
-				   mmu_hw->base +
-				   MMUV2_AT_REG_L1_ZLW_INS_N_AHEAD_SID(j));
+			       mmu_hw->base +
+			       MMUV2_AT_REG_L1_ZLW_INS_N_AHEAD_SID(j));
 
 			/* Set if ZLW 2D mode active for each streams */
 			writel(mmu->mmu_hw[i].l1_zlw_2d_mode[j],
-				   mmu_hw->base +
-				   MMUV2_AT_REG_L1_ZLW_2DMODE_SID(j));
+			       mmu_hw->base +
+			       MMUV2_AT_REG_L1_ZLW_2DMODE_SID(j));
 		}
 
 		if (zlw_invalidate_in_any)
 			writel(1, mmu_hw->base +
-				   MMUV2_AT_REG_L1_FW_ZLW_PRIO);
+			       MMUV2_AT_REG_L1_FW_ZLW_PRIO);
 
 		/* Configure MMU TLB stream configuration for L2 */
 		for (j = 0, block_addr = 0; j < mmu_hw->nr_l2streams;

@@ -320,7 +320,8 @@ struct ipu6_fw_isys_resolution_abi { // Same for IPU4
  * @addr: Points to output pin buffer - CSS Virtual Address
  * @compress: Request frame compression (1), or  not (0)
  */
-struct ipu6_fw_isys_output_pin_payload_abi { // AKA ia_css_isys_output_pin_payload_comm
+struct ipu6_fw_isys_output_pin_payload_abi {
+	// AKA ia_css_isys_output_pin_payload_comm
 	u64 out_buf_id;
 	u32 addr;
 	u32 compress;
@@ -339,17 +340,18 @@ struct ipu6_fw_isys_output_pin_payload_abi { // AKA ia_css_isys_output_pin_paylo
  * @input_pin_id: related input pin id
  * @reserve_compression: reserve compression resources for pin
  */
-struct ipu4_fw_isys_output_pin_info_abi { // AKA ia_css_isys_output_pin_info_comm in old driver
-	/* 0x00 */ struct ipu6_fw_isys_resolution_abi output_res;
-	/* 0x08 */ u32 stride;
-	/* 0x0b */ u32 watermark_in_lines;
-	/* 0x10 */ u32 payload_buf_size;
-	/* 0x14 */ u8 send_irq;
-	/* 0x15 */ u8 input_pin_id;
-	/* 0x16 */ u8 pt;
-	/* 0x17 */ u8 ft;
-	/* 0x18 */ u8 link_id;
-	/* 0x19 */ u8 reserve_compression;
+struct ipu4_fw_isys_output_pin_info_abi {
+	// AKA ia_css_isys_output_pin_info_comm in old driver
+	struct ipu6_fw_isys_resolution_abi output_res;	/* 0x00 */
+	u32 stride;					/* 0x08 */
+	u32 watermark_in_lines;				/* 0x0b */
+	u32 payload_buf_size;				/* 0x10 */
+	u8 send_irq;					/* 0x14 */
+	u8 input_pin_id;				/* 0x15 */
+	u8 pt;						/* 0x16 */
+	u8 ft;						/* 0x17 */
+	u8 link_id;					/* 0x18 */
+	u8 reserve_compression;				/* 0x19 */
 	/* 0x1a..0x1b?  auto-padding*/
 };
 
@@ -358,9 +360,9 @@ struct ipu4_fw_isys_output_pin_info_abi { // AKA ia_css_isys_output_pin_info_com
  * @input_res: input resolution
  * @dt: mipi data type ((enum ipu_fw_isys_mipi_data_type)
  * @mipi_store_mode: defines if legacy long packet header will be stored or
- *		     discarded if discarded, output pin pin type for this
- *		     input pin can only be MIPI
- *		     (enum ipu_fw_isys_mipi_store_mode)
+ *			discarded if discarded, output pin type for this
+ *			input pin can only be MIPI
+ *			(enum ipu_fw_isys_mipi_store_mode)
  * @bits_per_pix: native bits per pixel
  * @mapped_dt: actual data type from sensor
  */
@@ -435,7 +437,8 @@ struct ipu6_fw_isys_cropping_abi {
  * @vc: MIPI Virtual Channel (up to 4 virtual per physical channel)
  * @isl_use: indicates whether stream requires ISL and how
  */
-struct ipu4_fw_isys_stream_cfg_data_abi { // AKA ia_css_isys_stream_cfg_data_comm in old
+struct ipu4_fw_isys_stream_cfg_data_abi {
+	// AKA ia_css_isys_stream_cfg_data_comm in old
 	struct ipu4_fw_isys_isa_cfg_abi isa_cfg;
 	struct ipu6_fw_isys_cropping_abi crop[N_IPU_FW_ISYS_CROPPING_LOCATION];
 	struct ipu4_fw_isys_input_pin_info_abi input_pins[IPU4_MAX_IPINS];

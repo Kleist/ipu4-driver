@@ -17,23 +17,23 @@
 #define IPU_SENSOR_ROTATION_INVERTED		1
 
 #define NODE_SENSOR(_HID, _PROPS)		\
-	(const struct software_node) {		\
+	((const struct software_node) {		\
 		.name = _HID,			\
 		.properties = _PROPS,		\
-	}
+	})
 
 #define NODE_PORT(_PORT, _SENSOR_NODE)		\
-	(const struct software_node) {		\
+	((const struct software_node) {		\
 		.name = _PORT,			\
 		.parent = _SENSOR_NODE,		\
-	}
+	})
 
 #define NODE_ENDPOINT(_EP, _PORT, _PROPS)	\
-	(const struct software_node) {		\
+	((const struct software_node) {		\
 		.name = _EP,			\
 		.parent = _PORT,		\
 		.properties = _PROPS,		\
-	}
+	})
 
 enum ipu_sensor_swnodes {
 	SWNODE_SENSOR_HID,
@@ -62,7 +62,8 @@ struct ipu_node_names {
 
 struct mipi_bridge_config {
 	u8 mcsi_port;
-	u8 csi2_device; // Which "IPU4 CSI2 %d" media-ctl device is this mipi bridge connected to?
+	// "IPU4 CSI2 %d" media-ctl device is this mipi bridge connected to?
+	u8 csi2_device;
 	u8 i2c_addr;
 	u8 i2c_adapter;
 	const char *compatible;
@@ -75,7 +76,6 @@ struct ipu_sensor {
 
 	u8 link; /* Hard-coded "SSDB" info*/
 	u8 lanes; /* Hard-coded "SSDB" info*/
-
 
 	/* SWNODE_COUNT + 1 for terminating NULL */
 	const struct software_node *group[SWNODE_COUNT + 1];

@@ -28,19 +28,24 @@ static struct vm_info *get_vm_info(struct ipu6_mmu *mmu, dma_addr_t iova)
 
 	list_for_each_entry_safe(info, save, &mmu->vma_list, list) {
 		if (iova >= info->ipu6_iova &&
-		    iova < (info->ipu6_iova + info->size)) {
-				return info;
-		}
+		    iova < (info->ipu6_iova + info->size))
+			return info;
 
 		if (len < sizeof(debug_info)) {
-			len += snprintf(debug_info+len, sizeof(debug_info)-len,
-				"0x%llx-0x%llx, ", info->ipu6_iova, info->ipu6_iova+info->size);
+			len += snprintf(debug_info + len,
+					sizeof(debug_info) - len,
+					"0x%llx-0x%llx, ",
+					info->ipu6_iova,
+					info->ipu6_iova + info->size);
 		} else {
 			dev_warn_once(mmu->dev, "Debug buffer full - address data missing\n");
 		}
 	}
 
-	dev_err(mmu->dev, "%s: iova=0x%llx not in ranges %s\n", __func__, iova, debug_info);
+	dev_err(mmu->dev, "%s: iova=0x%llx not in ranges %s\n",
+		__func__,
+		iova,
+		debug_info);
 	return NULL;
 }
 

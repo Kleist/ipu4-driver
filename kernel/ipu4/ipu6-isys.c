@@ -293,17 +293,15 @@ static void ipu6_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
 		if ((status & CSI2_IRQ_FS_VC(i))) {
 			stream = ipu6_isys_query_stream_by_source(csi2->isys,
 								  source, i);
-			if (stream) {
+			if (stream)
 				ipu6_isys_put_stream(stream);
-			}
 		}
 
 		if ((status & CSI2_IRQ_FE_VC(i))) {
 			stream = ipu6_isys_query_stream_by_source(csi2->isys,
 								  source, i);
-			if (stream) {
+			if (stream)
 				ipu6_isys_put_stream(stream);
-			}
 		}
 	}
 }
@@ -353,7 +351,7 @@ irqreturn_t isys_isr(struct ipu6_bus_device *adev)
 		status |= readl(isys->pdata->base +
 				    IPU4_REG_ISYS_UNISPART_IRQ_STATUS);
 	} while (status & (isys->isr_csi2_bits | IPU4_ISYS_UNISPART_IRQ_SW));
-	
+
 	spin_unlock(&isys->power_lock);
 
 	return IRQ_HANDLED;
@@ -409,7 +407,8 @@ static int isys_notifier_init(struct ipu6_isys *isys)
 		struct sensor_async_sd *s_asd;
 		struct fwnode_handle *ep;
 
-		ep = fwnode_graph_get_endpoint_by_id(dev_fwnode(dev), i, 0,
+		ep =
+		fwnode_graph_get_endpoint_by_id(dev_fwnode(dev), i, 0,
 						FWNODE_GRAPH_ENDPOINT_NEXT);
 		if (!ep)
 			continue;
@@ -523,8 +522,8 @@ static void isys_unregister_devices(struct ipu6_isys *isys)
 {
 	isys_unregister_video_devices(isys);
 	isys_csi2_unregister_subdevices(isys);
- 	v4l2_device_unregister(&isys->v4l2_dev);
- 	media_device_unregister(&isys->media_dev);
+	v4l2_device_unregister(&isys->v4l2_dev);
+	media_device_unregister(&isys->media_dev);
 	media_device_cleanup(&isys->media_dev);
 }
 
@@ -643,7 +642,6 @@ static void isys_remove(struct auxiliary_device *auxdev)
 
 	mutex_destroy(&isys->stream_mutex);
 	mutex_destroy(&isys->mutex);
-
 }
 
 static int alloc_fw_msg_bufs(struct ipu6_isys *isys, int amount)
@@ -730,7 +728,7 @@ void ipu6_cleanup_fw_msg_bufs(struct ipu6_isys *isys)
 void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, struct isys_fw_msgs *msg)
 {
 	unsigned long flags;
-	
+
 	if (!msg)
 		return;
 
@@ -738,7 +736,6 @@ void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, struct isys_fw_msgs *msg)
 	list_move(&msg->head, &isys->framebuflist);
 	spin_unlock_irqrestore(&isys->listlock, flags);
 }
-
 
 static int isys_probe(struct auxiliary_device *auxdev,
 		      const struct auxiliary_device_id *auxdev_id)
@@ -775,8 +772,8 @@ static int isys_probe(struct auxiliary_device *auxdev,
 	mutex_init(&isys->mutex);
 	mutex_init(&isys->stream_mutex);
 
- 	spin_lock_init(&isys->listlock);
- 	INIT_LIST_HEAD(&isys->framebuflist);
+	spin_lock_init(&isys->listlock);
+	INIT_LIST_HEAD(&isys->framebuflist);
 	INIT_LIST_HEAD(&isys->framebuflist_fw);
 
 	isys->line_align = IPU6_ISYS_2600_MEM_LINE_ALIGN;
@@ -784,7 +781,7 @@ static int isys_probe(struct auxiliary_device *auxdev,
 
 	dev_set_drvdata(&auxdev->dev, isys);
 
- 	isys_stream_init(isys);
+	isys_stream_init(isys);
 
 	if (!isp->secure_mode) {
 		fw = isp->cpd_fw;
@@ -940,7 +937,8 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 		complete(&stream->stream_start_completion);
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_START_AND_CAPTURE_ACK:
-		ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev), (struct isys_fw_msgs*)resp->buf_handle);
+		ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev),
+				    (struct isys_fw_msgs *)resp->buf_handle);
 		complete(&stream->stream_start_completion);
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_STOP_ACK:
@@ -963,7 +961,8 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_CAPTURE_ACK:
-		ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev), (struct isys_fw_msgs*)resp->buf_handle);
+		ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev),
+				    (struct isys_fw_msgs *)resp->buf_handle);
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_START_AND_CAPTURE_DONE:
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_CAPTURE_DONE:

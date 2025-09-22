@@ -18,7 +18,7 @@
 #include "ipu6-platform-isys-csi2-reg.h"
 #include "ipu6-platform-regs.h"
 
-const char* ipu_last_rw_func;
+const char *ipu_last_rw_func;
 EXPORT_SYMBOL(ipu_last_rw_func);
 
 #define IPU6_PCI_BAR		0
@@ -62,56 +62,54 @@ static unsigned int ipu4_csi_offsets[] = {
 	0x64000, 0x65000, 0x66000, 0x67000, 0x6C000, 0x6C800
 };
 
-
 // From iei-4.19.217 ipu4.c
 static const struct ipu6_isys_internal_pdata isys_ipdata = {
 	.hw_variant = {
-		       .offset = IPU4_ISYS_OFFSET,
-		       .nr_mmus = 2,
-		       .mmu_hw = {
-			{
-				.offset = IPU4_ISYS_IOMMU0_OFFSET,
-				.info_bits = IPU4_INFO_REQUEST_DESTINATION_PRIMARY,
-				.nr_l1streams = 0,
-				.nr_l2streams = 0,
-				.insert_read_before_invalidate = true,
+	    .offset = IPU4_ISYS_OFFSET,
+		.nr_mmus = 2,
+		.mmu_hw = {{
+			.offset = IPU4_ISYS_IOMMU0_OFFSET,
+			.info_bits = IPU4_INFO_REQUEST_DESTINATION_PRIMARY,
+			.nr_l1streams = 0,
+			.nr_l2streams = 0,
+			.insert_read_before_invalidate = true,
 			},
 			{
-				.offset = IPU4_ISYS_IOMMU1_OFFSET,
-				.info_bits = IPU4_INFO_STREAM_ID_SET(0),
-				.nr_l1streams = IPU4_MMU_MAX_TLB_L1_STREAMS,
-				.l1_block_sz = {
-						8, 16, 16, 16, 0, 0, 0, 0, 0,
-						0, 0, 0, 0, 0, 0, 8
-				},
-				.l1_zlw_en = {
-						1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
-						0, 0, 0, 0, 0, 0
-				},
-				.l1_zlw_1d_mode = {
-						0, 1, 1, 1, 0, 0, 0, 0,
-						0, 0, 0, 0, 0, 0, 0, 0
-				},
-				.l1_ins_zlw_ahead_pages = {
-							0, 3, 3, 3, 0, 0,
-							0, 0, 0, 0, 0, 0,
-							0, 0, 0, 0
-				},
-				.l1_zlw_2d_mode = {
-						0, 0, 0, 0, 0, 0, 0, 0, 0,
-						0, 0, 0, 0, 0, 0, 0
-				},
-				.nr_l2streams = IPU4_MMU_MAX_TLB_L2_STREAMS,
-				.l2_block_sz = {
-						2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-						2, 2, 2, 2, 2, 2
-				},
-				.insert_read_before_invalidate = false,
-				.zlw_invalidate = false,
-				.l1_stream_id_reg_offset =
-					IPU4_MMU_L1_STREAM_ID_REG_OFFSET,
-				.l2_stream_id_reg_offset =
-					IPU4_MMU_L2_STREAM_ID_REG_OFFSET,
+			.offset = IPU4_ISYS_IOMMU1_OFFSET,
+			.info_bits = IPU4_INFO_STREAM_ID_SET(0),
+			.nr_l1streams = IPU4_MMU_MAX_TLB_L1_STREAMS,
+			.l1_block_sz = {
+					8, 16, 16, 16, 0, 0, 0, 0, 0,
+					0, 0, 0, 0, 0, 0, 8
+			},
+			.l1_zlw_en = {
+					1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 0, 0, 0
+			},
+			.l1_zlw_1d_mode = {
+					0, 1, 1, 1, 0, 0, 0, 0,
+					0, 0, 0, 0, 0, 0, 0, 0
+			},
+			.l1_ins_zlw_ahead_pages = {
+						0, 3, 3, 3, 0, 0,
+						0, 0, 0, 0, 0, 0,
+						0, 0, 0, 0
+			},
+			.l1_zlw_2d_mode = {
+					0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 0, 0, 0, 0
+			},
+			.nr_l2streams = IPU4_MMU_MAX_TLB_L2_STREAMS,
+			.l2_block_sz = {
+					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+					2, 2, 2, 2, 2, 2
+			},
+			.insert_read_before_invalidate = false,
+			.zlw_invalidate = false,
+			.l1_stream_id_reg_offset =
+				IPU4_MMU_L1_STREAM_ID_REG_OFFSET,
+			.l2_stream_id_reg_offset =
+				IPU4_MMU_L2_STREAM_ID_REG_OFFSET,
 			},
 		},
 		.dmem_offset = IPU4_ISYS_DMEM_OFFSET,
@@ -126,7 +124,8 @@ static const struct ipu6_isys_internal_pdata isys_ipdata = {
 	.max_send_queues = IPU4_N_MAX_SEND_QUEUES,
 
 	/* Consider 1 slot per stream since driver is not expected to pipeline
-		* device commands for the same stream */
+	 * device commands for the same stream
+	 */
 	.max_devq_size = IPU4_ISYS_MAX_STREAMS,
 };
 
@@ -263,7 +262,8 @@ static const struct ipu6_buttress_ctrl ipu4_psys_buttress_ctrl = {
 	.pwr_sts_off = IPU4_BUTTRESS_PWR_STATE_PS_PWR_FSM_IDLE,
 };
 
-// List of all registers that the old and new driver reads, created from mmiotrace's
+// List of all registers that the old and new driver reads,
+// created from mmiotrace's
 static const u32 readable_regs[] = {
 	// 0x90000000 offset removed since it is "included" in isp->base
 	0x000008,
@@ -311,21 +311,26 @@ static const u32 readable_regs[] = {
 	0x4b0004,
 };
 
-void ipu_dump_state(struct ipu6_device *isp, const char* context)
+void ipu_dump_state(struct ipu6_device *isp, const char *context)
 {
 	int i;
-	static int ipu_dump_state_iteration = 0;
+	static int ipu_dump_state_iteration;
 	static DEFINE_MUTEX(mutex);
 
 	mutex_lock(&mutex);
 	ipu_dump_state_iteration++;
 
-	mmiotrace_printk("%s in context %d %s begin\n", __func__, ipu_dump_state_iteration, context);
+	mmiotrace_printk("%s in context %d %s begin\n",
+			 __func__,
+			 ipu_dump_state_iteration,
+			 context);
 	for (i = 0; i < ARRAY_SIZE(readable_regs); ++i)
-	{
 		(void)readl(isp->base + readable_regs[i]);
-	}
-	mmiotrace_printk("%s in context %d %s end\n", __func__, ipu_dump_state_iteration, context);
+
+	mmiotrace_printk("%s in context %d %s end\n",
+			 __func__,
+			 ipu_dump_state_iteration,
+			 context);
 	mutex_unlock(&mutex);
 }
 EXPORT_SYMBOL_GPL(ipu_dump_state);
@@ -494,9 +499,9 @@ static int ipu6_pci_config_setup(struct pci_dev *dev, u8 hw_ver)
 	}
 
 	ret = pci_alloc_irq_vectors(dev, 1, 1, PCI_IRQ_MSI);
-	if (ret<0)
+	if (ret < 0)
 		return dev_err_probe(&dev->dev, ret, "Request msi failed");
-	
+
 	return 0;
 }
 
@@ -619,8 +624,10 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	case PCI_DEVICE_ID_INTEL_IPU4:
 		isp->hw_ver = IPU4_VER_4;
 		isp->cpd_fw_name = IPU4_FIRMWARE_NAME;
-		// IPU4 uses same cpd metadata cmpnt as ipu6se (smaller hash size)
-		isp->cpd_metadata_cmpnt_size = sizeof(struct ipu6se_cpd_metadata_cmpnt);
+		// IPU4 uses same cpd metadata cmpnt as ipu6se
+		// (smaller hash size)
+		isp->cpd_metadata_cmpnt_size =
+			sizeof(struct ipu6se_cpd_metadata_cmpnt);
 		isp->buttress.reg_irq_sts = BUTTRESS_REG_ISR_ENABLED_STATUS;
 		break;
 	default:
@@ -666,7 +673,8 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		goto out_ipu6_bus_del_devices;
 	}
 
-	isys_ctrl = is_ipu4(isp->hw_ver) ? &ipu4_isys_buttress_ctrl : &ipu6_isys_buttress_ctrl;
+	isys_ctrl = is_ipu4(isp->hw_ver) ?
+			&ipu4_isys_buttress_ctrl : &ipu6_isys_buttress_ctrl;
 	isp->isys = ipu6_isys_init(pdev, &pdev->dev, isys_ctrl, isys_base,
 				   &isys_ipdata);
 	if (IS_ERR(isp->isys)) {
@@ -674,7 +682,8 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		goto out_ipu6_bus_del_devices;
 	}
 
-	psys_ctrl = is_ipu4(isp->hw_ver) ? &ipu4_psys_buttress_ctrl : &ipu6_psys_buttress_ctrl;
+	psys_ctrl = is_ipu4(isp->hw_ver) ?
+			&ipu4_psys_buttress_ctrl : &ipu6_psys_buttress_ctrl;
 
 	isp->psys = ipu6_psys_init(pdev, &isp->isys->auxdev.dev, psys_ctrl,
 				   psys_base, &psys_ipdata);

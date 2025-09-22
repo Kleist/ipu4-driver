@@ -18,9 +18,8 @@ static int queue_setup(struct vb2_queue *q, unsigned int *num_buffers,
 	u32 size;
 
 	/* num_planes == 0: we're being called through VIDIOC_REQBUFS */
-	if (!*num_planes) {
+	if (!*num_planes)
 		*num_planes = 1;
-	}
 
 	size = av->pix.sizeimage;
 	sizes[0] = size;
@@ -49,46 +48,54 @@ static int ipu6_isys_buf_prepare(struct vb2_buffer *vb)
 	return 0;
 }
 
-static void _dump_queue_info(struct ipu6_isys_queue *aq, const char* context)
+static void _dump_queue_info(struct ipu6_isys_queue *aq, const char *context)
 {
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
-	struct ipu6_isys_buffer * ib;
+	struct ipu6_isys_buffer *ib;
 	char active_buffer[64] = {0};
 	char incoming_buffer[64] = {0};
-	size_t len=0;
+	size_t len = 0;
 
 	lockdep_assert_held(&aq->lock);
 
 	list_for_each_entry(ib, &aq->incoming, head) {
 		struct vb2_buffer *vb =
 			ipu6_isys_buffer_to_vb2_buffer(ib);
-		len += snprintf(incoming_buffer+len, sizeof(incoming_buffer)-len, "%d, ", vb->index);
+		len += snprintf(incoming_buffer + len,
+				sizeof(incoming_buffer) - len,
+				"%d, ",
+				vb->index);
 	}
 
-	if (len > 2) {
-		incoming_buffer[len-2] = '\0';
-	}
+	if (len > 2)
+		incoming_buffer[len - 2] = '\0';
 
 	len = 0;
 	list_for_each_entry(ib, &aq->active, head) {
 		struct vb2_buffer *vb =
 			ipu6_isys_buffer_to_vb2_buffer(ib);
-		len += snprintf(active_buffer+len, sizeof(active_buffer)-len, "%d, ", vb->index);
+		len += snprintf(active_buffer + len,
+				sizeof(active_buffer) - len,
+				"%d, ",
+				vb->index);
 	}
-	if (len > 2) {
-		active_buffer[len-2] = '\0';
-	}
+	if (len > 2)
+		active_buffer[len - 2] = '\0';
 
-	dev_info(&av->isys->adev->auxdev.dev, "%s: %s: active: [%s], incoming: [%s]", context, av->vdev.name, active_buffer, incoming_buffer);
-
+	dev_info(&av->isys->adev->auxdev.dev,
+		 "%s: %s: active: [%s], incoming: [%s]",
+		 context,
+		 av->vdev.name,
+		 active_buffer,
+		 incoming_buffer);
 }
 
-#define dump_queue_info(AQ, FMT, ...) 						\
-	do {									\
-		char _msg_buffer[128];						\
-										\
-		snprintf(_msg_buffer, sizeof(_msg_buffer), FMT, ##__VA_ARGS__);	\
-		_dump_queue_info(AQ, _msg_buffer);				\
+#define dump_queue_info(AQ, FMT, ...)					       \
+	do {								       \
+		char _msg_buffer[128];					       \
+									       \
+		snprintf(_msg_buffer, sizeof(_msg_buffer), FMT, ##__VA_ARGS__);\
+		_dump_queue_info(AQ, _msg_buffer);			       \
 	} while (0)
 
 /*
@@ -676,15 +683,19 @@ static int restart_stream(struct ipu6_isys_video *av)
 
 	mutex_lock(&isys->stream_mutex);
 	if (!wait_for_no_active_buffers(av)) {
-		// When stream buffers are lost, restarting would break the existing stream
-		dev_err(dev, "%s stream buffers lost during restart\n", av->vdev.name);
+		// When stream buffers are lost,
+		// restarting would break the existing stream
+		dev_err(dev, "%s stream buffers lost during restart\n",
+			av->vdev.name);
 		ret = -EIO;
 		goto err_unlock;
 	}
 
 	ret = ipu6_isys_video_set_streaming(av, 0, NULL);
 	if (ret) {
-		dev_err(dev, "ipu6_isys_video_set_streaming(%s, 0, NULL) failed: %d\n", av->vdev.name, ret);
+		dev_err(dev, "ipu6_isys_video_set_streaming(%s, 0, NULL) failed: %d\n",
+			av->vdev.name,
+			ret);
 		goto err_unlock;
 	}
 
@@ -714,7 +725,10 @@ static int restart_stream(struct ipu6_isys_video *av)
 	}
 	ret = ipu6_isys_video_set_streaming(av, 1, bl_ptr);
 	if (ret) {
-		dev_err(dev, "ipu6_isys_video_set_streaming(%s, 1, %p) failed: %d\n", av->vdev.name, bl_ptr, ret);
+		dev_err(dev, "ipu6_isys_video_set_streaming(%s, 1, %p) failed: %d\n",
+			av->vdev.name,
+			bl_ptr,
+			ret);
 		goto err_unlock;
 	}
 
@@ -745,9 +759,10 @@ int ipu6_isys_queue_restart_streams(struct ipu6_isys_video *av)
 		mutex_lock(&other_av->stream->mutex);
 		if (other_av->streaming) {
 			dev_info(&other_av->vdev.dev, "Restarting stream\n");
-			if (!WARN(stream_restarted, "Restarting more than one stream not supported!")) {
+			if (!WARN(stream_restarted,
+				  "Restarting > one stream not supported!"))
 				ret = restart_stream(other_av);
-			}
+
 			stream_restarted = true;
 		}
 		mutex_unlock(&other_av->stream->mutex);

@@ -405,7 +405,7 @@ void ipu6_fw_isys_put_resp(void *context, unsigned int queue)
 }
 
 void ipu6_fw_isys_dump_stream_cfg(struct device *dev,
-			     struct ipu4_fw_isys_stream_cfg_data_abi *stream_cfg)
+				  struct ipu4_fw_isys_stream_cfg_data_abi *cfg)
 {
 	unsigned int i;
 
@@ -413,63 +413,68 @@ void ipu6_fw_isys_dump_stream_cfg(struct device *dev,
 	dev_dbg(dev, "IPU_FW_ISYS_STREAM_CFG_DATA\n");
 	dev_dbg(dev, "---------------------------\n");
 
-	dev_dbg(dev, "crop[0] offset: %lx", (uintptr_t)&stream_cfg->crop[0]-(uintptr_t)stream_cfg);
-	dev_dbg(dev, "input_pins[0] offset: %lx", (uintptr_t)&stream_cfg->input_pins[0]-(uintptr_t)stream_cfg);
-	dev_dbg(dev, "output_pins[0] offset: %lx", (uintptr_t)&stream_cfg->output_pins[0]-(uintptr_t)stream_cfg);
-	dev_dbg(dev, "compfmt offset: %lx", (uintptr_t)&stream_cfg->compfmt-(uintptr_t)stream_cfg);
-	
-	dev_dbg(dev, "Source %d\n", stream_cfg->src);
-	dev_dbg(dev, "VC %d\n", stream_cfg->vc);
-	dev_dbg(dev, "Nof input pins %d\n", stream_cfg->nof_input_pins);
-	dev_dbg(dev, "Nof output pins %d\n", stream_cfg->nof_output_pins);
+	dev_dbg(dev, "crop[0] offset: %lx",
+		(uintptr_t)&cfg->crop[0] - (uintptr_t)cfg);
+	dev_dbg(dev, "input_pins[0] offset: %lx",
+		(uintptr_t)&cfg->input_pins[0] - (uintptr_t)cfg);
+	dev_dbg(dev, "output_pins[0] offset: %lx",
+		(uintptr_t)&cfg->output_pins[0] - (uintptr_t)cfg);
+	dev_dbg(dev, "compfmt offset: %lx",
+		(uintptr_t)&cfg->compfmt - (uintptr_t)cfg);
 
-	for (i = 0; i < stream_cfg->nof_input_pins; i++) {
+	dev_dbg(dev, "Source %d\n", cfg->src);
+	dev_dbg(dev, "VC %d\n", cfg->vc);
+	dev_dbg(dev, "Nof input pins %d\n", cfg->nof_input_pins);
+	dev_dbg(dev, "Nof output pins %d\n", cfg->nof_output_pins);
+
+	for (i = 0; i < cfg->nof_input_pins; i++) {
 		dev_dbg(dev, "Input pin %d\n", i);
 		dev_dbg(dev, "Mipi data type 0x%0x\n",
-			stream_cfg->input_pins[i].dt);
+			cfg->input_pins[i].dt);
 		dev_dbg(dev, "Mipi store mode %d\n",
-			stream_cfg->input_pins[i].mipi_store_mode);
+			cfg->input_pins[i].mipi_store_mode);
 		dev_dbg(dev, "Bits per pixel %d\n",
-			stream_cfg->input_pins[i].bits_per_pix);
+			cfg->input_pins[i].bits_per_pix);
 		dev_dbg(dev, "Mapped data type 0x%0x\n",
-			stream_cfg->input_pins[i].mapped_dt);
+			cfg->input_pins[i].mapped_dt);
 		dev_dbg(dev, "Input res width %d\n",
-			stream_cfg->input_pins[i].input_res.width);
+			cfg->input_pins[i].input_res.width);
 		dev_dbg(dev, "Input res height %d\n",
-			stream_cfg->input_pins[i].input_res.height);
+			cfg->input_pins[i].input_res.height);
 	}
 
 	for (i = 0; i < N_IPU_FW_ISYS_CROPPING_LOCATION; i++) {
 		dev_dbg(dev, "Crop info %d\n", i);
 		dev_dbg(dev, "Crop.top_offset %d\n",
-			stream_cfg->crop[i].top_offset);
+			cfg->crop[i].top_offset);
 		dev_dbg(dev, "Crop.left_offset %d\n",
-			stream_cfg->crop[i].left_offset);
+			cfg->crop[i].left_offset);
 		dev_dbg(dev, "Crop.bottom_offset %d\n",
-			stream_cfg->crop[i].bottom_offset);
+			cfg->crop[i].bottom_offset);
 		dev_dbg(dev, "Crop.right_offset %d\n",
-			stream_cfg->crop[i].right_offset);
+			cfg->crop[i].right_offset);
 		dev_dbg(dev, "----------------\n");
 	}
 
-	for (i = 0; i < stream_cfg->nof_output_pins; i++) {
+	for (i = 0; i < cfg->nof_output_pins; i++) {
 		dev_dbg(dev, "Output pin %d\n", i);
 		dev_dbg(dev, "Output input pin id %d\n",
-			stream_cfg->output_pins[i].input_pin_id);
+			cfg->output_pins[i].input_pin_id);
 		dev_dbg(dev, "Output res width %d\n",
-			stream_cfg->output_pins[i].output_res.width);
+			cfg->output_pins[i].output_res.width);
 		dev_dbg(dev, "Output res height %d\n",
-			stream_cfg->output_pins[i].output_res.height);
-		dev_dbg(dev, "Payload buf size: %d\n", stream_cfg->output_pins[i].payload_buf_size);
-		dev_dbg(dev, "Stride %d\n", stream_cfg->output_pins[i].stride);
-		dev_dbg(dev, "Pin type %d\n", stream_cfg->output_pins[i].pt);
-		dev_dbg(dev, "Ft %d\n", stream_cfg->output_pins[i].ft);
+			cfg->output_pins[i].output_res.height);
+		dev_dbg(dev, "Payload buf size: %d\n",
+			cfg->output_pins[i].payload_buf_size);
+		dev_dbg(dev, "Stride %d\n", cfg->output_pins[i].stride);
+		dev_dbg(dev, "Pin type %d\n", cfg->output_pins[i].pt);
+		dev_dbg(dev, "Ft %d\n", cfg->output_pins[i].ft);
 		dev_dbg(dev, "Watermar in lines %d\n",
-			stream_cfg->output_pins[i].watermark_in_lines);
+			cfg->output_pins[i].watermark_in_lines);
 		dev_dbg(dev, "Send irq %d\n",
-			stream_cfg->output_pins[i].send_irq);
+			cfg->output_pins[i].send_irq);
 		dev_dbg(dev, "Reserve compression %d\n",
-			stream_cfg->output_pins[i].reserve_compression);
+			cfg->output_pins[i].reserve_compression);
 		dev_dbg(dev, "----------------\n");
 	}
 }

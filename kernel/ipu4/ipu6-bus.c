@@ -160,7 +160,7 @@ int ipu6_bus_reset_device(struct ipu6_bus_device *adev)
 {
 	int ret = 0;
 	struct device *dev = &adev->auxdev.dev;
-	
+
 	ret = bus_pm_runtime_suspend(dev);
 	if (ret < 0)
 		return ret;

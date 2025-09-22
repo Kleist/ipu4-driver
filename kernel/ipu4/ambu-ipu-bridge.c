@@ -20,16 +20,18 @@ static const struct mipi_bridge_config mipi_bridge_configs[] = {
 		.compatible = "ambu,tc358748",
 		.i2c_addr = 0x0e,
 		.i2c_adapter = 0,
-		.link_freq = 317250000, // ieib475_pll_configurations op_sys_clk from 4.19 driver
-		.mcsi_port = 0, 
+		// ieib475_pll_configurations op_sys_clk from 4.19 driver
+		.link_freq = 317250000,
+		.mcsi_port = 0,
 		.csi2_device = 0,
 	},
 	{
 		.compatible = "ambu,tc358748",
 		.i2c_addr = 0x0e,
 		.i2c_adapter = 3,
-		.link_freq = 317250000, // ieib475_pll_configurations op_sys_clk from 4.19 driver
-		.mcsi_port = 1, 
+		// ieib475_pll_configurations op_sys_clk from 4.19 driver
+		.link_freq = 317250000,
+		.mcsi_port = 1,
 		.csi2_device = 4,
 	},
 
@@ -43,40 +45,48 @@ static const struct ipu_property_names prop_names = {
 	.link_frequencies = "link-frequencies",
 };
 
-static void ipu_bridge_create_fwnode_properties(
-	struct ipu_sensor *sensor,
-	struct ipu_bridge *bridge,
-	const struct mipi_bridge_config *cfg)
+static void ipu_bridge_create_fwnode_properties
+	(struct ipu_sensor *sensor,
+	 struct ipu_bridge *bridge,
+	 const struct mipi_bridge_config *cfg)
 {
 	sensor->prop_names = prop_names;
 
-	sensor->local_ref[0] = SOFTWARE_NODE_REFERENCE(&sensor->swnodes[SWNODE_IPU_ENDPOINT]);
-	sensor->remote_ref[0] = SOFTWARE_NODE_REFERENCE(&sensor->swnodes[SWNODE_SENSOR_ENDPOINT]);
+	sensor->local_ref[0] =
+	SOFTWARE_NODE_REFERENCE(&sensor->swnodes[SWNODE_IPU_ENDPOINT]);
 
-	sensor->dev_properties[0] = PROPERTY_ENTRY_U32(
-					sensor->prop_names.clock_frequency,
-					cfg->link_freq);
-	sensor->ep_properties[0] = PROPERTY_ENTRY_U32(
-					sensor->prop_names.bus_type,
-					V4L2_FWNODE_BUS_TYPE_CSI2_DPHY);
-	sensor->ep_properties[1] = PROPERTY_ENTRY_U32_ARRAY_LEN(
-					sensor->prop_names.data_lanes,
-					bridge->data_lanes, sensor->lanes);
-	sensor->ep_properties[2] = PROPERTY_ENTRY_REF_ARRAY(
-					sensor->prop_names.remote_endpoint,
-					sensor->local_ref);
+	sensor->remote_ref[0] =
+	SOFTWARE_NODE_REFERENCE(&sensor->swnodes[SWNODE_SENSOR_ENDPOINT]);
 
-	sensor->ep_properties[3] = PROPERTY_ENTRY_U64_ARRAY_LEN(
-		sensor->prop_names.link_frequencies,
-		&cfg->link_freq,
-		1); // TODO - does this need to be an array when we always have 1?
+	sensor->dev_properties[0] =
+	PROPERTY_ENTRY_U32(sensor->prop_names.clock_frequency,
+			   cfg->link_freq);
 
-	sensor->ipu_properties[0] = PROPERTY_ENTRY_U32_ARRAY_LEN(
-					sensor->prop_names.data_lanes,
-					bridge->data_lanes, sensor->lanes);
-	sensor->ipu_properties[1] = PROPERTY_ENTRY_REF_ARRAY(
-					sensor->prop_names.remote_endpoint,
-					sensor->remote_ref);
+	sensor->ep_properties[0] =
+	PROPERTY_ENTRY_U32(sensor->prop_names.bus_type,
+			   V4L2_FWNODE_BUS_TYPE_CSI2_DPHY);
+
+	sensor->ep_properties[1] =
+	PROPERTY_ENTRY_U32_ARRAY_LEN(sensor->prop_names.data_lanes,
+				     bridge->data_lanes,
+				     sensor->lanes);
+	sensor->ep_properties[2] =
+	PROPERTY_ENTRY_REF_ARRAY(sensor->prop_names.remote_endpoint,
+				 sensor->local_ref);
+
+	// TODO - does this need to be an array when we always have 1?
+	sensor->ep_properties[3] =
+	PROPERTY_ENTRY_U64_ARRAY_LEN(sensor->prop_names.link_frequencies,
+				     &cfg->link_freq,
+				     1);
+
+	sensor->ipu_properties[0] =
+	PROPERTY_ENTRY_U32_ARRAY_LEN(sensor->prop_names.data_lanes,
+				     bridge->data_lanes,
+				     sensor->lanes);
+	sensor->ipu_properties[1] =
+	PROPERTY_ENTRY_REF_ARRAY(sensor->prop_names.remote_endpoint,
+				 sensor->remote_ref);
 }
 
 static void ipu_bridge_init_swnode_names(struct ipu_sensor *sensor)
@@ -114,16 +124,15 @@ static void ipu_bridge_create_connection_swnodes(struct ipu_bridge *bridge,
 					       sensor->dev_properties);
 	nodes[SWNODE_SENSOR_PORT] = NODE_PORT(sensor->node_names.port,
 					      &nodes[SWNODE_SENSOR_HID]);
-	nodes[SWNODE_SENSOR_ENDPOINT] = NODE_ENDPOINT(
-						sensor->node_names.endpoint,
-						&nodes[SWNODE_SENSOR_PORT],
-						sensor->ep_properties);
+	nodes[SWNODE_SENSOR_ENDPOINT] =
+		NODE_ENDPOINT(sensor->node_names.endpoint,
+			      &nodes[SWNODE_SENSOR_PORT],
+			      sensor->ep_properties);
 	nodes[SWNODE_IPU_PORT] = NODE_PORT(sensor->node_names.remote_port,
 					   &bridge->ipu_hid_node);
-	nodes[SWNODE_IPU_ENDPOINT] = NODE_ENDPOINT(
-						sensor->node_names.endpoint,
-						&nodes[SWNODE_IPU_PORT],
-						sensor->ipu_properties);
+	nodes[SWNODE_IPU_ENDPOINT] = NODE_ENDPOINT(sensor->node_names.endpoint,
+						   &nodes[SWNODE_IPU_PORT],
+						   sensor->ipu_properties);
 
 	ipu_bridge_init_swnode_group(sensor);
 }
@@ -140,16 +149,18 @@ static void ipu_bridge_unregister_sensors(struct ipu_bridge *bridge)
 	}
 }
 
-static struct i2c_client *ipu_bridge_init_i2c_dev(
-	struct device *dev,
-	const struct mipi_bridge_config *cfg,
-	const struct software_node *swnode)
+static struct i2c_client *
+ipu_bridge_init_i2c_dev(struct device *dev,
+			const struct mipi_bridge_config *cfg,
+			const struct software_node *swnode)
 {
 	struct i2c_adapter *adapter;
 	struct i2c_client *client;
-	struct i2c_board_info info = { I2C_BOARD_INFO("ambu,tc358748", cfg->i2c_addr) };
+	struct i2c_board_info info = {
+		I2C_BOARD_INFO("ambu,tc358748", cfg->i2c_addr) };
 
-	// TODO - when swnode is passed to i2c_new_device, should it also be registered elsewhere?
+	// TODO - when swnode is passed to i2c_new_device,
+	// should it also be registered elsewhere?
 	info.swnode = swnode;
 
 	adapter = i2c_get_adapter(cfg->i2c_adapter);
@@ -164,9 +175,10 @@ static struct i2c_client *ipu_bridge_init_i2c_dev(
 	return client;
 }
 
-static int ipu_bridge_setup_mipi_bridge(const struct mipi_bridge_config *cfg,
-				     struct ipu_bridge *bridge,
-				     struct device *dev)
+static int
+ipu_bridge_setup_mipi_bridge(const struct mipi_bridge_config *cfg,
+			     struct ipu_bridge *bridge,
+			     struct device *dev)
 {
 	struct ipu_sensor *sensor;
 	int ret;
@@ -178,16 +190,16 @@ static int ipu_bridge_setup_mipi_bridge(const struct mipi_bridge_config *cfg,
 
 	sensor = &bridge->sensors[bridge->n_sensors];
 
-	sensor->lanes = 1; // from 4.19.217 dev_dbg(&csi2->isys->adev->dev, "lane nr %d.\n", nlanes) => "lane nr 1."
+	sensor->lanes = 1; // from 4.19.217 dev_dbg(&csi2->isys->adev->dev,
+			   // "lane nr %d.\n", nlanes) => "lane nr 1."
 	sensor->link = cfg->csi2_device;
 
 	snprintf(sensor->name, sizeof(sensor->name), "%s-%u",
-			cfg->compatible, cfg->mcsi_port);
+		 cfg->compatible, cfg->mcsi_port);
 
 	if (sensor->lanes > IPU_MAX_LANES) {
 		dev_err(&sensor->i2c_dev->dev, "Number of lanes is invalid\n");
 		return -EINVAL;
-
 	}
 
 	ipu_bridge_create_fwnode_properties(sensor, bridge, cfg);
@@ -199,8 +211,9 @@ static int ipu_bridge_setup_mipi_bridge(const struct mipi_bridge_config *cfg,
 
 	// HACK - This is probably not the right place to register this device
 
-	sensor->i2c_dev = ipu_bridge_init_i2c_dev(dev, cfg, &sensor->swnodes[
-							SWNODE_SENSOR_HID]);
+	sensor->i2c_dev =
+		ipu_bridge_init_i2c_dev(dev, cfg,
+					&sensor->swnodes[SWNODE_SENSOR_HID]);
 	if (IS_ERR(sensor->i2c_dev)) {
 		ret = PTR_ERR(sensor->i2c_dev);
 		sensor->i2c_dev = NULL;
@@ -208,7 +221,7 @@ static int ipu_bridge_setup_mipi_bridge(const struct mipi_bridge_config *cfg,
 	}
 
 	dev_info(dev, "Found supported sensor %s\n",
-			dev_name(&sensor->i2c_dev->dev));
+		 dev_name(&sensor->i2c_dev->dev));
 
 	bridge->n_sensors++;
 
@@ -220,13 +233,14 @@ err_free_swnodes:
 }
 
 static int ipu_bridge_setup_mipi_bridges(struct ipu_bridge *bridge,
-				      struct device *dev)
+					 struct device *dev)
 {
 	unsigned int i;
 	int ret;
 
 	for (i = 0; i < ARRAY_SIZE(mipi_bridge_configs); i++) {
-		ret = ipu_bridge_setup_mipi_bridge(&mipi_bridge_configs[i], bridge, dev);
+		ret = ipu_bridge_setup_mipi_bridge(&mipi_bridge_configs[i],
+						   bridge, dev);
 		if (ret)
 			goto err_unregister_sensors;
 	}
@@ -240,7 +254,8 @@ err_unregister_sensors:
 
 static int ipu_bridge_sensors_are_ready(void)
 {
-	//TODO - is there anything we should do here to find out if toshiba bridge is ready?
+	//TODO - is there anything we should do here
+	// to find out if toshiba bridge is ready?
 	return true;
 }
 
@@ -257,7 +272,8 @@ int ambu_ipu_bridge_init(struct device *dev)
 	static_bridge = kzalloc(sizeof(*bridge), GFP_KERNEL);
 	if (!static_bridge)
 		return -ENOMEM;
-	bridge = static_bridge; // Use alias to avoid changing every line in this file
+	// Use alias to avoid changing every line in this file
+	bridge = static_bridge;
 
 	strscpy(bridge->ipu_node_name, IPU_HID,
 		sizeof(bridge->ipu_node_name));
@@ -292,7 +308,8 @@ int ambu_ipu_bridge_init(struct device *dev)
 		goto err_unregister_sensors;
 	}
 
-	// HACK - there appears to be no inverse of set_secondary_fwnode, so we do this manually
+	// HACK - there appears to be no inverse of
+	// set_secondary_fwnode, so we do this manually
 	if (fwnode->secondary) {
 		dev_err(dev, "Expected no fwnode->secondary, cannot proceed");
 		ret = -ENOTUNIQ;
@@ -311,7 +328,6 @@ err_free_bridge:
 	return ret;
 }
 EXPORT_SYMBOL_NS_GPL(ambu_ipu_bridge_init, INTEL_IPU_BRIDGE);
-
 
 void ambu_ipu_bridge_uninit(struct device *dev)
 {

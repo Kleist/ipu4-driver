@@ -127,24 +127,26 @@ struct ipu6_isys {
 	struct ipu6_bus_device *adev;
 
 	int power;
-	spinlock_t power_lock;
+	spinlock_t power_lock; // Access to power
 	u32 isr_csi2_bits;
 	u32 csi2_rx_ctrl_cached;
-	spinlock_t streams_lock;
+	spinlock_t streams_lock; // Access to streams
 	struct ipu6_isys_stream streams[IPU4_ISYS_MAX_STREAMS];
 	int streams_ref_count[IPU4_ISYS_MAX_STREAMS];
 	void *fwcom;
 	unsigned int line_align;
 	u32 phy_termcal_val;
 	bool need_reset;
-	bool resetting; // Ambu HACK - true when resetting, protected by isys->mutex 
+
+	// Ambu HACK - true when resetting, protected by isys->mutex
+	bool resetting;
 	bool icache_prefetch;
 	bool csi2_cse_ipc_not_supported;
 	unsigned int ref_count;
 	unsigned int stream_opened;
 
-	struct mutex mutex;
-	struct mutex stream_mutex;
+	struct mutex mutex; // isys video open/release operations
+	struct mutex stream_mutex; // Stream start stop
 
 	struct ipu6_isys_pdata *pdata;
 
@@ -178,6 +180,6 @@ void isys_setup_hw(struct ipu6_isys *isys);
 irqreturn_t isys_isr(struct ipu6_bus_device *adev);
 void update_watermark_setting(struct ipu6_isys *isys);
 
-void ipu6_isys_wait_not_resetting(struct ipu6_isys *isys, const char* context);
+void ipu6_isys_wait_not_resetting(struct ipu6_isys *isys, const char *context);
 
 #endif /* IPU6_ISYS_H */
