@@ -1,4 +1,3 @@
-import time
 import ambu_test_library as atl
 
 def get_scope_by_id(scope_id):
