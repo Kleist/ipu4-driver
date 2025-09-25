@@ -24,8 +24,8 @@ def test_for_sysrq_help(target):
     Target seems to get keypresses for sysrq commands, most of them result
     in HELP message printed, but some actually do stuff (like reboot the device)
 
-    The intention with this test is to prevent that we detect if we accidentally
-    trigger sysrq commands in tests.
+    The intention with this test is to detect if we accidentally trigger sysrq
+    commands in tests.
 
     [Ref]: EMB-2181
     """
