@@ -36,6 +36,7 @@ checkpatch:
 		--no-tree \
 		--quiet \
 		--file \
+		--ignore LINUX_VERSION_CODE \
 		--max-line-length=80 \
 		--strict \
 		--color=always \
