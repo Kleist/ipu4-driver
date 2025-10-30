@@ -558,8 +558,7 @@ void ipu6_isys_csi2_sof_event_by_stream(struct ipu6_isys_stream *stream)
 int ipu6_isys_csi2_get_remote_desc(u32 source_stream,
 				   struct ipu6_isys_csi2 *csi2,
 				   struct media_entity *source_entity,
-				   struct v4l2_mbus_frame_desc_entry *entry,
-				   int *nr_queues)
+				   struct v4l2_mbus_frame_desc_entry *entry)
 {
 	struct v4l2_mbus_frame_desc_entry *desc_entry = NULL;
 	struct device *dev = &csi2->isys->adev->auxdev.dev;
@@ -567,7 +566,6 @@ int ipu6_isys_csi2_get_remote_desc(u32 source_stream,
 	struct v4l2_subdev *source;
 	struct media_pad *pad;
 	unsigned int i;
-	int count = 0;
 	int ret;
 
 	source = media_entity_to_v4l2_subdev(source_entity);
@@ -606,12 +604,7 @@ int ipu6_isys_csi2_get_remote_desc(u32 source_stream,
 	}
 
 	*entry = *desc_entry;
-	for (i = 0; i < desc.num_entries; i++) {
-		if (entry->bus.csi2.vc == desc.entry[i].bus.csi2.vc)
-			count++;
-	}
 
-	*nr_queues = count;
 	return 0;
 }
 

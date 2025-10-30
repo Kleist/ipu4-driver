@@ -1,13 +1,26 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2013 - 2023 Intel Corporation
+ * Copyright (C) 2013--2024 Intel Corporation
  */
-
-#include <media/videobuf2-dma-contig.h>
+#include <linux/atomic.h>
+#include <linux/bug.h>
 #include <linux/delay.h>
-#include <linux/pm_runtime.h>
+#include <linux/device.h>
+#include <linux/list.h>
+#include <linux/lockdep.h>
+#include <linux/mutex.h>
+#include <linux/spinlock.h>
+#include <linux/types.h>
 
+#include <media/media-entity.h>
+#include <media/v4l2-subdev.h>
+#include <media/videobuf2-dma-contig.h>
+#include <media/videobuf2-v4l2.h>
+
+#include "ipu6-bus.h"
+#include "ipu6-fw-isys.h"
 #include "ipu6-isys.h"
+#include "ipu6-isys-video.h"
 
 static int queue_setup(struct vb2_queue *q, unsigned int *num_buffers,
 		       unsigned int *num_planes, unsigned int sizes[],
@@ -15,15 +28,19 @@ static int queue_setup(struct vb2_queue *q, unsigned int *num_buffers,
 {
 	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(q);
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
-	u32 size;
+	struct device *dev = &av->isys->adev->auxdev.dev;
+	u32 size = ipu6_isys_get_data_size(av);
 
 	/* num_planes == 0: we're being called through VIDIOC_REQBUFS */
-	if (!*num_planes)
-		*num_planes = 1;
+	if (!*num_planes) {
+		sizes[0] = size;
+	} else if (sizes[0] < size) {
+		dev_dbg(dev, "%s: queue setup: size %u < %u\n",
+			av->vdev.name, sizes[0], size);
+		return -EINVAL;
+	}
 
-	size = av->pix.sizeimage;
-	sizes[0] = size;
-	alloc_devs[0] = aq->dev;
+	*num_planes = 1;
 
 	return 0;
 }
@@ -33,17 +50,17 @@ static int ipu6_isys_buf_prepare(struct vb2_buffer *vb)
 	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(vb->vb2_queue);
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
 	struct device *dev = &av->isys->adev->auxdev.dev;
+	u32 bytesperline = ipu6_isys_get_bytes_per_line(av);
+	u32 height = ipu6_isys_get_frame_height(av);
+	u32 size = ipu6_isys_get_data_size(av);
 
 	dev_dbg(dev, "buffer: %s: configured size %u, buffer size %lu\n",
-		av->vdev.name, av->pix.sizeimage,
-		vb2_plane_size(vb, 0));
+		av->vdev.name, size, vb2_plane_size(vb, 0));
 
-	if (av->pix.sizeimage > vb2_plane_size(vb, 0))
+	if (size > vb2_plane_size(vb, 0))
 		return -EINVAL;
 
-	vb2_set_plane_payload(vb, 0, av->pix.bytesperline *
-			      av->pix.height);
-	vb->planes[0].data_offset = 0;
+	vb2_set_plane_payload(vb, 0, bytesperline * height);
 
 	return 0;
 }
@@ -123,9 +140,6 @@ void ipu6_isys_buffer_list_queue(struct ipu6_isys_buffer_list *bl,
 		struct ipu6_isys_queue *aq =
 			vb2_queue_to_isys_queue(vb->vb2_queue);
 		struct device *dev;
-
-		if (WARN_ON_ONCE(ib->type != IPU6_ISYS_VIDEO_BUFFER))
-			continue;
 
 		av = ipu6_isys_queue_to_video(aq);
 		dev = &av->isys->adev->auxdev.dev;
@@ -308,9 +322,6 @@ ipu6_isys_buf_to_fw_frame_buf(struct ipu4_fw_isys_frame_buff_set_abi *set,
 	list_for_each_entry(ib, &bl->head, head) {
 		struct vb2_buffer *vb = ipu6_isys_buffer_to_vb2_buffer(ib);
 
-		if (WARN_ON_ONCE(ib->type != IPU6_ISYS_VIDEO_BUFFER))
-			continue;
-
 		ipu6_isys_buf_to_fw_frame_buf_pin(vb, set);
 	}
 }
@@ -353,7 +364,6 @@ static int ipu6_isys_stream_start(struct ipu6_isys_video *av,
 						 stream->nr_output_pins);
 		ipu6_isys_buffer_list_queue(bl, IPU6_ISYS_BUFFER_LIST_FL_ACTIVE,
 					    0);
-
 		ret = ipu6_fw_isys_complex_cmd(stream->isys,
 					       stream->stream_handle, buf,
 					       msg->dma_addr, sizeof(*buf),
@@ -365,10 +375,10 @@ static int ipu6_isys_stream_start(struct ipu6_isys_video *av,
 out_requeue:
 	if (bl && bl->nbufs)
 		ipu6_isys_buffer_list_queue(bl,
-					    (IPU6_ISYS_BUFFER_LIST_FL_INCOMING |
-					     error) ?
+					    IPU6_ISYS_BUFFER_LIST_FL_INCOMING |
+					    (error ?
 					    IPU6_ISYS_BUFFER_LIST_FL_SET_STATE :
-					    0, error ? VB2_BUF_STATE_ERROR :
+					     0), error ? VB2_BUF_STATE_ERROR :
 					    VB2_BUF_STATE_QUEUED);
 	flush_firmware_streamon_fail(stream);
 
@@ -379,7 +389,10 @@ static void buf_queue(struct vb2_buffer *vb)
 {
 	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(vb->vb2_queue);
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
-	struct ipu6_isys_buffer *ib = vb2_buffer_to_ipu6_isys_buffer(vb);
+	struct vb2_v4l2_buffer *vvb = to_vb2_v4l2_buffer(vb);
+	struct ipu6_isys_video_buffer *ivb =
+		vb2_buffer_to_ipu6_isys_video_buffer(vvb);
+	struct ipu6_isys_buffer *ib = &ivb->ib;
 	struct device *dev = &av->isys->adev->auxdev.dev;
 	struct media_pipeline *media_pipe =
 		media_entity_pipeline(&av->vdev.entity);
@@ -389,15 +402,12 @@ static void buf_queue(struct vb2_buffer *vb)
 	struct isys_fw_msgs *msg;
 	unsigned long flags;
 	dma_addr_t dma;
-	unsigned int i;
 	int ret;
 
 	dev_dbg(dev, "queue buffer %u for %s\n", vb->index, av->vdev.name);
 
-	for (i = 0; i < vb->num_planes; i++) {
-		dma = vb2_dma_contig_plane_dma_addr(vb, i);
-		dev_dbg(dev, "iova: plane %u iova %pad\n", i, &dma);
-	}
+	dma = vb2_dma_contig_plane_dma_addr(vb, 0);
+	dev_dbg(dev, "iova: iova %pad\n", &dma);
 
 	spin_lock_irqsave(&aq->lock, flags);
 	list_add(&ib->head, &aq->incoming);
@@ -423,7 +433,7 @@ static void buf_queue(struct vb2_buffer *vb)
 	 */
 	ret = buffer_list_get(stream, &bl);
 	if (ret < 0) {
-		dev_warn(dev, "No buffers available\n");
+		dev_dbg(dev, "No buffers available\n");
 		goto out;
 	}
 
@@ -434,9 +444,7 @@ static void buf_queue(struct vb2_buffer *vb)
 	}
 
 	buf = &msg->fw_msg.frame;
-
 	ipu6_isys_buf_to_fw_frame_buf(buf, stream, &bl);
-
 	ipu6_fw_isys_dump_frame_buff_set(dev, buf, stream->nr_output_pins);
 
 	if (!stream->streaming) {
@@ -472,7 +480,7 @@ static int ipu6_isys_link_fmt_validate(struct ipu6_isys_queue *aq)
 	struct media_pad *remote_pad =
 		media_pad_remote_pad_first(av->vdev.entity.pads);
 	struct v4l2_subdev *sd;
-	u32 r_stream;
+	u32 r_stream, code;
 	int ret;
 
 	if (!remote_pad)
@@ -490,23 +498,19 @@ static int ipu6_isys_link_fmt_validate(struct ipu6_isys_queue *aq)
 		return ret;
 	}
 
-	if (format.width != av->pix.width ||
-	    format.height != av->pix.height) {
+	if (format.width != ipu6_isys_get_frame_width(av) ||
+	    format.height != ipu6_isys_get_frame_height(av)) {
 		dev_dbg(dev, "wrong width or height %ux%u (%ux%u expected)\n",
-			av->pix.width, av->pix.height,
-			format.width, format.height);
+			ipu6_isys_get_frame_width(av),
+			ipu6_isys_get_frame_height(av), format.width,
+			format.height);
 		return -EINVAL;
 	}
 
-	if (format.field != av->pix.field) {
-		dev_dbg(dev, "wrong field value 0x%8.8x (0x%8.8x expected)\n",
-			av->pix.field, format.field);
-		return -EINVAL;
-	}
-
-	if (format.code != av->pfmt->code) {
+	code = ipu6_isys_get_isys_format(ipu6_isys_get_format(av), 0)->code;
+	if (format.code != code) {
 		dev_dbg(dev, "wrong mbus code 0x%8.8x (0x%8.8x expected)\n",
-			av->pfmt->code, format.code);
+			code, format.code);
 		return -EINVAL;
 	}
 
@@ -589,14 +593,16 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(q);
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
 	struct device *dev = &av->isys->adev->auxdev.dev;
+	const struct ipu6_isys_pixelformat *pfmt =
+		ipu6_isys_get_isys_format(ipu6_isys_get_format(av), 0);
 	struct ipu6_isys_buffer_list __bl, *bl = NULL;
 	struct ipu6_isys_stream *stream;
 	struct media_entity *source_entity = NULL;
 	int nr_queues, ret;
 
 	dev_dbg(dev, "stream: %s: width %u, height %u, css pixelformat %u\n",
-		av->vdev.name, av->pix.width, av->pix.height,
-		av->pfmt->css_pixelformat);
+		av->vdev.name, ipu6_isys_get_frame_width(av),
+		ipu6_isys_get_frame_height(av), pfmt->css_pixelformat);
 
 	ret = ipu6_isys_setup_video(av, &source_entity, &nr_queues);
 	if (ret < 0) {
@@ -628,9 +634,13 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 	stream->nr_streaming++;
 	dev_dbg(dev, "queue %u of %u\n", stream->nr_streaming,
 		stream->nr_queues);
-	list_add(&aq->node, &stream->queues);
 
+	list_add(&aq->node, &stream->queues);
 	ipu6_isys_set_csi2_streams_status(av, true);
+#ifdef IPU6 // Disabled for IPU4
+	ipu6_isys_configure_stream_watermark(av, true);
+	ipu6_isys_update_stream_watermark(av, true);
+#endif
 
 	if (stream->nr_streaming != stream->nr_queues)
 		goto out;
@@ -653,6 +663,9 @@ out:
 	return 0;
 
 out_stream_start:
+#ifdef IPU6 // Disabled for IPU4
+	ipu6_isys_update_stream_watermark(av, false);
+#endif
 	list_del(&aq->node);
 	stream->nr_streaming--;
 
@@ -779,16 +792,19 @@ static void stop_streaming(struct vb2_queue *q)
 	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(q);
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
 	struct ipu6_isys_stream *stream = av->stream;
-	struct ipu6_isys *isys = av->isys;
 
 	ipu6_isys_set_csi2_streams_status(av, false);
 
 	mutex_lock(&stream->mutex);
 
-	mutex_lock(&isys->stream_mutex);
+#ifdef IPU6 // Disabled for IPU4
+	ipu6_isys_update_stream_watermark(av, false);
+#endif
+
+	mutex_lock(&av->isys->stream_mutex);
 	if (stream->nr_streaming == stream->nr_queues && stream->streaming)
 		ipu6_isys_video_set_streaming(av, 0, NULL);
-	mutex_unlock(&isys->stream_mutex);
+	mutex_unlock(&av->isys->stream_mutex);
 
 	stream->nr_streaming--;
 	list_del(&aq->node);
@@ -799,7 +815,7 @@ static void stop_streaming(struct vb2_queue *q)
 
 	return_buffers(aq, VB2_BUF_STATE_ERROR);
 
-	ipu6_isys_fw_put(isys);
+	ipu6_isys_fw_put(av->isys);
 }
 
 static unsigned int
@@ -918,8 +934,8 @@ void ipu6_isys_queue_buf_ready(struct ipu6_isys_stream *stream,
 
 		if (info->pin.addr != addr) {
 			if (first)
-				dev_err(dev, "Unexpected buffer address 0x%x != 0x%llx\n",
-					info->pin.addr, addr);
+				dev_err(dev, "Unexpected buffer address %pad\n",
+					&addr);
 			first = false;
 			continue;
 		}
@@ -977,6 +993,9 @@ int ipu6_isys_queue_init(struct ipu6_isys_queue *aq)
 	aq->vbq.lock = &av->mutex;
 	aq->vbq.mem_ops = &vb2_dma_contig_memops;
 	aq->vbq.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+	aq->vbq.min_queued_buffers = 1;
+#endif
 	aq->vbq.timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 
 	ret = vb2_queue_init(&aq->vbq);

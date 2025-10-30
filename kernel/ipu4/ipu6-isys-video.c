@@ -1,23 +1,40 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2013 - 2023 Intel Corporation
+ * Copyright (C) 2013--2024 Intel Corporation
  */
 
+#include <linux/align.h>
+#include <linux/bits.h>
+#include <linux/bug.h>
+#include <linux/completion.h>
+#include <linux/container_of.h>
 #include <linux/delay.h>
-#include <linux/firmware.h>
+#include <linux/device.h>
+#include <linux/list.h>
+#include <linux/math64.h>
+#include <linux/minmax.h>
+#include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/pm_runtime.h>
-#include <linux/types.h>
+#include <linux/spinlock.h>
+#include <linux/string.h>
 
-#include <media/v4l2-device.h>
+#include <media/media-entity.h>
+#include <media/v4l2-ctrls.h>
+#include <media/v4l2-dev.h>
+#include <media/v4l2-fh.h>
 #include <media/v4l2-ioctl.h>
-#include <media/v4l2-mc.h>
+#include <media/v4l2-subdev.h>
+#include <media/videobuf2-v4l2.h>
 
+#include "ipu6.h"
 #include "ipu6-bus.h"
 #include "ipu6-cpd.h"
-#include "ipu6-fw-com.h"
+#include "ipu6-fw-isys.h"
 #include "ipu6-isys.h"
-#include "ipu6-platform-buttress-regs.h"
-#include "ipu4-platform-isys-csi2-reg.h"
+#include "ipu6-isys-csi2.h"
+#include "ipu6-isys-queue.h"
+#include "ipu6-isys-video.h"
 #include "ipu6-platform-regs.h"
 #include "ipu4-compat.h"
 
@@ -30,55 +47,65 @@ module_param(silent_reset_enable, bool, 0644);
 MODULE_PARM_DESC(silent_reset_enable, "perform a silent reset of existing streams when 'isys power cycle required' would otherwise be logged");
 
 const struct ipu6_isys_pixelformat ipu6_isys_pfmts[] = {
-	{V4L2_PIX_FMT_SBGGR12, 16, 12, MEDIA_BUS_FMT_SBGGR12_1X12,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW16},
-	{V4L2_PIX_FMT_SGBRG12, 16, 12, MEDIA_BUS_FMT_SGBRG12_1X12,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW16},
-	{V4L2_PIX_FMT_SGRBG12, 16, 12, MEDIA_BUS_FMT_SGRBG12_1X12,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW16},
-	{V4L2_PIX_FMT_SRGGB12, 16, 12, MEDIA_BUS_FMT_SRGGB12_1X12,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW16},
-	{V4L2_PIX_FMT_SBGGR10, 16, 10, MEDIA_BUS_FMT_SBGGR10_1X10,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW16},
-	{V4L2_PIX_FMT_SGBRG10, 16, 10, MEDIA_BUS_FMT_SGBRG10_1X10,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW16},
-	{V4L2_PIX_FMT_SGRBG10, 16, 10, MEDIA_BUS_FMT_SGRBG10_1X10,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW16},
-	{V4L2_PIX_FMT_SRGGB10, 16, 10, MEDIA_BUS_FMT_SRGGB10_1X10,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW16},
-	{V4L2_PIX_FMT_SBGGR8, 8, 8, MEDIA_BUS_FMT_SBGGR8_1X8,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW8},
-	{V4L2_PIX_FMT_SGBRG8, 8, 8, MEDIA_BUS_FMT_SGBRG8_1X8,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW8},
-	{V4L2_PIX_FMT_SGRBG8, 8, 8, MEDIA_BUS_FMT_SGRBG8_1X8,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW8},
-	{V4L2_PIX_FMT_SRGGB8, 8, 8, MEDIA_BUS_FMT_SRGGB8_1X8,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW8},
-	{V4L2_PIX_FMT_SBGGR12P, 12, 12, MEDIA_BUS_FMT_SBGGR12_1X12,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW12},
-	{V4L2_PIX_FMT_SGBRG12P, 12, 12, MEDIA_BUS_FMT_SGBRG12_1X12,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW12},
-	{V4L2_PIX_FMT_SGRBG12P, 12, 12, MEDIA_BUS_FMT_SGRBG12_1X12,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW12},
-	{V4L2_PIX_FMT_SRGGB12P, 12, 12, MEDIA_BUS_FMT_SRGGB12_1X12,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW12},
-	{V4L2_PIX_FMT_SBGGR10P, 10, 10, MEDIA_BUS_FMT_SBGGR10_1X10,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW10},
-	{V4L2_PIX_FMT_SGBRG10P, 10, 10, MEDIA_BUS_FMT_SGBRG10_1X10,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW10},
-	{V4L2_PIX_FMT_SGRBG10P, 10, 10, MEDIA_BUS_FMT_SGRBG10_1X10,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW10},
-	{V4L2_PIX_FMT_SRGGB10P, 10, 10, MEDIA_BUS_FMT_SRGGB10_1X10,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RAW10},
-	{V4L2_PIX_FMT_UYVY, 16, 16, MEDIA_BUS_FMT_UYVY8_1X16,
-	 IPU6_FW_ISYS_FRAME_FORMAT_UYVY},
-	{V4L2_PIX_FMT_YUYV, 16, 16, MEDIA_BUS_FMT_YUYV8_1X16,
-	 IPU6_FW_ISYS_FRAME_FORMAT_YUYV},
-	{V4L2_PIX_FMT_RGB565, 16, 16, MEDIA_BUS_FMT_RGB565_1X16,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RGB565},
-	{V4L2_PIX_FMT_BGR24, 24, 24, MEDIA_BUS_FMT_RGB888_1X24,
-	 IPU6_FW_ISYS_FRAME_FORMAT_RGBA888},
-	{V4L2_PIX_FMT_XBGR32, 32, 24, MEDIA_BUS_FMT_RGB888_1X24,
+	{ V4L2_PIX_FMT_SBGGR12, 16, 12, MEDIA_BUS_FMT_SBGGR12_1X12,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW16 },
+	{ V4L2_PIX_FMT_SGBRG12, 16, 12, MEDIA_BUS_FMT_SGBRG12_1X12,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW16 },
+	{ V4L2_PIX_FMT_SGRBG12, 16, 12, MEDIA_BUS_FMT_SGRBG12_1X12,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW16 },
+	{ V4L2_PIX_FMT_SRGGB12, 16, 12, MEDIA_BUS_FMT_SRGGB12_1X12,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW16 },
+	{ V4L2_PIX_FMT_SBGGR10, 16, 10, MEDIA_BUS_FMT_SBGGR10_1X10,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW16 },
+	{ V4L2_PIX_FMT_SGBRG10, 16, 10, MEDIA_BUS_FMT_SGBRG10_1X10,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW16 },
+	{ V4L2_PIX_FMT_SGRBG10, 16, 10, MEDIA_BUS_FMT_SGRBG10_1X10,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW16 },
+	{ V4L2_PIX_FMT_SRGGB10, 16, 10, MEDIA_BUS_FMT_SRGGB10_1X10,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW16 },
+	{ V4L2_PIX_FMT_SBGGR8, 8, 8, MEDIA_BUS_FMT_SBGGR8_1X8,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW8 },
+	{ V4L2_PIX_FMT_SGBRG8, 8, 8, MEDIA_BUS_FMT_SGBRG8_1X8,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW8 },
+	{ V4L2_PIX_FMT_SGRBG8, 8, 8, MEDIA_BUS_FMT_SGRBG8_1X8,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW8 },
+	{ V4L2_PIX_FMT_SRGGB8, 8, 8, MEDIA_BUS_FMT_SRGGB8_1X8,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW8 },
+	{ V4L2_PIX_FMT_SBGGR12P, 12, 12, MEDIA_BUS_FMT_SBGGR12_1X12,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW12 },
+	{ V4L2_PIX_FMT_SGBRG12P, 12, 12, MEDIA_BUS_FMT_SGBRG12_1X12,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW12 },
+	{ V4L2_PIX_FMT_SGRBG12P, 12, 12, MEDIA_BUS_FMT_SGRBG12_1X12,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW12 },
+	{ V4L2_PIX_FMT_SRGGB12P, 12, 12, MEDIA_BUS_FMT_SRGGB12_1X12,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW12 },
+	{ V4L2_PIX_FMT_SBGGR10P, 10, 10, MEDIA_BUS_FMT_SBGGR10_1X10,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW10 },
+	{ V4L2_PIX_FMT_SGBRG10P, 10, 10, MEDIA_BUS_FMT_SGBRG10_1X10,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW10 },
+	{ V4L2_PIX_FMT_SGRBG10P, 10, 10, MEDIA_BUS_FMT_SGRBG10_1X10,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW10 },
+	{ V4L2_PIX_FMT_SRGGB10P, 10, 10, MEDIA_BUS_FMT_SRGGB10_1X10,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW10 },
+	{ V4L2_PIX_FMT_UYVY, 16, 16, MEDIA_BUS_FMT_UYVY8_1X16,
+	  IPU6_FW_ISYS_FRAME_FORMAT_UYVY},
+	{ V4L2_PIX_FMT_YUYV, 16, 16, MEDIA_BUS_FMT_YUYV8_1X16,
+	  IPU6_FW_ISYS_FRAME_FORMAT_YUYV},
+	{ V4L2_PIX_FMT_RGB565, 16, 16, MEDIA_BUS_FMT_RGB565_1X16,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RGB565 },
+	{ V4L2_PIX_FMT_BGR24, 24, 24, MEDIA_BUS_FMT_RGB888_1X24,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RGBA888 },
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+	{ V4L2_META_FMT_GENERIC_8, 8, 8, MEDIA_BUS_FMT_META_8,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW8, true },
+	{ V4L2_META_FMT_GENERIC_CSI2_10, 10, 10, MEDIA_BUS_FMT_META_10,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW10, true },
+	{ V4L2_META_FMT_GENERIC_CSI2_12, 12, 12, MEDIA_BUS_FMT_META_12,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW12, true },
+	{ V4L2_META_FMT_GENERIC_CSI2_16, 16, 16, MEDIA_BUS_FMT_META_16,
+	  IPU6_FW_ISYS_FRAME_FORMAT_RAW16, true },
+#endif
+	{ V4L2_PIX_FMT_XBGR32, 32, 24, MEDIA_BUS_FMT_RGB888_1X24,
 	 IPU6_FW_ISYS_FRAME_FORMAT_RGBA888},
 };
 
@@ -149,28 +176,35 @@ static int video_open(struct file *file)
 	return ret;
 }
 
-static int video_release(struct file *file)
+const struct ipu6_isys_pixelformat *
+ipu6_isys_get_isys_format(u32 pixelformat, u32 type)
 {
-	return vb2_fop_release(file);
-}
-
-static const struct ipu6_isys_pixelformat *
-ipu6_isys_get_pixelformat(u32 pixelformat)
-{
+	const struct ipu6_isys_pixelformat *default_pfmt = NULL;
 	unsigned int i;
 
 	for (i = 0; i < ARRAY_SIZE(ipu6_isys_pfmts); i++) {
 		const struct ipu6_isys_pixelformat *pfmt = &ipu6_isys_pfmts[i];
 
-		if (pfmt->pixelformat == pixelformat)
-			return pfmt;
+		if (type && ((!pfmt->is_meta &&
+			      type != V4L2_BUF_TYPE_VIDEO_CAPTURE) ||
+			     (pfmt->is_meta &&
+			      type != V4L2_BUF_TYPE_META_CAPTURE)))
+			continue;
+
+		if (!default_pfmt)
+			default_pfmt = pfmt;
+
+		if (pfmt->pixelformat != pixelformat)
+			continue;
+
+		return pfmt;
 	}
 
-	return &ipu6_isys_pfmts[0];
+	return default_pfmt;
 }
 
-int ipu6_isys_vidioc_querycap(struct file *file, void *fh,
-			      struct v4l2_capability *cap)
+static int ipu6_isys_vidioc_querycap(struct file *file, void *fh,
+				     struct v4l2_capability *cap)
 {
 	struct ipu6_isys_video *av = video_drvdata(file);
 
@@ -180,31 +214,30 @@ int ipu6_isys_vidioc_querycap(struct file *file, void *fh,
 	return 0;
 }
 
-int ipu6_isys_vidioc_enum_fmt(struct file *file, void *fh,
-			      struct v4l2_fmtdesc *f)
+static int ipu6_isys_vidioc_enum_fmt(struct file *file, void *fh,
+				     struct v4l2_fmtdesc *f)
 {
-	unsigned int i, found = 0;
+	unsigned int i, num_found;
 
-	if (f->index >= ARRAY_SIZE(ipu6_isys_pfmts))
-		return -EINVAL;
-
-	if (!f->mbus_code) {
-		f->flags = 0;
-		f->pixelformat = ipu6_isys_pfmts[f->index].pixelformat;
-		f->mbus_code = ipu6_isys_pfmts[f->index].code;
-		return 0;
-	}
-
-	for (i = 0; i < ARRAY_SIZE(ipu6_isys_pfmts); i++) {
-		if (f->mbus_code != ipu6_isys_pfmts[i].code)
+	for (i = 0, num_found = 0; i < ARRAY_SIZE(ipu6_isys_pfmts); i++) {
+		if ((ipu6_isys_pfmts[i].is_meta &&
+		     f->type != V4L2_BUF_TYPE_META_CAPTURE) ||
+		    (!ipu6_isys_pfmts[i].is_meta &&
+		     f->type != V4L2_BUF_TYPE_VIDEO_CAPTURE))
 			continue;
 
-		if (f->index == found) {
-			f->flags = 0;
-			f->pixelformat = ipu6_isys_pfmts[i].pixelformat;
-			return 0;
+		if (f->mbus_code && f->mbus_code != ipu6_isys_pfmts[i].code)
+			continue;
+
+		if (num_found < f->index) {
+			num_found++;
+			continue;
 		}
-		found++;
+
+		f->flags = 0;
+		f->pixelformat = ipu6_isys_pfmts[i].pixelformat;
+
+		return 0;
 	}
 
 	return -EINVAL;
@@ -213,54 +246,68 @@ int ipu6_isys_vidioc_enum_fmt(struct file *file, void *fh,
 static int ipu6_isys_vidioc_enum_framesizes(struct file *file, void *fh,
 					    struct v4l2_frmsizeenum *fsize)
 {
+	unsigned int i;
+
 	if (fsize->index > 0)
 		return -EINVAL;
 
-	fsize->type = V4L2_FRMSIZE_TYPE_CONTINUOUS;
-	fsize->stepwise.min_width = IPU6_ISYS_MIN_WIDTH;
-	fsize->stepwise.max_width = IPU6_ISYS_MAX_WIDTH;
-	fsize->stepwise.min_height = IPU6_ISYS_MIN_HEIGHT;
-	fsize->stepwise.max_height = IPU6_ISYS_MAX_HEIGHT;
-	fsize->stepwise.step_width = 2;
-	fsize->stepwise.step_height = 2;
+	for (i = 0; i < ARRAY_SIZE(ipu6_isys_pfmts); i++) {
+		if (fsize->pixel_format != ipu6_isys_pfmts[i].pixelformat)
+			continue;
 
-	return 0;
+		fsize->type = V4L2_FRMSIZE_TYPE_STEPWISE;
+		fsize->stepwise.min_width = IPU6_ISYS_MIN_WIDTH;
+		fsize->stepwise.max_width = IPU6_ISYS_MAX_WIDTH;
+		fsize->stepwise.min_height = IPU6_ISYS_MIN_HEIGHT;
+		fsize->stepwise.max_height = IPU6_ISYS_MAX_HEIGHT;
+		fsize->stepwise.step_width = 2;
+		fsize->stepwise.step_height = 2;
+
+		return 0;
+	}
+
+	return -EINVAL;
 }
 
-static int vidioc_g_fmt_vid_cap(struct file *file, void *fh,
-				struct v4l2_format *fmt)
+static int ipu6_isys_vidioc_g_fmt_vid_cap(struct file *file, void *fh,
+				      struct v4l2_format *f)
 {
 	struct ipu6_isys_video *av = video_drvdata(file);
 
-	fmt->fmt.pix = av->pix;
+	f->fmt.pix = av->pix_fmt;
 
 	return 0;
 }
 
-static const struct ipu6_isys_pixelformat *
-ipu6_isys_video_try_fmt_vid(struct ipu6_isys_video *av,
-			    struct v4l2_pix_format *pix)
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+static int ipu6_isys_vidioc_g_fmt_meta_cap(struct file *file, void *fh,
+					   struct v4l2_format *f)
+{
+	struct ipu6_isys_video *av = video_drvdata(file);
+
+	f->fmt.meta = av->meta_fmt;
+
+	return 0;
+}
+#endif
+
+static void ipu6_isys_try_fmt_cap(struct ipu6_isys_video *av, u32 type,
+				  u32 *format, u32 *width, u32 *height,
+				  u32 *bytesperline, u32 *sizeimage)
 {
 	const struct ipu6_isys_pixelformat *pfmt =
-		ipu6_isys_get_pixelformat(pix->pixelformat);
+		ipu6_isys_get_isys_format(*format, type);
 
-	pix->pixelformat = pfmt->pixelformat;
-
-	pix->width = clamp(pix->width, IPU6_ISYS_MIN_WIDTH,
-			   IPU6_ISYS_MAX_WIDTH);
-	pix->height = clamp(pix->height, IPU6_ISYS_MIN_HEIGHT,
-			    IPU6_ISYS_MAX_HEIGHT);
+	*format = pfmt->pixelformat;
+	*width = clamp(*width, IPU6_ISYS_MIN_WIDTH, IPU6_ISYS_MAX_WIDTH);
+	*height = clamp(*height, IPU6_ISYS_MIN_HEIGHT, IPU6_ISYS_MAX_HEIGHT);
 
 	if (pfmt->bpp != pfmt->bpp_packed)
-		pix->bytesperline =
-			pix->width * DIV_ROUND_UP(pfmt->bpp, BITS_PER_BYTE);
+		*bytesperline = *width * DIV_ROUND_UP(pfmt->bpp, BITS_PER_BYTE);
 	else
-		pix->bytesperline =
-			DIV_ROUND_UP((unsigned int)pix->width * pfmt->bpp,
-				     BITS_PER_BYTE);
+		*bytesperline = DIV_ROUND_UP(*width * pfmt->bpp, BITS_PER_BYTE);
 
-	pix->bytesperline = ALIGN(pix->bytesperline,
-				  av->isys->line_align);
+	*bytesperline = ALIGN(*bytesperline, av->isys->line_align);
 
 	/*
 	 * (height + 1) * bytesperline due to a hardware issue: the DMA unit
@@ -271,47 +318,118 @@ ipu6_isys_video_try_fmt_vid(struct ipu6_isys_video *av,
 	 * resolution it gives a bigger number. Use larger one to avoid
 	 * memory corruption.
 	 */
-	pix->sizeimage =
-		max(max(pix->sizeimage,
-			pix->bytesperline * pix->height +
-			max(pix->bytesperline,
-			    av->isys->pdata->ipdata->isys_dma_overshoot)), 1U);
-
-	pix->field = V4L2_FIELD_NONE;
-
-	pix->colorspace = V4L2_COLORSPACE_RAW;
-	pix->ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
-	pix->quantization = V4L2_QUANTIZATION_DEFAULT;
-	pix->xfer_func = V4L2_XFER_FUNC_DEFAULT;
-
-	return pfmt;
+	*sizeimage = *bytesperline * *height +
+		max(*bytesperline,
+		    av->isys->pdata->ipdata->isys_dma_overshoot);
 }
 
-static int vidioc_s_fmt_vid_cap(struct file *file, void *fh,
-				struct v4l2_format *f)
+static void __ipu6_isys_vidioc_try_fmt_vid_cap(struct ipu6_isys_video *av,
+					       struct v4l2_format *f)
+{
+	ipu6_isys_try_fmt_cap(av, f->type, &f->fmt.pix.pixelformat,
+			      &f->fmt.pix.width, &f->fmt.pix.height,
+			      &f->fmt.pix.bytesperline, &f->fmt.pix.sizeimage);
+
+	f->fmt.pix.field = V4L2_FIELD_NONE;
+	f->fmt.pix.colorspace = V4L2_COLORSPACE_RAW;
+	f->fmt.pix.ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
+	f->fmt.pix.quantization = V4L2_QUANTIZATION_DEFAULT;
+	f->fmt.pix.xfer_func = V4L2_XFER_FUNC_DEFAULT;
+}
+
+static int ipu6_isys_vidioc_try_fmt_vid_cap(struct file *file, void *fh,
+					    struct v4l2_format *f)
 {
 	struct ipu6_isys_video *av = video_drvdata(file);
 
-	if (vb2_is_busy(&av->aq.vbq)) {
-		dev_err(&av->vdev.dev, "%s called while av->aq.vbq.streaming\n",
-			__func__);
+	if (vb2_is_busy(&av->aq.vbq))
 		return -EBUSY;
-	}
 
-	av->pfmt = ipu6_isys_video_try_fmt_vid(av, &f->fmt.pix);
-	av->pix = f->fmt.pix;
+	__ipu6_isys_vidioc_try_fmt_vid_cap(av, f);
 
 	return 0;
 }
 
-static int vidioc_try_fmt_vid_cap(struct file *file, void *fh,
-				  struct v4l2_format *f)
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+static int __ipu6_isys_vidioc_try_fmt_meta_cap(struct ipu6_isys_video *av,
+					       struct v4l2_format *f)
+{
+	ipu6_isys_try_fmt_cap(av, f->type, &f->fmt.meta.dataformat,
+			      &f->fmt.meta.width, &f->fmt.meta.height,
+			      &f->fmt.meta.bytesperline,
+			      &f->fmt.meta.buffersize);
+
+	return 0;
+}
+
+static int ipu6_isys_vidioc_try_fmt_meta_cap(struct file *file, void *fh,
+					     struct v4l2_format *f)
 {
 	struct ipu6_isys_video *av = video_drvdata(file);
 
-	ipu6_isys_video_try_fmt_vid(av, &f->fmt.pix);
+	__ipu6_isys_vidioc_try_fmt_meta_cap(av, f);
 
 	return 0;
+}
+#endif
+
+static int ipu6_isys_vidioc_s_fmt_vid_cap(struct file *file, void *fh,
+				      struct v4l2_format *f)
+{
+	struct ipu6_isys_video *av = video_drvdata(file);
+
+	ipu6_isys_vidioc_try_fmt_vid_cap(file, fh, f);
+	av->pix_fmt = f->fmt.pix;
+
+	return 0;
+}
+
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+static int ipu6_isys_vidioc_s_fmt_meta_cap(struct file *file, void *fh,
+					   struct v4l2_format *f)
+{
+	struct ipu6_isys_video *av = video_drvdata(file);
+
+	if (vb2_is_busy(&av->aq.vbq))
+		return -EBUSY;
+
+	ipu6_isys_vidioc_try_fmt_meta_cap(file, fh, f);
+	av->meta_fmt = f->fmt.meta;
+
+	return 0;
+}
+#endif
+
+static int ipu6_isys_vidioc_reqbufs(struct file *file, void *priv,
+				    struct v4l2_requestbuffers *p)
+{
+	struct ipu6_isys_video *av = video_drvdata(file);
+	int ret;
+
+	av->aq.vbq.is_multiplanar = V4L2_TYPE_IS_MULTIPLANAR(p->type);
+	av->aq.vbq.is_output = V4L2_TYPE_IS_OUTPUT(p->type);
+
+	ret = vb2_queue_change_type(&av->aq.vbq, p->type);
+	if (ret)
+		return ret;
+
+	return vb2_ioctl_reqbufs(file, priv, p);
+}
+
+static int ipu6_isys_vidioc_create_bufs(struct file *file, void *priv,
+					struct v4l2_create_buffers *p)
+{
+	struct ipu6_isys_video *av = video_drvdata(file);
+	int ret;
+
+	av->aq.vbq.is_multiplanar = V4L2_TYPE_IS_MULTIPLANAR(p->format.type);
+	av->aq.vbq.is_output = V4L2_TYPE_IS_OUTPUT(p->format.type);
+
+	ret = vb2_queue_change_type(&av->aq.vbq, p->format.type);
+	if (ret)
+		return ret;
+
+	return vb2_ioctl_create_bufs(file, priv, p);
 }
 
 static int link_validate(struct media_link *link)
@@ -323,7 +441,7 @@ static int link_validate(struct media_link *link)
 	struct v4l2_subdev *s_sd;
 	struct v4l2_mbus_framefmt *s_fmt;
 	struct media_pad *s_pad;
-	u32 s_stream;
+	u32 s_stream, code;
 	int ret = -EPIPE;
 
 	if (!link->source->entity)
@@ -349,11 +467,15 @@ static int link_validate(struct media_link *link)
 		goto unlock;
 	}
 
-	if (s_fmt->width != av->pix.width ||
-	    s_fmt->height != av->pix.height || s_fmt->code != av->pfmt->code) {
-		dev_err(dev, "format mismatch %dx%d,%x != %dx%d,%x\n",
+	code = ipu6_isys_get_isys_format(ipu6_isys_get_format(av), 0)->code;
+
+	if (s_fmt->width != ipu6_isys_get_frame_width(av) ||
+	    s_fmt->height != ipu6_isys_get_frame_height(av) ||
+	    s_fmt->code != code) {
+		dev_dbg(dev, "format mismatch %dx%d,%x != %dx%d,%x\n",
 			s_fmt->width, s_fmt->height, s_fmt->code,
-			av->pix.width, av->pix.height, av->pfmt->code);
+			ipu6_isys_get_frame_width(av),
+			ipu6_isys_get_frame_height(av), code);
 		goto unlock;
 	}
 
@@ -394,6 +516,8 @@ static int ipu6_isys_fw_pin_cfg(struct ipu6_isys_video *av,
 	struct ipu6_isys_stream *stream = av->stream;
 	struct ipu6_isys_queue *aq = &av->aq;
 	struct v4l2_mbus_framefmt fmt;
+	const struct ipu6_isys_pixelformat *pfmt =
+		ipu6_isys_get_isys_format(ipu6_isys_get_format(av), 0);
 	struct v4l2_rect v4l2_crop;
 	struct ipu6_isys *isys = av->isys;
 	struct device *dev = &isys->adev->auxdev.dev;
@@ -421,12 +545,18 @@ static int ipu6_isys_fw_pin_cfg(struct ipu6_isys_video *av,
 	input_pin->input_res.width = fmt.width;
 	input_pin->input_res.height = fmt.height;
 	input_pin->dt = av->dt;
-	input_pin->bits_per_pix = av->pfmt->bpp_packed;
+	input_pin->bits_per_pix = pfmt->bpp_packed;
 	input_pin->mapped_dt = 0x40; /* invalid mipi data type */
-	input_pin->mipi_store_mode = av->pfmt->bpp == av->pfmt->bpp_packed ?
+#ifdef IPU6 // Disabled for IPU4
+	input_pin->mipi_decompression = 0;
+	input_pin->capture_mode = IPU6_FW_ISYS_CAPTURE_MODE_REGULAR;
+#endif
+	input_pin->mipi_store_mode = pfmt->bpp == pfmt->bpp_packed ?
 		IPU6_FW_ISYS_MIPI_STORE_MODE_DISCARD_LONG_HEADER :
 		IPU6_FW_ISYS_MIPI_STORE_MODE_NORMAL;
-
+#ifdef IPU6 // Disabled for IPU4
+	input_pin->crop_first_and_last_lines = v4l2_crop.top & 1;
+#endif
 	output_pins = cfg->nof_output_pins++;
 	aq->fw_output = output_pins;
 	stream->output_pins[output_pins].pin_ready = ipu6_isys_queue_buf_ready;
@@ -434,17 +564,29 @@ static int ipu6_isys_fw_pin_cfg(struct ipu6_isys_video *av,
 
 	output_pin = &cfg->output_pins[output_pins];
 	output_pin->input_pin_id = input_pins;
-	output_pin->output_res.width = av->pix.width;
-	output_pin->output_res.height = av->pix.height;
+	output_pin->output_res.width = ipu6_isys_get_frame_width(av);
+	output_pin->output_res.height = ipu6_isys_get_frame_height(av);
 
-	output_pin->stride = av->pix.bytesperline;
-	if (av->pfmt->bpp != av->pfmt->bpp_packed)
+	output_pin->stride = ipu6_isys_get_bytes_per_line(av);
+	if (pfmt->bpp != pfmt->bpp_packed)
 		output_pin->pt = IPU6_FW_ISYS_PIN_TYPE_RAW_SOC;
 	else
 		output_pin->pt = IPU6_FW_ISYS_PIN_TYPE_MIPI;
-	output_pin->ft = av->pfmt->css_pixelformat;
+	output_pin->ft = pfmt->css_pixelformat;
 	output_pin->send_irq = 1;
+#ifdef IPU6 // Disabled for IPU4
+	memset(output_pin->ts_offsets, 0, sizeof(output_pin->ts_offsets));
+	output_pin->s2m_pixel_soc_pixel_remapping =
+		S2M_PIXEL_SOC_PIXEL_REMAPPING_FLAG_NO_REMAPPING;
+	output_pin->csi_be_soc_pixel_remapping =
+		CSI_BE_SOC_PIXEL_REMAPPING_FLAG_NO_REMAPPING;
 
+	output_pin->snoopable = true;
+	output_pin->error_handling_enable = false;
+	output_pin->sensor_type = isys->sensor_type++;
+	if (isys->sensor_type > isys->pdata->ipdata->sensor_type_end)
+		isys->sensor_type = isys->pdata->ipdata->sensor_type_start;
+#endif
 	/* Though payload_buf_size was added for compression, set sane value for
 	 * payload_buf_size, just in case...
 	 */
@@ -474,13 +616,16 @@ static int start_stream_firmware(struct ipu6_isys_video *av,
 	stream_cfg->src = stream->stream_source;
 	stream_cfg->vc = stream->vc;
 	stream_cfg->isl_use = 0;
+#ifdef IPU6 // Disabled for IPU4
+	stream_cfg->sensor_type = IPU6_FW_ISYS_SENSOR_MODE_NORMAL;
+#endif
 
 	list_for_each_entry(aq, &stream->queues, node) {
 		struct ipu6_isys_video *__av = ipu6_isys_queue_to_video(aq);
 
 		ret = ipu6_isys_fw_pin_cfg(__av, stream_cfg);
 		if (ret < 0) {
-			ipu6_put_fw_msg_buf(av->isys, msg);
+			ipu6_put_fw_msg_buf(av->isys, (u64)stream_cfg);
 			return ret;
 		}
 	}
@@ -497,7 +642,7 @@ static int start_stream_firmware(struct ipu6_isys_video *av,
 				       IPU6_FW_ISYS_SEND_TYPE_STREAM_OPEN);
 	if (ret < 0) {
 		dev_err(dev, "can't open stream (%d)\n", ret);
-		ipu6_put_fw_msg_buf(av->isys, msg);
+		ipu6_put_fw_msg_buf(av->isys, (u64)stream_cfg);
 		return ret;
 	}
 
@@ -506,7 +651,7 @@ static int start_stream_firmware(struct ipu6_isys_video *av,
 	tout = wait_for_completion_timeout(&stream->stream_open_completion,
 					   IPU6_FW_CALL_TIMEOUT_JIFFIES);
 
-	ipu6_put_fw_msg_buf(av->isys, msg);
+	ipu6_put_fw_msg_buf(av->isys, (u64)stream_cfg);
 
 	if (!tout) {
 		dev_err(dev, "stream open time out\n");
@@ -678,6 +823,109 @@ int ipu6_isys_video_prepare_stream(struct ipu6_isys_video *av,
 	return 0;
 }
 
+#ifdef IPU6 // Disabled for IPU4
+void ipu6_isys_configure_stream_watermark(struct ipu6_isys_video *av,
+					  bool state)
+{
+	struct ipu6_isys *isys = av->isys;
+	struct ipu6_isys_csi2 *csi2 = NULL;
+	struct isys_iwake_watermark *iwake_watermark = &isys->iwake_watermark;
+	struct device *dev = &isys->adev->auxdev.dev;
+	struct v4l2_mbus_framefmt format;
+	struct v4l2_subdev *esd;
+	struct v4l2_control hb = { .id = V4L2_CID_HBLANK, .value = 0 };
+	unsigned int bpp, lanes;
+	s64 link_freq = 0;
+	u64 pixel_rate = 0;
+	int ret;
+
+	if (!state)
+		return;
+
+	esd = media_entity_to_v4l2_subdev(av->stream->source_entity);
+
+	av->watermark.width = ipu6_isys_get_frame_width(av);
+	av->watermark.height = ipu6_isys_get_frame_height(av);
+	av->watermark.sram_gran_shift = isys->pdata->ipdata->sram_gran_shift;
+	av->watermark.sram_gran_size = isys->pdata->ipdata->sram_gran_size;
+
+	ret = v4l2_g_ctrl(esd->ctrl_handler, &hb);
+	if (!ret && hb.value >= 0)
+		av->watermark.hblank = hb.value;
+	else
+		av->watermark.hblank = 0;
+
+	csi2 = ipu6_isys_subdev_to_csi2(av->stream->asd);
+	link_freq = ipu6_isys_csi2_get_link_freq(csi2);
+	if (link_freq > 0) {
+		lanes = csi2->nlanes;
+		ret = ipu6_isys_get_stream_pad_fmt(&csi2->asd.sd, 0,
+						   av->source_stream, &format);
+		if (!ret) {
+			bpp = ipu6_isys_mbus_code_to_bpp(format.code);
+			pixel_rate = mul_u64_u32_div(link_freq, lanes * 2, bpp);
+		}
+	}
+
+	av->watermark.pixel_rate = pixel_rate;
+
+	if (!pixel_rate) {
+		mutex_lock(&iwake_watermark->mutex);
+		iwake_watermark->force_iwake_disable = true;
+		mutex_unlock(&iwake_watermark->mutex);
+		dev_warn(dev, "unexpected pixel_rate from %s, disable iwake.\n",
+			 av->stream->source_entity->name);
+	}
+}
+
+static void calculate_stream_datarate(struct ipu6_isys_video *av)
+{
+	struct video_stream_watermark *watermark = &av->watermark;
+	const struct ipu6_isys_pixelformat *pfmt =
+		ipu6_isys_get_isys_format(ipu6_isys_get_format(av), 0);
+	u32 pages_per_line, pb_bytes_per_line, pixels_per_line, bytes_per_line;
+	u64 line_time_ns, stream_data_rate;
+	u16 shift, size;
+
+	shift = watermark->sram_gran_shift;
+	size = watermark->sram_gran_size;
+
+	pixels_per_line = watermark->width + watermark->hblank;
+	line_time_ns =  div_u64(pixels_per_line * NSEC_PER_SEC,
+				watermark->pixel_rate);
+	bytes_per_line = watermark->width * pfmt->bpp / 8;
+	pages_per_line = DIV_ROUND_UP(bytes_per_line, size);
+	pb_bytes_per_line = pages_per_line << shift;
+	stream_data_rate = div64_u64(pb_bytes_per_line * 1000, line_time_ns);
+
+	watermark->stream_data_rate = stream_data_rate;
+}
+
+void ipu6_isys_update_stream_watermark(struct ipu6_isys_video *av, bool state)
+{
+	struct isys_iwake_watermark *iwake_watermark =
+		&av->isys->iwake_watermark;
+
+	if (!av->watermark.pixel_rate)
+		return;
+
+	if (state) {
+		calculate_stream_datarate(av);
+		mutex_lock(&iwake_watermark->mutex);
+		list_add(&av->watermark.stream_node,
+			 &iwake_watermark->video_list);
+		mutex_unlock(&iwake_watermark->mutex);
+	} else {
+		av->watermark.stream_data_rate = 0;
+		mutex_lock(&iwake_watermark->mutex);
+		list_del(&av->watermark.stream_node);
+		mutex_unlock(&iwake_watermark->mutex);
+	}
+
+	update_watermark_setting(av->isys);
+}
+#endif
+
 void ipu6_isys_put_stream(struct ipu6_isys_stream *stream)
 {
 	struct device *dev;
@@ -685,9 +933,10 @@ void ipu6_isys_put_stream(struct ipu6_isys_stream *stream)
 	unsigned long flags;
 
 	if (!stream) {
-		dev_err(dev, "no available stream\n");
+		pr_err("ipu6-isys: no available stream\n");
 		return;
 	}
+
 	dev = &stream->isys->adev->auxdev.dev;
 
 	spin_lock_irqsave(&stream->isys->streams_lock, flags);
@@ -778,7 +1027,7 @@ ipu6_isys_query_stream_by_source(struct ipu6_isys *isys, int source, u8 vc)
 		return NULL;
 
 	if (source < 0) {
-		dev_err(&stream->isys->adev->auxdev.dev,
+		dev_err(&isys->adev->auxdev.dev,
 			"query stream with invalid port number\n");
 		return NULL;
 	}
@@ -800,18 +1049,18 @@ ipu6_isys_query_stream_by_source(struct ipu6_isys *isys, int source, u8 vc)
 	return stream;
 }
 
-static u64 get_stream_mask_by_pipeline(struct ipu6_isys_video *av)
+static u64 get_stream_mask_by_pipeline(struct ipu6_isys_video *__av)
 {
 	struct media_pipeline *pipeline =
-		media_entity_pipeline(&av->vdev.entity);
+		media_entity_pipeline(&__av->vdev.entity);
 	struct media_entity *entity;
 	unsigned int i;
 	u64 stream_mask = 0;
 
 	for (i = 0; i < NR_OF_VIDEO_DEVICE; i++) {
-		entity = &av->isys->av[i].vdev.entity;
+		entity = &__av->isys->av[i].vdev.entity;
 		if (pipeline == media_entity_pipeline(entity))
-			stream_mask |= BIT_ULL(av->isys->av[i].source_stream);
+			stream_mask |= BIT_ULL(__av->isys->av[i].source_stream);
 	}
 
 	return stream_mask;
@@ -824,10 +1073,10 @@ int ipu6_isys_video_set_streaming(struct ipu6_isys_video *av, int state,
 	struct ipu6_isys_stream *stream = av->stream;
 	struct v4l2_subdev_state *subdev_state;
 	struct device *dev = &av->isys->adev->auxdev.dev;
-	struct v4l2_subdev *sd = NULL;
-	struct v4l2_subdev *ssd = NULL;
+	struct v4l2_subdev *sd;
+	struct v4l2_subdev *ssd;
 	struct media_pad *r_pad;
-	struct media_pad *s_pad = NULL;
+	struct media_pad *s_pad;
 	u32 sink_pad, sink_stream;
 	u64 r_stream;
 	u64 stream_mask = 0;
@@ -880,20 +1129,15 @@ int ipu6_isys_video_set_streaming(struct ipu6_isys_video *av, int state,
 		}
 		close_streaming_firmware(av);
 	} else {
-		/* start sub-device which connects with video */
-		dev_dbg(dev, "stream on %s pad %d\n", sd->name, r_pad->index);
-		ret = v4l2_subdev_call(sd, video, s_stream, state);
-		if (ret) {
-			dev_err(dev, "s_stream failed: %d\n", ret);
-			return ret;
-		}
-
 		ret = start_stream_firmware(av, bl);
 		if (ret) {
 			dev_err(dev, "start stream of firmware failed\n");
 			return ret;
 		}
 
+		/* start sub-device which connects with video */
+		dev_dbg(dev, "stream on %s pad %d\n", sd->name, r_pad->index);
+		ret = v4l2_subdev_call(sd, video, s_stream, state);
 		if (ret) {
 			dev_err(dev, "stream on %s failed with %d\n", sd->name,
 				ret);
@@ -922,18 +1166,25 @@ out_media_entity_stop_streaming:
 
 out_media_entity_stop_streaming_firmware:
 	stop_streaming_firmware(av);
+
 	return ret;
 }
 
-static const struct v4l2_ioctl_ops ioctl_ops = {
+static const struct v4l2_ioctl_ops ipu6_v4l2_ioctl_ops = {
 	.vidioc_querycap = ipu6_isys_vidioc_querycap,
 	.vidioc_enum_fmt_vid_cap = ipu6_isys_vidioc_enum_fmt,
+	.vidioc_enum_fmt_meta_cap = ipu6_isys_vidioc_enum_fmt,
 	.vidioc_enum_framesizes = ipu6_isys_vidioc_enum_framesizes,
-	.vidioc_g_fmt_vid_cap = vidioc_g_fmt_vid_cap,
-	.vidioc_s_fmt_vid_cap = vidioc_s_fmt_vid_cap,
-	.vidioc_try_fmt_vid_cap = vidioc_try_fmt_vid_cap,
-	.vidioc_reqbufs = vb2_ioctl_reqbufs,
-	.vidioc_create_bufs = vb2_ioctl_create_bufs,
+	.vidioc_g_fmt_vid_cap = ipu6_isys_vidioc_g_fmt_vid_cap,
+	.vidioc_s_fmt_vid_cap = ipu6_isys_vidioc_s_fmt_vid_cap,
+	.vidioc_try_fmt_vid_cap = ipu6_isys_vidioc_try_fmt_vid_cap,
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+	.vidioc_g_fmt_meta_cap = ipu6_isys_vidioc_g_fmt_meta_cap,
+	.vidioc_s_fmt_meta_cap = ipu6_isys_vidioc_s_fmt_meta_cap,
+	.vidioc_try_fmt_meta_cap = ipu6_isys_vidioc_try_fmt_meta_cap,
+#endif
+	.vidioc_reqbufs = ipu6_isys_vidioc_reqbufs,
+	.vidioc_create_bufs = ipu6_isys_vidioc_create_bufs,
 	.vidioc_prepare_buf = vb2_ioctl_prepare_buf,
 	.vidioc_querybuf = vb2_ioctl_querybuf,
 	.vidioc_qbuf = vb2_ioctl_qbuf,
@@ -953,7 +1204,7 @@ static const struct v4l2_file_operations isys_fops = {
 	.unlocked_ioctl = video_ioctl2,
 	.mmap = vb2_fop_mmap,
 	.open = video_open,
-	.release = video_release,
+	.release = vb2_fop_release,
 };
 
 int ipu6_isys_fw_get(struct ipu6_isys *isys)
@@ -1015,9 +1266,10 @@ void ipu6_isys_fw_put(struct ipu6_isys *isys)
 }
 
 int ipu6_isys_setup_video(struct ipu6_isys_video *av,
-			  struct media_entity **source_entity,
-			  int *nr_queues)
+			  struct media_entity **source_entity, int *nr_queues)
 {
+	const struct ipu6_isys_pixelformat *pfmt =
+		ipu6_isys_get_isys_format(ipu6_isys_get_format(av), 0);
 	struct device *dev = &av->isys->adev->auxdev.dev;
 	struct v4l2_mbus_frame_desc_entry entry;
 	struct v4l2_subdev_route *route = NULL;
@@ -1029,17 +1281,19 @@ int ipu6_isys_setup_video(struct ipu6_isys_video *av,
 	struct media_pad *source_pad, *remote_pad;
 	int ret = -EINVAL;
 
-	remote_pad = media_pad_remote_pad_first(&av->pad);
-	if (!remote_pad) {
-		dev_info(dev, "failed to get remote pad\n");
-		return -ENODEV;
+	*nr_queues = 0;
+
+	remote_pad = media_pad_remote_pad_unique(&av->pad);
+	if (IS_ERR(remote_pad)) {
+		dev_dbg(dev, "failed to get remote pad\n");
+		return PTR_ERR(remote_pad);
 	}
 
 	remote_sd = media_entity_to_v4l2_subdev(remote_pad->entity);
 	asd = to_ipu6_isys_subdev(remote_sd);
 	source_pad = media_pad_remote_pad_first(&remote_pad->entity->pads[0]);
 	if (!source_pad) {
-		dev_info(dev, "No external source entity\n");
+		dev_dbg(dev, "No external source entity\n");
 		return -ENODEV;
 	}
 
@@ -1048,29 +1302,26 @@ int ipu6_isys_setup_video(struct ipu6_isys_video *av,
 	/* Find the root */
 	state = v4l2_subdev_lock_and_get_active_state(remote_sd);
 	for_each_active_route(&state->routing, r) {
-		if (r->source_pad != remote_pad->index)
-			continue;
+		(*nr_queues)++;
 
-		route = r;
-		break;
+		if (r->source_pad == remote_pad->index)
+			route = r;
 	}
 
 	if (!route) {
 		v4l2_subdev_unlock_state(state);
-		dev_info(dev, "Failed to find route\n");
+		dev_dbg(dev, "Failed to find route\n");
 		return -ENODEV;
 	}
-	v4l2_subdev_unlock_state(state);
 	av->source_stream = route->sink_stream;
+	v4l2_subdev_unlock_state(state);
 
 	ret = ipu6_isys_csi2_get_remote_desc(av->source_stream,
 					     to_ipu6_isys_csi2(remote_sd),
-					     *source_entity, &entry,
-					     nr_queues);
+					     *source_entity, &entry);
 	if (ret == -ENOIOCTLCMD) {
 		av->vc = 0;
-		av->dt = ipu6_isys_mbus_code_to_mipi(av->pfmt->code);
-		*nr_queues = 1;
+		av->dt = ipu6_isys_mbus_code_to_mipi(pfmt->code);
 	} else if (!ret) {
 		dev_dbg(dev, "Framedesc: stream %u, len %u, vc %u, dt %#x\n",
 			entry.stream, entry.length, entry.bus.csi2.vc,
@@ -1089,7 +1340,7 @@ int ipu6_isys_setup_video(struct ipu6_isys_video *av,
 	else
 		ret = video_device_pipeline_start(&av->vdev, pipeline);
 	if (ret < 0) {
-		dev_err(dev, "media pipeline start failed: %d\n", ret);
+		dev_dbg(dev, "media pipeline start failed\n");
 		return ret;
 	}
 
@@ -1118,11 +1369,20 @@ int ipu6_isys_video_init(struct ipu6_isys_video *av)
 			.height = 1080,
 		},
 	};
-	int ret = 0;
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+	struct v4l2_format format_meta = {
+		.type = V4L2_BUF_TYPE_META_CAPTURE,
+		.fmt.meta = {
+			.width = 1920,
+			.height = 4,
+		},
+	};
+#endif
+	int ret;
 
 	mutex_init(&av->mutex);
 	av->vdev.device_caps = V4L2_CAP_STREAMING | V4L2_CAP_IO_MC |
-			       V4L2_CAP_VIDEO_CAPTURE;
+			       V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_META_CAPTURE;
 	av->vdev.vfl_dir = VFL_DIR_RX;
 
 	ret = ipu6_isys_queue_init(&av->aq);
@@ -1132,19 +1392,23 @@ int ipu6_isys_video_init(struct ipu6_isys_video *av)
 	av->pad.flags = MEDIA_PAD_FL_SINK | MEDIA_PAD_FL_MUST_CONNECT;
 	ret = media_entity_pads_init(&av->vdev.entity, 1, &av->pad);
 	if (ret)
-		goto out_free_watermark;
+		goto out_vb2_queue_release;
 
 	av->vdev.entity.ops = &entity_ops;
 	av->vdev.release = video_device_release_empty;
 	av->vdev.fops = &isys_fops;
 	av->vdev.v4l2_dev = &av->isys->v4l2_dev;
 	if (!av->vdev.ioctl_ops)
-		av->vdev.ioctl_ops = &ioctl_ops;
+		av->vdev.ioctl_ops = &ipu6_v4l2_ioctl_ops;
 	av->vdev.queue = &av->aq.vbq;
 	av->vdev.lock = &av->mutex;
 
-	ipu6_isys_video_try_fmt_vid(av, &format.fmt.pix);
-	av->pix = format.fmt.pix;
+	__ipu6_isys_vidioc_try_fmt_vid_cap(av, &format);
+	av->pix_fmt = format.fmt.pix;
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+	__ipu6_isys_vidioc_try_fmt_meta_cap(av, &format_meta);
+	av->meta_fmt = format_meta.fmt.meta;
+#endif
 
 	set_bit(V4L2_FL_USES_V4L2_FH, &av->vdev.flags);
 	video_set_drvdata(&av->vdev, av);
@@ -1159,6 +1423,9 @@ out_media_entity_cleanup:
 	vb2_video_unregister_device(&av->vdev);
 	media_entity_cleanup(&av->vdev.entity);
 
+out_vb2_queue_release:
+	vb2_queue_release(&av->aq.vbq);
+
 out_free_watermark:
 	mutex_destroy(&av->mutex);
 
@@ -1170,4 +1437,65 @@ void ipu6_isys_video_cleanup(struct ipu6_isys_video *av)
 	vb2_video_unregister_device(&av->vdev);
 	media_entity_cleanup(&av->vdev.entity);
 	mutex_destroy(&av->mutex);
+}
+
+u32 ipu6_isys_get_format(struct ipu6_isys_video *av)
+{
+	if (av->aq.vbq.type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return av->pix_fmt.pixelformat;
+
+	if (av->aq.vbq.type == V4L2_BUF_TYPE_META_CAPTURE)
+		return av->meta_fmt.dataformat;
+
+	return 0;
+}
+
+u32 ipu6_isys_get_data_size(struct ipu6_isys_video *av)
+{
+	if (av->aq.vbq.type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return av->pix_fmt.sizeimage;
+
+	if (av->aq.vbq.type == V4L2_BUF_TYPE_META_CAPTURE)
+		return av->meta_fmt.buffersize;
+
+	return 0;
+}
+
+u32 ipu6_isys_get_bytes_per_line(struct ipu6_isys_video *av)
+{
+	if (av->aq.vbq.type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return av->pix_fmt.bytesperline;
+
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+	if (av->aq.vbq.type == V4L2_BUF_TYPE_META_CAPTURE)
+		return av->meta_fmt.bytesperline;
+#endif
+
+	return 0;
+}
+
+u32 ipu6_isys_get_frame_width(struct ipu6_isys_video *av)
+{
+	if (av->aq.vbq.type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return av->pix_fmt.width;
+
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+	if (av->aq.vbq.type == V4L2_BUF_TYPE_META_CAPTURE)
+		return av->meta_fmt.width;
+#endif
+
+	return 0;
+}
+
+u32 ipu6_isys_get_frame_height(struct ipu6_isys_video *av)
+{
+	if (av->aq.vbq.type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return av->pix_fmt.height;
+
+#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
+	if (av->aq.vbq.type == V4L2_BUF_TYPE_META_CAPTURE)
+		return av->meta_fmt.height;
+#endif
+
+	return 0;
 }

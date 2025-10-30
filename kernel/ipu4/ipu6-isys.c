@@ -1,25 +1,41 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2013 - 2023 Intel Corporation
+ * Copyright (C) 2013--2024 Intel Corporation
  */
 
+#include <linux/auxiliary_bus.h>
 #include <linux/bitfield.h>
+#include <linux/bits.h>
+#include <linux/completion.h>
+#include <linux/container_of.h>
 #include <linux/delay.h>
+#include <linux/device.h>
 #include <linux/dma-mapping.h>
+#include <linux/err.h>
 #include <linux/firmware.h>
+#include <linux/io.h>
+#include <linux/irqreturn.h>
+#include <linux/list.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/pci.h>
 #include <linux/pm_runtime.h>
+#include <linux/pm_qos.h>
+#include <linux/slab.h>
+#include <linux/spinlock.h>
+#include <linux/string.h>
 
-#include <media/v4l2-ctrls.h>
+#include <media/ipu-bridge.h>
+#include <media/media-device.h>
+#include <media/media-entity.h>
+#include <media/v4l2-async.h>
 #include <media/v4l2-device.h>
-#include <media/v4l2-event.h>
 #include <media/v4l2-fwnode.h>
-#include <media/v4l2-ioctl.h>
 
+#include "ipu6-bus.h"
 #include "ipu6-cpd.h"
-#include "ipu6-dma.h"
 #include "ipu6-isys.h"
+#include "ipu6-isys-csi2.h"
 #include "ipu6-mmu.h"
 #include "ipu6-platform-buttress-regs.h"
 #include "ipu4-platform-isys-csi2-reg.h"
@@ -38,20 +54,20 @@
 #define ISF_DMA_TOP_GDA_PROFERTY_PAGE_SIZE	0x800
 
 /* LTR & DID value are 10 bit at most */
-#define LTR_DID_VAL_MAX		1023
-#define LTR_DEFAULT_VALUE	0x70503C19
-#define FILL_TIME_DEFAULT_VALUE 0xFFF0783C
-#define LTR_DID_PKGC_2R		20
-#define LTR_SCALE_DEFAULT	5
-#define LTR_SCALE_1024NS	2
-#define DID_SCALE_1US		2
-#define DID_SCALE_32US		3
-#define REG_PKGC_PMON_CFG	0xB00
+#define LTR_DID_VAL_MAX				1023
+#define LTR_DEFAULT_VALUE			0x70503c19
+#define FILL_TIME_DEFAULT_VALUE			0xfff0783c
+#define LTR_DID_PKGC_2R				20
+#define LTR_SCALE_DEFAULT			5
+#define LTR_SCALE_1024NS			2
+#define DID_SCALE_1US				2
+#define DID_SCALE_32US				3
+#define REG_PKGC_PMON_CFG			0xb00
 
-#define VAL_PKGC_PMON_CFG_RESET 0x38
-#define VAL_PKGC_PMON_CFG_START 0x7
+#define VAL_PKGC_PMON_CFG_RESET			0x38
+#define VAL_PKGC_PMON_CFG_START			0x7
 
-#define IS_PIXEL_BUFFER_PAGES		0x80
+#define IS_PIXEL_BUFFER_PAGES			0x80
 /*
  * when iwake mode is disabled, the critical threshold is statically set
  * to 75% of the IS pixel buffer, criticalThreshold = (128 * 3) / 4
@@ -107,7 +123,8 @@ isys_complete_ext_device_registration(struct ipu6_isys *isys,
 
 	ret = media_create_pad_link(&sd->entity, i,
 				    &isys->csi2[csi2->port].asd.sd.entity,
-				    0, 0);
+				    0, MEDIA_LNK_FL_ENABLED |
+				       MEDIA_LNK_FL_IMMUTABLE);
 	if (ret) {
 		dev_warn(dev, "can't create link\n");
 		goto unregister_subdev;
@@ -224,14 +241,15 @@ static int isys_register_video_devices(struct ipu6_isys *isys)
 	int ret;
 
 	for (i = 0; i < NR_OF_VIDEO_DEVICE; i++) {
-		snprintf(isys->av[i].vdev.name, sizeof(isys->av[i].vdev.name),
-			 IPU6_ISYS_ENTITY_PREFIX " ISYS Capture %u", i);
-		isys->av[i].isys = isys;
-		isys->av[i].aq.vbq.buf_struct_size =
-			sizeof(struct ipu6_isys_video_buffer);
-		isys->av[i].pfmt = &ipu6_isys_pfmts[0];
+		struct ipu6_isys_video *av = &isys->av[i];
 
-		ret = ipu6_isys_video_init(&isys->av[i]);
+		snprintf(av->vdev.name, sizeof(av->vdev.name),
+			 IPU6_ISYS_ENTITY_PREFIX " ISYS Capture %u", i);
+		av->isys = isys;
+		av->aq.vbq.buf_struct_size =
+			sizeof(struct ipu6_isys_video_buffer);
+
+		ret = ipu6_isys_video_init(av);
 		if (ret)
 			goto fail;
 	}
@@ -609,39 +627,18 @@ static const struct dev_pm_ops isys_pm_ops = {
 	.resume = isys_resume,
 };
 
-static void isys_remove(struct auxiliary_device *auxdev)
+static void free_fw_msg_bufs(struct ipu6_isys *isys)
 {
-	struct ipu6_bus_device *adev = auxdev_to_adev(auxdev);
-	struct ipu6_isys *isys = dev_get_drvdata(&auxdev->dev);
-	struct ipu6_device *isp = adev->isp;
+	struct device *dev = &isys->adev->auxdev.dev;
 	struct isys_fw_msgs *fwmsg, *safe;
-	unsigned int i;
-
-	isys_unregister_devices(isys);
 
 	list_for_each_entry_safe(fwmsg, safe, &isys->framebuflist, head)
-		dma_free_attrs(&auxdev->dev, sizeof(struct isys_fw_msgs),
-			       fwmsg, fwmsg->dma_addr, 0);
+		dma_free_attrs(dev, sizeof(struct isys_fw_msgs), fwmsg,
+			       fwmsg->dma_addr, 0);
 
 	list_for_each_entry_safe(fwmsg, safe, &isys->framebuflist_fw, head)
-		dma_free_attrs(&auxdev->dev, sizeof(struct isys_fw_msgs),
-			       fwmsg, fwmsg->dma_addr, 0);
-
-	isys_notifier_cleanup(isys);
-
-	cpu_latency_qos_remove_request(&isys->pm_qos);
-
-	if (!isp->secure_mode) {
-		ipu6_cpd_free_pkg_dir(adev);
-		ipu6_buttress_unmap_fw_image(adev, &adev->fw_sgt);
-		release_firmware(adev->fw);
-	}
-
-	for (i = 0; i < IPU4_ISYS_MAX_STREAMS; i++)
-		mutex_destroy(&isys->streams[i].mutex);
-
-	mutex_destroy(&isys->stream_mutex);
-	mutex_destroy(&isys->mutex);
+		dma_free_attrs(dev, sizeof(struct isys_fw_msgs), fwmsg,
+			       fwmsg->dma_addr, 0);
 }
 
 static int alloc_fw_msg_bufs(struct ipu6_isys *isys, int amount)
@@ -725,14 +722,17 @@ void ipu6_cleanup_fw_msg_bufs(struct ipu6_isys *isys)
 	spin_unlock_irqrestore(&isys->listlock, flags);
 }
 
-void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, struct isys_fw_msgs *msg)
+void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, u64 data)
 {
+	struct isys_fw_msgs *msg;
 	unsigned long flags;
+	u64 *ptr = (u64 *)data;
 
-	if (!msg)
+	if (!ptr)
 		return;
 
 	spin_lock_irqsave(&isys->listlock, flags);
+	msg = container_of(ptr, struct isys_fw_msgs, fw_msg.dummy);
 	list_move(&msg->head, &isys->framebuflist);
 	spin_unlock_irqrestore(&isys->listlock, flags);
 }
@@ -740,6 +740,7 @@ void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, struct isys_fw_msgs *msg)
 static int isys_probe(struct auxiliary_device *auxdev,
 		      const struct auxiliary_device_id *auxdev_id)
 {
+	const struct ipu6_isys_internal_csi2_pdata *csi2_pdata;
 	struct ipu6_bus_device *adev = auxdev_to_adev(auxdev);
 	struct ipu6_device *isp = adev->isp;
 	const struct firmware *fw;
@@ -754,15 +755,26 @@ static int isys_probe(struct auxiliary_device *auxdev,
 	if (!isys)
 		return -ENOMEM;
 
-	ret = ipu6_mmu_hw_init(adev->mmu);
-	if (ret)
-		return ret;
-
 	adev->auxdrv_data =
 		(const struct ipu6_auxdrv_data *)auxdev_id->driver_data;
 	adev->auxdrv = to_auxiliary_drv(auxdev->dev.driver);
 	isys->adev = adev;
 	isys->pdata = adev->pdata;
+	csi2_pdata = &isys->pdata->ipdata->csi2;
+
+	isys->csi2 = devm_kcalloc(&auxdev->dev, csi2_pdata->nports,
+				  sizeof(*isys->csi2), GFP_KERNEL);
+	if (!isys->csi2)
+		return -ENOMEM;
+
+	ret = ipu6_mmu_hw_init(adev->mmu);
+	if (ret)
+		return ret;
+
+#ifdef IPU6 // Disabled for IPU4
+	/* initial sensor type */
+	isys->sensor_type = isys->pdata->ipdata->sensor_type_start;
+#endif
 
 	spin_lock_init(&isys->streams_lock);
 	spin_lock_init(&isys->power_lock);
@@ -800,14 +812,27 @@ static int isys_probe(struct auxiliary_device *auxdev,
 	if (ret < 0)
 		goto out_remove_pkg_dir_shared_buffer;
 
+#ifdef IPU6 // Disabled for IPU4
+	isys_iwake_watermark_init(isys);
+
+	if (is_ipu6se(adev->isp->hw_ver))
+		isys->phy_set_power = ipu6_isys_jsl_phy_set_power;
+	else if (is_ipu6ep_mtl(adev->isp->hw_ver))
+		isys->phy_set_power = ipu6_isys_dwc_phy_set_power;
+	else
+		isys->phy_set_power = ipu6_isys_mcd_phy_set_power;
+#endif
+
 	ret = isys_register_devices(isys);
 	if (ret)
-		goto out_remove_pkg_dir_shared_buffer;
+		goto free_fw_msg_bufs;
 
 	ipu6_mmu_hw_cleanup(adev->mmu);
 
 	return 0;
 
+free_fw_msg_bufs:
+	free_fw_msg_bufs(isys);
 out_remove_pkg_dir_shared_buffer:
 	if (!isp->secure_mode)
 		ipu6_cpd_free_pkg_dir(adev);
@@ -827,6 +852,36 @@ release_firmware:
 	ipu6_mmu_hw_cleanup(adev->mmu);
 
 	return ret;
+}
+
+static void isys_remove(struct auxiliary_device *auxdev)
+{
+	struct ipu6_bus_device *adev = auxdev_to_adev(auxdev);
+	struct ipu6_isys *isys = dev_get_drvdata(&auxdev->dev);
+	struct ipu6_device *isp = adev->isp;
+	unsigned int i;
+
+	free_fw_msg_bufs(isys);
+
+	isys_unregister_devices(isys);
+	isys_notifier_cleanup(isys);
+
+	cpu_latency_qos_remove_request(&isys->pm_qos);
+
+	if (!isp->secure_mode) {
+		ipu6_cpd_free_pkg_dir(adev);
+		ipu6_buttress_unmap_fw_image(adev, &adev->fw_sgt);
+		release_firmware(adev->fw);
+	}
+
+	for (i = 0; i < IPU4_ISYS_MAX_STREAMS; i++)
+		mutex_destroy(&isys->streams[i].mutex);
+
+#ifdef IPU6 // Disabled for IPU4
+	isys_iwake_watermark_cleanup(isys);
+#endif
+	mutex_destroy(&isys->stream_mutex);
+	mutex_destroy(&isys->mutex);
 }
 
 struct fwmsg {
@@ -854,7 +909,7 @@ static const struct fwmsg fw_msg[] = {
 	{-1, "UNKNOWN MESSAGE", 0}
 };
 
-static int resp_type_to_index(int type)
+static u32 resp_type_to_index(int type)
 {
 	unsigned int i;
 
@@ -871,6 +926,7 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 	struct ipu6_fw_isys_resp_info_abi *resp;
 	struct ipu6_isys_stream *stream;
 	struct ipu6_isys_csi2 *csi2 = NULL;
+	u32 index;
 	u64 ts;
 
 	if (!isys->fwcom)
@@ -882,33 +938,21 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 
 	ts = (u64)resp->timestamp[1] << 32 | resp->timestamp[0];
 
+	index = resp_type_to_index(resp->type);
+	dev_dbg(&adev->auxdev.dev,
+		"FW resp %02d %s, stream %u, ts 0x%16.16llx, pin %d\n",
+		resp->type, fw_msg[index].msg, resp->stream_handle,
+		fw_msg[index].valid_ts ? ts : 0, resp->pin_id);
+
 	if (resp->error_info.error == IPU6_FW_ISYS_ERROR_STREAM_IN_SUSPENSION)
 		/* Suspension is kind of special case: not enough buffers */
 		dev_dbg(&adev->auxdev.dev,
-			"FW error resp %02d %s, stream %u, error SUSPENSION, details %d, timestamp 0x%16.16llx, pin %d\n",
-			resp->type,
-			fw_msg[resp_type_to_index(resp->type)].msg,
-			resp->stream_handle,
-			resp->error_info.error_details,
-			fw_msg[resp_type_to_index(resp->type)].valid_ts ?
-			ts : 0, resp->pin_id);
+			"FW error resp SUSPENSION, details %d\n",
+			resp->error_info.error_details);
 	else if (resp->error_info.error)
 		dev_dbg(&adev->auxdev.dev,
-			"FW error resp %02d %s, stream %u, error %d, details %d, timestamp 0x%16.16llx, pin %d\n",
-			resp->type,
-			fw_msg[resp_type_to_index(resp->type)].msg,
-			resp->stream_handle,
-			resp->error_info.error, resp->error_info.error_details,
-			fw_msg[resp_type_to_index(resp->type)].valid_ts ?
-			ts : 0, resp->pin_id);
-	else
-		dev_dbg(&adev->auxdev.dev,
-			"FW resp %02d %s, stream %u, timestamp 0x%16.16llx, pin %d\n",
-			resp->type,
-			fw_msg[resp_type_to_index(resp->type)].msg,
-			resp->stream_handle,
-			fw_msg[resp_type_to_index(resp->type)].valid_ts ?
-			ts : 0, resp->pin_id);
+			"FW error resp error %d, details %d\n",
+			resp->error_info.error, resp->error_info.error_details);
 
 	if (resp->stream_handle >= IPU4_ISYS_MAX_STREAMS) {
 		dev_err(&adev->auxdev.dev, "bad stream handle %u\n",
@@ -938,7 +982,7 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_START_AND_CAPTURE_ACK:
 		ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev),
-				    (struct isys_fw_msgs *)resp->buf_handle);
+				    resp->buf_handle);
 		complete(&stream->stream_start_completion);
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_STOP_ACK:
@@ -962,7 +1006,7 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_CAPTURE_ACK:
 		ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev),
-				    (struct isys_fw_msgs *)resp->buf_handle);
+				    resp->buf_handle);
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_START_AND_CAPTURE_DONE:
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_CAPTURE_DONE:
@@ -981,6 +1025,9 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 			% IPU6_ISYS_MAX_PARALLEL_SOF;
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_FRAME_EOF:
+#ifdef IPU6 // Disabled for IPU4
+		ipu6_isys_csi2_eof_event_by_stream(stream);
+#endif
 		dev_dbg(&adev->auxdev.dev,
 			"eof: handle %d: (index %u), timestamp 0x%16.16llx\n",
 			resp->stream_handle,
