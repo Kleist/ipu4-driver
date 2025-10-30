@@ -7,8 +7,8 @@
    Copyright (C) 2023 Intel Corporation
 */
 
-#ifndef IPU6_PLATFORM_ISYS_CSI2_REG_H
-#define IPU6_PLATFORM_ISYS_CSI2_REG_H
+#ifndef IPU4_PLATFORM_ISYS_CSI2_REG_H
+#define IPU4_PLATFORM_ISYS_CSI2_REG_H
 
 /* IRQ-related registers specific to each of the four CSI receivers */
 #define CSI2_REG_CSI2PART_IRQ_EDGE			0x400
