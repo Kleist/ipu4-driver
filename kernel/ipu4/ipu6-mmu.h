@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Copyright (C) 2013 - 2023 Intel Corporation */
+/* Copyright (C) 2013--2024 Intel Corporation */
 
 #ifndef IPU6_MMU_H
 #define IPU6_MMU_H
@@ -7,7 +7,13 @@
 #define ISYS_MMID 1
 #define PSYS_MMID 0
 
-#include <linux/device.h>
+#include <linux/list.h>
+#include <linux/spinlock_types.h>
+#include <linux/types.h>
+
+struct device;
+struct page;
+struct ipu6_hw_variants;
 
 struct ipu6_mmu_info {
 	struct device *dev;

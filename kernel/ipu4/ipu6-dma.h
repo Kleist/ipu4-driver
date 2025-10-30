@@ -12,7 +12,6 @@ struct ipu6_mmu_info;
 struct ipu6_dma_mapping {
 	struct ipu6_mmu_info *mmu_info;
 	struct iova_domain iovad;
-	struct kref ref;
 };
 
 extern const struct dma_map_ops ipu6_dma_ops;

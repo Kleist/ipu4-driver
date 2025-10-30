@@ -1,10 +1,27 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2013 - 2023 Intel Corporation
+ * Copyright (C) 2013--2024 Intel Corporation
  */
+#include <asm/barrier.h>
 
+#include <linux/align.h>
+#include <linux/atomic.h>
+#include <linux/bitops.h>
+#include <linux/bits.h>
+#include <linux/bug.h>
 #include <linux/cacheflush.h>
+#include <linux/dma-mapping.h>
+#include <linux/err.h>
+#include <linux/gfp.h>
+#include <linux/io.h>
 #include <linux/iova.h>
+#include <linux/math.h>
+#include <linux/minmax.h>
+#include <linux/mm.h>
+#include <linux/pfn.h>
+#include <linux/slab.h>
+#include <linux/spinlock.h>
+#include <linux/types.h>
 #include <linux/vmalloc.h>
 
 #include "ipu6.h"
@@ -703,8 +720,6 @@ static struct ipu6_dma_mapping *alloc_dma_mapping(struct ipu6_device *isp)
 	init_iova_domain(&dmap->iovad, SZ_4K, 1);
 	dmap->mmu_info->dmap = dmap;
 
-	kref_init(&dmap->ref);
-
 	dev_dbg(&isp->pdev->dev, "alloc mapping\n");
 
 	iova_cache_get();
@@ -885,12 +900,12 @@ static void ipu6_mmu_destroy(struct ipu6_mmu *mmu)
 		}
 	}
 
+	vfree(mmu_info->l2_pts);
 	free_dummy_page(mmu_info);
 	dma_unmap_single(mmu_info->dev, TBL_PHYS_ADDR(mmu_info->l1_pt_dma),
 			 PAGE_SIZE, DMA_BIDIRECTIONAL);
 	free_page((unsigned long)mmu_info->dummy_l2_pt);
 	free_page((unsigned long)mmu_info->l1_pt);
-	vfree(mmu_info->l2_pts);
 	kfree(mmu_info);
 }
 
