@@ -272,7 +272,7 @@ static int buffer_list_get(struct ipu6_isys_stream *stream,
 	return 0;
 }
 
-void
+static void
 ipu6_isys_buf_to_fw_frame_buf_pin(struct vb2_buffer *vb,
 				  struct ipu4_fw_isys_frame_buff_set_abi *set)
 {
