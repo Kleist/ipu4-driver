@@ -1,0 +1,63 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Copyright (C) 2018 - 2023 Intel Corporation */
+
+#ifndef IPU4_PLATFORM_REGS_H
+#define IPU4_PLATFORM_REGS_H
+
+#include <linux/bits.h>
+
+
+/* PKG DIR OFFSET in IMR in secure mode */
+#define IPU6_PKG_DIR_IMR_OFFSET			0x40
+#define IPU6_PSYS_REG_SPC_STATUS_CTRL			0x0 // TODO
+#define IPU6_PSYS_SPC_STATUS_CTRL_ICACHE_INVALIDATE	BIT(12) // TODO
+
+// From 4.19 ipu-platform-regs.h
+#define IPU4_ISYS_IOMMU0_OFFSET		0x000e0000
+#define IPU4_ISYS_IOMMU1_OFFSET		0x000e0100
+
+#define IPU4_ISYS_OFFSET			0x00100000
+#define IPU4_PSYS_OFFSET			0x00400000
+
+#define IPU4_PSYS_IOMMU0_OFFSET		0x000b0000
+#define IPU4_PSYS_IOMMU1_OFFSET		0x000b0100
+#define IPU4_PSYS_IOMMU1R_OFFSET	0x000b0600
+
+#define IPU4_ISYS_SPC_OFFSET			0x000000
+#define IPU4_PSYS_SPC_OFFSET			0x000000
+#define IPU4_ISYS_DMEM_OFFSET			0x008000
+#define IPU4_PSYS_DMEM_OFFSET			0x008000
+
+
+#define IPU4_ISYS_MAX_CSI2_LEGACY_PORTS	4
+#define IPU4_ISYS_UNISPART_IRQ_CSI2(port)		\
+	({ typeof(port) __port = (port); \
+	__port < IPU4_ISYS_MAX_CSI2_LEGACY_PORTS ?	\
+	((0x8) << __port) :					\
+	(0x800 << (__port - IPU4_ISYS_MAX_CSI2_LEGACY_PORTS)); })
+
+
+#define IPU4_INFO_REQUEST_DESTINATION_PRIMARY	BIT(4)
+#define IPU4_INFO_STREAM_ID_SET(a)	((a & 0xF) << 4)
+
+#define IPU4_MMU_MAX_TLB_L1_STREAMS	16
+#define IPU4_MMU_MAX_TLB_L2_STREAMS	16
+
+#define IPU4_MMU_L1_STREAM_ID_REG_OFFSET	0x0c
+#define IPU4_MMU_L2_STREAM_ID_REG_OFFSET	0x4c
+
+#define IPU4_REG_ISYS_UNISPART_IRQ_EDGE            0x7c000
+#define IPU4_REG_ISYS_UNISPART_IRQ_MASK            0x7c004
+#define IPU4_REG_ISYS_UNISPART_IRQ_STATUS          0x7c008
+#define IPU4_REG_ISYS_UNISPART_IRQ_CLEAR           0x7c00c
+#define IPU4_REG_ISYS_UNISPART_IRQ_ENABLE          0x7c010
+#define IPU4_REG_ISYS_UNISPART_IRQ_LEVEL_NOT_PULSE 0x7c014
+#define IPU4_REG_ISYS_UNISPART_SW_IRQ_REG          0x7c414
+#define IPU4_REG_ISYS_UNISPART_SW_IRQ_MUX_REG      0x7c418
+#define IPU4_ISYS_UNISPART_IRQ_SW			       BIT(30)
+
+/* CDC Burst collector thresholds for isys - 3 FIFOs i = 0..2 */
+#define IPU4_REG_ISYS_CDC_THRESHOLD(i)		(0x7c400 + ((i) * 4))
+
+
+#endif /* IPU4_PLATFORM_REGS_H */

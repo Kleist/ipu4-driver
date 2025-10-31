@@ -35,7 +35,6 @@
 #include "ipu6-isys-csi2.h"
 #include "ipu6-isys-queue.h"
 #include "ipu6-isys-video.h"
-#include "ipu6-platform-regs.h"
 #include "ipu4-compat.h"
 
 bool force_need_reset;

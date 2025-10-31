@@ -27,7 +27,7 @@
 #include "ipu6.h"
 #include "ipu6-dma.h"
 #include "ipu6-mmu.h"
-#include "ipu6-platform-regs.h"
+#include "ipu4-platform-regs.h"
 
 #define ISP_PAGE_SHIFT		12
 #define ISP_PAGE_SIZE		BIT(ISP_PAGE_SHIFT)

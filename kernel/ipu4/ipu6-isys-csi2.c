@@ -14,7 +14,7 @@
 #include "ipu6-isys-subdev.h"
 #include "ipu6-platform-buttress-regs.h"
 #include "ipu4-platform-isys-csi2-reg.h"
-#include "ipu6-platform-regs.h"
+#include "ipu4-platform-regs.h"
 
 #include "ipu4-compat.h"
 

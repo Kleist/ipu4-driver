@@ -1,58 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Copyright (C) 2018 - 2023 Intel Corporation */
+/* Copyright (C) 2018 - 2024 Intel Corporation */
 
 #ifndef IPU6_PLATFORM_REGS_H
 #define IPU6_PLATFORM_REGS_H
 
 #include <linux/bits.h>
-
-// From 4.19 ipu-platform-regs.h
-#define IPU4_ISYS_IOMMU0_OFFSET		0x000e0000
-#define IPU4_ISYS_IOMMU1_OFFSET		0x000e0100
-
-#define IPU4_ISYS_OFFSET			0x00100000
-#define IPU4_PSYS_OFFSET			0x00400000
-
-#define IPU4_PSYS_IOMMU0_OFFSET		0x000b0000
-#define IPU4_PSYS_IOMMU1_OFFSET		0x000b0100
-#define IPU4_PSYS_IOMMU1R_OFFSET	0x000b0600
-
-#define IPU4_ISYS_SPC_OFFSET			0x000000
-#define IPU4_PSYS_SPC_OFFSET			0x000000
-#define IPU4_ISYS_DMEM_OFFSET			0x008000
-#define IPU4_PSYS_DMEM_OFFSET			0x008000
-
-
-#define IPU4_ISYS_MAX_CSI2_LEGACY_PORTS	4
-#define IPU4_ISYS_UNISPART_IRQ_CSI2(port)		\
-	({ typeof(port) __port = (port); \
-	__port < IPU4_ISYS_MAX_CSI2_LEGACY_PORTS ?	\
-	((0x8) << __port) :					\
-	(0x800 << (__port - IPU4_ISYS_MAX_CSI2_LEGACY_PORTS)); })
-
-
-#define IPU4_INFO_REQUEST_DESTINATION_PRIMARY	BIT(4)
-#define IPU4_INFO_STREAM_ID_SET(a)	((a & 0xF) << 4)
-
-#define IPU4_MMU_MAX_TLB_L1_STREAMS	16
-#define IPU4_MMU_MAX_TLB_L2_STREAMS	16
-
-#define IPU4_MMU_L1_STREAM_ID_REG_OFFSET IPU6_MMU_L1_STREAM_ID_REG_OFFSET
-#define IPU4_MMU_L2_STREAM_ID_REG_OFFSET IPU6_MMU_L2_STREAM_ID_REG_OFFSET
-
-#define IPU4_REG_ISYS_UNISPART_IRQ_EDGE            0x7c000
-#define IPU4_REG_ISYS_UNISPART_IRQ_MASK            0x7c004
-#define IPU4_REG_ISYS_UNISPART_IRQ_STATUS          0x7c008
-#define IPU4_REG_ISYS_UNISPART_IRQ_CLEAR           0x7c00c
-#define IPU4_REG_ISYS_UNISPART_IRQ_ENABLE          0x7c010
-#define IPU4_REG_ISYS_UNISPART_IRQ_LEVEL_NOT_PULSE 0x7c014
-#define IPU4_REG_ISYS_UNISPART_SW_IRQ_REG          0x7c414
-#define IPU4_REG_ISYS_UNISPART_SW_IRQ_MUX_REG      0x7c418
-#define IPU4_ISYS_UNISPART_IRQ_SW			       BIT(30)
-
-/* CDC Burst collector thresholds for isys - 3 FIFOs i = 0..2 */
-#define IPU4_REG_ISYS_CDC_THRESHOLD(i)		(0x7c400 + ((i) * 4))
-
 
 /*
  * IPU6 uses uniform address within IPU6, therefore all subsystem registers
@@ -77,11 +29,15 @@
 #define IPU6_PSYS_MMU1W_L2_STREAM_ID_REG_OFFSET	0x8c
 
 #define IPU6_MMU_INFO_OFFSET		0x8
+
 #define IPU6_ISYS_SPC_OFFSET		0x210000
+
 #define IPU6SE_PSYS_SPC_OFFSET		0x110000
 #define IPU6_PSYS_SPC_OFFSET		0x118000
+
 #define IPU6_ISYS_DMEM_OFFSET		0x200000
 #define IPU6_PSYS_DMEM_OFFSET		0x100000
+
 #define IPU6_REG_ISYS_UNISPART_IRQ_EDGE			0x27c000
 #define IPU6_REG_ISYS_UNISPART_IRQ_MASK			0x27c004
 #define IPU6_REG_ISYS_UNISPART_IRQ_STATUS		0x27c008
@@ -93,22 +49,28 @@
 #define IPU6_ISYS_UNISPART_IRQ_CSI0			BIT(2)
 #define IPU6_ISYS_UNISPART_IRQ_CSI1			BIT(3)
 #define IPU6_ISYS_UNISPART_IRQ_SW			BIT(22)
+
 #define IPU6_REG_ISYS_ISL_TOP_IRQ_EDGE			0x2b0200
 #define IPU6_REG_ISYS_ISL_TOP_IRQ_MASK			0x2b0204
 #define IPU6_REG_ISYS_ISL_TOP_IRQ_STATUS		0x2b0208
 #define IPU6_REG_ISYS_ISL_TOP_IRQ_CLEAR			0x2b020c
 #define IPU6_REG_ISYS_ISL_TOP_IRQ_ENABLE		0x2b0210
 #define IPU6_REG_ISYS_ISL_TOP_IRQ_LEVEL_NOT_PULSE	0x2b0214
+
 #define IPU6_REG_ISYS_CMPR_TOP_IRQ_EDGE			0x2d2100
 #define IPU6_REG_ISYS_CMPR_TOP_IRQ_MASK			0x2d2104
 #define IPU6_REG_ISYS_CMPR_TOP_IRQ_STATUS		0x2d2108
 #define IPU6_REG_ISYS_CMPR_TOP_IRQ_CLEAR		0x2d210c
 #define IPU6_REG_ISYS_CMPR_TOP_IRQ_ENABLE		0x2d2110
 #define IPU6_REG_ISYS_CMPR_TOP_IRQ_LEVEL_NOT_PULSE	0x2d2114
+
+/* CDC Burst collector thresholds for isys - 3 FIFOs i = 0..2 */
 #define IPU6_REG_ISYS_CDC_THRESHOLD(i)		(0x27c400 + ((i) * 4))
+
 #define IPU6_CSI_IRQ_NUM_PER_PIPE			4
 #define IPU6SE_ISYS_CSI_PORT_NUM			4
 #define IPU6_ISYS_CSI_PORT_NUM				8
+
 #define IPU6_ISYS_CSI_PORT_IRQ(irq_num)		BIT(irq_num)
 
 /* PKG DIR OFFSET in IMR in secure mode */
@@ -134,6 +96,7 @@
 #define IPU6_PSYS_SPC_STATUS_ICACHE_PREFETCH		BIT(13)
 
 #define IPU6_PSYS_REG_SPP0_STATUS_CTRL			0x20000
+
 #define IPU6_INFO_ENABLE_SNOOP			BIT(0)
 #define IPU6_INFO_DEC_FORCE_FLUSH		BIT(1)
 #define IPU6_INFO_DEC_PASS_THROUGH		BIT(2)
@@ -143,13 +106,28 @@
 #define IPU6_INFO_IMR_DESTINED			BIT(11)
 
 #define IPU6_INFO_REQUEST_DESTINATION_PRIMARY IPU6_INFO_REQUEST_DESTINATION_IOSF
+
+/*
+ * s2m_pixel_soc_pixel_remapping is dedicated for the enabling of the
+ * pixel s2m remp ability.Remap here  means that s2m rearange the order
+ * of the pixels in each 4 pixels group.
+ * For examle, mirroring remping means that if input's 4 first pixels
+ * are 1 2 3 4 then in output we should see 4 3 2 1 in this 4 first pixels.
+ * 0xE4 is from s2m MAS document. It means no remapping.
+ */
 #define S2M_PIXEL_SOC_PIXEL_REMAPPING_FLAG_NO_REMAPPING 0xe4
+/*
+ * csi_be_soc_pixel_remapping is for the enabling of the pixel remapping.
+ * This remapping is exactly like the stream2mmio remapping.
+ */
 #define CSI_BE_SOC_PIXEL_REMAPPING_FLAG_NO_REMAPPING    0xe4
+
 #define IPU6_REG_DMA_TOP_AB_GROUP1_BASE_ADDR		0x1ae000
 #define IPU6_REG_DMA_TOP_AB_GROUP2_BASE_ADDR		0x1af000
 #define IPU6_REG_DMA_TOP_AB_RING_MIN_OFFSET(n)		(0x4 + (n) * 0xc)
 #define IPU6_REG_DMA_TOP_AB_RING_MAX_OFFSET(n)		(0x8 + (n) * 0xc)
 #define IPU6_REG_DMA_TOP_AB_RING_ACCESS_OFFSET(n)	(0xc + (n) * 0xc)
+
 enum ipu6_device_ab_group1_target_id {
 	IPU6_DEVICE_AB_GROUP1_TARGET_ID_R0_SPC_DMEM,
 	IPU6_DEVICE_AB_GROUP1_TARGET_ID_R1_SPC_DMEM,
@@ -171,18 +149,22 @@ enum ipu6_device_ab_group1_target_id {
 	IPU6_DEVICE_AB_GROUP1_TARGET_ID_R17_ZLW_INSERTER,
 	IPU6_DEVICE_AB_GROUP1_TARGET_ID_R18_AB,
 };
+
 enum nci_ab_access_mode {
 	NCI_AB_ACCESS_MODE_RW,	/* read & write */
 	NCI_AB_ACCESS_MODE_RO,	/* read only */
 	NCI_AB_ACCESS_MODE_WO,	/* write only */
 	NCI_AB_ACCESS_MODE_NA,	/* No access at all */
 };
+
+/* IRQ-related registers in PSYS */
 #define IPU6_REG_PSYS_GPDEV_IRQ_EDGE		0x1aa200
 #define IPU6_REG_PSYS_GPDEV_IRQ_MASK		0x1aa204
 #define IPU6_REG_PSYS_GPDEV_IRQ_STATUS		0x1aa208
 #define IPU6_REG_PSYS_GPDEV_IRQ_CLEAR		0x1aa20c
 #define IPU6_REG_PSYS_GPDEV_IRQ_ENABLE		0x1aa210
 #define IPU6_REG_PSYS_GPDEV_IRQ_LEVEL_NOT_PULSE	0x1aa214
+/* There are 8 FW interrupts, n = 0..7 */
 #define IPU6_PSYS_GPDEV_FWIRQ0			5
 #define IPU6_PSYS_GPDEV_FWIRQ1			6
 #define IPU6_PSYS_GPDEV_FWIRQ2			7
@@ -193,4 +175,5 @@ enum nci_ab_access_mode {
 #define IPU6_PSYS_GPDEV_FWIRQ7			12
 #define IPU6_PSYS_GPDEV_IRQ_FWIRQ(n)		BIT(n)
 #define IPU6_REG_PSYS_GPDEV_FWIRQ(n)		(4 * (n) + 0x1aa100)
+
 #endif /* IPU6_PLATFORM_REGS_H */
