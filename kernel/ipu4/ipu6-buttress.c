@@ -1,14 +1,26 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2013 - 2023 Intel Corporation
+ * Copyright (C) 2013--2024 Intel Corporation
  */
 
 #include <linux/bitfield.h>
+#include <linux/bits.h>
 #include <linux/completion.h>
+#include <linux/delay.h>
+#include <linux/device.h>
+#include <linux/dma-mapping.h>
 #include <linux/firmware.h>
+#include <linux/interrupt.h>
 #include <linux/iopoll.h>
+#include <linux/math64.h>
+#include <linux/mm.h>
+#include <linux/mutex.h>
 #include <linux/pci.h>
+#include <linux/pfn.h>
 #include <linux/pm_runtime.h>
+#include <linux/scatterlist.h>
+#include <linux/slab.h>
+#include <linux/time64.h>
 
 #include "ipu6.h"
 #include "ipu6-bus.h"
@@ -347,12 +359,10 @@ irqreturn_t ipu6_buttress_isr(int irq, void *isp_ptr)
 		writel(irq_status, isp->base + BUTTRESS_REG_ISR_CLEAR);
 
 		for (i = 0; i < ARRAY_SIZE(ipu6_adev_irq_mask); i++) {
-			irqreturn_t r;
+			irqreturn_t r = ipu6_buttress_call_isr(adev[i]);
 
 			if (!(irq_status & ipu6_adev_irq_mask[i]))
 				continue;
-
-			r = ipu6_buttress_call_isr(adev[i]);
 
 			if (r == IRQ_WAKE_THREAD) {
 				ret = IRQ_WAKE_THREAD;
@@ -542,11 +552,15 @@ int ipu6_buttress_reset_authentication(struct ipu6_device *isp)
 int ipu6_buttress_map_fw_image(struct ipu6_bus_device *sys,
 			       const struct firmware *fw, struct sg_table *sgt)
 {
+	bool is_vmalloc = is_vmalloc_addr(fw->data);
 	struct page **pages;
 	const void *addr;
 	unsigned long n_pages;
 	unsigned int i;
 	int ret;
+
+	if (!is_vmalloc && !virt_addr_valid(fw->data))
+		return -EDOM;
 
 	n_pages = PHYS_PFN(PAGE_ALIGN(fw->size));
 
@@ -556,7 +570,8 @@ int ipu6_buttress_map_fw_image(struct ipu6_bus_device *sys,
 
 	addr = fw->data;
 	for (i = 0; i < n_pages; i++) {
-		struct page *p = vmalloc_to_page(addr);
+		struct page *p = is_vmalloc ?
+			vmalloc_to_page(addr) : virt_to_page(addr);
 
 		if (!p) {
 			ret = -ENOMEM;
@@ -620,7 +635,6 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 		goto out_unlock;
 
 	if (ipu6_buttress_auth_done(isp)) {
-		dev_dbg(&isp->pdev->dev, "Buttress authentication already done\n");
 		ret = 0;
 		goto out_pm_put;
 	}
@@ -822,6 +836,7 @@ int ipu6_buttress_init(struct ipu6_device *isp)
 {
 	int ret, ipc_reset_retry = BUTTRESS_CSE_IPC_RESET_RETRY;
 	struct ipu6_buttress *b = &isp->buttress;
+	u32 val;
 
 	mutex_init(&b->power_mutex);
 	mutex_init(&b->auth_mutex);
@@ -845,10 +860,35 @@ int ipu6_buttress_init(struct ipu6_device *isp)
 	memset(&b->ish, 0, sizeof(b->ish));
 
 	isp->secure_mode = ipu6_buttress_get_secure_mode(isp);
+	dev_info(&isp->pdev->dev, "IPU6 in %s mode touch 0x%x mask 0x%x\n",
+		 isp->secure_mode ? "secure" : "non-secure",
+		 readl(isp->base + BUTTRESS_REG_SECURITY_TOUCH),
+		 readl(isp->base + BUTTRESS_REG_CAMERA_MASK));
 
 	b->wdt_cached_value = readl(isp->base + BUTTRESS_REG_WDT);
 	writel(BUTTRESS_IRQS, isp->base + BUTTRESS_REG_ISR_CLEAR);
 	writel(BUTTRESS_IRQS, isp->base + BUTTRESS_REG_ISR_ENABLE);
+
+	/* get ref_clk frequency by reading the indication in btrs control */
+	val = readl(isp->base + BUTTRESS_REG_BTRS_CTRL);
+	val = FIELD_GET(BUTTRESS_REG_BTRS_CTRL_REF_CLK_IND, val);
+
+	switch (val) {
+	case 0x0:
+		b->ref_clk = 240;
+		break;
+	case 0x1:
+		b->ref_clk = 192;
+		break;
+	case 0x2:
+		b->ref_clk = 384;
+		break;
+	default:
+		dev_warn(&isp->pdev->dev,
+			 "Unsupported ref clock, use 19.2Mhz by default.\n");
+		b->ref_clk = 192;
+		break;
+	}
 
 	/* Retry couple of times in case of CSE initialization is delayed */
 	do {

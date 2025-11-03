@@ -1,17 +1,18 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Copyright (C) 2013 - 2023 Intel Corporation */
+/* Copyright (C) 2013--2024 Intel Corporation */
 
 #ifndef IPU6_BUTTRESS_H
 #define IPU6_BUTTRESS_H
 
-#include <linux/device.h>
+#include <linux/completion.h>
+#include <linux/irqreturn.h>
+#include <linux/list.h>
+#include <linux/mutex.h>
 
+struct device;
 struct firmware;
 struct ipu6_device;
 struct ipu6_bus_device;
-
-#define IPU6_BUTTRESS_NUM_OF_SENS_CKS	3
-#define IPU6_BUTTRESS_NUM_OF_PLL_CKS	3
 
 #define BUTTRESS_PS_FREQ_STEP		25U
 #define BUTTRESS_MIN_FORCE_PS_FREQ	(BUTTRESS_PS_FREQ_STEP * 8)
@@ -19,18 +20,13 @@ struct ipu6_bus_device;
 
 #define BUTTRESS_IS_FREQ_STEP		25U
 #define BUTTRESS_MIN_FORCE_IS_FREQ	(BUTTRESS_IS_FREQ_STEP * 8)
-#define BUTTRESS_MAX_FORCE_IS_FREQ	(BUTTRESS_IS_FREQ_STEP * 16)
+#define BUTTRESS_MAX_FORCE_IS_FREQ	(BUTTRESS_IS_FREQ_STEP * 22)
 
 struct ipu6_buttress_ctrl {
 	u32 freq_ctl, pwr_sts_shift, pwr_sts_mask, pwr_sts_on, pwr_sts_off;
 	unsigned int ratio;
 	unsigned int qos_floor;
-};
-
-struct ipu6_buttress_fused_freqs {
-	unsigned int min_freq;
-	unsigned int max_freq;
-	unsigned int efficient_freq;
+	bool started;
 };
 
 struct ipu6_buttress_ipc {
@@ -53,22 +49,13 @@ struct ipu6_buttress {
 	struct ipu6_buttress_ipc ish;
 	u32 wdt_cached_value;
 	bool force_suspend;
+	u32 ref_clk;
 	u32 reg_irq_sts;
-};
-
-struct ipu6_buttress_sensor_clk_freq {
-	unsigned int rate;
-	unsigned int val;
 };
 
 enum ipu6_buttress_ipc_domain {
 	IPU6_BUTTRESS_IPC_CSE,
 	IPU6_BUTTRESS_IPC_ISH,
-};
-
-struct ipu6_buttress_constraint {
-	struct list_head list;
-	unsigned int min_freq;
 };
 
 struct ipu6_ipc_buttress_bulk_msg {
