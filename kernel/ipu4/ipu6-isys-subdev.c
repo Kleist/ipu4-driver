@@ -1,10 +1,18 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2013 - 2023 Intel Corporation
+ * Copyright (C) 2013--2024 Intel Corporation
  */
 
-#include <media/mipi-csi2.h>
+#include <linux/bug.h>
+#include <linux/device.h>
+#include <linux/minmax.h>
 
+#include <media/media-entity.h>
+#include <media/mipi-csi2.h>
+#include <media/v4l2-ctrls.h>
+#include <media/v4l2-subdev.h>
+
+#include "ipu6-bus.h"
 #include "ipu6-isys.h"
 #include "ipu6-isys-subdev.h"
 

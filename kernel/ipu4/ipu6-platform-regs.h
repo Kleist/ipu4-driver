@@ -6,6 +6,8 @@
 
 #include <linux/bits.h>
 
+#include "ipu4-platform-regs.h"
+
 /*
  * IPU6 uses uniform address within IPU6, therefore all subsystem registers
  * locates in one single space starts from 0 but in different sctions with

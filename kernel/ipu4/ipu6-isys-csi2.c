@@ -10,6 +10,7 @@
 #include <media/v4l2-device.h>
 #include <media/v4l2-event.h>
 
+#include "ipu6-bus.h"
 #include "ipu6-isys.h"
 #include "ipu6-isys-subdev.h"
 #include "ipu6-platform-buttress-regs.h"
@@ -306,7 +307,7 @@ static int ipu6_isys_csi2_set_stream(struct v4l2_subdev *sd,
 
 	/* SOF/EOF of VC0-VC3 enabled from CSI2PART register in B0 */
 	for (i = 0; i < NR_OF_CSI2_VC; i++)
-		csi2part |= CSI2_IRQ_FS_VC(i) | CSI2_IRQ_FE_VC(i);
+		csi2part |= IPU_CSI_RX_IRQ_FS_VC(i) | IPU_CSI_RX_IRQ_FE_VC(i);
 
 	/* Enable csi2 receiver error interrupts */
 	csi2csirx = BIT(CSI2_CSIRX_NUM_ERRORS) - 1;

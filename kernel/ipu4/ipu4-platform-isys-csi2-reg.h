@@ -34,8 +34,8 @@
 #define CSI2_REG_CSI2S2M_IRQ_ENABLE			0x610
 #define CSI2_REG_CSI2S2M_IRQ_LEVEL_NOT_PULSE		0x614
 
-#define CSI2_IRQ_FS_VC(chn)				(1 << ((chn) * 4))
-#define CSI2_IRQ_FE_VC(chn)				(2 << ((chn) * 4))
+#define IPU_CSI_RX_IRQ_FS_VC(chn)			(1 << ((chn) * 4))
+#define IPU_CSI_RX_IRQ_FE_VC(chn)			(2 << ((chn) * 4))
 
 #define CSI2_REG_CSI_RX_ENABLE				0x00
 #define CSI2_CSI_RX_ENABLE_ENABLE			0x01

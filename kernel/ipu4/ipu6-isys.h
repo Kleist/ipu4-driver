@@ -1,20 +1,26 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Copyright (C) 2013 - 2023 Intel Corporation */
+/* Copyright (C) 2013--2024 Intel Corporation */
 
 #ifndef IPU6_ISYS_H
 #define IPU6_ISYS_H
 
+#include <linux/irqreturn.h>
+#include <linux/list.h>
+#include <linux/mutex.h>
 #include <linux/pm_qos.h>
+#include <linux/spinlock_types.h>
+#include <linux/types.h>
 
 #include <media/media-device.h>
 #include <media/v4l2-async.h>
 #include <media/v4l2-device.h>
 
 #include "ipu6.h"
-#include "ipu6-bus.h"
 #include "ipu6-fw-isys.h"
 #include "ipu6-isys-csi2.h"
 #include "ipu6-isys-video.h"
+
+struct ipu6_bus_device;
 
 #define IPU6_ISYS_ENTITY_PREFIX		"Intel IPU4"
 /* FW support max 16 streams */
@@ -35,8 +41,8 @@
 #define IPU6_ISYS_SIZE_PROXY_SEND_QUEUE 5
 #define IPU6_ISYS_NUM_RECV_QUEUE 1
 
-#define IPU6_ISYS_MIN_WIDTH		1U
-#define IPU6_ISYS_MIN_HEIGHT		1U
+#define IPU6_ISYS_MIN_WIDTH		2U
+#define IPU6_ISYS_MIN_HEIGHT		2U
 #define IPU6_ISYS_MAX_WIDTH		4672U
 #define IPU6_ISYS_MAX_HEIGHT		3416U
 
@@ -127,10 +133,10 @@ struct ipu6_isys {
 	struct ipu6_bus_device *adev;
 
 	int power;
-	spinlock_t power_lock; // Access to power
+	spinlock_t power_lock;
 	u32 isr_csi2_bits;
 	u32 csi2_rx_ctrl_cached;
-	spinlock_t streams_lock; // Access to streams
+	spinlock_t streams_lock;
 	struct ipu6_isys_stream streams[IPU4_ISYS_MAX_STREAMS];
 	int streams_ref_count[IPU4_ISYS_MAX_STREAMS];
 	void *fwcom;
@@ -144,11 +150,17 @@ struct ipu6_isys {
 	bool csi2_cse_ipc_not_supported;
 	unsigned int ref_count;
 	unsigned int stream_opened;
+	unsigned int sensor_type;
 
-	struct mutex mutex; // isys video open/release operations
-	struct mutex stream_mutex; // Stream start stop
+	struct mutex mutex;
+	struct mutex stream_mutex;
 
 	struct ipu6_isys_pdata *pdata;
+
+	int (*phy_set_power)(struct ipu6_isys *isys,
+			     struct ipu6_isys_csi2_config *cfg,
+			     const struct ipu6_isys_csi2_timing *timing,
+			     bool on);
 
 	struct ipu6_isys_csi2 *csi2;
 	struct ipu6_isys_video av[NR_OF_VIDEO_DEVICE];
@@ -181,6 +193,20 @@ void isys_setup_hw(struct ipu6_isys *isys);
 irqreturn_t isys_isr(struct ipu6_bus_device *adev);
 void update_watermark_setting(struct ipu6_isys *isys);
 
-void ipu6_isys_wait_not_resetting(struct ipu6_isys *isys, const char *context);
+int ipu6_isys_mcd_phy_set_power(struct ipu6_isys *isys,
+				struct ipu6_isys_csi2_config *cfg,
+				const struct ipu6_isys_csi2_timing *timing,
+				bool on);
 
+int ipu6_isys_dwc_phy_set_power(struct ipu6_isys *isys,
+				struct ipu6_isys_csi2_config *cfg,
+				const struct ipu6_isys_csi2_timing *timing,
+				bool on);
+
+int ipu6_isys_jsl_phy_set_power(struct ipu6_isys *isys,
+				struct ipu6_isys_csi2_config *cfg,
+				const struct ipu6_isys_csi2_timing *timing,
+				bool on);
+
+void ipu6_isys_wait_not_resetting(struct ipu6_isys *isys, const char *context);
 #endif /* IPU6_ISYS_H */

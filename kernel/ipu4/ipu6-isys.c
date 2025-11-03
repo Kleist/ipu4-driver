@@ -38,8 +38,8 @@
 #include "ipu6-isys-csi2.h"
 #include "ipu6-mmu.h"
 #include "ipu6-platform-buttress-regs.h"
-#include "ipu4-platform-isys-csi2-reg.h"
-#include "ipu4-platform-regs.h"
+#include "ipu6-platform-isys-csi2-reg.h"
+#include "ipu6-platform-regs.h"
 
 #define IPU6_BUTTRESS_FABIC_CONTROL		0x68
 #define GDA_ENABLE_IWAKE_INDEX			2
@@ -268,8 +268,37 @@ void isys_setup_hw(struct ipu6_isys *isys)
 	void __iomem *base = isys->pdata->base;
 	const u8 *thd = isys->pdata->ipdata->hw_variant.cdc_fifo_threshold;
 	u32 irqs = 0;
-	unsigned int i;
+#ifdef IPU6
+	unsigned int i, nports;
 
+	nports = isys->pdata->ipdata->csi2.nports;
+
+	/* Enable irqs for all MIPI ports */
+	for (i = 0; i < nports; i++)
+		irqs |= IPU6_ISYS_UNISPART_IRQ_CSI2(i);
+
+	writel(irqs, base + isys->pdata->ipdata->csi2.ctrl0_irq_edge);
+	writel(irqs, base + isys->pdata->ipdata->csi2.ctrl0_irq_lnp);
+	writel(irqs, base + isys->pdata->ipdata->csi2.ctrl0_irq_mask);
+	writel(irqs, base + isys->pdata->ipdata->csi2.ctrl0_irq_enable);
+	writel(GENMASK(19, 0),
+	       base + isys->pdata->ipdata->csi2.ctrl0_irq_clear);
+
+	irqs = ISYS_UNISPART_IRQS;
+	writel(irqs, base + IPU6_REG_ISYS_UNISPART_IRQ_EDGE);
+	writel(irqs, base + IPU6_REG_ISYS_UNISPART_IRQ_LEVEL_NOT_PULSE);
+	writel(GENMASK(28, 0), base + IPU6_REG_ISYS_UNISPART_IRQ_CLEAR);
+	writel(irqs, base + IPU6_REG_ISYS_UNISPART_IRQ_MASK);
+	writel(irqs, base + IPU6_REG_ISYS_UNISPART_IRQ_ENABLE);
+
+	writel(0, base + IPU6_REG_ISYS_UNISPART_SW_IRQ_REG);
+	writel(0, base + IPU6_REG_ISYS_UNISPART_SW_IRQ_MUX_REG);
+
+	/* Write CDC FIFO threshold values for isys */
+	for (i = 0; i < isys->pdata->ipdata->hw_variant.cdc_fifos; i++)
+		writel(thd[i], base + IPU6_REG_ISYS_CDC_THRESHOLD(i));
+#else
+	unsigned int i;
 	/* Enable irqs for all MIPI ports */
 	irqs = IPU4_ISYS_UNISPART_IRQ_CSI2(0) |
 	    IPU4_ISYS_UNISPART_IRQ_CSI2(1) |
@@ -291,6 +320,7 @@ void isys_setup_hw(struct ipu6_isys *isys)
 	/* Write CDC FIFO threshold values for isys */
 	for (i = 0; i < isys->pdata->ipdata->hw_variant.cdc_fifos; i++)
 		writel(thd[i], base + IPU4_REG_ISYS_CDC_THRESHOLD(i));
+#endif
 }
 
 static void ipu6_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
@@ -300,26 +330,43 @@ static void ipu6_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
 	u32 status;
 	int source;
 
+#ifdef IPU6
+	ipu6_isys_register_errors(csi2);
+
+	status = readl(csi2->base + CSI_PORT_REG_BASE_IRQ_CSI_SYNC +
+		       CSI_PORT_REG_BASE_IRQ_STATUS_OFFSET);
+
+	writel(status, csi2->base + CSI_PORT_REG_BASE_IRQ_CSI_SYNC +
+	       CSI_PORT_REG_BASE_IRQ_CLEAR_OFFSET);
+#else
 	status = readl(csi2->base + CSI2_REG_CSI2PART_IRQ_STATUS);
 	writel(status, csi2->base + CSI2_REG_CSI2PART_IRQ_CLEAR);
 
 	if (status & CSI2_CSI2PART_IRQ_CSIRX)
 		ipu4_isys_register_errors(csi2);
-
+#endif
 	source = csi2->asd.source;
 	for (i = 0; i < NR_OF_CSI2_VC; i++) {
-		if ((status & CSI2_IRQ_FS_VC(i))) {
+		if (status & IPU_CSI_RX_IRQ_FS_VC(i)) {
 			stream = ipu6_isys_query_stream_by_source(csi2->isys,
 								  source, i);
-			if (stream)
+			if (stream) {
+#ifdef IPU6 // TBD - is this a bug in upstream? 2 x sof_event send?
+				ipu6_isys_csi2_sof_event_by_stream(stream);
+#endif
 				ipu6_isys_put_stream(stream);
+			}
 		}
 
-		if ((status & CSI2_IRQ_FE_VC(i))) {
+		if (status & IPU_CSI_RX_IRQ_FE_VC(i)) {
 			stream = ipu6_isys_query_stream_by_source(csi2->isys,
 								  source, i);
-			if (stream)
+			if (stream) {
+#ifdef IPU6 // TBD - is this a bug in upstream? 2 x eof_event send?
+				ipu6_isys_csi2_eof_event_by_stream(stream);
+#endif
 				ipu6_isys_put_stream(stream);
+			}
 		}
 	}
 }
@@ -386,6 +433,20 @@ static int isys_notifier_bound(struct v4l2_async_notifier *notifier,
 		container_of(asc, struct sensor_async_sd, asc);
 	int ret;
 
+	if (s_asd->csi2.port >= isys->pdata->ipdata->csi2.nports) {
+		dev_err(&isys->adev->auxdev.dev, "invalid csi2 port %u\n",
+			s_asd->csi2.port);
+		return -EINVAL;
+	}
+
+#ifdef IPU6
+	ret = ipu_bridge_instantiate_vcm(sd->dev);
+	if (ret) {
+		dev_err(&isys->adev->auxdev.dev, "instantiate vcm failed\n");
+		return ret;
+	}
+#endif
+
 	dev_dbg(&isys->adev->auxdev.dev, "bind %s nlanes is %d port is %d\n",
 		sd->name, s_asd->csi2.nlanes, s_asd->csi2.port);
 	ret = isys_complete_ext_device_registration(isys, sd, &s_asd->csi2);
@@ -425,8 +486,7 @@ static int isys_notifier_init(struct ipu6_isys *isys)
 		struct sensor_async_sd *s_asd;
 		struct fwnode_handle *ep;
 
-		ep =
-		fwnode_graph_get_endpoint_by_id(dev_fwnode(dev), i, 0,
+		ep = fwnode_graph_get_endpoint_by_id(dev_fwnode(dev), i, 0,
 						FWNODE_GRAPH_ENDPOINT_NEXT);
 		if (!ep)
 			continue;
@@ -491,12 +551,12 @@ static int isys_register_devices(struct ipu6_isys *isys)
 
 	ret = media_device_register(&isys->media_dev);
 	if (ret < 0)
-		goto out_failed_register;
+		goto out_media_device_unregister;
 
 	isys->v4l2_dev.mdev = &isys->media_dev;
 	isys->v4l2_dev.ctrl_handler = NULL;
 
-	ret = v4l2_device_register(dev->parent, &isys->v4l2_dev);
+	ret = v4l2_device_register(dev, &isys->v4l2_dev);
 	if (ret < 0)
 		goto out_media_device_unregister;
 
@@ -530,7 +590,7 @@ out_v4l2_device_unregister:
 out_media_device_unregister:
 	media_device_unregister(&isys->media_dev);
 	media_device_cleanup(&isys->media_dev);
-out_failed_register:
+
 	dev_err(dev, "failed to register isys devices\n");
 
 	return ret;
@@ -572,6 +632,9 @@ static int isys_runtime_pm_resume(struct device *dev)
 
 	isys_setup_hw(isys);
 
+#ifdef IPU6
+	set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_ON);
+#endif
 	return 0;
 }
 
@@ -590,14 +653,14 @@ static int isys_runtime_pm_suspend(struct device *dev)
 	spin_unlock_irqrestore(&isys->power_lock, flags);
 
 	mutex_lock(&isys->mutex);
-	if (isys->need_reset) {
-		isys->need_reset = false;
-		dev_info(dev, "%s: Cleared need_reset\n", __func__);
-	}
+	isys->need_reset = false;
 	mutex_unlock(&isys->mutex);
 
 	isys->phy_termcal_val = 0;
 	cpu_latency_qos_update_request(&isys->pm_qos, PM_QOS_DEFAULT_VALUE);
+#ifdef IPU6
+	set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_OFF);
+#endif
 
 	ipu6_mmu_hw_cleanup(adev->mmu);
 
@@ -1086,3 +1149,4 @@ MODULE_AUTHOR("Hongju Wang <hongju.wang@intel.com>");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Intel IPU4 input system driver");
 MODULE_IMPORT_NS(INTEL_IPU6);
+MODULE_IMPORT_NS(INTEL_IPU_BRIDGE);
