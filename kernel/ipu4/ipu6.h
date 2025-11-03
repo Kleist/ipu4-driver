@@ -4,11 +4,27 @@
 #ifndef IPU6_H
 #define IPU6_H
 
-#include <linux/firmware.h>
+#include <linux/list.h>
 #include <linux/pci.h>
-#include <linux/mmiotrace.h>
+#include <linux/types.h>
 
 #include "ipu6-buttress.h"
+
+struct firmware;
+struct pci_dev;
+struct ipu6_bus_device;
+
+#define IPU6_NAME			"intel-ipu6"
+#define IPU6_MEDIA_DEV_MODEL_NAME	"ipu6"
+
+#define IPU6SE_FIRMWARE_NAME		"intel/ipu/ipu6se_fw.bin"
+#define IPU6EP_FIRMWARE_NAME		"intel/ipu/ipu6ep_fw.bin"
+#define IPU6_FIRMWARE_NAME		"intel/ipu/ipu6_fw.bin"
+#define IPU6EPMTL_FIRMWARE_NAME		"intel/ipu/ipu6epmtl_fw.bin"
+#define IPU6EPADLN_FIRMWARE_NAME	"intel/ipu/ipu6epadln_fw.bin"
+
+#define IPU4_FIRMWARE_NAME               "ipu4_cpd_b0.bin"
+#define IPU4_ISYS_NUM_STREAMS            8       /* Max 8 */
 
 #define PCI_DEVICE_ID_INTEL_IPU4		0x5a88
 
@@ -21,12 +37,6 @@
 
 #define IPU4_NAME			"intel-ipu4"
 #define IPU4_MEDIA_DEV_MODEL_NAME	"ipu4"
-
-#define IPU6SE_FIRMWARE_NAME		"intel/ipu6se_fw.bin"
-#define IPU6EP_FIRMWARE_NAME		"intel/ipu6ep_fw.bin"
-#define IPU6_FIRMWARE_NAME		"intel/ipu6_fw.bin"
-#define IPU6EPMTL_FIRMWARE_NAME		"intel/ipu6epmtl_fw.bin"
-
 #define IPU4_PCI_ID	0x5a88
 #define IPU4_MEDIA_DEV_MODEL_NAME	"ipu4"
 
@@ -90,8 +100,6 @@ static inline bool is_ipu4(u8 hw_ver)
 /* Virtualization factor to calculate the available virtual pages */
 #define IPU6_DEVICE_GDA_VIRT_FACTOR	32
 
-#define NR_OF_MMU_RESOURCES			2
-
 struct ipu6_device {
 	struct pci_dev *pdev;
 	struct list_head devices;
@@ -123,15 +131,8 @@ struct ipu6_device {
 #define IPU6_MAX_LI_BLOCK_ADDR		128
 #define IPU6_MAX_L2_BLOCK_ADDR		64
 
-#define IPU6_ISYS_MAX_CSI2_COMBO_PORTS	2
-
-#define IPU6_MAX_FRAME_COUNTER	0xff
-
 #define IPU6SE_ISYS_NUM_STREAMS          IPU6SE_NONSECURE_STREAM_ID_MAX
 #define IPU6_ISYS_NUM_STREAMS            IPU6_NONSECURE_STREAM_ID_MAX
-
-#define IPU4_ISYS_NUM_STREAMS            8       /* Max 8 */
-#define IPU4_FIRMWARE_NAME               "ipu4_cpd_b0.bin"
 
 /*
  * To maximize the IOSF utlization, IPU6 need to send requests in bursts.
@@ -338,10 +339,18 @@ struct ipu6_isys_internal_pdata {
 	struct ipu6_hw_variants hw_variant;
 	u32 num_parallel_streams;
 	u32 isys_dma_overshoot;
+	u32 sram_gran_shift;
+	u32 sram_gran_size;
+	u32 max_sram_size;
 	u32 max_streams;
 	u32 max_send_queues;
 	u32 max_sram_blocks;
 	u32 max_devq_size;
+	u32 sensor_type_start;
+	u32 sensor_type_end;
+	u32 ltr;
+	u32 memopen_threshold;
+	bool enhanced_iwake;
 };
 
 struct ipu6_isys_pdata {

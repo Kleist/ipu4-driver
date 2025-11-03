@@ -74,7 +74,145 @@ struct ipu6_cell_program {
 	u32 dummy[2];
 };
 
-// From iei-4.19.217 ipu4.c
+#ifdef IPU6
+static struct ipu6_isys_internal_pdata isys_ipdata = {
+	.hw_variant = {
+		.offset = IPU6_UNIFIED_OFFSET,
+		.nr_mmus = 3,
+		.mmu_hw = {
+			{
+				.offset = IPU6_ISYS_IOMMU0_OFFSET,
+				.info_bits = IPU6_INFO_REQUEST_DESTINATION_IOSF,
+				.nr_l1streams = 16,
+				.l1_block_sz = {
+					3, 8, 2, 2, 2, 2, 2, 2, 1, 1,
+					1, 1, 1, 1, 1, 1
+				},
+				.nr_l2streams = 16,
+				.l2_block_sz = {
+					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+					2, 2, 2, 2, 2, 2
+				},
+				.insert_read_before_invalidate = false,
+				.l1_stream_id_reg_offset =
+				IPU6_MMU_L1_STREAM_ID_REG_OFFSET,
+				.l2_stream_id_reg_offset =
+				IPU6_MMU_L2_STREAM_ID_REG_OFFSET,
+			},
+			{
+				.offset = IPU6_ISYS_IOMMU1_OFFSET,
+				.info_bits = 0,
+				.nr_l1streams = 16,
+				.l1_block_sz = {
+					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+					2, 2, 2, 1, 1, 4
+				},
+				.nr_l2streams = 16,
+				.l2_block_sz = {
+					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+					2, 2, 2, 2, 2, 2
+				},
+				.insert_read_before_invalidate = false,
+				.l1_stream_id_reg_offset =
+				IPU6_MMU_L1_STREAM_ID_REG_OFFSET,
+				.l2_stream_id_reg_offset =
+				IPU6_MMU_L2_STREAM_ID_REG_OFFSET,
+			},
+			{
+				.offset = IPU6_ISYS_IOMMUI_OFFSET,
+				.info_bits = 0,
+				.nr_l1streams = 0,
+				.nr_l2streams = 0,
+				.insert_read_before_invalidate = false,
+			},
+		},
+		.cdc_fifos = 3,
+		.cdc_fifo_threshold = {6, 8, 2},
+		.dmem_offset = IPU6_ISYS_DMEM_OFFSET,
+		.spc_offset = IPU6_ISYS_SPC_OFFSET,
+	},
+	.isys_dma_overshoot = IPU6_ISYS_OVERALLOC_MIN,
+};
+
+static struct ipu6_psys_internal_pdata psys_ipdata = {
+	.hw_variant = {
+		.offset = IPU6_UNIFIED_OFFSET,
+		.nr_mmus = 4,
+		.mmu_hw = {
+			{
+				.offset = IPU6_PSYS_IOMMU0_OFFSET,
+				.info_bits =
+				IPU6_INFO_REQUEST_DESTINATION_IOSF,
+				.nr_l1streams = 16,
+				.l1_block_sz = {
+					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+					2, 2, 2, 2, 2, 2
+				},
+				.nr_l2streams = 16,
+				.l2_block_sz = {
+					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+					2, 2, 2, 2, 2, 2
+				},
+				.insert_read_before_invalidate = false,
+				.l1_stream_id_reg_offset =
+				IPU6_MMU_L1_STREAM_ID_REG_OFFSET,
+				.l2_stream_id_reg_offset =
+				IPU6_MMU_L2_STREAM_ID_REG_OFFSET,
+			},
+			{
+				.offset = IPU6_PSYS_IOMMU1_OFFSET,
+				.info_bits = 0,
+				.nr_l1streams = 32,
+				.l1_block_sz = {
+					1, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+					2, 2, 2, 2, 2, 10,
+					5, 4, 14, 6, 4, 14, 6, 4, 8,
+					4, 2, 1, 1, 1, 1, 14
+				},
+				.nr_l2streams = 32,
+				.l2_block_sz = {
+					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+					2, 2, 2, 2, 2, 2,
+					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+					2, 2, 2, 2, 2, 2
+				},
+				.insert_read_before_invalidate = false,
+				.l1_stream_id_reg_offset =
+				IPU6_MMU_L1_STREAM_ID_REG_OFFSET,
+				.l2_stream_id_reg_offset =
+				IPU6_PSYS_MMU1W_L2_STREAM_ID_REG_OFFSET,
+			},
+			{
+				.offset = IPU6_PSYS_IOMMU1R_OFFSET,
+				.info_bits = 0,
+				.nr_l1streams = 16,
+				.l1_block_sz = {
+					1, 4, 4, 4, 4, 16, 8, 4, 32,
+					16, 16, 2, 2, 2, 1, 12
+				},
+				.nr_l2streams = 16,
+				.l2_block_sz = {
+					2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+					2, 2, 2, 2, 2, 2
+				},
+				.insert_read_before_invalidate = false,
+				.l1_stream_id_reg_offset =
+				IPU6_MMU_L1_STREAM_ID_REG_OFFSET,
+				.l2_stream_id_reg_offset =
+				IPU6_MMU_L2_STREAM_ID_REG_OFFSET,
+			},
+			{
+				.offset = IPU6_PSYS_IOMMUI_OFFSET,
+				.info_bits = 0,
+				.nr_l1streams = 0,
+				.nr_l2streams = 0,
+				.insert_read_before_invalidate = false,
+			},
+		},
+		.dmem_offset = IPU6_PSYS_DMEM_OFFSET,
+	},
+};
+#else
 static const struct ipu6_isys_internal_pdata isys_ipdata = {
 	.hw_variant = {
 	    .offset = IPU4_ISYS_OFFSET,
@@ -233,6 +371,7 @@ static const struct ipu6_psys_internal_pdata psys_ipdata = {
 		       .spc_offset = IPU4_PSYS_SPC_OFFSET,
 	},
 };
+#endif
 
 static const struct ipu6_buttress_ctrl ipu6_isys_buttress_ctrl = {
 	.ratio = IPU6_IS_FREQ_CTL_DEFAULT_RATIO,
@@ -344,16 +483,112 @@ static int ipu6_isys_check_fwnode_graph(struct fwnode_handle *fwnode)
 	return ipu6_isys_check_fwnode_graph(fwnode->secondary);
 }
 
+#define IPU6_ISYS_CSI2_NPORTS		4
+#define IPU6SE_ISYS_CSI2_NPORTS		4
+#define IPU6_TGL_ISYS_CSI2_NPORTS	8
+#define IPU6EP_MTL_ISYS_CSI2_NPORTS	6
+
+static void ipu6_internal_pdata_init(struct ipu6_device *isp)
+{
+#ifdef IPU6
+	u8 hw_ver = isp->hw_ver;
+
+	isys_ipdata.num_parallel_streams = IPU6_ISYS_NUM_STREAMS;
+	isys_ipdata.sram_gran_shift = IPU6_SRAM_GRANULARITY_SHIFT;
+	isys_ipdata.sram_gran_size = IPU6_SRAM_GRANULARITY_SIZE;
+	isys_ipdata.max_sram_size = IPU6_MAX_SRAM_SIZE;
+	isys_ipdata.sensor_type_start = IPU6_FW_ISYS_SENSOR_TYPE_START;
+	isys_ipdata.sensor_type_end = IPU6_FW_ISYS_SENSOR_TYPE_END;
+	isys_ipdata.max_streams = IPU6_ISYS_NUM_STREAMS;
+	isys_ipdata.max_send_queues = IPU6_N_MAX_SEND_QUEUES;
+	isys_ipdata.max_sram_blocks = IPU6_NOF_SRAM_BLOCKS_MAX;
+	isys_ipdata.max_devq_size = IPU6_DEV_SEND_QUEUE_SIZE;
+	isys_ipdata.csi2.nports = IPU6_ISYS_CSI2_NPORTS;
+	isys_ipdata.csi2.irq_mask = IPU6_CSI_RX_ERROR_IRQ_MASK;
+	isys_ipdata.csi2.ctrl0_irq_edge = IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_EDGE;
+	isys_ipdata.csi2.ctrl0_irq_clear =
+		IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_CLEAR;
+	isys_ipdata.csi2.ctrl0_irq_mask = IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_MASK;
+	isys_ipdata.csi2.ctrl0_irq_enable =
+		IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_ENABLE;
+	isys_ipdata.csi2.ctrl0_irq_status =
+		IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_STATUS;
+	isys_ipdata.csi2.ctrl0_irq_lnp =
+		IPU6_REG_ISYS_CSI_TOP_CTRL0_IRQ_LEVEL_NOT_PULSE;
+	isys_ipdata.enhanced_iwake = is_ipu6ep_mtl(hw_ver) || is_ipu6ep(hw_ver);
+	psys_ipdata.hw_variant.spc_offset = IPU6_PSYS_SPC_OFFSET;
+	isys_ipdata.csi2.fw_access_port_ofs = CSI_REG_HUB_FW_ACCESS_PORT_OFS;
+
+	if (is_ipu6ep(hw_ver)) {
+		isys_ipdata.ltr = IPU6EP_LTR_VALUE;
+		isys_ipdata.memopen_threshold = IPU6EP_MIN_MEMOPEN_TH;
+	}
+
+	if (is_ipu6_tgl(hw_ver))
+		isys_ipdata.csi2.nports = IPU6_TGL_ISYS_CSI2_NPORTS;
+
+	if (is_ipu6ep_mtl(hw_ver)) {
+		isys_ipdata.csi2.nports = IPU6EP_MTL_ISYS_CSI2_NPORTS;
+
+		isys_ipdata.csi2.ctrl0_irq_edge =
+			IPU6V6_REG_ISYS_CSI_TOP_CTRL0_IRQ_EDGE;
+		isys_ipdata.csi2.ctrl0_irq_clear =
+			IPU6V6_REG_ISYS_CSI_TOP_CTRL0_IRQ_CLEAR;
+		isys_ipdata.csi2.ctrl0_irq_mask =
+			IPU6V6_REG_ISYS_CSI_TOP_CTRL0_IRQ_MASK;
+		isys_ipdata.csi2.ctrl0_irq_enable =
+			IPU6V6_REG_ISYS_CSI_TOP_CTRL0_IRQ_ENABLE;
+		isys_ipdata.csi2.ctrl0_irq_lnp =
+			IPU6V6_REG_ISYS_CSI_TOP_CTRL0_IRQ_LEVEL_NOT_PULSE;
+		isys_ipdata.csi2.ctrl0_irq_status =
+			IPU6V6_REG_ISYS_CSI_TOP_CTRL0_IRQ_STATUS;
+		isys_ipdata.csi2.fw_access_port_ofs =
+			CSI_REG_HUB_FW_ACCESS_PORT_V6OFS;
+		isys_ipdata.ltr = IPU6EP_MTL_LTR_VALUE;
+		isys_ipdata.memopen_threshold = IPU6EP_MTL_MIN_MEMOPEN_TH;
+	}
+
+	if (is_ipu6se(hw_ver)) {
+		isys_ipdata.csi2.nports = IPU6SE_ISYS_CSI2_NPORTS;
+		isys_ipdata.csi2.irq_mask = IPU6SE_CSI_RX_ERROR_IRQ_MASK;
+		isys_ipdata.num_parallel_streams = IPU6SE_ISYS_NUM_STREAMS;
+		isys_ipdata.sram_gran_shift = IPU6SE_SRAM_GRANULARITY_SHIFT;
+		isys_ipdata.sram_gran_size = IPU6SE_SRAM_GRANULARITY_SIZE;
+		isys_ipdata.max_sram_size = IPU6SE_MAX_SRAM_SIZE;
+		isys_ipdata.sensor_type_start =
+			IPU6SE_FW_ISYS_SENSOR_TYPE_START;
+		isys_ipdata.sensor_type_end = IPU6SE_FW_ISYS_SENSOR_TYPE_END;
+		isys_ipdata.max_streams = IPU6SE_ISYS_NUM_STREAMS;
+		isys_ipdata.max_send_queues = IPU6SE_N_MAX_SEND_QUEUES;
+		isys_ipdata.max_sram_blocks = IPU6SE_NOF_SRAM_BLOCKS_MAX;
+		isys_ipdata.max_devq_size = IPU6SE_DEV_SEND_QUEUE_SIZE;
+		psys_ipdata.hw_variant.spc_offset = IPU6SE_PSYS_SPC_OFFSET;
+	}
+#else
+	(void)isp;
+#endif
+}
+
 static struct ipu6_bus_device *
 ipu6_isys_init(struct pci_dev *pdev, struct device *parent,
 	       const struct ipu6_buttress_ctrl *ctrl, void __iomem *base,
 	       const struct ipu6_isys_internal_pdata *ipdata)
 {
+#ifndef IPU6
 	struct fwnode_handle *fwnode = dev_fwnode(&pdev->dev);
+#endif
+	struct device *dev = &pdev->dev;
 	struct ipu6_bus_device *isys_adev;
 	struct ipu6_isys_pdata *pdata;
 	int ret;
 
+#ifdef IPU6
+	ret = ipu_bridge_init(dev, ipu_bridge_parse_ssdb);
+	if (ret) {
+		dev_err_probe(dev, ret, "IPU6 bridge init failed\n");
+		return ERR_PTR(ret);
+	}
+#else
 	/* check fwnode at first, fallback into bridge if no fwnode graph */
 	ret = ipu6_isys_check_fwnode_graph(fwnode);
 	if (ret) {
@@ -363,14 +598,14 @@ ipu6_isys_init(struct pci_dev *pdev, struct device *parent,
 			return ERR_PTR(-EINVAL);
 		}
 
-		ret = ambu_ipu_bridge_init(&pdev->dev);
+		ret = ambu_ipu_bridge_init(dev);
 		if (ret) {
 			if (ret != -EPROBE_DEFER)
-				dev_err_probe(&pdev->dev, ret,
-					      "IPU6 bridge init failed\n");
+				dev_err_probe(dev, ret, "IPU6 bridge init failed\n");
 			return ERR_PTR(ret);
 		}
 	}
+#endif
 
 	pdata = kzalloc(sizeof(*pdata), GFP_KERNEL);
 	if (!pdata)
@@ -382,16 +617,16 @@ ipu6_isys_init(struct pci_dev *pdev, struct device *parent,
 	isys_adev = ipu6_bus_initialize_device(pdev, parent, pdata, ctrl,
 					       IPU6_ISYS_NAME);
 	if (IS_ERR(isys_adev)) {
-		dev_err_probe(&pdev->dev, PTR_ERR(isys_adev),
+		dev_err_probe(dev, PTR_ERR(isys_adev),
 			      "ipu6_bus_initialize_device isys failed\n");
 		kfree(pdata);
 		return ERR_CAST(isys_adev);
 	}
 
-	isys_adev->mmu = ipu6_mmu_init(&pdev->dev, base, ISYS_MMID,
+	isys_adev->mmu = ipu6_mmu_init(dev, base, ISYS_MMID,
 				       &ipdata->hw_variant);
 	if (IS_ERR(isys_adev->mmu)) {
-		dev_err_probe(&pdev->dev, PTR_ERR(isys_adev),
+		dev_err_probe(dev, PTR_ERR(isys_adev->mmu),
 			      "ipu6_mmu_init(isys_adev->mmu) failed\n");
 		put_device(&isys_adev->auxdev.dev);
 		kfree(pdata);
@@ -437,7 +672,7 @@ ipu6_psys_init(struct pci_dev *pdev, struct device *parent,
 	psys_adev->mmu = ipu6_mmu_init(&pdev->dev, base, PSYS_MMID,
 				       &ipdata->hw_variant);
 	if (IS_ERR(psys_adev->mmu)) {
-		dev_err_probe(&pdev->dev, PTR_ERR(psys_adev),
+		dev_err_probe(&pdev->dev, PTR_ERR(psys_adev->mmu),
 			      "ipu6_mmu_init(psys_adev->mmu) failed\n");
 		put_device(&psys_adev->auxdev.dev);
 		kfree(pdata);
@@ -498,13 +733,14 @@ static void ipu6_configure_vc_mechanism(struct ipu6_device *isp)
 static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
 	const struct ipu6_buttress_ctrl *isys_ctrl = NULL, *psys_ctrl = NULL;
+	struct device *dev = &pdev->dev;
 	void __iomem *isys_base = NULL;
 	void __iomem *psys_base = NULL;
 	struct ipu6_device *isp;
 	phys_addr_t phys;
 	int ret;
 
-	isp = devm_kzalloc(&pdev->dev, sizeof(*isp), GFP_KERNEL);
+	isp = devm_kzalloc(dev, sizeof(*isp), GFP_KERNEL);
 	if (!isp)
 		return -ENOMEM;
 
@@ -513,16 +749,14 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	ret = pcim_enable_device(pdev);
 	if (ret)
-		return dev_err_probe(&pdev->dev, ret,
-				     "Enable PCI device failed\n");
+		return dev_err_probe(dev, ret, "Enable PCI device failed\n");
 
 	phys = pci_resource_start(pdev, IPU6_PCI_BAR);
-	dev_dbg(&pdev->dev, "IPU6 PCI bar[%u] = %pa\n", IPU6_PCI_BAR, &phys);
+	dev_dbg(dev, "IPU6 PCI bar[%u] = %pa\n", IPU6_PCI_BAR, &phys);
 
 	ret = pcim_iomap_regions(pdev, 1 << IPU6_PCI_BAR, pci_name(pdev));
 	if (ret)
-		return dev_err_probe(&pdev->dev, ret,
-				     "Failed to I/O mem remappinp\n");
+		return dev_err_probe(dev, ret, "Failed to I/O mem remapping\n");
 
 	isp->base = pcim_iomap_table(pdev)[IPU6_PCI_BAR];
 	pci_set_drvdata(pdev, isp);
@@ -543,10 +777,14 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		isp->buttress.reg_irq_sts = BUTTRESS_REG_ISR_STATUS;
 		break;
 	case PCI_DEVICE_ID_INTEL_IPU6EP_ADLP:
-	case PCI_DEVICE_ID_INTEL_IPU6EP_ADLN:
 	case PCI_DEVICE_ID_INTEL_IPU6EP_RPLP:
 		isp->hw_ver = IPU6_VER_6EP;
 		isp->cpd_fw_name = IPU6EP_FIRMWARE_NAME;
+		isp->buttress.reg_irq_sts = BUTTRESS_REG_ISR_STATUS;
+		break;
+	case PCI_DEVICE_ID_INTEL_IPU6EP_ADLN:
+		isp->hw_ver = IPU6_VER_6EP;
+		isp->cpd_fw_name = IPU6EPADLN_FIRMWARE_NAME;
 		isp->buttress.reg_irq_sts = BUTTRESS_REG_ISR_STATUS;
 		break;
 	case PCI_DEVICE_ID_INTEL_IPU6EP_MTL:
@@ -564,10 +802,12 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		isp->buttress.reg_irq_sts = BUTTRESS_REG_ISR_ENABLED_STATUS;
 		break;
 	default:
-		return dev_err_probe(&pdev->dev, -ENODEV,
+		return dev_err_probe(dev, -ENODEV,
 				     "Unsupported IPU6 device %x\n",
 				     id->device);
 	}
+
+	ipu6_internal_pdata_init(isp);
 
 	isys_base = isp->base + isys_ipdata.hw_variant.offset;
 	psys_base = isp->base + psys_ipdata.hw_variant.offset;
@@ -590,7 +830,7 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (ret)
 		return ret;
 
-	ret = request_firmware(&isp->cpd_fw, isp->cpd_fw_name, &pdev->dev);
+	ret = request_firmware(&isp->cpd_fw, isp->cpd_fw_name, dev);
 	if (ret) {
 		dev_err_probe(&isp->pdev->dev, ret,
 			      "Requesting signed firmware %s failed\n",
@@ -718,9 +958,6 @@ static void ipu6_pci_remove(struct pci_dev *pdev)
 
 	pm_runtime_forbid(&pdev->dev);
 	pm_runtime_get_noresume(&pdev->dev);
-
-	pci_release_regions(pdev);
-	pci_disable_device(pdev);
 
 	release_firmware(isp->cpd_fw);
 
