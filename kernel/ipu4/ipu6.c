@@ -36,8 +36,8 @@
 #include "ipu6-isys.h"
 #include "ipu6-mmu.h"
 #include "ipu6-platform-buttress-regs.h"
-#include "ipu4-platform-isys-csi2-reg.h"
-#include "ipu4-platform-regs.h"
+#include "ipu6-platform-isys-csi2-reg.h"
+#include "ipu6-platform-regs.h"
 
 #define IPU6_PCI_BAR		0
 
