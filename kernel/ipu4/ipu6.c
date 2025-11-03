@@ -280,6 +280,39 @@ static const struct ipu6_buttress_ctrl ipu4_psys_buttress_ctrl = {
 	.pwr_sts_off = IPU4_BUTTRESS_PWR_STATE_PS_PWR_FSM_IDLE,
 };
 
+static void
+ipu6_pkg_dir_configure_spc(struct ipu6_device *isp,
+			   const struct ipu6_hw_variants *hw_variant,
+			   int pkg_dir_idx, void __iomem *base,
+			   u64 *pkg_dir, dma_addr_t pkg_dir_vied_address)
+{
+	struct ipu6_cell_program *prog;
+	void __iomem *spc_base;
+	u32 server_fw_addr;
+	dma_addr_t dma_addr;
+	u32 pg_offset;
+
+	server_fw_addr = lower_32_bits(*(pkg_dir + (pkg_dir_idx + 1) * 2));
+	if (pkg_dir_idx == IPU6_CPD_PKG_DIR_ISYS_SERVER_IDX)
+		dma_addr = sg_dma_address(isp->isys->fw_sgt.sgl);
+	else
+		dma_addr = sg_dma_address(isp->psys->fw_sgt.sgl);
+
+	pg_offset = server_fw_addr - dma_addr;
+	prog = (struct ipu6_cell_program *)((u64)isp->cpd_fw->data + pg_offset);
+	spc_base = base + prog->regs_addr;
+	if (spc_base != (base + hw_variant->spc_offset))
+		dev_warn(&isp->pdev->dev,
+			 "SPC reg addr %p not matching value from CPD %p\n",
+			 base + hw_variant->spc_offset, spc_base);
+	writel(server_fw_addr + prog->blob_offset +
+	       prog->icache_source, spc_base + IPU6_PSYS_REG_SPC_ICACHE_BASE);
+	writel(IPU6_INFO_REQUEST_DESTINATION_IOSF,
+	       spc_base + IPU6_REG_PSYS_INFO_SEG_0_CONFIG_ICACHE_MASTER);
+	writel(prog->start[1], spc_base + IPU6_PSYS_REG_SPC_START_PC);
+	writel(pkg_dir_vied_address, base + hw_variant->dmem_offset);
+}
+
 void ipu6_configure_spc(struct ipu6_device *isp,
 			const struct ipu6_hw_variants *hw_variant,
 			int pkg_dir_idx, void __iomem *base, u64 *pkg_dir,
@@ -296,7 +329,8 @@ void ipu6_configure_spc(struct ipu6_device *isp,
 	if (isp->secure_mode)
 		writel(IPU6_PKG_DIR_IMR_OFFSET, dmem_base);
 	else
-		WARN(1, "non-secure_,mode not implemented");
+		ipu6_pkg_dir_configure_spc(isp, hw_variant, pkg_dir_idx, base,
+					   pkg_dir, pkg_dir_dma_addr);
 }
 EXPORT_SYMBOL_NS_GPL(ipu6_configure_spc, INTEL_IPU6);
 
