@@ -5,13 +5,23 @@
 #define IPU6_BUS_H
 
 #include <linux/auxiliary_bus.h>
-#include <linux/pci.h>
+#include <linux/container_of.h>
+#include <linux/device.h>
+#include <linux/irqreturn.h>
+#include <linux/list.h>
+#include <linux/scatterlist.h>
+#include <linux/types.h>
+
+struct firmware;
+struct pci_dev;
+
+#define IPU6_BUS_NAME	IPU6_NAME "-bus"
 
 struct ipu6_buttress_ctrl;
 
 struct ipu6_bus_device {
 	struct auxiliary_device auxdev;
-	const struct auxiliary_driver *auxdrv;
+	struct auxiliary_driver *auxdrv;
 	const struct ipu6_auxdrv_data *auxdrv_data;
 	struct list_head list;
 	void *pdata;
@@ -32,10 +42,10 @@ struct ipu6_auxdrv_data {
 	bool wake_isr_thread;
 };
 
-#define to_ipu6_bus_device(_dev) container_of(to_auxiliary_dev(_dev), \
-					      struct ipu6_bus_device, auxdev)
-#define auxdev_to_adev(_auxdev) container_of(_auxdev, \
-					     struct ipu6_bus_device, auxdev)
+#define to_ipu6_bus_device(_dev) \
+	container_of(to_auxiliary_dev(_dev), struct ipu6_bus_device, auxdev)
+#define auxdev_to_adev(_auxdev) \
+	container_of(_auxdev, struct ipu6_bus_device, auxdev)
 #define ipu6_bus_get_drvdata(adev) dev_get_drvdata(&(adev)->auxdev.dev)
 
 struct ipu6_bus_device *

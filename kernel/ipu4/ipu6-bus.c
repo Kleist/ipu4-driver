@@ -1,14 +1,22 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2013 - 2023 Intel Corporation
+ * Copyright (C) 2013 - 2024 Intel Corporation
  */
 
+#include <linux/auxiliary_bus.h>
+#include <linux/device.h>
+#include <linux/dma-mapping.h>
+#include <linux/err.h>
+#include <linux/list.h>
+#include <linux/mutex.h>
 #include <linux/pci.h>
 #include <linux/pm_domain.h>
 #include <linux/pm_runtime.h>
+#include <linux/slab.h>
 
 #include "ipu6.h"
 #include "ipu6-bus.h"
+#include "ipu6-buttress.h"
 #include "ipu6-dma.h"
 
 static int bus_pm_runtime_suspend(struct device *dev)
@@ -156,6 +164,7 @@ void ipu6_bus_del_devices(struct pci_dev *pdev)
 	mutex_unlock(&ipu6_bus_mutex);
 }
 
+// Implemented by Ambu for silent_reset feature
 int ipu6_bus_reset_device(struct ipu6_bus_device *adev)
 {
 	int ret = 0;
