@@ -39,9 +39,6 @@
 #include "ipu4-platform-isys-csi2-reg.h"
 #include "ipu4-platform-regs.h"
 
-const char *ipu_last_rw_func;
-EXPORT_SYMBOL(ipu_last_rw_func);
-
 #define IPU6_PCI_BAR		0
 
 struct ipu6_cell_program {

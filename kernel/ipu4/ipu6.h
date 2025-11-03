@@ -10,43 +10,6 @@
 
 #include "ipu6-buttress.h"
 
-extern const char *ipu_last_rw_func;
-
-#define IPU_LOG_MARK_RW_LOCATIONS
-#if defined(IPU_LOG_MARK_RW_LOCATIONS)
-
-static inline u32 ipu_debug_readl(const void __iomem *addr,
-				  const char*, unsigned int, const char *func)
-{
-	if (func != ipu_last_rw_func) {
-		mmiotrace_printk("next mmio from %s\n", func);
-		ipu_last_rw_func = func;
-	}
-	return readl(addr);
-}
-
-static inline void ipu_debug_writel(u32 value, void __iomem *addr,
-				    const char*, unsigned int, const char *func)
-{
-	if (func != ipu_last_rw_func) {
-		mmiotrace_printk("next mmio from %s\n", func);
-		ipu_last_rw_func = func;
-	}
-	writel(value, addr);
-}
-#endif
-
-#if defined(IPU_LOG_MARK_RW_LOCATIONS)
-// Replace readl/writel macros with ones that debugs,
-// the original readl/writel is used above for the actual read/write
-#undef readl
-#define readl(ADDR) ipu_debug_readl(ADDR, __FILE__, __LINE__, __func__)
-
-#undef writel
-#define writel(VALUE, ADDR) \
-	ipu_debug_writel(VALUE, ADDR, __FILE__, __LINE__, __func__)
-#endif
-
 #define PCI_DEVICE_ID_INTEL_IPU4		0x5a88
 
 #define PCI_DEVICE_ID_INTEL_IPU6		0x9a19
