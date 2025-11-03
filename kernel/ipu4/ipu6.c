@@ -1,17 +1,37 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2013 - 2023 Intel Corporation
+ * Copyright (C) 2013--2024 Intel Corporation
  */
 
 #include <linux/bitfield.h>
+#include <linux/bits.h>
+#include <linux/dma-mapping.h>
+#include <linux/err.h>
+#include <linux/firmware.h>
+#include <linux/kernel.h>
+#include <linux/interrupt.h>
+#include <linux/io.h>
+#include <linux/list.h>
 #include <linux/module.h>
 #include <linux/pci-ats.h>
 #include <linux/pm_runtime.h>
+#include <linux/property.h>
+#include <linux/scatterlist.h>
+#include <linux/slab.h>
 #include <linux/trace.h>
+#include <linux/types.h>
 #include <linux/vmalloc.h>
 
+#ifdef IPU6
+#include <media/ipu-bridge.h>
+#include <media/ipu6-pci-table.h>
+#else
 #include "ambu-ipu-bridge.h"
+#endif
+
 #include "ipu6.h"
+#include "ipu6-bus.h"
+#include "ipu6-buttress.h"
 #include "ipu6-cpd.h"
 #include "ipu6-isys.h"
 #include "ipu6-mmu.h"
