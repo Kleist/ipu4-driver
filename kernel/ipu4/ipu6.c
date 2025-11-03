@@ -265,10 +265,9 @@ static const struct ipu6_isys_internal_pdata isys_ipdata = {
 		.dmem_offset = IPU4_ISYS_DMEM_OFFSET,
 		.spc_offset = IPU4_ISYS_SPC_OFFSET,
 	},
-	.isys_dma_overshoot = IPU4_ISYS_OVERALLOC_MIN,
+	.isys_dma_overshoot = IPU6_ISYS_OVERALLOC_MIN,
 	.num_parallel_streams = IPU4_STREAM_ID_MAX,
 	.csi2.nports = ARRAY_SIZE(ipu4_csi_offsets),
-	.csi2.offsets = (unsigned*)ipu4_csi_offsets,
 	.max_streams = IPU4_ISYS_MAX_STREAMS,
 	.max_sram_blocks = IPU4_ISYS_MAX_STREAMS,
 	.max_send_queues = IPU4_N_MAX_SEND_QUEUES,
@@ -903,7 +902,7 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (ret) {
 		dev_err_probe(&isp->pdev->dev, ret,
 			      "FW authentication failed\n");
-		goto out_ipu_bridge_uninit;
+		goto out_free_irq;
 	}
 
 	ipu6_mmu_hw_cleanup(isp->psys->mmu);
@@ -912,16 +911,26 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	/* Configure the arbitration mechanisms for VC requests */
 	ipu6_configure_vc_mechanism(isp);
 
+#ifdef IPU6
+	val = readl(isp->base + BUTTRESS_REG_SKU);
+	sku_id = FIELD_GET(GENMASK(6, 4), val);
+	version = FIELD_GET(GENMASK(3, 0), val);
+	dev_info(dev, "IPU%u-v%u[%x] hardware version %d\n", version, sku_id,
+		 pdev->device, isp->hw_ver);
+#else
 	// NB: Don't change, currently used as done signal in test
 	dev_info(&pdev->dev, "IPU4 PCI driver ready\n");
+#endif
 
-	pm_runtime_put_noidle(&pdev->dev);
-	pm_runtime_allow(&pdev->dev);
+	pm_runtime_put_noidle(dev);
+	pm_runtime_allow(dev);
 
 	isp->bus_ready_to_probe = true;
 
 	return 0;
 
+out_free_irq:
+	devm_free_irq(dev, pdev->irq, isp);
 out_ipu_bridge_uninit:
 	ambu_ipu_bridge_uninit(&pdev->dev);
 out_ipu6_bus_del_devices:
@@ -1052,8 +1061,8 @@ static int ipu6_runtime_resume(struct device *dev)
 }
 
 static const struct dev_pm_ops ipu6_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(&ipu6_suspend, &ipu6_resume)
-	SET_RUNTIME_PM_OPS(&ipu6_suspend, &ipu6_runtime_resume, NULL)
+	SYSTEM_SLEEP_PM_OPS(&ipu6_suspend, &ipu6_resume)
+	RUNTIME_PM_OPS(&ipu6_suspend, &ipu6_runtime_resume, NULL)
 };
 
 static const struct pci_device_id ipu6_pci_tbl[] = {

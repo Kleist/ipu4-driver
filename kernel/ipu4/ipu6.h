@@ -87,13 +87,6 @@ static inline bool is_ipu4(u8 hw_ver)
  */
 #define IPU6_ISYS_OVERALLOC_MIN		1024
 
-/*
- * ISYS DMA can overshoot. For higher resolutions over allocation is one line
- * but it must be at minimum 1024 bytes. Value could be different in
- * different versions / generations thus provide it via platform data.
- */
-#define IPU4_ISYS_OVERALLOC_MIN		1024
-
 /* Physical pages in GDA is 128, page size is 2K for IPU6, 1K for others */
 #define IPU6_DEVICE_GDA_NR_PAGES		128
 
@@ -308,7 +301,6 @@ struct ipu6_isys_csi2_pdata {
 struct ipu6_isys_internal_csi2_pdata {
 	u32 nports;
 	u32 irq_mask;
-	u32 *offsets;
 	u32 ctrl0_irq_edge;
 	u32 ctrl0_irq_clear;
 	u32 ctrl0_irq_mask;
