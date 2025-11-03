@@ -364,5 +364,4 @@ void ipu6_configure_spc(struct ipu6_device *isp,
 			int pkg_dir_idx, void __iomem *base, u64 *pkg_dir,
 			dma_addr_t pkg_dir_dma_addr);
 
-void ipu_dump_state(struct ipu6_device *isp, const char *context);
 #endif /* IPU6_H */

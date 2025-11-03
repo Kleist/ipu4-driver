@@ -762,7 +762,6 @@ int ipu6_isys_queue_restart_streams(struct ipu6_isys_video *av)
 	int ret = 0;
 	bool stream_restarted = false;
 
-	ipu_dump_state(av->isys->adev->isp, "before restart");
 	for (i = 0; i < NR_OF_VIDEO_DEVICE; i++) {
 		struct ipu6_isys_video *other_av = &isys->av[i];
 
@@ -783,7 +782,6 @@ int ipu6_isys_queue_restart_streams(struct ipu6_isys_video *av)
 		if (ret != 0)
 			break;
 	}
-	ipu_dump_state(av->isys->adev->isp, "after restart");
 	return ret;
 }
 
