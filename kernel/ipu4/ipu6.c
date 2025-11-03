@@ -18,9 +18,7 @@
 #include <linux/property.h>
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
-#include <linux/trace.h>
 #include <linux/types.h>
-#include <linux/vmalloc.h>
 
 #ifdef IPU6
 #include <media/ipu-bridge.h>
@@ -501,45 +499,6 @@ static void ipu6_configure_vc_mechanism(struct ipu6_device *isp)
 	writel(val, isp->base + BUTTRESS_REG_BTRS_CTRL);
 }
 
-static int request_cpd_fw(const struct firmware **firmware_p, const char *name,
-			  struct device *device)
-{
-	const struct firmware *fw;
-	struct firmware *dst;
-	int ret = 0;
-
-	ret = request_firmware(&fw, name, device);
-	if (ret)
-		return ret;
-
-	if (is_vmalloc_addr(fw->data)) {
-		*firmware_p = fw;
-		return 0;
-	}
-
-	dst = kzalloc(sizeof(*dst), GFP_KERNEL);
-	if (!dst) {
-		ret = -ENOMEM;
-		goto release_firmware;
-	}
-
-	dst->size = fw->size;
-	dst->data = vmalloc(fw->size);
-	if (!dst->data) {
-		kfree(dst);
-		ret = -ENOMEM;
-		goto release_firmware;
-	}
-
-	memcpy((void *)dst->data, fw->data, fw->size);
-	*firmware_p = dst;
-
-release_firmware:
-	release_firmware(fw);
-
-	return ret;
-}
-
 static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
 	const struct ipu6_buttress_ctrl *isys_ctrl = NULL, *psys_ctrl = NULL;
@@ -549,7 +508,6 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	phys_addr_t phys;
 	int ret;
 
-	trace_printk_init_buffers();
 	isp = devm_kzalloc(&pdev->dev, sizeof(*isp), GFP_KERNEL);
 	if (!isp)
 		return -ENOMEM;
@@ -636,7 +594,7 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (ret)
 		return ret;
 
-	ret = request_cpd_fw(&isp->cpd_fw, isp->cpd_fw_name, &pdev->dev);
+	ret = request_firmware(&isp->cpd_fw, isp->cpd_fw_name, &pdev->dev);
 	if (ret) {
 		dev_err_probe(&isp->pdev->dev, ret,
 			      "Requesting signed firmware %s failed\n",
