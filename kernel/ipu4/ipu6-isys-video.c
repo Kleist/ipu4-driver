@@ -1316,7 +1316,7 @@ int ipu6_isys_setup_video(struct ipu6_isys_video *av,
 	v4l2_subdev_unlock_state(state);
 
 	ret = ipu6_isys_csi2_get_remote_desc(av->source_stream,
-					     to_ipu6_isys_csi2(remote_sd),
+					     to_ipu6_isys_csi2(asd),
 					     *source_entity, &entry);
 	if (ret == -ENOIOCTLCMD) {
 		av->vc = 0;
