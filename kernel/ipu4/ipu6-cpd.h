@@ -1,10 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Copyright (C) 2015 - 2023 Intel Corporation */
+/* Copyright (C) 2015--2024 Intel Corporation */
 
 #ifndef IPU6_CPD_H
 #define IPU6_CPD_H
 
-#include "ipu6-bus.h"
+struct ipu6_device;
+struct ipu6_bus_device;
 
 #define IPU6_CPD_SIZE_OF_FW_ARCH_VERSION	7
 #define IPU6_CPD_SIZE_OF_SYSTEM_VERSION		11

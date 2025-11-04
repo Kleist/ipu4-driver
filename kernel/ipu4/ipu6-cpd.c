@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2013 - 2023 Intel Corporation
+ * Copyright (C) 2013--2024 Intel Corporation
  */
 
 #include <linux/bitfield.h>
+#include <linux/bits.h>
+#include <linux/err.h>
+#include <linux/dma-mapping.h>
+#include <linux/gfp_types.h>
+#include <linux/math64.h>
+#include <linux/sizes.h>
+#include <linux/types.h>
 
 #include "ipu6.h"
 #include "ipu6-bus.h"
