@@ -1,9 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Copyright (C) 2013 - 2023 Intel Corporation */
+/* Copyright (C) 2013--2024 Intel Corporation */
 
 #ifndef IPU6_ISYS_SUBDEV_H
 #define IPU6_ISYS_SUBDEV_H
 
+#include <linux/container_of.h>
+
+#include <media/media-entity.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-subdev.h>
 

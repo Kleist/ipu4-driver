@@ -22,25 +22,30 @@ unsigned int ipu6_isys_mbus_code_to_bpp(u32 code)
 {
 	switch (code) {
 	case MEDIA_BUS_FMT_RGB888_1X24:
+	case MEDIA_BUS_FMT_META_24:
 		return 24;
 	case MEDIA_BUS_FMT_RGB565_1X16:
 	case MEDIA_BUS_FMT_UYVY8_1X16:
 	case MEDIA_BUS_FMT_YUYV8_1X16:
+	case MEDIA_BUS_FMT_META_16:
 		return 16;
 	case MEDIA_BUS_FMT_SBGGR12_1X12:
 	case MEDIA_BUS_FMT_SGBRG12_1X12:
 	case MEDIA_BUS_FMT_SGRBG12_1X12:
 	case MEDIA_BUS_FMT_SRGGB12_1X12:
+	case MEDIA_BUS_FMT_META_12:
 		return 12;
 	case MEDIA_BUS_FMT_SBGGR10_1X10:
 	case MEDIA_BUS_FMT_SGBRG10_1X10:
 	case MEDIA_BUS_FMT_SGRBG10_1X10:
 	case MEDIA_BUS_FMT_SRGGB10_1X10:
+	case MEDIA_BUS_FMT_META_10:
 		return 10;
 	case MEDIA_BUS_FMT_SBGGR8_1X8:
 	case MEDIA_BUS_FMT_SGBRG8_1X8:
 	case MEDIA_BUS_FMT_SGRBG8_1X8:
 	case MEDIA_BUS_FMT_SRGGB8_1X8:
+	case MEDIA_BUS_FMT_META_8:
 		return 8;
 	default:
 		WARN_ON(1);
@@ -58,6 +63,11 @@ unsigned int ipu6_isys_mbus_code_to_mipi(u32 code)
 	case MEDIA_BUS_FMT_UYVY8_1X16:
 	case MEDIA_BUS_FMT_YUYV8_1X16:
 		return MIPI_CSI2_DT_YUV422_8B;
+	case MEDIA_BUS_FMT_SBGGR16_1X16:
+	case MEDIA_BUS_FMT_SGBRG16_1X16:
+	case MEDIA_BUS_FMT_SGRBG16_1X16:
+	case MEDIA_BUS_FMT_SRGGB16_1X16:
+		return MIPI_CSI2_DT_RAW16;
 	case MEDIA_BUS_FMT_SBGGR12_1X12:
 	case MEDIA_BUS_FMT_SGBRG12_1X12:
 	case MEDIA_BUS_FMT_SGRBG12_1X12:
@@ -86,6 +96,11 @@ bool ipu6_isys_is_bayer_format(u32 code)
 	case MIPI_CSI2_DT_RAW8:
 	case MIPI_CSI2_DT_RAW10:
 	case MIPI_CSI2_DT_RAW12:
+	case MIPI_CSI2_DT_RAW14:
+	case MIPI_CSI2_DT_RAW16:
+	case MIPI_CSI2_DT_RAW20:
+	case MIPI_CSI2_DT_RAW24:
+	case MIPI_CSI2_DT_RAW28:
 		return true;
 	default:
 		return false;
@@ -106,7 +121,11 @@ u32 ipu6_isys_convert_bayer_order(u32 code, int x, int y)
 		MEDIA_BUS_FMT_SRGGB12_1X12,
 		MEDIA_BUS_FMT_SGRBG12_1X12,
 		MEDIA_BUS_FMT_SGBRG12_1X12,
-		MEDIA_BUS_FMT_SBGGR12_1X12
+		MEDIA_BUS_FMT_SBGGR12_1X12,
+		MEDIA_BUS_FMT_SRGGB16_1X16,
+		MEDIA_BUS_FMT_SGRBG16_1X16,
+		MEDIA_BUS_FMT_SGBRG16_1X16,
+		MEDIA_BUS_FMT_SBGGR16_1X16,
 	};
 	u32 i;
 
@@ -231,20 +250,17 @@ int ipu6_isys_get_stream_pad_fmt(struct v4l2_subdev *sd, u32 pad, u32 stream,
 {
 	struct v4l2_mbus_framefmt *fmt;
 	struct v4l2_subdev_state *state;
-	int ret = -EINVAL;
 
 	if (!sd || !format)
 		return -EINVAL;
 
 	state = v4l2_subdev_lock_and_get_active_state(sd);
 	fmt = v4l2_subdev_state_get_format(state, pad, stream);
-	if (fmt) {
+	if (fmt)
 		*format = *fmt;
-		ret = 0;
-	}
 	v4l2_subdev_unlock_state(state);
 
-	return ret;
+	return fmt ? 0 : -EINVAL;
 }
 
 int ipu6_isys_get_stream_pad_crop(struct v4l2_subdev *sd, u32 pad, u32 stream,
@@ -252,20 +268,17 @@ int ipu6_isys_get_stream_pad_crop(struct v4l2_subdev *sd, u32 pad, u32 stream,
 {
 	struct v4l2_subdev_state *state;
 	struct v4l2_rect *rect;
-	int ret = -EINVAL;
 
 	if (!sd || !crop)
 		return -EINVAL;
 
 	state = v4l2_subdev_lock_and_get_active_state(sd);
 	rect = v4l2_subdev_state_get_crop(state, pad, stream);
-	if (rect) {
+	if (rect)
 		*crop = *rect;
-		ret = 0;
-	}
 	v4l2_subdev_unlock_state(state);
 
-	return ret;
+	return rect ? 0 : -EINVAL;
 }
 
 u32 ipu6_isys_get_src_stream_by_src_pad(struct v4l2_subdev *sd, u32 pad)
@@ -351,7 +364,6 @@ int ipu6_isys_subdev_init(struct ipu6_isys_subdev *asd,
 #endif
 	asd->pad = devm_kcalloc(&asd->isys->adev->auxdev.dev, num_pads,
 				sizeof(*asd->pad), GFP_KERNEL);
-
 	if (!asd->pad)
 		return -ENOMEM;
 

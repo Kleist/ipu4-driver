@@ -27,7 +27,7 @@
 #include "ipu6.h"
 #include "ipu6-dma.h"
 #include "ipu6-mmu.h"
-#include "ipu4-platform-regs.h"
+#include "ipu6-platform-regs.h"
 
 #define ISP_PAGE_SHIFT		12
 #define ISP_PAGE_SIZE		BIT(ISP_PAGE_SHIFT)
@@ -717,6 +717,7 @@ static struct ipu6_dma_mapping *alloc_dma_mapping(struct ipu6_device *isp)
 		kfree(dmap);
 		return NULL;
 	}
+
 	init_iova_domain(&dmap->iovad, SZ_4K, 1);
 	dmap->mmu_info->dmap = dmap;
 

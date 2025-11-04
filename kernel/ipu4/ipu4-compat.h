@@ -5,6 +5,16 @@
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 
+// From include/uapi/linux/media-bus-format.h
+/* Generic line based metadata formats for serial buses. Next is 0x8008. */
+#define MEDIA_BUS_FMT_META_8			0x8001
+#define MEDIA_BUS_FMT_META_10			0x8002
+#define MEDIA_BUS_FMT_META_12			0x8003
+#define MEDIA_BUS_FMT_META_14			0x8004
+#define MEDIA_BUS_FMT_META_16			0x8005
+#define MEDIA_BUS_FMT_META_20			0x8006
+#define MEDIA_BUS_FMT_META_24			0x8007
+
 // commit d0fde6aae2bacdc024fff43461ba0f325375fa97
 // Author: Sakari Ailus <sakari.ailus@linux.intel.com>
 // Date:   Fri Oct 13 10:16:06 2023 +0200

@@ -521,7 +521,6 @@ static void return_buffers(struct ipu6_isys_queue *aq,
 			   enum vb2_buffer_state state)
 {
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
-	struct device *dev = &av->isys->adev->auxdev.dev;
 	struct ipu6_isys_buffer *ib;
 	bool need_reset = false;
 	unsigned long flags;
@@ -538,7 +537,7 @@ static void return_buffers(struct ipu6_isys_queue *aq,
 
 		vb2_buffer_done(vb, state);
 
-		dev_dbg(dev, "%s: stop_streaming incoming %u\n",
+		dev_dbg(&av->isys->adev->auxdev.dev, "%s: stop_streaming incoming %u\n",
 			ipu6_isys_queue_to_video(vb2_queue_to_isys_queue
 						 (vb->vb2_queue))->vdev.name,
 			vb->index);
@@ -563,7 +562,7 @@ static void return_buffers(struct ipu6_isys_queue *aq,
 
 		vb2_buffer_done(vb, state);
 
-		dev_warn(dev, "%s: cleaning active queue %u\n",
+		dev_warn(&av->isys->adev->auxdev.dev, "%s: cleaning active queue %u\n",
 			 ipu6_isys_queue_to_video(vb2_queue_to_isys_queue
 						  (vb->vb2_queue))->vdev.name,
 			 vb->index);
