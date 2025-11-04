@@ -629,7 +629,7 @@ static int start_stream_firmware(struct ipu6_isys_video *av,
 		}
 	}
 
-	ipu6_fw_isys_dump_stream_cfg(dev, stream_cfg);
+	ipu4_fw_isys_dump_stream_cfg(dev, stream_cfg);
 
 	stream->nr_output_pins = stream_cfg->nof_output_pins;
 
@@ -680,7 +680,7 @@ static int start_stream_firmware(struct ipu6_isys_video *av,
 
 	if (bl) {
 		send_type = IPU6_FW_ISYS_SEND_TYPE_STREAM_START_AND_CAPTURE;
-		ipu6_fw_isys_dump_frame_buff_set(dev, buf,
+		ipu4_fw_isys_dump_frame_buff_set(dev, buf,
 						 stream_cfg->nof_output_pins);
 		ret = ipu6_fw_isys_complex_cmd(av->isys, stream->stream_handle,
 					       buf, msg->dma_addr,

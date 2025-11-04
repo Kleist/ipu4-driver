@@ -1,21 +1,23 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2013 - 2023 Intel Corporation
+ * Copyright (C) 2013--2024 Intel Corporation
  */
 
 #include <linux/cacheflush.h>
 #include <linux/delay.h>
+#include <linux/device.h>
+#include <linux/io.h>
+#include <linux/spinlock.h>
+#include <linux/types.h>
 
-#include <media/mipi-csi2.h>
-
+#include "ipu6-bus.h"
 #include "ipu6-cpd.h"
 #include "ipu6-fw-com.h"
 #include "ipu6-isys.h"
-#include "ipu4-platform-isys-csi2-reg.h"
+#include "ipu6-platform-isys-csi2-reg.h"
 #include "ipu6-platform-regs.h"
 
-#define MAX_SEND_MSG_LEN 32
-static const char send_msg_types[N_IPU6_FW_ISYS_SEND_TYPE][MAX_SEND_MSG_LEN] = {
+static const char send_msg_types[N_IPU6_FW_ISYS_SEND_TYPE][32] = {
 	"STREAM_OPEN",
 	"STREAM_START",
 	"STREAM_START_AND_CAPTURE",
@@ -96,10 +98,13 @@ int ipu6_fw_isys_complex_cmd(struct ipu6_isys *isys,
 			     size_t size, u16 send_type)
 {
 	struct ipu6_fw_com_context *ctx = isys->fwcom;
+	struct device *dev = &isys->adev->auxdev.dev;
 	struct ipu6_fw_send_queue_token *token;
 
 	if (send_type >= N_IPU6_FW_ISYS_SEND_TYPE)
 		return -EINVAL;
+
+	dev_dbg(dev, "send_token: %s\n", send_msg_types[send_type]);
 
 	/*
 	 * Time to flush cache in case we have some payload. Not all messages
@@ -116,6 +121,7 @@ int ipu6_fw_isys_complex_cmd(struct ipu6_isys *isys,
 	token->payload = dma_mapped_buf;
 	token->buf_handle = (unsigned long)cpu_mapped_buf;
 	token->send_type = send_type;
+
 	ipu6_send_put_token(ctx, stream_handle + IPU4_BASE_MSG_SEND_QUEUES);
 
 	return 0;
@@ -128,6 +134,7 @@ int ipu6_fw_isys_simple_cmd(struct ipu6_isys *isys,
 					send_type);
 }
 
+// Refactoring needed for silent_reset - upstream candidate?
 int ipu6_fw_isys_open(struct ipu6_isys *isys)
 {
 	const struct ipu6_isys_internal_pdata *ipdata = isys->pdata->ipdata;
@@ -169,6 +176,7 @@ int ipu6_fw_isys_close(struct ipu6_isys *isys)
 	void *fwcom;
 	int ret;
 
+	// Ambu specific: for silent_reset feature
 	if (!isys->resetting)
 		lockdep_assert_held(&isys->mutex);
 
@@ -405,7 +413,7 @@ void ipu6_fw_isys_put_resp(void *context, unsigned int queue)
 	ipu6_recv_put_token(context, queue);
 }
 
-void ipu6_fw_isys_dump_stream_cfg(struct device *dev,
+void ipu4_fw_isys_dump_stream_cfg(struct device *dev,
 				  struct ipu4_fw_isys_stream_cfg_data_abi *cfg)
 {
 	unsigned int i;
@@ -481,7 +489,7 @@ void ipu6_fw_isys_dump_stream_cfg(struct device *dev,
 }
 
 void
-ipu6_fw_isys_dump_frame_buff_set(struct device *dev,
+ipu4_fw_isys_dump_frame_buff_set(struct device *dev,
 				 struct ipu4_fw_isys_frame_buff_set_abi *buf,
 				 unsigned int outputs)
 {
@@ -506,6 +514,119 @@ ipu6_fw_isys_dump_frame_buff_set(struct device *dev,
 		buf->send_irq_capture_ack);
 	dev_dbg(dev, "send_irq_capture_done = 0x%x\n",
 		buf->send_irq_capture_done);
+
+	dev_dbg(dev, "-----------------------------------------------------\n");
+}
+
+
+void ipu6_fw_isys_dump_stream_cfg(struct device *dev,
+				  struct ipu6_fw_isys_stream_cfg_data_abi *cfg)
+{
+	unsigned int i;
+
+	dev_dbg(dev, "-----------------------------------------------------\n");
+	dev_dbg(dev, "IPU6_FW_ISYS_STREAM_CFG_DATA\n");
+
+	dev_dbg(dev, "compfmt = %d\n", cfg->vc);
+	dev_dbg(dev, "src = %d\n", cfg->src);
+	dev_dbg(dev, "vc = %d\n", cfg->vc);
+	dev_dbg(dev, "isl_use = %d\n", cfg->isl_use);
+	dev_dbg(dev, "sensor_type = %d\n", cfg->sensor_type);
+
+	dev_dbg(dev, "send_irq_sof_discarded = %d\n",
+		cfg->send_irq_sof_discarded);
+	dev_dbg(dev, "send_irq_eof_discarded = %d\n",
+		cfg->send_irq_eof_discarded);
+	dev_dbg(dev, "send_resp_sof_discarded = %d\n",
+		cfg->send_resp_sof_discarded);
+	dev_dbg(dev, "send_resp_eof_discarded = %d\n",
+		cfg->send_resp_eof_discarded);
+
+	dev_dbg(dev, "crop:\n");
+	dev_dbg(dev, "\t.left_top = [%d, %d]\n", cfg->crop.left_offset,
+		cfg->crop.top_offset);
+	dev_dbg(dev, "\t.right_bottom = [%d, %d]\n", cfg->crop.right_offset,
+		cfg->crop.bottom_offset);
+
+	dev_dbg(dev, "nof_input_pins = %d\n", cfg->nof_input_pins);
+	for (i = 0; i < cfg->nof_input_pins; i++) {
+		dev_dbg(dev, "input pin[%d]:\n", i);
+		dev_dbg(dev, "\t.dt = 0x%0x\n", cfg->input_pins[i].dt);
+		dev_dbg(dev, "\t.mipi_store_mode = %d\n",
+			cfg->input_pins[i].mipi_store_mode);
+		dev_dbg(dev, "\t.bits_per_pix = %d\n",
+			cfg->input_pins[i].bits_per_pix);
+		dev_dbg(dev, "\t.mapped_dt = 0x%0x\n",
+			cfg->input_pins[i].mapped_dt);
+		dev_dbg(dev, "\t.input_res = %dx%d\n",
+			cfg->input_pins[i].input_res.width,
+			cfg->input_pins[i].input_res.height);
+		dev_dbg(dev, "\t.mipi_decompression = %d\n",
+			cfg->input_pins[i].mipi_decompression);
+		dev_dbg(dev, "\t.capture_mode = %d\n",
+			cfg->input_pins[i].capture_mode);
+	}
+
+	dev_dbg(dev, "nof_output_pins = %d\n", cfg->nof_output_pins);
+	for (i = 0; i < cfg->nof_output_pins; i++) {
+		dev_dbg(dev, "output_pin[%d]:\n", i);
+		dev_dbg(dev, "\t.input_pin_id = %d\n",
+			cfg->output_pins[i].input_pin_id);
+		dev_dbg(dev, "\t.output_res = %dx%d\n",
+			cfg->output_pins[i].output_res.width,
+			cfg->output_pins[i].output_res.height);
+		dev_dbg(dev, "\t.stride = %d\n", cfg->output_pins[i].stride);
+		dev_dbg(dev, "\t.pt = %d\n", cfg->output_pins[i].pt);
+		dev_dbg(dev, "\t.payload_buf_size = %d\n",
+			cfg->output_pins[i].payload_buf_size);
+		dev_dbg(dev, "\t.ft = %d\n", cfg->output_pins[i].ft);
+		dev_dbg(dev, "\t.watermark_in_lines = %d\n",
+			cfg->output_pins[i].watermark_in_lines);
+		dev_dbg(dev, "\t.send_irq = %d\n",
+			cfg->output_pins[i].send_irq);
+		dev_dbg(dev, "\t.reserve_compression = %d\n",
+			cfg->output_pins[i].reserve_compression);
+		dev_dbg(dev, "\t.snoopable = %d\n",
+			cfg->output_pins[i].snoopable);
+		dev_dbg(dev, "\t.error_handling_enable = %d\n",
+			cfg->output_pins[i].error_handling_enable);
+		dev_dbg(dev, "\t.sensor_type = %d\n",
+			cfg->output_pins[i].sensor_type);
+	}
+	dev_dbg(dev, "-----------------------------------------------------\n");
+}
+
+void
+ipu6_fw_isys_dump_frame_buff_set(struct device *dev,
+				 struct ipu6_fw_isys_frame_buff_set_abi *buf,
+				 unsigned int outputs)
+{
+	unsigned int i;
+
+	dev_dbg(dev, "-----------------------------------------------------\n");
+	dev_dbg(dev, "IPU6_FW_ISYS_FRAME_BUFF_SET\n");
+
+	for (i = 0; i < outputs; i++) {
+		dev_dbg(dev, "output_pin[%d]:\n", i);
+		dev_dbg(dev, "\t.out_buf_id = %llu\n",
+			buf->output_pins[i].out_buf_id);
+		dev_dbg(dev, "\t.addr = 0x%x\n", buf->output_pins[i].addr);
+		dev_dbg(dev, "\t.compress = %d\n",
+			buf->output_pins[i].compress);
+	}
+
+	dev_dbg(dev, "send_irq_sof = 0x%x\n", buf->send_irq_sof);
+	dev_dbg(dev, "send_irq_eof = 0x%x\n", buf->send_irq_eof);
+	dev_dbg(dev, "send_resp_sof = 0x%x\n", buf->send_resp_sof);
+	dev_dbg(dev, "send_resp_eof = 0x%x\n", buf->send_resp_eof);
+	dev_dbg(dev, "send_irq_capture_ack = 0x%x\n",
+		buf->send_irq_capture_ack);
+	dev_dbg(dev, "send_irq_capture_done = 0x%x\n",
+		buf->send_irq_capture_done);
+	dev_dbg(dev, "send_resp_capture_ack = 0x%x\n",
+		buf->send_resp_capture_ack);
+	dev_dbg(dev, "send_resp_capture_done = 0x%x\n",
+		buf->send_resp_capture_done);
 
 	dev_dbg(dev, "-----------------------------------------------------\n");
 }

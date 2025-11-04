@@ -1,13 +1,56 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Copyright (C) 2013 - 2023 Intel Corporation */
+/* Copyright (C) 2013--2024 Intel Corporation */
 
 #ifndef IPU6_FW_ISYS_H
 #define IPU6_FW_ISYS_H
 
+#include <linux/types.h>
+
+struct device;
 struct ipu6_isys;
 
 /* Max number of Input/Output Pins */
 #define IPU6_MAX_IPINS 4 // IPU4 OK
+
+#define IPU6_MAX_OPINS ((IPU6_MAX_IPINS) + 1)
+
+#define IPU6_STREAM_ID_MAX 16
+#define IPU6_NONSECURE_STREAM_ID_MAX 12
+#define IPU6_DEV_SEND_QUEUE_SIZE (IPU6_STREAM_ID_MAX)
+#define IPU6_NOF_SRAM_BLOCKS_MAX (IPU6_STREAM_ID_MAX)
+#define IPU6_N_MAX_MSG_SEND_QUEUES (IPU6_STREAM_ID_MAX)
+#define IPU6SE_STREAM_ID_MAX 8
+#define IPU6SE_NONSECURE_STREAM_ID_MAX 4
+#define IPU6SE_DEV_SEND_QUEUE_SIZE (IPU6SE_STREAM_ID_MAX)
+#define IPU6SE_NOF_SRAM_BLOCKS_MAX (IPU6SE_STREAM_ID_MAX)
+#define IPU6SE_N_MAX_MSG_SEND_QUEUES (IPU6SE_STREAM_ID_MAX)
+
+/* Single return queue for all streams/commands type */
+#define IPU6_N_MAX_MSG_RECV_QUEUES 1
+/* Single device queue for high priority commands (bypass in-order queue) */
+#define IPU6_N_MAX_DEV_SEND_QUEUES 1
+/* Single dedicated send queue for proxy interface */
+#define IPU6_N_MAX_PROXY_SEND_QUEUES 1
+/* Single dedicated recv queue for proxy interface */
+#define IPU6_N_MAX_PROXY_RECV_QUEUES 1
+/* Send queues layout */
+#define IPU6_BASE_PROXY_SEND_QUEUES 0
+#define IPU6_BASE_DEV_SEND_QUEUES \
+	(IPU6_BASE_PROXY_SEND_QUEUES + IPU6_N_MAX_PROXY_SEND_QUEUES)
+#define IPU6_BASE_MSG_SEND_QUEUES \
+	(IPU6_BASE_DEV_SEND_QUEUES + IPU6_N_MAX_DEV_SEND_QUEUES)
+/* Recv queues layout */
+#define IPU6_BASE_PROXY_RECV_QUEUES 0
+#define IPU6_BASE_MSG_RECV_QUEUES \
+	(IPU6_BASE_PROXY_RECV_QUEUES + IPU6_N_MAX_PROXY_RECV_QUEUES)
+#define IPU6_N_MAX_RECV_QUEUES \
+	(IPU6_BASE_MSG_RECV_QUEUES + IPU6_N_MAX_MSG_RECV_QUEUES)
+
+#define IPU6_N_MAX_SEND_QUEUES \
+	(IPU6_BASE_MSG_SEND_QUEUES + IPU6_N_MAX_MSG_SEND_QUEUES)
+#define IPU6SE_N_MAX_SEND_QUEUES \
+	(IPU6_BASE_MSG_SEND_QUEUES + IPU6SE_N_MAX_MSG_SEND_QUEUES)
+
 #define IPU4_MAX_IPINS 4
 
 /* worst case is ISA use where a single input pin produces:
@@ -47,12 +90,13 @@ struct ipu6_isys;
 #define IPU4_MAX_QUEUE_SIZE (256)
 #define IPU4_MIN_QUEUE_SIZE (1)
 
-/* Max number of supported input pins routed in ISL */
-#define IPU6_MAX_IPINS_IN_ISL 2
-
 /* Max number of planes for frame formats supported by the FW */
 #define IPU6_PIN_PLANES_MAX 4
 
+#define IPU6_FW_ISYS_SENSOR_TYPE_START 14
+#define IPU6_FW_ISYS_SENSOR_TYPE_END 19
+#define IPU6SE_FW_ISYS_SENSOR_TYPE_START 6
+#define IPU6SE_FW_ISYS_SENSOR_TYPE_END 11
 /*
  * Device close takes some time from last ack message to actual stopping
  * of the SP processor. As long as the SP processor runs we can't proceed with
@@ -60,7 +104,7 @@ struct ipu6_isys;
  */
 #define IPU6_ISYS_OPEN_RETRY			2000
 #define IPU6_ISYS_CLOSE_RETRY			2000
-#define IPU6_FW_CALL_TIMEOUT_JIFFIES		msecs_to_jiffies(500)
+#define IPU6_FW_CALL_TIMEOUT_JIFFIES		msecs_to_jiffies(500) // Should be upstreamed - 2s timout is very long
 
 enum ipu6_fw_isys_resp_type {
 	IPU6_FW_ISYS_RESP_TYPE_STREAM_OPEN_DONE = 0,
@@ -151,6 +195,7 @@ enum ipu6_fw_isys_stream_source {
 #define IPU6_FW_ISYS_STREAM_SRC_MIPIGEN_PORT0 IPU6_FW_ISYS_STREAM_SRC_MIPIGEN_0
 #define IPU6_FW_ISYS_STREAM_SRC_MIPIGEN_PORT1 IPU6_FW_ISYS_STREAM_SRC_MIPIGEN_1
 
+#ifdef IPU6
 /**
  * enum ipu6_fw_isys_mipi_vc: MIPI csi2 spec
  * supports up to 4 virtual per physical channel
@@ -162,6 +207,8 @@ enum ipu6_fw_isys_mipi_vc {
 	IPU6_FW_ISYS_MIPI_VC_3,
 	N_IPU6_FW_ISYS_MIPI_VC
 };
+
+#endif
 
 enum ipu6_fw_isys_frame_format_type {
 	IPU6_FW_ISYS_FRAME_FORMAT_NV11 = 0, /* 12 bit YUV 411, Y, UV plane */
@@ -204,8 +251,6 @@ enum ipu6_fw_isys_frame_format_type {
 	N_IPU6_FW_ISYS_FRAME_FORMAT
 };
 
-#define IPU6_FW_ISYS_FRAME_FORMAT_RAW	(IPU6_FW_ISYS_FRAME_FORMAT_RAW16)
-
 enum ipu6_fw_isys_pin_type {
 	/* captured as MIPI packets */
 	IPU6_FW_ISYS_PIN_TYPE_MIPI = 0,
@@ -213,7 +258,7 @@ enum ipu6_fw_isys_pin_type {
 	IPU6_FW_ISYS_PIN_TYPE_RAW_SOC = 3,
 };
 
-/**
+/*
  * enum ipu6_fw_isys_mipi_store_mode. Describes if long MIPI packets reach
  * MIPI SRAM with the long packet header or
  * if not, then only option is to capture it with pin type MIPI.
@@ -224,6 +269,7 @@ enum ipu6_fw_isys_mipi_store_mode {
 	N_IPU6_FW_ISYS_MIPI_STORE_MODE
 };
 
+#ifdef IPU6
 enum ipu6_fw_isys_capture_mode {
 	IPU6_FW_ISYS_CAPTURE_MODE_REGULAR = 0,
 	IPU6_FW_ISYS_CAPTURE_MODE_BURST,
@@ -235,6 +281,8 @@ enum ipu6_fw_isys_sensor_mode {
 	IPU6_FW_ISYS_SENSOR_MODE_TOBII,
 	N_IPU6_FW_ISYS_SENSOR_MODE,
 };
+
+#else
 
 /**
  * enum ipu_fw_isys_cropping_location. Enumerates the cropping locations in ISYS
@@ -271,6 +319,8 @@ enum ipu4_fw_isys_resolution_info {
 	N_IPU_FW_ISYS_RESOLUTION_INFO
 };
 
+#endif
+
 enum ipu6_fw_isys_error {
 	IPU6_FW_ISYS_ERROR_NONE = 0,
 	IPU6_FW_ISYS_ERROR_FW_INTERNAL_CONSISTENCY,
@@ -306,25 +356,92 @@ struct ipu6_fw_isys_fw_config {
 	u32 num_recv_queues[N_IPU6_FW_ISYS_QUEUE_TYPE];
 };
 
-/**
+/*
  * struct ipu6_fw_isys_resolution_abi: Generic resolution structure.
  */
-struct ipu6_fw_isys_resolution_abi { // Same for IPU4
+struct ipu6_fw_isys_resolution_abi {
 	u32 width;
 	u32 height;
 };
 
 /**
- * struct ipu6_fw_isys_output_pin_payload_abi
+ * struct ipu6_fw_isys_output_pin_payload_abi - ISYS output pin buffer
  * @out_buf_id: Points to output pin buffer - buffer identifier
  * @addr: Points to output pin buffer - CSS Virtual Address
  * @compress: Request frame compression (1), or  not (0)
  */
 struct ipu6_fw_isys_output_pin_payload_abi {
-	// AKA ia_css_isys_output_pin_payload_comm
 	u64 out_buf_id;
 	u32 addr;
 	u32 compress;
+};
+
+/**
+ * struct ipu6_fw_isys_output_pin_info_abi - ISYS output pin info
+ * @output_res: output pin resolution
+ * @stride: output stride in Bytes (not valid for statistics)
+ * @watermark_in_lines: pin watermark level in lines
+ * @payload_buf_size: minimum size in Bytes of all buffers that will be
+ *			supplied for capture on this pin
+ * @ts_offsets: ts_offsets
+ * @s2m_pixel_soc_pixel_remapping: pixel soc remapping (see the definition of
+ *				   S2M_PIXEL_SOC_PIXEL_REMAPPING_FLAG_NO_REMAPPING)
+ * @csi_be_soc_pixel_remapping: see s2m_pixel_soc_pixel_remapping
+ * @send_irq: assert if pin event should trigger irq
+ * @input_pin_id: related input pin id
+ * @pt: pin type -real format "enum ipu6_fw_isys_pin_type"
+ * @ft: frame format type -real format "enum ipu6_fw_isys_frame_format_type"
+ * @reserved: a reserved field
+ * @reserve_compression: reserve compression resources for pin
+ * @snoopable: snoopable
+ * @error_handling_enable: enable error handling
+ * @sensor_type: sensor_type
+ */
+struct ipu6_fw_isys_output_pin_info_abi {
+	struct ipu6_fw_isys_resolution_abi output_res;
+	u32 stride;
+	u32 watermark_in_lines;
+	u32 payload_buf_size;
+	u32 ts_offsets[IPU6_PIN_PLANES_MAX];
+	u32 s2m_pixel_soc_pixel_remapping;
+	u32 csi_be_soc_pixel_remapping;
+	u8 send_irq;
+	u8 input_pin_id;
+	u8 pt;
+	u8 ft;
+	u8 reserved;
+	u8 reserve_compression;
+	u8 snoopable;
+	u8 error_handling_enable;
+	u32 sensor_type;
+};
+
+/**
+ * struct ipu6_fw_isys_input_pin_info_abi - ISYS input pin info
+ * @input_res: input resolution
+ * @dt: mipi data type ((enum ipu6_fw_isys_mipi_data_type)
+ * @mipi_store_mode: defines if legacy long packet header will be stored or
+ *		     discarded if discarded, output pin type for this
+ *		     input pin can only be MIPI
+ *		     (enum ipu6_fw_isys_mipi_store_mode)
+ * @bits_per_pix: native bits per pixel
+ * @mapped_dt: actual data type from sensor
+ * @mipi_decompression: defines which compression will be in mipi backend
+ * @crop_first_and_last_lines: Control whether to crop the first and last line
+ *			       of the input image. Crop done by HW device.
+ * @capture_mode: mode of capture, regular or burst, default value is regular
+ * @reserved: a reserved field
+ */
+struct ipu6_fw_isys_input_pin_info_abi {
+	struct ipu6_fw_isys_resolution_abi input_res;
+	u8 dt;
+	u8 mipi_store_mode;
+	u8 bits_per_pix;
+	u8 mapped_dt;
+	u8 mipi_decompression;
+	u8 crop_first_and_last_lines;
+	u8 capture_mode;
+	u8 reserved;
 };
 
 /**
@@ -405,6 +522,91 @@ struct ipu6_fw_isys_cropping_abi {
 	s32 left_offset;
 	s32 bottom_offset;
 	s32 right_offset;
+};
+
+/**
+ * struct ipu6_fw_isys_stream_cfg_data_abi - ISYS stream configuration data
+ * ISYS stream configuration data structure
+ * @crop: for extended use and is not used in FW currently
+ * @input_pins: input pin descriptors
+ * @output_pins: output pin descriptors
+ * @compfmt: de-compression setting for User Defined Data
+ * @nof_input_pins: number of input pins
+ * @nof_output_pins: number of output pins
+ * @send_irq_sof_discarded: send irq on discarded frame sof response
+ *		- if '1' it will override the send_resp_sof_discarded
+ *		  and send the response
+ *		- if '0' the send_resp_sof_discarded will determine
+ *		  whether to send the response
+ * @send_irq_eof_discarded: send irq on discarded frame eof response
+ *		- if '1' it will override the send_resp_eof_discarded
+ *		  and send the response
+ *		- if '0' the send_resp_eof_discarded will determine
+ *		  whether to send the response
+ * @send_resp_sof_discarded: send response for discarded frame sof detected,
+ *			     used only when send_irq_sof_discarded is '0'
+ * @send_resp_eof_discarded: send response for discarded frame eof detected,
+ *			     used only when send_irq_eof_discarded is '0'
+ * @src: Stream source index e.g. MIPI_generator_0, CSI2-rx_1
+ * @vc: MIPI Virtual Channel (up to 4 virtual per physical channel)
+ * @isl_use: indicates whether stream requires ISL and how
+ * @sensor_type: type of connected sensor, tobii or others, default is 0
+ * @reserved: a reserved field
+ * @reserved2: a reserved field
+ */
+struct ipu6_fw_isys_stream_cfg_data_abi {
+	struct ipu6_fw_isys_cropping_abi crop;
+	struct ipu6_fw_isys_input_pin_info_abi input_pins[IPU6_MAX_IPINS];
+	struct ipu6_fw_isys_output_pin_info_abi output_pins[IPU6_MAX_OPINS];
+	u32 compfmt;
+	u8 nof_input_pins;
+	u8 nof_output_pins;
+	u8 send_irq_sof_discarded;
+	u8 send_irq_eof_discarded;
+	u8 send_resp_sof_discarded;
+	u8 send_resp_eof_discarded;
+	u8 src;
+	u8 vc;
+	u8 isl_use;
+	u8 sensor_type;
+	u8 reserved;
+	u8 reserved2;
+};
+
+/**
+ * struct ipu6_fw_isys_frame_buff_set_abi - ISYS frame buffer set (request)
+ * @output_pins: output pin addresses
+ * @send_irq_sof: send irq on frame sof response
+ *		- if '1' it will override the send_resp_sof and
+ *		  send the response
+ *		- if '0' the send_resp_sof will determine whether to
+ *		  send the response
+ * @send_irq_eof: send irq on frame eof response
+ *		- if '1' it will override the send_resp_eof and
+ *		  send the response
+ *		- if '0' the send_resp_eof will determine whether to
+ *		  send the response
+ * @send_irq_capture_ack: send irq on capture ack
+ * @send_irq_capture_done: send irq on capture done
+ * @send_resp_sof: send response for frame sof detected,
+ *		   used only when send_irq_sof is '0'
+ * @send_resp_eof: send response for frame eof detected,
+ *		   used only when send_irq_eof is '0'
+ * @send_resp_capture_ack: send response for capture ack event
+ * @send_resp_capture_done: send response for capture done event
+ * @reserved: a reserved field
+ */
+struct ipu6_fw_isys_frame_buff_set_abi {
+	struct ipu6_fw_isys_output_pin_payload_abi output_pins[IPU6_MAX_OPINS];
+	u8 send_irq_sof;
+	u8 send_irq_eof;
+	u8 send_irq_capture_ack;
+	u8 send_irq_capture_done;
+	u8 send_resp_sof;
+	u8 send_resp_eof;
+	u8 send_resp_capture_ack;
+	u8 send_resp_capture_done;
+	u8 reserved[8];
 };
 
 /**
@@ -496,15 +698,41 @@ struct ipu4_fw_isys_frame_buff_set_abi { // AKA ia_css_isys_frame_buff_set_comm
 };
 
 /**
- * struct ipu6_fw_isys_error_info_abi
+ * struct ipu6_fw_isys_error_info_abi - ISYS error information
  * @error: error code if something went wrong
  * @error_details: depending on error code, it may contain additional error info
  */
-struct ipu6_fw_isys_error_info_abi { // AKA ia_css_isys_error_info_comm
+struct ipu6_fw_isys_error_info_abi {
 	u32 error;
 	u32 error_details;
 };
 
+#ifdef IPU6
+/**
+ * struct ipu6_fw_isys_resp_info_abi - ISYS firmware response
+ * @buf_id: buffer ID
+ * @pin: this var is only valid for pin event related responses,
+ *     contains pin addresses
+ * @error_info: error information from the FW
+ * @timestamp: Time information for event if available
+ * @stream_handle: stream id the response corresponds to
+ * @type: response type (enum ipu6_fw_isys_resp_type)
+ * @pin_id: pin id that the pin payload corresponds to
+ * @reserved: a reserved field
+ * @reserved2: a reserved field
+ */
+struct ipu6_fw_isys_resp_info_abi {
+	u64 buf_id;
+	struct ipu6_fw_isys_output_pin_payload_abi pin;
+	struct ipu6_fw_isys_error_info_abi error_info;
+	u32 timestamp[2];
+	u8 stream_handle;
+	u8 type;
+	u8 pin_id;
+	u8 reserved;
+	u32 reserved2;
+};
+#else
 /**
  * struct ipu6_fw_isys_resp_info_comm
  * @pin: this var is only valid for pin event related responses,
@@ -528,12 +756,12 @@ struct ipu6_fw_isys_resp_info_abi { // AKA ia_css_isys_resp_info_comm
 	u8 frame_counter;
 	u8 written_direct;
 };
+#endif
 
 /**
- * struct ipu6_fw_isys_proxy_error_info_comm
- * @proxy_error: error code if something went wrong
- * @proxy_error_details: depending on error code, it may contain additional
- *			error info
+ * struct ipu6_fw_isys_proxy_error_info_abi - ISYS proxy error
+ * @error: error code if something went wrong
+ * @error_details: depending on error code, it may contain additional error info
  */
 struct ipu6_fw_isys_proxy_error_info_abi {
 	u32 error;
@@ -546,7 +774,7 @@ struct ipu6_fw_isys_proxy_resp_info_abi {
 };
 
 /**
- * struct ipu6_fw_proxy_write_queue_token
+ * struct ipu6_fw_proxy_write_queue_token - ISYS proxy write queue token
  * @request_id: update id for the specific proxy write request
  * @region_index: Region id for the proxy write request
  * @offset: Offset of the write request according to the base address
@@ -561,14 +789,19 @@ struct ipu6_fw_proxy_write_queue_token {
 };
 
 /**
- * struct ipu6_fw_resp_queue_token
+ * struct ipu6_fw_resp_queue_token - ISYS response queue token
+ * @resp_info: response info
  */
 struct ipu6_fw_resp_queue_token {
 	struct ipu6_fw_isys_resp_info_abi resp_info;
 };
 
 /**
- * struct ipu6_fw_send_queue_token
+ * struct ipu6_fw_send_queue_token - ISYS send queue token
+ * @buf_handle: buffer handle
+ * @payload: payload
+ * @send_type: send_type
+ * @stream_id: stream_id
  */
 struct ipu6_fw_send_queue_token {
 	u64 buf_handle;
@@ -578,14 +811,19 @@ struct ipu6_fw_send_queue_token {
 };
 
 /**
- * struct ipu6_fw_proxy_resp_queue_token
+ * struct ipu6_fw_proxy_resp_queue_token - ISYS proxy response queue token
+ * @proxy_resp_info: proxy response info
  */
 struct ipu6_fw_proxy_resp_queue_token {
 	struct ipu6_fw_isys_proxy_resp_info_abi proxy_resp_info;
 };
 
 /**
- * struct ipu6_fw_proxy_send_queue_token
+ * struct ipu6_fw_proxy_send_queue_token - SYS proxy send queue token
+ * @request_id: request_id
+ * @region_index: region_index
+ * @offset: offset
+ * @value: value
  */
 struct ipu6_fw_proxy_send_queue_token {
 	u32 request_id;
@@ -594,12 +832,20 @@ struct ipu6_fw_proxy_send_queue_token {
 	u32 value;
 };
 
-void ipu6_fw_isys_dump_stream_cfg(struct device *dev,
-				  struct ipu4_fw_isys_stream_cfg_data_abi
-				  *stream_cfg);
+void
+ipu4_fw_isys_dump_stream_cfg(struct device *dev,
+			     struct ipu4_fw_isys_stream_cfg_data_abi *cfg);
+void
+ipu4_fw_isys_dump_frame_buff_set(struct device *dev,
+				 struct ipu4_fw_isys_frame_buff_set_abi *buf,
+				 unsigned int outputs);
+
+void
+ipu6_fw_isys_dump_stream_cfg(struct device *dev,
+			     struct ipu6_fw_isys_stream_cfg_data_abi *cfg);
 void
 ipu6_fw_isys_dump_frame_buff_set(struct device *dev,
-				 struct ipu4_fw_isys_frame_buff_set_abi *buf,
+				 struct ipu6_fw_isys_frame_buff_set_abi *buf,
 				 unsigned int outputs);
 int ipu6_fw_isys_init(struct ipu6_isys *isys, unsigned int num_streams);
 int ipu6_fw_isys_close(struct ipu6_isys *isys);

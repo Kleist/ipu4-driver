@@ -360,7 +360,7 @@ static int ipu6_isys_stream_start(struct ipu6_isys_video *av,
 
 		buf = &msg->fw_msg.frame;
 		ipu6_isys_buf_to_fw_frame_buf(buf, stream, bl);
-		ipu6_fw_isys_dump_frame_buff_set(dev, buf,
+		ipu4_fw_isys_dump_frame_buff_set(dev, buf,
 						 stream->nr_output_pins);
 		ipu6_isys_buffer_list_queue(bl, IPU6_ISYS_BUFFER_LIST_FL_ACTIVE,
 					    0);
@@ -445,7 +445,7 @@ static void buf_queue(struct vb2_buffer *vb)
 
 	buf = &msg->fw_msg.frame;
 	ipu6_isys_buf_to_fw_frame_buf(buf, stream, &bl);
-	ipu6_fw_isys_dump_frame_buff_set(dev, buf, stream->nr_output_pins);
+	ipu4_fw_isys_dump_frame_buff_set(dev, buf, stream->nr_output_pins);
 
 	if (!stream->streaming) {
 		ret = ipu6_isys_stream_start(av, &bl, true);
