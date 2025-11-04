@@ -477,7 +477,7 @@ int ipu6_buttress_power(struct device *dev,
 				   ctrl->ratio) |
 			FIELD_PREP(BUTTRESS_FREQ_CTL_QOS_FLOOR_MASK,
 				   ctrl->qos_floor) |
-			BUTTRESS_FREQ_CTL_ICCMAX_LEVEL;
+			IPU4_BUTTRESS_FREQ_CTL_ICCMAX_LEVEL;
 
 		pwr_sts = ctrl->pwr_sts_on << ctrl->pwr_sts_shift;
 	}
@@ -739,7 +739,7 @@ static int ipu6_buttress_send_tsc_request(struct ipu6_device *isp)
 	u32 val, mask, done;
 	int ret;
 
-	mask = BUTTRESS_PWR_STATE_HH_STATUS_MASK;
+	mask = IPU4_BUTTRESS_PWR_STATE_HH_STATUS_MASK;
 
 	writel(BUTTRESS_FABRIC_CMD_START_TSC_SYNC,
 	       isp->base + BUTTRESS_REG_FABRIC_CMD);
