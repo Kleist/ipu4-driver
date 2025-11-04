@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2013 - 2023 Intel Corporation
+ * Copyright (C) 2013--2024 Intel Corporation
  */
 
 #include <linux/cacheflush.h>
+#include <linux/dma-mapping.h>
+#include <linux/iova.h>
+#include <linux/list.h>
+#include <linux/mm.h>
 #include <linux/vmalloc.h>
-#include <linux/kernel.h>
+#include <linux/scatterlist.h>
+#include <linux/slab.h>
+#include <linux/types.h>
 
 #include "ipu6.h"
 #include "ipu6-bus.h"
@@ -23,29 +29,13 @@ struct vm_info {
 static struct vm_info *get_vm_info(struct ipu6_mmu *mmu, dma_addr_t iova)
 {
 	struct vm_info *info, *save;
-	char debug_info[1024];
-	int len = 0;
 
 	list_for_each_entry_safe(info, save, &mmu->vma_list, list) {
 		if (iova >= info->ipu6_iova &&
 		    iova < (info->ipu6_iova + info->size))
 			return info;
-
-		if (len < sizeof(debug_info)) {
-			len += snprintf(debug_info + len,
-					sizeof(debug_info) - len,
-					"0x%llx-0x%llx, ",
-					info->ipu6_iova,
-					info->ipu6_iova + info->size);
-		} else {
-			dev_warn_once(mmu->dev, "Debug buffer full - address data missing\n");
-		}
 	}
 
-	dev_err(mmu->dev, "%s: iova=0x%llx not in ranges %s\n",
-		__func__,
-		iova,
-		debug_info);
 	return NULL;
 }
 
@@ -308,6 +298,7 @@ static int ipu6_dma_mmap(struct device *dev, struct vm_area_struct *vma,
 	size_t count = PHYS_PFN(PAGE_ALIGN(size));
 	struct vm_info *info;
 	size_t i;
+	int ret;
 
 	info = get_vm_info(mmu, iova);
 	if (!info)
@@ -322,9 +313,12 @@ static int ipu6_dma_mmap(struct device *dev, struct vm_area_struct *vma,
 	if (size > info->size)
 		return -EFAULT;
 
-	for (i = 0; i < count; i++)
-		vm_insert_page(vma, vma->vm_start + PFN_PHYS(i),
-			       info->pages[i]);
+	for (i = 0; i < count; i++) {
+		ret = vm_insert_page(vma, vma->vm_start + PFN_PHYS(i),
+				     info->pages[i]);
+		if (ret < 0)
+			return ret;
+	}
 
 	return 0;
 }
