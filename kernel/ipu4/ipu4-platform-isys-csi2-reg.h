@@ -10,6 +10,11 @@
 #ifndef IPU4_PLATFORM_ISYS_CSI2_REG_H
 #define IPU4_PLATFORM_ISYS_CSI2_REG_H
 
+static const unsigned int ipu4_csi_offsets[] = {
+	0x64000, 0x65000, 0x66000, 0x67000, 0x6C000, 0x6C800
+};
+#define CSI_REG_PORT_BASE(id)		ipu4_csi_offsets[id]
+
 /* IRQ-related registers specific to each of the four CSI receivers */
 #define CSI2_REG_CSI2PART_IRQ_EDGE			0x400
 #define CSI2_REG_CSI2PART_IRQ_MASK			0x404

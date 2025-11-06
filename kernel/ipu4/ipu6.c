@@ -74,10 +74,6 @@ struct ipu6_cell_program {
 	u32 dummy[2];
 };
 
-static unsigned int ipu4_csi_offsets[] = {
-	0x64000, 0x65000, 0x66000, 0x67000, 0x6C000, 0x6C800
-};
-
 // From iei-4.19.217 ipu4.c
 static const struct ipu6_isys_internal_pdata isys_ipdata = {
 	.hw_variant = {
@@ -134,7 +130,7 @@ static const struct ipu6_isys_internal_pdata isys_ipdata = {
 	.isys_dma_overshoot = IPU4_ISYS_OVERALLOC_MIN,
 	.num_parallel_streams = IPU4_STREAM_ID_MAX,
 	.csi2.nports = ARRAY_SIZE(ipu4_csi_offsets),
-	.csi2.offsets = ipu4_csi_offsets,
+	.csi2.offsets = (unsigned*)ipu4_csi_offsets,
 	.max_streams = IPU4_ISYS_MAX_STREAMS,
 	.max_sram_blocks = IPU4_ISYS_MAX_STREAMS,
 	.max_send_queues = IPU4_N_MAX_SEND_QUEUES,
