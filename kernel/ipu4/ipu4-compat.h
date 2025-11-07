@@ -10,7 +10,7 @@
 #define dev_err_cast_probe(dev, ___err_ptr, fmt, ...) \
 	ERR_PTR(dev_err_probe(dev, PTR_ERR(___err_ptr), fmt, ##__VA_ARGS__))
 
-#endif
+#endif // 6.11
 
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
@@ -43,5 +43,12 @@
     v4l2_subdev_state_get_format(e2, e3)
 
 #endif // 6.10
+
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+// Before 6.9, pm_runtime_get_if_active took an extra argument.
+// See https://github.com/torvalds/linux/commit/c0ef3df8dbaef51ee4cfd58a471adf2eaee6f6b3
+#define pm_runtime_get_if_active(DEV) pm_runtime_get_if_active(DEV, true)
+#endif // 6.9
 
 #endif // IPU4_COMPAT_H

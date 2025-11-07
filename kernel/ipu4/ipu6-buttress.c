@@ -28,6 +28,8 @@
 #include "ipu6-buttress.h"
 #include "ipu6-platform-buttress-regs.h"
 
+#include "ipu4-compat.h"
+
 #define IPU4_BOOTLOADER_STATUS_OFFSET	0x8000
 #define IPU6_BOOTLOADER_STATUS_OFFSET   0x15c
 
