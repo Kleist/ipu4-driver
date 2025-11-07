@@ -3,6 +3,16 @@
 
 #include <linux/version.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+// https://github.com/torvalds/linux/commit/dbbe7eaf0e4795bf003ac06872aaf52b6b6b1310
+
+/* Simple helper for dev_err_probe() when ERR_CAST() is to be returned. */
+#define dev_err_cast_probe(dev, ___err_ptr, fmt, ...) \
+	ERR_PTR(dev_err_probe(dev, PTR_ERR(___err_ptr), fmt, ##__VA_ARGS__))
+
+#endif
+
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 
 // From include/uapi/linux/media-bus-format.h
