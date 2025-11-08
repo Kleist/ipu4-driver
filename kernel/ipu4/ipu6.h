@@ -10,6 +10,8 @@
 
 #include "ipu6-buttress.h"
 
+#include "ipu4-compat.h"
+
 struct firmware;
 struct pci_dev;
 struct ipu6_bus_device;

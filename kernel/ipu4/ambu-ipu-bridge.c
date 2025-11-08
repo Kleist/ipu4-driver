@@ -13,6 +13,8 @@
 
 #include "ambu-ipu-bridge.h"
 
+#include "ipu4-compat.h"
+
 static struct ipu_bridge *static_bridge;
 
 static const struct mipi_bridge_config mipi_bridge_configs[] = {
