@@ -3,6 +3,11 @@
 
 #include <linux/version.h>
 
+#if KERNEL_VERSION(6, 14, 0) <= LINUX_VERSION_CODE
+#define INTEL_IPU_BRIDGE "INTEL_IPU_BRIDGE"
+#define INTEL_IPU6 "INTEL_IPU6"
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
 // https://github.com/torvalds/linux/commit/dbbe7eaf0e4795bf003ac06872aaf52b6b6b1310
 
