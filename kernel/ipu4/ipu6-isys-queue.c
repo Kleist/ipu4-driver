@@ -624,14 +624,10 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 	ipu6_isys_update_stream_watermark(av, true);
 #endif
 
-	if (stream->nr_streaming != stream->nr_queues)
-		goto out;
-
 	ret = ipu6_isys_stream_start(av);
 	if (ret)
 		goto out_stream_start;
 
-out:
 	mutex_unlock(&stream->mutex);
 
 	return 0;
@@ -766,8 +762,7 @@ static void stop_streaming(struct vb2_queue *q)
 #endif
 
 	mutex_lock(&av->isys->stream_mutex);
-	if (stream->nr_streaming == stream->nr_queues)
-		ipu6_isys_video_set_streaming(av, 0);
+	ipu6_isys_video_set_streaming(av, 0);
 	list_del(&aq->node);
 	mutex_unlock(&av->isys->stream_mutex);
 
