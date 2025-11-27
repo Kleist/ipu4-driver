@@ -45,9 +45,11 @@
 #endif // 6.10
 
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 103)
 // Before 6.9, pm_runtime_get_if_active took an extra argument.
 // See https://github.com/torvalds/linux/commit/c0ef3df8dbaef51ee4cfd58a471adf2eaee6f6b3
+// It was backported in 6.6.103.
+// See https://github.com/gregkh/linux/commit/ac2e62cab0977960420a0f4b3197932591a104f8
 #define pm_runtime_get_if_active(DEV) pm_runtime_get_if_active(DEV, true)
 #endif // 6.9
 
