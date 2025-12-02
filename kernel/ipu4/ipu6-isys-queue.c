@@ -621,10 +621,6 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 	}
 
 	list_add(&aq->node, &stream->queues);
-#ifdef IPU6 // Disabled for IPU4
-	ipu6_isys_configure_stream_watermark(av, source_pad->entity);
-	ipu6_isys_update_stream_watermark(av, true);
-#endif
 
 	ret = ipu6_isys_stream_start(av);
 	if (ret)
@@ -635,9 +631,6 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 	return 0;
 
 out_stream_start:
-#ifdef IPU6 // Disabled for IPU4
-	ipu6_isys_update_stream_watermark(av, false);
-#endif
 	list_del(&aq->node);
 
 out_fw_close:
@@ -757,10 +750,6 @@ static void stop_streaming(struct vb2_queue *q)
 	struct ipu6_isys_stream *stream = av->stream;
 
 	mutex_lock(&stream->mutex);
-
-#ifdef IPU6 // Disabled for IPU4
-	ipu6_isys_update_stream_watermark(av, false);
-#endif
 
 	mutex_lock(&av->isys->stream_mutex);
 	ipu6_isys_video_set_streaming(av, 0);
