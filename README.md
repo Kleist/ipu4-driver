@@ -20,6 +20,15 @@ The driver currently only supports IPU4, not IPU4P.
 * 6.6.111
 * 6.12.47
 
+## History
+This driver has it's origin in two different drivers:
+* The IPU6 driver which was upstreamed by Intel, see https://lore.kernel.org/all/?q=s:%22media:+ipu6:%22 and https://github.com/torvalds/linux/tree/master/drivers/media/pci/intel/ipu6 .
+* The IPU4 driver which was part of clear linux https://github.com/clearlinux-pkgs/linux-iot-lts2018
+
+IPU4 support was hacked onto the IPU6 driver to work with 6.6 by @Kleist. See https://lore.kernel.org/all/e136389011517dbc65b30f6bf0b1a9c49ab4e599.camel@gmail.com/ for more information about this work. This work was shared in https://github.com/Kleist/linux/tree/kleist-v6.6-ipu4-hacks-1 .
+
+It was recently updated to work as an out-of-tree module on 6.6 and 6.12 (and possibly working on some intermediate versions).
+
 ### Module Structure
 
 - **intel-ipu4**: Core driver module handling device discovery, initialization, and hardware management
