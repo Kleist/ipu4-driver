@@ -29,7 +29,15 @@ IPU4 support was hacked onto the IPU6 driver to work with 6.6 by @Kleist. See ht
 
 It was recently updated to work as an out-of-tree module on 6.6 and 6.12 (and possibly working on some intermediate versions).
 
-### Module Structure
+## Scripts
+The scripts added will not work out of the box, but should be seen as a source of inspiration for how one could work with porting this to other devices, or e.g. add IPU4P support.
+
+* trace_ipu4.sh: Setup a stream with media-ctl and capture some frames using gstreamer or yavta
+* trace_functions.sh: Helper functions for trace_ipu4.sh
+* split_trace.sh: Split a trace based on the markers inserted by trace_ipu4.sh
+* postprocess_trace.py: Convert register addresses to register names
+
+## Module Structure
 
 - **intel-ipu4**: Core driver module handling device discovery, initialization, and hardware management
 - **intel-ipu4-isys**: Input System module for camera interface and V4L2 video device support
