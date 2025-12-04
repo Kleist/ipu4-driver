@@ -32,10 +32,12 @@ It was recently updated to work as an out-of-tree module on 6.6 and 6.12 (and po
 ## Scripts
 The scripts added will not work out of the box, but should be seen as a source of inspiration for how one could work with porting this to other devices, or e.g. add IPU4P support.
 
-* trace_ipu4.sh: Setup a stream with media-ctl and capture some frames using gstreamer or yavta
-* trace_functions.sh: Helper functions for trace_ipu4.sh
-* split_trace.sh: Split a trace based on the markers inserted by trace_ipu4.sh
-* postprocess_trace.py: Convert register addresses to register names
+For the scripts to work, the kernel should be configured with kernel/configs/mmiotrace.config (from the kernel tree)
+
+* [trace_ipu4.sh](trace_ipu4.sh): Setup a stream with media-ctl and capture some frames using gstreamer or yavta
+* [trace_functions.sh](trace_functions.sh): Helper functions for trace_ipu4.sh
+* [split_trace.sh](split_trace.sh): Split a trace based on the markers inserted by trace_ipu4.sh
+* [postprocess_trace.py](postprocess_trace.py): Convert register addresses to register names
 
 ## Module Structure
 
