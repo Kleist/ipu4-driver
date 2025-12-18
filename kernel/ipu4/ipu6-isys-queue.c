@@ -11,6 +11,7 @@
 #include <linux/list.h>
 #include <linux/lockdep.h>
 #include <linux/mutex.h>
+#include <linux/pm_runtime.h>
 #include <linux/spinlock.h>
 #include <linux/types.h>
 
@@ -617,18 +618,11 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 		goto out_pipeline_stop;
 	}
 
-	ret = ipu6_isys_fw_get(av->isys);
+	ret = ipu6_isys_stream_start(av);
 	if (ret)
 		goto out_pipeline_stop;
 
-	ret = ipu6_isys_stream_start(av);
-	if (ret)
-		goto out_fw_close;
-
 	return 0;
-
-out_fw_close:
-	ipu6_isys_fw_put(av->isys);
 
 out_pipeline_stop:
 	ipu6_isys_stream_cleanup(av);
@@ -646,6 +640,11 @@ static int restart_stream(struct ipu6_isys_video *av)
 	int ret = 0;
 
 	dev_info(dev, "Restarting %s", av->vdev.name);
+
+	/* Stream off must not let runtime suspend close the firmware. */
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret < 0)
+		return ret;
 
 	mutex_lock(&isys->stream_mutex);
 	if (!wait_for_no_active_buffers(av)) {
@@ -705,6 +704,7 @@ err_unlock:
 		dev_info(dev, "Restarting %s done\n", av->vdev.name);
 
 	mutex_unlock(&isys->stream_mutex);
+	pm_runtime_put(dev);
 	return ret;
 }
 
@@ -752,8 +752,6 @@ static void stop_streaming(struct vb2_queue *q)
 	ipu6_isys_stream_cleanup(av);
 
 	return_buffers(aq, VB2_BUF_STATE_ERROR);
-
-	ipu6_isys_fw_put(av->isys);
 }
 
 static unsigned int
