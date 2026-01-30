@@ -45,4 +45,20 @@ static __maybe_unused s64 ambu_v4l2_get_link_freq(struct media_pad *src_pad, uns
 	X86_MATCH_VFM_STEPPINGS(vfm, GENMASK(max_step, min_step), data)
 #endif // 6.14
 
+#if KERNEL_VERSION(7, 4, 0) > LINUX_VERSION_CODE
+// 7.4 passes the subdev client info to the format and selection pad ops;
+// before, the ops tables point at wrappers without it.
+struct v4l2_subdev_client_info;
+#define IPU4_PAD_OP(fn)	fn##_no_ci
+#define IPU4_DEFINE_PAD_OP(fn, arg_t)					\
+static int fn##_no_ci(struct v4l2_subdev *sd,				\
+		      struct v4l2_subdev_state *state, arg_t *arg)	\
+{									\
+	return fn(sd, NULL, state, arg);				\
+}
+#else
+#define IPU4_PAD_OP(fn)	fn
+#define IPU4_DEFINE_PAD_OP(fn, arg_t)
+#endif // 7.4
+
 #endif // IPU4_COMPAT_H
