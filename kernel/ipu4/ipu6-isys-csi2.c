@@ -659,6 +659,7 @@ static int ipu6_isys_csi2_disable_streams(struct v4l2_subdev *sd,
 }
 
 static int ipu6_isys_csi2_set_sel(struct v4l2_subdev *sd,
+				  const struct v4l2_subdev_client_info *ci,
 				  struct v4l2_subdev_state *state,
 				  struct v4l2_subdev_selection *sel)
 {
@@ -710,6 +711,7 @@ static int ipu6_isys_csi2_set_sel(struct v4l2_subdev *sd,
 }
 
 static int ipu6_isys_csi2_get_sel(struct v4l2_subdev *sd,
+				  const struct v4l2_subdev_client_info *ci,
 				  struct v4l2_subdev_state *state,
 				  struct v4l2_subdev_selection *sel)
 {
@@ -748,11 +750,15 @@ static int ipu6_isys_csi2_get_sel(struct v4l2_subdev *sd,
 	return ret;
 }
 
+IPU4_DEFINE_PAD_OP(ipu6_isys_subdev_set_fmt, struct v4l2_subdev_format)
+IPU4_DEFINE_PAD_OP(ipu6_isys_csi2_get_sel, struct v4l2_subdev_selection)
+IPU4_DEFINE_PAD_OP(ipu6_isys_csi2_set_sel, struct v4l2_subdev_selection)
+
 static const struct v4l2_subdev_pad_ops csi2_sd_pad_ops = {
 	.get_fmt = v4l2_subdev_get_fmt,
-	.set_fmt = ipu6_isys_subdev_set_fmt,
-	.get_selection = ipu6_isys_csi2_get_sel,
-	.set_selection = ipu6_isys_csi2_set_sel,
+	.set_fmt = IPU4_PAD_OP(ipu6_isys_subdev_set_fmt),
+	.get_selection = IPU4_PAD_OP(ipu6_isys_csi2_get_sel),
+	.set_selection = IPU4_PAD_OP(ipu6_isys_csi2_set_sel),
 	.enum_mbus_code = ipu6_isys_subdev_enum_mbus_code,
 	.set_routing = ipu6_isys_subdev_set_routing,
 	.enable_streams = ipu6_isys_csi2_enable_streams,
