@@ -941,9 +941,6 @@ ipu6_stream_buf_ready(struct ipu6_isys_stream *stream, u8 pin_id, u32 pin_addr,
 	bool first = true;
 	struct vb2_v4l2_buffer *buf;
 
-	dev_dbg(dev, "buffer: %s: received buffer %8.8x\n",
-		ipu6_isys_queue_to_video(aq)->vdev.name, info->pin.addr);
-
 	spin_lock_irqsave(&aq->lock, flags);
 	if (list_empty(&aq->active)) {
 		spin_unlock_irqrestore(&aq->lock, flags);
