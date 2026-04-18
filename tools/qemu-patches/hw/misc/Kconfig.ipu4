@@ -1,0 +1,5 @@
+# Append to hw/misc/Kconfig during bootstrap:
+config IPU4
+    bool
+    default y if PCI_DEVICES
+    depends on PCI

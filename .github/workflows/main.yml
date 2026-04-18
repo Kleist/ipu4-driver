@@ -1,0 +1,35 @@
+name: main
+on:
+  push:
+    branches: [main, master, 'claude/**']
+  workflow_dispatch:
+
+# Milestones landed so far: M0 (in-tree migration scaffolding) and M1 (KUnit
+# sources). The QEMU device model, rootfs, e2e streaming, and coverage
+# report jobs are staged in tools/ but not yet wired for a green run; they
+# are added back here as the corresponding milestones land (see STATUS.md).
+
+jobs:
+  full:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential bc bison flex libelf-dev libssl-dev \
+            python3 qemu-system-x86 lcov
+
+      - name: Bootstrap harness
+        run: ./tools/bootstrap.sh
+
+      - name: Build driver
+        run: ./tools/build.sh
+
+      - name: KUnit
+        run: ./tools/tests/kunit.sh
