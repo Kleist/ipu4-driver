@@ -1,0 +1,27 @@
+name: rebase
+on:
+  schedule:
+    # Mondays 06:00 UTC.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  rebase-6-12:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential bc bison flex libelf-dev libssl-dev \
+            python3 qemu-system-x86 lcov ninja-build pkg-config \
+            libglib2.0-dev libpixman-1-dev
+
+      - name: Bootstrap harness
+        run: ./tools/bootstrap.sh
+
+      - name: Rebase onto linux-6.12.y + run tests
+        run: ./tools/rebase.sh

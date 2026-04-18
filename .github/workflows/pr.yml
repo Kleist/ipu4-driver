@@ -1,0 +1,30 @@
+name: pr
+on:
+  pull_request:
+  push:
+    branches-ignore: [main, master]
+
+jobs:
+  build-and-kunit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential bc bison flex libelf-dev libssl-dev \
+            python3 qemu-system-x86 lcov
+
+      - name: Bootstrap harness
+        run: ./tools/bootstrap.sh
+
+      - name: Build driver
+        run: ./tools/build.sh
+
+      - name: Run KUnit
+        run: ./tools/tests/kunit.sh

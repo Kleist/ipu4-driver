@@ -1,0 +1,10 @@
+tools/trace/__pycache__/
+# Forked upstream trees and ephemeral build / test artifacts.
+# These are populated by tools/bootstrap.sh and tools/tests/*.sh but never
+# committed: the forked repos live behind their own URLs (see
+# IPU4_LINUX_URL / IPU4_QEMU_URL) and the out/ dirs are regenerated per run.
+tools/linux/
+tools/qemu/
+tools/rootfs/out/
+tools/tests/out/
+tools/coverage/html/
