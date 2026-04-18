@@ -61,6 +61,21 @@ if ! compgen -G "$DRV_DST/ipu6*.c" > /dev/null; then
 	cp "$ROOT"/kernel/ipu4/*.[ch] "$DRV_DST/"
 fi
 
+# Wire CONFIG_VIDEO_INTEL_IPU4 into the parent Kconfig and Makefile so
+# `make modules` / kunit.py descend into ipu4/. Both edits are appended
+# only if not already present so re-runs are no-ops.
+PARENT_KCONFIG="$LINUX_DIR/drivers/media/pci/intel/Kconfig"
+PARENT_MAKEFILE="$LINUX_DIR/drivers/media/pci/intel/Makefile"
+
+if ! grep -q '^source "drivers/media/pci/intel/ipu4/Kconfig"$' "$PARENT_KCONFIG"; then
+	echo ">>> wiring ipu4/Kconfig into $PARENT_KCONFIG"
+	printf '\nsource "drivers/media/pci/intel/ipu4/Kconfig"\n' >> "$PARENT_KCONFIG"
+fi
+if ! grep -q '^obj-\$(CONFIG_VIDEO_INTEL_IPU4)\s*+=\s*ipu4/$' "$PARENT_MAKEFILE"; then
+	echo ">>> wiring ipu4/ into $PARENT_MAKEFILE"
+	printf 'obj-$(CONFIG_VIDEO_INTEL_IPU4)\t+= ipu4/\n' >> "$PARENT_MAKEFILE"
+fi
+
 echo ">>> bootstrap complete"
 echo "linux: $LINUX_DIR  branch=$LINUX_BRANCH"
 echo "qemu:  $QEMU_DIR   branch=$QEMU_BRANCH"

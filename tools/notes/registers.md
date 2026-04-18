@@ -54,6 +54,7 @@ once the current handlers get the probe past IPC reset:
 
 ## KUnit exposure
 
-- `ipu6_mmu_pgsize()` is currently `static` in `ipu6-mmu.c`. Landing
-  `ipu4_mmu_kunit.c` requires dropping `static` — a single-line change,
-  no API impact.
+- `ipu6_mmu_pgsize()` was un-staticed in `ipu6-mmu.c` and declared in
+  `ipu6-mmu.h` so `ipu4_mmu_kunit.c` can call it directly. No other
+  driver-internal symbols are exposed for testing; if more are needed,
+  add their declarations next to this one.
