@@ -11,6 +11,7 @@
  */
 
 #include <kunit/test.h>
+#include <linux/sizes.h>
 #include <linux/types.h>
 
 size_t ipu6_mmu_pgsize(unsigned long pgsize_bitmap,

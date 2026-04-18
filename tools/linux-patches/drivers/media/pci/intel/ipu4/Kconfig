@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config VIDEO_INTEL_IPU4
+	tristate "Intel IPU4 driver"
+	depends on ACPI || COMPILE_TEST
+	depends on VIDEO_DEV
+	depends on X86 && X86_64 && HAS_DMA
+	depends on IPU_BRIDGE || !IPU_BRIDGE
+	# IPU4 and IPU6 share the same INTEL_IPU6 EXPORT_SYMBOL_NS namespace,
+	# so building both produces duplicate-symbol errors at modpost.
+	# Enforced in tools/build.sh by `--disable VIDEO_INTEL_IPU6`; a
+	# `depends on !VIDEO_INTEL_IPU6` here would create a Kconfig
+	# recursive dependency through ARCH_HAS_DMA_OPS.
+	select ARCH_HAS_DMA_OPS
+	select AUXILIARY_BUS
+	select IOMMU_IOVA
+	select VIDEO_V4L2_SUBDEV_API
+	select MEDIA_CONTROLLER
+	select VIDEOBUF2_DMA_SG
+	select V4L2_FWNODE
+	help
+	  This is the 4th Gen Intel Image Processing Unit, found in some
+	  Intel SoCs. The driver is a downstream fork of the upstream IPU6
+	  driver kept close to it for synchronization.
+
+	  Conflicts with VIDEO_INTEL_IPU6: both modules export the same
+	  symbol namespace and cannot be loaded together.
+
+	  To compile this driver, say Y here. It produces two modules:
+	  intel-ipu4 and intel-ipu4-isys.
+
+source "drivers/media/pci/intel/ipu4/tests/Kconfig"

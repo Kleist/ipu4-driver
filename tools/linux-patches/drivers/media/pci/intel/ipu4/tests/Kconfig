@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
-config VIDEO_IPU4_KUNIT_TESTS
+config VIDEO_INTEL_IPU4_KUNIT_TESTS
 	tristate "KUnit tests for Intel IPU4 driver" if !KUNIT_ALL_TESTS
-	depends on KUNIT && VIDEO_IPU4
+	depends on KUNIT && VIDEO_INTEL_IPU4
 	default KUNIT_ALL_TESTS
 	help
 	  Small, fast unit tests for pure-logic code paths in the IPU4

@@ -23,9 +23,11 @@ tools/
   notes/
     registers.md         register-behavior log for hw/misc/ipu4.c
   linux-patches/         files mirrored into tools/linux/ on bootstrap
-    drivers/media/pci/intel/ipu4/tests/
-      Kconfig Makefile .kunitconfig
-      ipu4_format_kunit.c  ipu4_bayer_kunit.c  ipu4_mmu_kunit.c
+    drivers/media/pci/intel/ipu4/
+      Kconfig Makefile     in-tree Kconfig + Makefile for the driver
+      tests/
+        Kconfig Makefile .kunitconfig
+        ipu4_format_kunit.c  ipu4_bayer_kunit.c  ipu4_mmu_kunit.c
   qemu-patches/          files mirrored into tools/qemu/ on bootstrap
     hw/misc/ipu4.c
   rootfs/
@@ -38,33 +40,27 @@ tools/
 
 ## Milestone state
 
-- **M0 — in-tree migration:** harness plumbing landed; actual fork of
-  Linux at `v6.12` and migration of `kernel/ipu4/*.[ch]` into
-  `drivers/media/pci/intel/ipu4/` is performed by `tools/bootstrap.sh`
-  on first run. An in-tree `Makefile` for that directory is shipped via
-  `tools/linux-patches/`, so `make M=drivers/media/pci/intel/ipu4`
-  compiles the driver without any parent-tree edits. `ipu4-compat.h` is
-  left in place: on v6.12 its only active macro is unused, but removing
-  it would require editing four `#include` sites, which is deferred to
-  a later upstreaming pass. The `kernel/ipu4/` tree is still the source
-  of truth in this repo until M2 is green.
+- **M0 — in-tree migration:** done. `tools/bootstrap.sh` clones Linux
+  at `v6.12`, copies an in-tree `Makefile` and `Kconfig` to
+  `drivers/media/pci/intel/ipu4/`, seeds the driver sources from
+  `kernel/ipu4/`, and idempotently appends a `source` line to
+  `drivers/media/pci/intel/Kconfig` and an `obj-$(CONFIG_VIDEO_INTEL_IPU4)
+  += ipu4/` line to the parent `Makefile`. The driver builds via
+  `make M=drivers/media/pci/intel/ipu4`. `ipu4-compat.h` is kept in
+  place: on v6.12 its only active macro is unused, but removing it
+  would require editing four `#include` sites, deferred to a later
+  upstreaming pass. The `kernel/ipu4/` tree remains the source of
+  truth in this repo until M2 is green.
 
-  **Not done yet in M0:** wiring the driver into
-  `drivers/media/pci/intel/Kconfig` and the parent `Makefile` via a
-  `CONFIG_VIDEO_IPU4` symbol. That wiring is required before the KUnit
-  suites can link against driver symbols.
-
-- **M1 — KUnit tier:** `ipu4_format_kunit.c`, `ipu4_bayer_kunit.c`,
-  `ipu4_mmu_kunit.c` written against the upstream IPU6 helpers.
-  `ipu4_mmu_kunit.c` requires dropping `static` from
-  `ipu6_mmu_pgsize()` — noted in `tools/notes/registers.md`.
-  `ipu4_ring_kunit.c` and `ipu4_queue_kunit.c` were skipped because
-  those call paths go through `readl`/`writel` and list helpers; adding
-  them later means introducing small MMIO fakes.
-
-  Until the Kconfig wiring above lands, `tools/tests/kunit.sh` exits 0
-  with a `kunit: skipping` marker instead of failing. CI stays honest
-  about the remaining work without being red on every push.
+- **M1 — KUnit tier:** done. `ipu4_format_kunit.c`,
+  `ipu4_bayer_kunit.c`, `ipu4_mmu_kunit.c` build and run as KUnit
+  modules under `qemu-system-x86_64`. 12 tests pass in ~1.2 s of test
+  execution (the surrounding kernel build dominates wall time).
+  `ipu6_mmu_pgsize()` was un-staticed and declared in `ipu6-mmu.h` so
+  the test can reference it. `ipu4_ring_kunit.c` and
+  `ipu4_queue_kunit.c` are still skipped because those call paths go
+  through `readl`/`writel` and list helpers; adding them means
+  introducing small MMIO fakes.
 
 - **M2 — QEMU skeleton:** `hw/misc/ipu4.c` in place with the buttress
   register subset the probe path touches first. Guest rootfs builder is
@@ -99,6 +95,4 @@ The forked Linux and QEMU URLs are configurable via `IPU4_LINUX_URL` and
 - `kernel/ipu4/` is not deleted yet. That happens after the first
   green e2e run on 6.12, so a revert of the in-tree layout remains
   trivial until then.
-- `ipu4-compat.h` will be removed by `bootstrap.sh` when it seeds the
-  driver into the forked tree; the original file stays here only as
-  the input to that copy step.
+- `ipu4-compat.h` is kept rather than removed by `bootstrap.sh`.

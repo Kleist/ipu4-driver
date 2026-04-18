@@ -40,11 +40,15 @@ else
 		--module VIDEO_DEV \
 		--module VIDEOBUF2_V4L2 \
 		--module VIDEOBUF2_DMA_SG \
+		--module VIDEOBUF2_DMA_CONTIG \
 		--enable FTRACE \
 		--enable MMIOTRACE \
 		--enable DYNAMIC_DEBUG \
 		--enable GCOV_KERNEL \
-		--enable KUNIT
+		--enable KUNIT \
+		--disable VIDEO_INTEL_IPU6 \
+		--module VIDEO_INTEL_IPU4 \
+		--module VIDEO_INTEL_IPU4_KUNIT_TESTS
 fi
 make olddefconfig
 

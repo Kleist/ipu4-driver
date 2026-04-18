@@ -64,6 +64,8 @@ struct ipu6_mmu *ipu6_mmu_init(struct device *dev,
 void ipu6_mmu_cleanup(struct ipu6_mmu *mmu);
 int ipu6_mmu_hw_init(struct ipu6_mmu *mmu);
 void ipu6_mmu_hw_cleanup(struct ipu6_mmu *mmu);
+size_t ipu6_mmu_pgsize(unsigned long pgsize_bitmap,
+		       unsigned long addr_merge, size_t size);
 int ipu6_mmu_map(struct ipu6_mmu_info *mmu_info, unsigned long iova,
 		 phys_addr_t paddr, size_t size);
 size_t ipu6_mmu_unmap(struct ipu6_mmu_info *mmu_info, unsigned long iova,

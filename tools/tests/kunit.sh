@@ -20,19 +20,13 @@ if [[ ! -f "$KUNITCFG" ]]; then
 	exit 2
 fi
 
-# The KUnit suites need CONFIG_VIDEO_IPU4 wired into the forked kernel's
-# Kconfig tree so the driver symbols exist. Until bootstrap.sh does that
-# wiring, .kunitconfig references a symbol with no definition and
-# kunit.py fails with a config-not-specified error. Skip with a clear
-# marker so CI remains green while M0's Kconfig step is in progress.
-if ! grep -q '^config VIDEO_IPU4' drivers/media/pci/intel/Kconfig 2>/dev/null \
-	&& ! grep -q 'ipu4/Kconfig' drivers/media/pci/intel/Kconfig 2>/dev/null; then
-	echo "kunit: skipping (Kconfig for drivers/media/pci/intel/ipu4 not wired)"
-	exit 0
-fi
+# kunit.py uses O=.kunit and refuses to run if the source tree is dirty
+# from a prior in-tree make (e.g. tools/build.sh leaving .o files behind).
+# Clean once before invoking; mrproper is a no-op on an already-clean tree.
+make -s mrproper
 
 exec ./tools/testing/kunit/kunit.py run \
 	--arch=x86_64 \
 	--kunitconfig=drivers/media/pci/intel/ipu4/tests \
 	--jobs="$(nproc)" \
-	ipu4_mmu ipu4_format ipu4_bayer
+	'ipu4_*'
