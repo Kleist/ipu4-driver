@@ -1,7 +1,7 @@
 name: main
 on:
   push:
-    branches: [main, master, 'claude/**']
+    branches: [main, master]
   workflow_dispatch:
 
 # Milestones landed so far: M0 (in-tree migration scaffolding) and M1 (KUnit
