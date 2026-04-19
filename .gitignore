@@ -8,3 +8,7 @@ tools/qemu/
 tools/rootfs/out/
 tools/tests/out/
 tools/coverage/html/
+kernel/ipu4/*.o
+kernel/ipu4/*.cmd
+kernel/ipu4/*.o.d
+kernel/ipu4/*.mod
