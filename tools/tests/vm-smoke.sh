@@ -14,6 +14,11 @@ mkdir -p "$OUT"
 LOG="$OUT/vm-smoke.serial"
 rm -f "$LOG"
 
+# Rebuild initramfs with the M2 guest init embedded — probe-smoke runs
+# with IPU4_INIT=probe-ok and can leave the shared rootfs/out state in
+# the other mode otherwise.
+IPU4_INIT=vm-smoke "$ROOT/tools/rootfs/build.sh" >/dev/null
+
 TIMEOUT="${IPU4_SMOKE_TIMEOUT:-90}"
 
 set +e

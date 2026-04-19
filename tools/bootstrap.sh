@@ -36,7 +36,12 @@ apply_patch_tree() {
 	fi
 	echo ">>> applying $src -> $dst"
 	(cd "$src" && find . -type f -print0) | while IFS= read -r -d '' rel; do
-		install -D -m 0644 "$src/$rel" "$dst/$rel"
+		local s="$src/$rel" d="$dst/$rel"
+		# cmp-before-install so unchanged files keep their mtimes; the
+		# CI cache would otherwise rebuild every dependent object.
+		if ! cmp -s "$s" "$d" 2>/dev/null; then
+			install -D -m 0644 "$s" "$d"
+		fi
 	done
 }
 
@@ -57,7 +62,15 @@ apply_patch_tree "$ROOT/tools/qemu-patches"  "$QEMU_DIR"
 DRV_DST="$LINUX_DIR/drivers/media/pci/intel/ipu4"
 mkdir -p "$DRV_DST"
 echo ">>> seeding driver sources into $DRV_DST"
-cp "$ROOT"/kernel/ipu4/*.[ch] "$DRV_DST/"
+# cmp-before-cp (see apply_patch_tree) so unchanged files keep their
+# mtimes — otherwise the cached kernel build in CI rebuilds every
+# ipu4 object on every run.
+for src in "$ROOT"/kernel/ipu4/*.[ch]; do
+	dst="$DRV_DST/$(basename "$src")"
+	if ! cmp -s "$src" "$dst" 2>/dev/null; then
+		cp "$src" "$dst"
+	fi
+done
 
 # Wire CONFIG_VIDEO_INTEL_IPU4 into the parent Kconfig and Makefile so
 # `make modules` / kunit.py descend into ipu4/. Both edits are appended
