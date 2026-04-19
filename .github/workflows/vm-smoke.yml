@@ -1,20 +1,27 @@
 name: vm-smoke
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches:
       - main
       - master
       - 'qemu-kunit-setup'
 
-# Heavy job: clones Linux + QEMU, builds both, boots a VM and checks
-# that the emulated IPU4 device (0x8086:0x5a88) is enumerated. Not
-# gated on PRs — runs on merges to the integration branch and on demand.
+# Runs the full boot pipeline (bootstrap → build QEMU → build kernel →
+# build initramfs → boot VM) and asserts the emulated IPU4 device
+# enumerates (M2) and the driver's probe path reaches at least
+# `probe:fw_valid` (M4).
+#
+# Cold: ~12 min on the free runner. Warm (both caches hit): ~2 min —
+# the QEMU source is re-cloned but ninja detects nothing changed;
+# the kernel source is re-cloned and bootstrap re-seeds driver sources
+# with cmp-before-cp so mtimes survive and make rebuilds nothing.
 
 jobs:
   vm-smoke:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,6 +36,23 @@ jobs:
             meson python3-venv \
             busybox-static qemu-system-x86 \
             cpio gzip
+
+      # Cache keys are hashed over the inputs that can change the
+      # corresponding build output. On cache hit, bootstrap re-clones
+      # the source trees (cheap; cmp-before-cp preserves mtimes) and
+      # the ninja / make invocations are near no-ops.
+
+      - name: Cache forked QEMU build
+        uses: actions/cache@v4
+        with:
+          path: tools/qemu
+          key: qemu-${{ hashFiles('tools/qemu-patches/**/*', 'tools/bootstrap.sh', 'tools/build-qemu.sh') }}
+
+      - name: Cache forked Linux build
+        uses: actions/cache@v4
+        with:
+          path: tools/linux
+          key: linux-${{ hashFiles('kernel/ipu4/**/*', 'tools/linux-patches/**/*', 'tools/bootstrap.sh', 'tools/build.sh', 'tools/build-kernel.sh') }}
 
       - name: Bootstrap harness
         run: ./tools/bootstrap.sh
@@ -47,7 +71,19 @@ jobs:
         env:
           IPU4_ACCEL: tcg
 
-      - name: Boot VM, verify driver probe progresses to firmware load
+      - name: Boot VM, verify driver probe progresses past fw_valid
         run: ./tools/tests/probe-smoke.sh
         env:
           IPU4_ACCEL: tcg
+
+      - name: Upload serial logs + artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-smoke-failure-${{ github.run_id }}
+          if-no-files-found: ignore
+          path: |
+            tools/tests/out/*.serial
+            tools/rootfs/out/rootfs.cpio.gz
+            tools/linux/arch/x86/boot/bzImage
+            tools/linux/.config
