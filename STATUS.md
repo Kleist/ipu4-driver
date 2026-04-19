@@ -89,25 +89,32 @@ tools/
   default `IPU4_PROBE_REQUIRED` is raised to `probe:fw_valid`; the
   actual reached marker is `probe:bridge`.
 
-- **M4.5 — virt-sensor bridge bypass:** done as a checkpoint.
+- **M4.5 — virt-sensor bridge bypass:** done.
   `kernel/ipu4/virt-sensor.c` installs a software-node graph on
   `pdev->dev.fwnode->secondary` and registers a v4l2_subdev
   advertising `MEDIA_BUS_FMT_RGB888_1X24` at 800×800, replacing
   the `ambu_ipu_bridge_init()` call under
-  `CONFIG_VIDEO_IPU4_VIRT_SENSOR=y`. Probe now passes the
-  fwnode-graph check and runs past the bridge step into
-  `ipu6_psys_init()` / `ipu6_buttress_map_fw_image()`, where it
-  panics on a null-pointer dereference in `ipu6_dma_unmap_sg()`
-  because the QEMU model has no MMU / DMA backing. `probe-smoke`
-  default `IPU4_PROBE_REQUIRED` is `probe:virt_sensor`; the
-  observed reached marker is `probe:virt_sensor`. `oops=panic` in
-  the kernel command line makes these crashes halt the VM in ~6 s
-  instead of hanging for the test timeout.
+  `CONFIG_VIDEO_IPU4_VIRT_SENSOR=y`.
 
-- **M5 — streaming + coverage:** MMU page-table walks in
-  `hw/misc/ipu4.c` (the M4.5 panic point), syscom ring state, a
-  QEMUTimer-driven frame generator, the virt-sensor `s_stream` hook
-  that consumes those frames, and the SHA-256-matching e2e test.
+- **M5a — probe completes, /dev/video* appears:** done. The M4.5
+  panic turned out to be a `BTRS_PWR_STATE_IS_PWR_RDY` shift
+  off-by-one in `hw/misc/ipu4.c` (19 → 20) — probe was racing the
+  power-up poll, not crashing on MMU. Fixing the constant so
+  `PWR_STATE` reports all IPU4 power islands ready
+  (`bits 13:12=HH_DONE, 23:20=IS_RDY, 28:24=PS_PWR_UP, 1:0=PWR_RDY`)
+  unblocked the whole probe path: `ipu6_psys_init()` completes,
+  isys notifier binds the virt-sensor, and the v4l2 core registers
+  23 `/dev/video*` nodes. `probe-smoke` default `IPU4_PROBE_REQUIRED`
+  is raised to `probe:video_node`. One cosmetic `"Change power
+  status timeout"` line is logged by the power-down poll in
+  `ipu6_buttress_power(on=false)` — the always-ready constant never
+  reads 0 so the poll times out, but probe ignores it and continues.
+
+- **M5b — streaming + coverage:** next piece. MMU page-table walks
+  in `hw/misc/ipu4.c` so real DMA allocations land correctly,
+  syscom ring state + doorbell, a QEMUTimer-driven frame generator,
+  the virt-sensor `.s_stream` hook that produces deterministic
+  frames, and the yavta SHA-256 e2e test in `tools/tests/e2e.sh`.
 
 - **M6/M7/M8 — rebase cadence + 6.18/mainline:** cron workflow in
   place; 6.18 and mainline jobs not yet added — they wait on M5 being

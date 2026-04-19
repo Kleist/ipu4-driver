@@ -58,10 +58,14 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define BTRS_FW_RESET_CTL_START    BIT(0)
 #define BTRS_FW_RESET_CTL_DONE     BIT(1)
 
-/* PWR_STATE target values the driver polls for. */
-#define BTRS_PWR_STATE_PWR_RDY     0x3
-#define BTRS_PWR_STATE_IS_PWR_RDY  (0xa << 19)
-#define BTRS_PWR_STATE_PS_PWR_UP   (0xf << 24)
+/* PWR_STATE target values the driver polls for. IPU4 uses:
+ *   - bits 13:12  HH (TSC-sync) status: DONE = 2
+ *   - bits 23:20  IS (ISYS) power FSM: IS_RDY = 0xa
+ *   - bits 28:24  PS (PSYS) power FSM: PS_PWR_UP = 0xf
+ * Reading PWR_STATE always returns all of them asserted so every
+ * `readl_poll_timeout()` in the driver terminates on the first read.
+ */
+#define BTRS_PWR_STATE_PWR_RDY_ALL      0x0fa02003
 
 struct Ipu4State {
     PCIDevice parent_obj;
@@ -99,11 +103,9 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
         val = s->fw_reset_ctl;
         break;
     case BTRS_REG_PWR_STATE:
-        /* Report "all power islands ready" on every read. The driver polls
-         * this after FW_RESET_CTL. */
-        val = BTRS_PWR_STATE_PWR_RDY
-            | BTRS_PWR_STATE_IS_PWR_RDY
-            | BTRS_PWR_STATE_PS_PWR_UP;
+        /* Report "all power islands ready" on every read. The driver
+         * polls this for ISYS, PSYS, and TSC-sync readiness. */
+        val = BTRS_PWR_STATE_PWR_RDY_ALL;
         s->pwr_state = val;
         break;
     case BTRS_REG_ISR_STATUS:

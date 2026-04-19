@@ -21,7 +21,7 @@ Columns:
 | 0x008  | Buttress | `ipu6-buttress.c` WDT kick              | Write: ignored. Read: 0.                                    | inferred   |
 | 0x00c  | Buttress | `ipu6-buttress.c` BTRS_CTRL             | R/W latched; value replayed on read.                        | inferred   |
 | 0x030  | Buttress | `ipu6-buttress.c` FW_RESET_CTL          | Write START → read DONE on next read (no timer).            | inferred   |
-| 0x05c  | Buttress | `ipu6-buttress.c` PWR_STATE poll        | Read always returns PWR_RDY | IS_PWR_RDY | PS_PWR_UP.      | guess      |
+| 0x05c  | Buttress | `ipu6-buttress.c` PWR_STATE poll        | Read returns `0x0fa02003` (HH_DONE[13:12]=2, IS_RDY[23:20]=0xa, PS_PWR_UP[28:24]=0xf, PWR_RDY[1:0]=3). Power-DOWN poll logs cosmetic timeout. | inferred   |
 | 0x078  | Buttress | `ipu6-buttress.c` FW_SOURCE_BASE_LO     | R/W latched.                                                | inferred   |
 | 0x07c  | Buttress | `ipu6-buttress.c` FW_SOURCE_BASE_HI     | R/W latched.                                                | inferred   |
 | 0x080  | Buttress | `ipu6-buttress.c` FW_SOURCE_SIZE        | R/W latched.                                                | inferred   |
@@ -76,29 +76,43 @@ With this blob, probe progresses through:
 `probe-smoke` reaches `probe:bridge` and passes against the new
 default required marker `probe:fw_valid`.
 
-## M4.5 progress
+## M4.5 / M5a progress
 
-`kernel/ipu4/virt-sensor.c` (landed under
-`CONFIG_VIDEO_IPU4_VIRT_SENSOR`) installs a software-node graph on
-`pdev->dev.fwnode->secondary` and a `v4l2_subdev` advertising
-`MEDIA_BUS_FMT_RGB888_1X24` at 800×800, replacing the ambu bridge
-call when the option is set. Probe progresses past the fwnode check
-into `ipu6_psys_init()`, then **panics** in `ipu6_dma_unmap_sg()` at
-`sg_dma_address(sglist)` on a null scatterlist. The crash is
-expected until the MMU handler below lands; the kernel command line
-carries `oops=panic` so the VM halts in ~6 s instead of hanging.
+`kernel/ipu4/virt-sensor.c` installs a software-node graph +
+v4l2_subdev under `CONFIG_VIDEO_IPU4_VIRT_SENSOR`.
+
+The M4.5 crash in `ipu6_dma_unmap_sg` was a false lead. Root cause
+was `BTRS_PWR_STATE_IS_PWR_RDY` encoded with the wrong shift (19
+instead of IPU4's 20). The driver's `readl_poll_timeout()` for ISYS
+power-up timed out, probe unwound with partially-initialised state,
+and the unwinder hit the `ipu6_dma_unmap_sg`/`sg_dma_address(NULL)`
+path.
+
+Fixing the PWR_STATE constant to return the right bits for IPU4 —
+`bits 13:12=HH_DONE (2), 23:20=IS_PWR_FSM_IS_RDY (0xa), 28:24=PS_PWR_FSM_PS_PWR_UP (0xf), 1:0=PWR_RDY (3)`
+→ aggregate `0x0fa02003` — unblocks all four polls
+(`ipu6_buttress_power()` for ISYS and PSYS; `ipu6_buttress_start_tsc_sync()`;
+`ipu6_buttress_powerup_*()`). Probe completes and 23 `/dev/video*`
+nodes appear.
+
+A single cosmetic line remains: `ipu6_buttress_power(on=false)`
+polls for `PWR_STATE & mask == 0` (power-down done), which our
+always-ready constant never satisfies, so it logs "Change power
+status timeout". probe ignores the return value in that path, so it
+is non-fatal — documented here rather than "fixed" with a proper
+on/off state machine until we need to exercise runtime-PM.
 
 ## Next targets (unimplemented)
 
-- **MMU (0x2e0000)** — the M4.5 panic point.
-  `ipu6_buttress_map_fw_image()` does DMA alloc that walks the IPU's
-  MMU page tables. The QEMU model must translate IOVA→host via
-  `pci_dma_rw()` on page-directory-base writes. This is the first
-  real M5 deliverable.
-- **Firmware magic (BAR+0x8000)** — CPD verifier expects `0xb00710ad`
-  at a specific offset after `FW_SOURCE_BASE_*` / `SIZE` are populated.
-  Not yet exercised because probe aborts earlier; ready to wire when
-  needed.
+- **MMU (0x2e0000)** — real DMA-alloc backing. Probe completes
+  today because the polls return ready, but any actual DMA
+  read/write through the emulated IPU MMU just hits unhandled MMIO.
+  Streaming (M5b) needs `pci_dma_rw()` on page-directory-base
+  writes.
+- **Firmware magic (BAR+0x8000)** — CPD verifier expects
+  `0xb00710ad`. Not yet exercised because probe doesn't load the
+  real firmware post-CPD-validate; may matter once real M5b tests
+  run.
 - **ISYS DMEM (0x200000)** — syscom ring head/tail and doorbell
   registers. Layout comes from `ipu6-fw-com.h` (`FW_COM_WR_REG`,
   `FW_COM_RD_REG`).
