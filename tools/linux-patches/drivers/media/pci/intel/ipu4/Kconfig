@@ -28,4 +28,18 @@ config VIDEO_INTEL_IPU4
 	  To compile this driver, say Y here. It produces two modules:
 	  intel-ipu4 and intel-ipu4-isys.
 
+config VIDEO_IPU4_VIRT_SENSOR
+	bool "Synthetic CSI2 sensor for the IPU4 QEMU harness"
+	depends on VIDEO_INTEL_IPU4
+	help
+	  Builds the ipu4-virt-sensor subdev into intel-ipu4.ko and
+	  replaces the ambu-ipu-bridge call in probe with one that
+	  installs a software-node graph plus a synthetic v4l2_subdev
+	  advertising RGB888_1X24 at 800x800. Lets the driver's probe
+	  path complete under QEMU (where no I2C sensor exists) so
+	  /dev/video* nodes appear. `s_stream()` is a no-op — real
+	  frames come from the QEMU device model's M5 frame generator.
+
+	  Leave N unless you are running the QEMU harness.
+
 source "drivers/media/pci/intel/ipu4/tests/Kconfig"

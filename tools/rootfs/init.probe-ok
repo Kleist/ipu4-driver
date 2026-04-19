@@ -19,11 +19,21 @@ mount -t 9p -o trans=virtio tests /mnt/tests 2>/dev/null || true
 echo 0 > /proc/sys/kernel/printk_devkmsg 2>/dev/null || true
 
 for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
-	ambu-ipu-bridge intel-ipu4 intel-ipu4-isys; do
+	ambu-ipu-bridge intel-ipu4; do
 	ko=/lib/modules/$m.ko
 	[ -f "$ko" ] || continue
 	insmod "$ko" dyndbg=+p 2>&1 || true
 done
+
+# intel-ipu4-isys depends on symbols from intel-ipu4. If intel-ipu4's
+# probe oopsed partway through, insmod-ing isys blocks for 30 s each
+# on "gave up waiting for init of module" — skip it when the core
+# module didn't initialise cleanly. `lsmod` / /proc/modules shows
+# "Live" when init completed; anything else (Loading/Unloading) means
+# we should not chain further modules on top.
+if grep -q '^intel_ipu4 .* Live' /proc/modules 2>/dev/null; then
+	insmod /lib/modules/intel-ipu4-isys.ko dyndbg=+p 2>&1 || true
+fi
 
 echo
 echo "=== /sys/bus/pci/devices ==="
@@ -51,6 +61,11 @@ if [ -d /sys/bus/pci/drivers/intel-ipu4 ]; then
 else
 	echo "PROBE_OK: FAIL (intel-ipu4 driver not registered)"
 fi
+
+for vd in /dev/video*; do
+	[ -e "$vd" ] || continue
+	echo "PROBE_OK: video=$vd"
+done
 
 echo "PROBE_OK: shutting down"
 poweroff -f

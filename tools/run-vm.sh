@@ -24,7 +24,7 @@ for f in "$QEMU_BIN" "$KERNEL" "$INITRD"; do
 	fi
 done
 
-APPEND="console=ttyS0 earlyprintk=serial,ttyS0 panic=-1 nokaslr"
+APPEND="console=ttyS0 earlyprintk=serial,ttyS0 panic=-1 oops=panic nokaslr"
 APPEND+=" loglevel=7 rdinit=/init"
 APPEND+=" intel_ipu4.dyndbg=+p"
 if [[ "${IPU4_MMIOTRACE:-0}" == 1 ]]; then

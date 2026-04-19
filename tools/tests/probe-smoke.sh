@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
-# M3 smoke test. Boots the VM with an init that inserts intel-ipu4.ko
-# and asserts the probe path made it past buttress init to firmware
-# load. The exact stopping point is the kernel's firmware_class failing
-# `ipu4_cpd_b0.bin` with -ENOENT; we don't ship a real CPD blob yet
-# (that's M4 territory), so the passing criterion here is "the driver
-# got far enough to _ask_ for firmware."
+# Probe-progress smoke test. Boots the VM with an init that inserts
+# intel-ipu4.ko and reports how far probe got. Each milestone raises
+# the default required checkpoint:
 #
-# Regression mode: if the probe was previously further along and now
-# stops earlier, this script fails.
+#   M3: probe reached ipu6_cpd_copy_binary() (probe:fw_load).
+#   M4: CPD blob accepted (probe:fw_valid).
+#   M4.5: virt-sensor replaces ambu-bridge so probe moves past the
+#         fwnode-graph check (probe:virt_sensor, the current default).
+#         Reaching /dev/video* still needs an MMU stub in hw/misc/ipu4.c
+#         — that's M5.
+#
+# A lower `IPU4_PROBE_REQUIRED` keeps the test green during regressions;
+# the default is tightened as new pieces land.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -27,15 +31,16 @@ timeout --preserve-status "$TIMEOUT" "$ROOT/tools/run-vm.sh" 2>&1 | tee "$LOG"
 set -e
 
 # Progress markers, ordered from earliest to furthest-along. The last
-# one that matches is the actual checkpoint reached. The marker patterns
-# are taken from ipu6.c probe-time dev_{info,err,dbg}() calls.
+# one that matches is the actual checkpoint reached. The regexes match
+# kernel log lines printed on the probe path plus the PROBE_OK: markers
+# tools/rootfs/init.probe-ok prints after driver load.
 markers=(
 	"probe:entered|PCI bar\[0\] = "
 	"probe:ipc_reset|IPC reset done"
 	"probe:fw_load|FW version:"
-	"probe:fw_valid|Found supported sensor"
-	"probe:bridge|IPU6 bridge init"
-	"probe:bound|driver bound"
+	"probe:virt_sensor|virt-sensor installed"
+	"probe:bound|PROBE_OK: driver bound"
+	"probe:video_node|PROBE_OK: video=/dev/video"
 )
 
 reached=""
@@ -49,11 +54,11 @@ done
 
 echo "probe-smoke: reached=$reached"
 
-# The required checkpoint. Raised as each M3/M4 piece lands. Default is
-# `probe:fw_valid` after M4 lands a CPD blob — probe now consistently
-# loads+validates firmware and runs the driver far enough to call into
-# ambu-ipu-bridge.
-REQUIRED="${IPU4_PROBE_REQUIRED:-probe:fw_valid}"
+# Default is `probe:virt_sensor` — with M4.5 the driver installs the
+# synthetic sensor, then probe keeps running into ipu6_buttress_map_fw_image
+# / psys_init where it hits DMA paths the QEMU model doesn't back yet.
+# The M5 MMU handler raises this to probe:video_node.
+REQUIRED="${IPU4_PROBE_REQUIRED:-probe:virt_sensor}"
 case "$reached" in
 "")
 	echo "probe-smoke: FAIL (driver did not reach any progress marker)" >&2
@@ -61,7 +66,6 @@ case "$reached" in
 	;;
 esac
 
-# Ordered check: fail if we reached less than the required marker.
 idx_of() {
 	local target="$1" i=0
 	for m in "${markers[@]}"; do
