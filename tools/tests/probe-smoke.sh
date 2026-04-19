@@ -6,9 +6,10 @@
 #   M3: probe reached ipu6_cpd_copy_binary() (probe:fw_load).
 #   M4: CPD blob accepted (probe:fw_valid).
 #   M4.5: virt-sensor replaces ambu-bridge so probe moves past the
-#         fwnode-graph check (probe:virt_sensor, the current default).
-#         Reaching /dev/video* still needs an MMU stub in hw/misc/ipu4.c
-#         — that's M5.
+#         fwnode-graph check (probe:virt_sensor).
+#   M5:   PWR_STATE constant in hw/misc/ipu4.c unblocks the buttress
+#         power-FSM polls, probe completes, v4l2 core registers
+#         /dev/video* (probe:video_node, the current default).
 #
 # A lower `IPU4_PROBE_REQUIRED` keeps the test green during regressions;
 # the default is tightened as new pieces land.
@@ -54,11 +55,12 @@ done
 
 echo "probe-smoke: reached=$reached"
 
-# Default is `probe:virt_sensor` — with M4.5 the driver installs the
-# synthetic sensor, then probe keeps running into ipu6_buttress_map_fw_image
-# / psys_init where it hits DMA paths the QEMU model doesn't back yet.
-# The M5 MMU handler raises this to probe:video_node.
-REQUIRED="${IPU4_PROBE_REQUIRED:-probe:virt_sensor}"
+# Default is `probe:video_node` — with M5's PWR_STATE "all ready"
+# constant the probe path completes through psys_init and video_device
+# registration. The power-down poll in ipu6_buttress_power(on=false)
+# logs a cosmetic "Change power status timeout" because our constant
+# never reads 0; probe ignores it and continues.
+REQUIRED="${IPU4_PROBE_REQUIRED:-probe:video_node}"
 case "$reached" in
 "")
 	echo "probe-smoke: FAIL (driver did not reach any progress marker)" >&2
