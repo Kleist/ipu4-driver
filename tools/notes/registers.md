@@ -40,34 +40,58 @@ Columns:
 
 ## M3 progress
 
-Today the driver's probe path reaches `ipu6_cpd_copy_binary()` / firmware
-load. Observed order of operations (from `dmesg | grep intel-ipu4`):
+The M3 PR added MSI (`msi_init()` in `ipu4_realize()`) so probe got
+past `pci_alloc_irq_vectors(..., PCI_IRQ_MSI)`. The non-secure branch
+of buttress init is entered because `SECURITY_CTL` reads 0, and
+`Skip IPC reset for non-secure mode` elides the CSE IPC handshake.
+Probe stopped at the firmware request with `-ENOENT`.
 
-1. `IPU6 PCI bar[0] = 0xfb000000` — BAR0 mapped.
-2. `pci_alloc_irq_vectors(dev, 1, 1, PCI_IRQ_MSI)` — now succeeds since
-   the QEMU model calls `msi_init()` in `ipu4_realize()`.
-3. `IPU6 in non-secure mode touch 0x0 mask 0x0` — buttress
-   `SECURITY_CTL` reads 0 (our latched default), which the driver
-   interprets as "non-secure".
-4. `Skip IPC reset for non-secure mode` — non-secure boot elides the
-   CSE IPC reset handshake (`BUTTRESS_REG_IU2CSE*` / `CSE2IU*` would
-   otherwise be exercised here).
-5. `Requesting signed firmware ipu4_cpd_b0.bin failed` with `-ENOENT`.
+## M4 progress
 
-The firmware file is the next barrier. Forging a valid CPD blob that
-passes `ipu6_cpd_validate_cpd_file()` is M4 territory (requires header
-marker `0x44504324`, manifest/metadata/moduledata partitions, and a
-component table the driver matches against `IPU6_CPD_METADATA_EXTN_TYPE_IUNIT`
-/ `IMAGE_TYPE_MAIN_FIRMWARE`). Until then, probe stops at firmware load
-and the `probe-smoke` test passes at `probe:fw_load`.
+`tools/firmware/gen-cpd.py` now synthesizes a minimal CPD blob that
+satisfies `ipu6_cpd_validate_cpd_file()`:
+
+- `hdr_mark = 0x44504324`, `hdr_len = 0x14`, `ent_cnt = 3`.
+- Three entries (MANIFEST, METADATA, MODULEDATA). MANIFEST is empty.
+- METADATA points to a single `ipu6_cpd_metadata_extn` with
+  `extn_type = IPU6_CPD_METADATA_EXTN_TYPE_IUNIT (0x10)` and
+  `img_type = IPU6_CPD_METADATA_IMAGE_TYPE_MAIN_FIRMWARE (2)`.
+- MODULEDATA contains a `module_data_hdr` followed by an empty nested
+  CPD (zero entries) — `ipu6_cpd_validate_moduledata()` recurses into
+  this with no further checks to fail.
+
+`rootfs/build.sh` generates the blob on demand and places it at
+`/lib/firmware/ipu4_cpd_b0.bin` in the initramfs.
+
+With this blob, probe progresses through:
+
+1. `FW version: 0` — firmware loaded, top-level CPD validated.
+2. CPD validation completes (metadata + moduledata recurse OK).
+3. `Found supported sensor 0-000e` — ambu-ipu-bridge config scan.
+4. `Invalid I2C adapter 3 for port 1` — ambu-ipu-bridge needs I2C
+   adapters 0 and 3 (see `kernel/ipu4/ambu-ipu-bridge.c:28`); QEMU
+   presents none, probe aborts with `IPU6 bridge init failed` and
+   `-EINVAL`.
+
+`probe-smoke` reaches `probe:bridge` and passes against the new
+default required marker `probe:fw_valid`.
 
 ## Next targets (unimplemented)
 
-Once a CPD blob exists, the next register ranges the fuzzing loop is
-expected to hit are:
+The next blocker is the ambu-ipu-bridge call. The upstream plan was
+always to replace this bridge with a `virt-sensor` kernel subdev that
+advertises RGB888_1X24/800x800 without needing I2C. The minimum bypass
+list is:
 
+- **virt-sensor** — a new kernel module in
+  `drivers/media/pci/intel/ipu4/virt-sensor.c`, gated by
+  `CONFIG_VIDEO_IPU4_VIRT_SENSOR`, registering a subdev the driver
+  discovers via `v4l2_async`. When enabled, the IPU4 probe path bypasses
+  `ambu_ipu_bridge_init()`.
 - **Firmware magic (BAR+0x8000)** — CPD verifier expects `0xb00710ad`
   at a specific offset after `FW_SOURCE_BASE_*` / `SIZE` are populated.
+  Not yet exercised because probe aborts earlier; ready to wire when
+  needed.
 - **MMU (0x2e0000)** — page-directory-base write triggers a page-table
   walk. Will be stubbed to `pci_dma_rw()` translation for host-side
   paging.

@@ -82,5 +82,17 @@ if compgen -G "$DRV_DIR/*.ko" > /dev/null; then
 	done
 fi
 
+# CPD firmware blob. Generated on-demand by tools/firmware/gen-cpd.py;
+# minimal content that passes ipu6_cpd_validate_cpd_file() but stops
+# probe later at pkg_dir creation (see STATUS.md for the M4 roadmap).
+FW_DIR="$OUT/firmware"
+mkdir -p "$FW_DIR"
+FW_BLOB="$FW_DIR/ipu4_cpd_b0.bin"
+if [[ ! -f "$FW_BLOB" || "$ROOT/tools/firmware/gen-cpd.py" -nt "$FW_BLOB" ]]; then
+	python3 "$ROOT/tools/firmware/gen-cpd.py" "$FW_BLOB"
+fi
+echo "dir  /lib/firmware           0755 0 0" >> "$LIST"
+echo "file /lib/firmware/ipu4_cpd_b0.bin  $FW_BLOB 0644 0 0" >> "$LIST"
+
 "$GEN" "$LIST" | gzip -9 > "$OUT/rootfs.cpio.gz"
 echo ">>> built $OUT/rootfs.cpio.gz ($(stat -c%s "$OUT/rootfs.cpio.gz") bytes)"

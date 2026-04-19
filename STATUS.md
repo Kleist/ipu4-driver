@@ -76,23 +76,28 @@ tools/
   dedicated `.github/workflows/vm-smoke.yml` runs this on merges to
   the integration branch and on demand (not on PRs — too slow).
 
-- **M3 — probe progresses to firmware load:** done as a checkpoint,
-  not as a terminus. `hw/misc/ipu4.c` now calls `msi_init()` so
-  `pci_alloc_irq_vectors(..., PCI_IRQ_MSI)` succeeds, the non-secure
-  IPC-reset branch completes, and probe reaches
-  `ipu6_cpd_copy_binary()` / the firmware request. That request fails
-  with `-ENOENT` because we don't ship a CPD firmware blob — forging
-  one is M4 territory. `tools/tests/probe-smoke.sh` reports the
-  furthest checkpoint reached (`probe:entered` → `probe:ipc_reset` →
-  `probe:fw_load` → `probe:fw_valid` → `probe:bound`) and passes when
-  it reaches a configurable `IPU4_PROBE_REQUIRED` (defaults to
-  `probe:fw_load`). The test runs in the `vm-smoke` workflow.
+- **M3 — probe progresses to firmware load:** done. Progress-graded
+  smoke test (`probe-smoke.sh`) reports the furthest reached marker
+  and passes against a configurable `IPU4_PROBE_REQUIRED` checkpoint.
 
-- **M4/M5 — firmware + MMU + syscom + streaming + coverage:** M4 is
-  the next milestone: synthesize a CPD blob the driver accepts, stub
-  MMU page-table walks, wire syscom ring state in the device model,
-  and add a `virt-sensor` so a yavta call returns deterministic
-  frames.
+- **M4 — firmware synthesized, probe reaches bridge init:** done as a
+  checkpoint. `tools/firmware/gen-cpd.py` generates a minimal CPD blob
+  that satisfies `ipu6_cpd_validate_cpd_file()`; `rootfs/build.sh`
+  drops it at `/lib/firmware/ipu4_cpd_b0.bin`. Probe now runs to
+  `ambu_ipu_bridge_init()` and stops at the I2C adapter lookup
+  (adapters 0 and 3 don't exist under QEMU). `probe-smoke.sh`
+  default `IPU4_PROBE_REQUIRED` is raised to `probe:fw_valid`; the
+  actual reached marker is `probe:bridge`.
+
+- **M4.5 — bridge bypass + virt-sensor:** the next piece. A new
+  `drivers/media/pci/intel/ipu4/virt-sensor.c` gated by
+  `CONFIG_VIDEO_IPU4_VIRT_SENSOR` will short-circuit the ambu bridge
+  so probe completes, `/dev/video*` nodes appear, and yavta can
+  request frames.
+
+- **M5 — streaming + coverage:** after the bridge-bypass lands:
+  MMU page-table walks, syscom ring state in the QEMU model, a frame
+  generator on a QEMUTimer, and the SHA-256-matching e2e test.
 
 - **M6/M7/M8 — rebase cadence + 6.18/mainline:** cron workflow in
   place; 6.18 and mainline jobs not yet added — they wait on M5 being

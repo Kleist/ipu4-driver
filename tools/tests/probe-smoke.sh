@@ -27,12 +27,14 @@ timeout --preserve-status "$TIMEOUT" "$ROOT/tools/run-vm.sh" 2>&1 | tee "$LOG"
 set -e
 
 # Progress markers, ordered from earliest to furthest-along. The last
-# one that matches is the actual checkpoint reached.
+# one that matches is the actual checkpoint reached. The marker patterns
+# are taken from ipu6.c probe-time dev_{info,err,dbg}() calls.
 markers=(
 	"probe:entered|PCI bar\[0\] = "
 	"probe:ipc_reset|IPC reset done"
-	"probe:fw_load|Requesting signed firmware"
-	"probe:fw_valid|IUNIT firmware|valid firmware"
+	"probe:fw_load|FW version:"
+	"probe:fw_valid|Found supported sensor"
+	"probe:bridge|IPU6 bridge init"
 	"probe:bound|driver bound"
 )
 
@@ -47,8 +49,11 @@ done
 
 echo "probe-smoke: reached=$reached"
 
-# The required checkpoint. Bumped as the M3 fuzzing loop lands handlers.
-REQUIRED="${IPU4_PROBE_REQUIRED:-probe:fw_load}"
+# The required checkpoint. Raised as each M3/M4 piece lands. Default is
+# `probe:fw_valid` after M4 lands a CPD blob — probe now consistently
+# loads+validates firmware and runs the driver far enough to call into
+# ambu-ipu-bridge.
+REQUIRED="${IPU4_PROBE_REQUIRED:-probe:fw_valid}"
 case "$reached" in
 "")
 	echo "probe-smoke: FAIL (driver did not reach any progress marker)" >&2
