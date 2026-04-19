@@ -106,6 +106,7 @@ bool ipu6_isys_is_bayer_format(u32 code)
 		return false;
 	}
 }
+EXPORT_SYMBOL_NS_GPL(ipu6_isys_is_bayer_format, INTEL_IPU6);
 
 u32 ipu6_isys_convert_bayer_order(u32 code, int x, int y)
 {
@@ -138,6 +139,7 @@ u32 ipu6_isys_convert_bayer_order(u32 code, int x, int y)
 
 	return code_map[i ^ (((y & 1) << 1) | (x & 1))];
 }
+EXPORT_SYMBOL_NS_GPL(ipu6_isys_convert_bayer_order, INTEL_IPU6);
 
 int ipu6_isys_subdev_set_fmt(struct v4l2_subdev *sd,
 			     struct v4l2_subdev_state *state,

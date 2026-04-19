@@ -1,3 +1,0 @@
-# Append to hw/misc/meson.build during bootstrap:
-#
-# system_ss.add(when: 'CONFIG_IPU4', if_true: files('ipu4.c'))

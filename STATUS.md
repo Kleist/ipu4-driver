@@ -33,8 +33,9 @@ tools/
   rootfs/
     build.sh             initramfs builder (not yet implemented)
 .github/workflows/
-  pr.yml                 KUnit + build
-  main.yml               KUnit + e2e + coverage
+  pr.yml                 KUnit + build (PR gate)
+  main.yml               reserved: e2e + coverage when they land
+  vm-smoke.yml           boot VM + assert 0x8086:0x5a88 (M2)
   rebase.yml             weekly rebase cron
 ```
 
@@ -62,12 +63,22 @@ tools/
   through `readl`/`writel` and list helpers; adding them means
   introducing small MMIO fakes.
 
-- **M2 — QEMU skeleton:** `hw/misc/ipu4.c` in place with the buttress
-  register subset the probe path touches first. Guest rootfs builder is
-  a stub.
+- **M2 — QEMU skeleton + VM boot:** done. `tools/bootstrap.sh` now
+  clones a forked QEMU and wires `hw/misc/ipu4.c` into the
+  `hw/misc/Kconfig` + `hw/misc/meson.build` via idempotent appends.
+  `tools/build-qemu.sh` builds `qemu-system-x86_64` with the IPU4
+  device registered; `tools/build-kernel.sh` builds `bzImage` + module
+  set from the same config as `build.sh`; `tools/rootfs/build.sh`
+  produces a busybox initramfs via the kernel's `gen_init_cpio`;
+  `tools/run-vm.sh` boots the whole thing with `-device ipu4`.
+  `tools/tests/vm-smoke.sh` asserts the guest enumerates
+  `0x8086:0x5a88` on its PCI bus and prints `VM_SMOKE: PASS`. A
+  dedicated `.github/workflows/vm-smoke.yml` runs this on merges to
+  the integration branch and on demand (not on PRs — too slow).
 
-- **M3/M4/M5 — fuzzing loops + e2e + coverage:** tooling written,
-  expected to be iterated on the first live boot.
+- **M3/M4/M5 — fuzzing loops + e2e + coverage:** M3 is the next
+  milestone: iterate `hw/misc/ipu4.c` register handlers until
+  `ipu6_pci_probe()` returns 0 and `/dev/video*` nodes appear.
 
 - **M6/M7/M8 — rebase cadence + 6.18/mainline:** cron workflow in
   place; 6.18 and mainline jobs not yet added — they wait on M5 being
@@ -77,10 +88,13 @@ tools/
 
 ```bash
 tools/bootstrap.sh            # one-time: forks Linux + QEMU, seeds patches
-tools/build.sh                # build intel-ipu4.ko
-tools/tests/kunit.sh          # tier 1, should be <1 s once booted
-tools/rootfs/build.sh         # TODO: produce out/bzImage + out/rootfs.cpio.gz
-tools/tests/e2e.sh            # tier 2, boots VM and streams
+tools/build.sh                # build intel-ipu4.ko (driver-only, fast)
+tools/tests/kunit.sh          # tier 1, ~1 s of test execution
+tools/build-qemu.sh           # build qemu-system-x86_64 with ipu4 device
+tools/build-kernel.sh         # full guest kernel + modules (for VM runs)
+tools/rootfs/build.sh         # busybox initramfs via gen_init_cpio
+tools/tests/vm-smoke.sh       # M2: boot VM, assert 0x8086:0x5a88 enumerates
+tools/tests/e2e.sh            # tier 2, boots VM and streams (M4 target)
 tools/coverage/collect.sh     # HTML report in tools/coverage/html/
 ```
 

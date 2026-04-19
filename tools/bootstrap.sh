@@ -8,11 +8,11 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 
-LINUX_URL="${IPU4_LINUX_URL:-https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git}"
+LINUX_URL="${IPU4_LINUX_URL:-https://github.com/torvalds/linux.git}"
 LINUX_TAG="${IPU4_LINUX_TAG:-v6.12}"
 LINUX_BRANCH="${IPU4_LINUX_BRANCH:-ipu4-6.12}"
 
-QEMU_URL="${IPU4_QEMU_URL:-https://gitlab.com/qemu-project/qemu.git}"
+QEMU_URL="${IPU4_QEMU_URL:-https://github.com/qemu/qemu.git}"
 QEMU_TAG="${IPU4_QEMU_TAG:-v9.1.0}"
 QEMU_BRANCH="${IPU4_QEMU_BRANCH:-ipu4-qemu}"
 
@@ -55,11 +55,9 @@ apply_patch_tree "$ROOT/tools/qemu-patches"  "$QEMU_DIR"
 # by any .c file, so it is a no-op. Cleaning it up is tracked as part
 # of a later upstreaming pass.
 DRV_DST="$LINUX_DIR/drivers/media/pci/intel/ipu4"
-if ! compgen -G "$DRV_DST/ipu6*.c" > /dev/null; then
-	echo ">>> seeding driver sources into $DRV_DST"
-	mkdir -p "$DRV_DST"
-	cp "$ROOT"/kernel/ipu4/*.[ch] "$DRV_DST/"
-fi
+mkdir -p "$DRV_DST"
+echo ">>> seeding driver sources into $DRV_DST"
+cp "$ROOT"/kernel/ipu4/*.[ch] "$DRV_DST/"
 
 # Wire CONFIG_VIDEO_INTEL_IPU4 into the parent Kconfig and Makefile so
 # `make modules` / kunit.py descend into ipu4/. Both edits are appended
@@ -74,6 +72,27 @@ fi
 if ! grep -q '^obj-\$(CONFIG_VIDEO_INTEL_IPU4)\s*+=\s*ipu4/$' "$PARENT_MAKEFILE"; then
 	echo ">>> wiring ipu4/ into $PARENT_MAKEFILE"
 	printf 'obj-$(CONFIG_VIDEO_INTEL_IPU4)\t+= ipu4/\n' >> "$PARENT_MAKEFILE"
+fi
+
+# Wire CONFIG_IPU4 into QEMU's hw/misc/Kconfig and hw/misc/meson.build so
+# the forked QEMU picks up the ipu4.c device model that apply_patch_tree
+# just copied over. Idempotent.
+QEMU_HW_KCONFIG="$QEMU_DIR/hw/misc/Kconfig"
+QEMU_HW_MESON="$QEMU_DIR/hw/misc/meson.build"
+
+if [[ -f "$QEMU_HW_KCONFIG" ]] && ! grep -q '^config IPU4$' "$QEMU_HW_KCONFIG"; then
+	echo ">>> wiring ipu4 into $QEMU_HW_KCONFIG"
+	cat >> "$QEMU_HW_KCONFIG" <<'EOF'
+
+config IPU4
+    bool
+    default y if PCI_DEVICES
+    depends on PCI
+EOF
+fi
+if [[ -f "$QEMU_HW_MESON" ]] && ! grep -q "files('ipu4.c')" "$QEMU_HW_MESON"; then
+	echo ">>> wiring ipu4.c into $QEMU_HW_MESON"
+	printf "\nsystem_ss.add(when: 'CONFIG_IPU4', if_true: files('ipu4.c'))\n" >> "$QEMU_HW_MESON"
 fi
 
 echo ">>> bootstrap complete"

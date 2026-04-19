@@ -1,0 +1,48 @@
+name: vm-smoke
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+      - 'qemu-kunit-setup'
+
+# Heavy job: clones Linux + QEMU, builds both, boots a VM and checks
+# that the emulated IPU4 device (0x8086:0x5a88) is enumerated. Not
+# gated on PRs — runs on merges to the integration branch and on demand.
+
+jobs:
+  vm-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential bc bison flex libelf-dev libssl-dev \
+            ninja-build pkg-config libglib2.0-dev libpixman-1-dev \
+            meson python3-venv \
+            busybox-static qemu-system-x86 \
+            cpio gzip
+
+      - name: Bootstrap harness
+        run: ./tools/bootstrap.sh
+
+      - name: Build QEMU (ipu4 device)
+        run: ./tools/build-qemu.sh
+
+      - name: Build kernel + driver
+        run: ./tools/build-kernel.sh
+
+      - name: Build initramfs
+        run: ./tools/rootfs/build.sh
+
+      - name: Boot VM, verify IPU4 device enumerates
+        run: ./tools/tests/vm-smoke.sh
+        env:
+          IPU4_ACCEL: tcg

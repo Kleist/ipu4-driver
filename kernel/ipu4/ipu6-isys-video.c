@@ -201,6 +201,7 @@ ipu6_isys_get_isys_format(u32 pixelformat, u32 type)
 
 	return default_pfmt;
 }
+EXPORT_SYMBOL_NS_GPL(ipu6_isys_get_isys_format, INTEL_IPU6);
 
 static int ipu6_isys_vidioc_querycap(struct file *file, void *fh,
 				     struct v4l2_capability *cap)

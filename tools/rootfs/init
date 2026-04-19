@@ -1,0 +1,35 @@
+#!/bin/sh
+# Guest-side init: mount essentials, report what QEMU presented on the
+# PCI bus, then power off. M2 only verifies device enumeration; driver
+# module load is M3's concern.
+#
+# Output is parsed by tools/tests/vm-smoke.sh on the host, so the
+# VM_SMOKE: markers below are load-bearing.
+
+PATH=/bin:/sbin
+export PATH
+
+mount -t proc     none /proc
+mount -t sysfs    none /sys
+mount -t devtmpfs none /dev 2>/dev/null || true
+
+# Optional 9p share for tests/output drop.
+mount -t 9p -o trans=virtio tests /mnt/tests 2>/dev/null || true
+
+echo
+echo "=== /sys/bus/pci/devices ==="
+for dev in /sys/bus/pci/devices/*; do
+	ven=$(cat "$dev/vendor" 2>/dev/null)
+	did=$(cat "$dev/device" 2>/dev/null)
+	echo "$(basename "$dev") $ven:$did"
+done
+
+if grep -q '0x8086' /sys/bus/pci/devices/*/vendor 2>/dev/null \
+	&& grep -q '0x5a88' /sys/bus/pci/devices/*/device 2>/dev/null; then
+	echo "VM_SMOKE: PASS device=0x8086:0x5a88"
+else
+	echo "VM_SMOKE: FAIL (no 0x8086:0x5a88 PCI device found)"
+fi
+
+echo "VM_SMOKE: shutting down"
+poweroff -f

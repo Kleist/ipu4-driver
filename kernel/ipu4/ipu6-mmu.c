@@ -777,6 +777,7 @@ size_t ipu6_mmu_pgsize(unsigned long pgsize_bitmap,
 
 	return pgsize;
 }
+EXPORT_SYMBOL_NS_GPL(ipu6_mmu_pgsize, INTEL_IPU6);
 
 size_t ipu6_mmu_unmap(struct ipu6_mmu_info *mmu_info, unsigned long iova,
 		      size_t size)
