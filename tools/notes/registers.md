@@ -38,19 +38,44 @@ Columns:
 | 0x30c  | CSE IPC  | `ipu6-buttress.c` CSE2IUCSR             | Echoed IU2CSECSR; driver write clears it.                   | guess      |
 | 0x314  | Buttress | `ipu6-buttress.c` SKU                   | Read: 0 (unfused).                                          | guess      |
 
+## M3 progress
+
+Today the driver's probe path reaches `ipu6_cpd_copy_binary()` / firmware
+load. Observed order of operations (from `dmesg | grep intel-ipu4`):
+
+1. `IPU6 PCI bar[0] = 0xfb000000` — BAR0 mapped.
+2. `pci_alloc_irq_vectors(dev, 1, 1, PCI_IRQ_MSI)` — now succeeds since
+   the QEMU model calls `msi_init()` in `ipu4_realize()`.
+3. `IPU6 in non-secure mode touch 0x0 mask 0x0` — buttress
+   `SECURITY_CTL` reads 0 (our latched default), which the driver
+   interprets as "non-secure".
+4. `Skip IPC reset for non-secure mode` — non-secure boot elides the
+   CSE IPC reset handshake (`BUTTRESS_REG_IU2CSE*` / `CSE2IU*` would
+   otherwise be exercised here).
+5. `Requesting signed firmware ipu4_cpd_b0.bin failed` with `-ENOENT`.
+
+The firmware file is the next barrier. Forging a valid CPD blob that
+passes `ipu6_cpd_validate_cpd_file()` is M4 territory (requires header
+marker `0x44504324`, manifest/metadata/moduledata partitions, and a
+component table the driver matches against `IPU6_CPD_METADATA_EXTN_TYPE_IUNIT`
+/ `IMAGE_TYPE_MAIN_FIRMWARE`). Until then, probe stops at firmware load
+and the `probe-smoke` test passes at `probe:fw_load`.
+
 ## Next targets (unimplemented)
 
-These are the register ranges the M3 fuzzing loop is expected to hit next
-once the current handlers get the probe past IPC reset:
+Once a CPD blob exists, the next register ranges the fuzzing loop is
+expected to hit are:
 
-- **Firmware magic (BAR+0x8000)** — CPD verifier expects `0xb00710ad` at
-  a specific offset after FW_SOURCE_BASE_*/SIZE are populated. See
-  `ipu6-cpd.c`.
-- **MMU (0x2e0000)** — page-directory-base write triggers page-table walk.
-  Will be stubbed to `pci_dma_rw()` translation for host-side paging.
-- **ISYS DMEM (0x200000)** — syscom ring head/tail and doorbell registers.
-  Layout comes from `ipu6-fw-com.h` (`FW_COM_WR_REG`, `FW_COM_RD_REG`).
-- **ISYS IRQ (TBD)** — frame-done interrupt raised by the frame generator.
+- **Firmware magic (BAR+0x8000)** — CPD verifier expects `0xb00710ad`
+  at a specific offset after `FW_SOURCE_BASE_*` / `SIZE` are populated.
+- **MMU (0x2e0000)** — page-directory-base write triggers a page-table
+  walk. Will be stubbed to `pci_dma_rw()` translation for host-side
+  paging.
+- **ISYS DMEM (0x200000)** — syscom ring head/tail and doorbell
+  registers. Layout comes from `ipu6-fw-com.h` (`FW_COM_WR_REG`,
+  `FW_COM_RD_REG`).
+- **ISYS IRQ (TBD)** — frame-done interrupt raised by the frame
+  generator.
 
 ## KUnit exposure
 

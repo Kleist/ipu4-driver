@@ -76,9 +76,23 @@ tools/
   dedicated `.github/workflows/vm-smoke.yml` runs this on merges to
   the integration branch and on demand (not on PRs — too slow).
 
-- **M3/M4/M5 — fuzzing loops + e2e + coverage:** M3 is the next
-  milestone: iterate `hw/misc/ipu4.c` register handlers until
-  `ipu6_pci_probe()` returns 0 and `/dev/video*` nodes appear.
+- **M3 — probe progresses to firmware load:** done as a checkpoint,
+  not as a terminus. `hw/misc/ipu4.c` now calls `msi_init()` so
+  `pci_alloc_irq_vectors(..., PCI_IRQ_MSI)` succeeds, the non-secure
+  IPC-reset branch completes, and probe reaches
+  `ipu6_cpd_copy_binary()` / the firmware request. That request fails
+  with `-ENOENT` because we don't ship a CPD firmware blob — forging
+  one is M4 territory. `tools/tests/probe-smoke.sh` reports the
+  furthest checkpoint reached (`probe:entered` → `probe:ipc_reset` →
+  `probe:fw_load` → `probe:fw_valid` → `probe:bound`) and passes when
+  it reaches a configurable `IPU4_PROBE_REQUIRED` (defaults to
+  `probe:fw_load`). The test runs in the `vm-smoke` workflow.
+
+- **M4/M5 — firmware + MMU + syscom + streaming + coverage:** M4 is
+  the next milestone: synthesize a CPD blob the driver accepts, stub
+  MMU page-table walks, wire syscom ring state in the device model,
+  and add a `virt-sensor` so a yavta call returns deterministic
+  frames.
 
 - **M6/M7/M8 — rebase cadence + 6.18/mainline:** cron workflow in
   place; 6.18 and mainline jobs not yet added — they wait on M5 being

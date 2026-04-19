@@ -31,16 +31,20 @@ else
 	# are themselves gated by the filter, so --enable MEDIA_CONTROLLER
 	# silently reverts to =n and the driver no longer sees
 	# struct v4l2_subdev::entity.
+	# VIDEO_DEV / VIDEOBUF2_* are built =y (not =m) so the IPU4 module
+	# resolves its kernel-side v4l2 symbols without a separate insmod
+	# dance in the guest initramfs. MEDIA_SUPPORT_FILTER=n keeps
+	# MEDIA_CAMERA_SUPPORT auto-enabled (see the MEDIA_CONTROLLER note).
 	./scripts/config \
 		--enable MEDIA_SUPPORT \
 		--disable MEDIA_SUPPORT_FILTER \
 		--enable MEDIA_PCI_SUPPORT \
 		--enable MEDIA_CONTROLLER \
 		--enable VIDEO_V4L2_SUBDEV_API \
-		--module VIDEO_DEV \
-		--module VIDEOBUF2_V4L2 \
-		--module VIDEOBUF2_DMA_SG \
-		--module VIDEOBUF2_DMA_CONTIG \
+		--enable VIDEO_DEV \
+		--enable VIDEOBUF2_V4L2 \
+		--enable VIDEOBUF2_DMA_SG \
+		--enable VIDEOBUF2_DMA_CONTIG \
 		--enable FTRACE \
 		--enable MMIOTRACE \
 		--enable DYNAMIC_DEBUG \

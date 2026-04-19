@@ -20,8 +20,10 @@
 #include "qemu/module.h"
 #include "qemu/units.h"
 #include "hw/pci/pci_device.h"
+#include "hw/pci/msi.h"
 #include "hw/qdev-properties.h"
 #include "migration/vmstate.h"
+#include "qapi/error.h"
 
 #define TYPE_IPU4 "ipu4"
 OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
@@ -211,12 +213,25 @@ static void ipu4_realize(PCIDevice *pdev, Error **errp)
 
     pci_config_set_interrupt_pin(pdev->config, 1);
 
+    /* The driver does pci_alloc_irq_vectors(dev, 1, 1, PCI_IRQ_MSI).
+     * Expose 1 MSI vector; the IPU6EP branch in ipu6.c also calls
+     * pci_disable_msi() first, so the capability must be present even
+     * when the device only uses INTx at runtime. */
+    if (msi_init(pdev, 0, 1, true, false, errp)) {
+        return;
+    }
+
     memory_region_init_io(&s->bar0, OBJECT(s), &ipu4_mmio_ops, s,
                           "ipu4-bar0", IPU4_BAR_SIZE);
     pci_register_bar(pdev, 0,
                      PCI_BASE_ADDRESS_SPACE_MEMORY |
                      PCI_BASE_ADDRESS_MEM_TYPE_64,
                      &s->bar0);
+}
+
+static void ipu4_exit(PCIDevice *pdev)
+{
+    msi_uninit(pdev);
 }
 
 static void ipu4_reset(DeviceState *dev)
@@ -265,6 +280,7 @@ static void ipu4_class_init(ObjectClass *klass, void *data)
     PCIDeviceClass *k = PCI_DEVICE_CLASS(klass);
 
     k->realize = ipu4_realize;
+    k->exit = ipu4_exit;
     k->vendor_id = IPU4_PCI_VENDOR_ID;
     k->device_id = IPU4_PCI_DEVICE_ID;
     k->revision = 0x00;

@@ -13,6 +13,16 @@ LINUX_DIR="$ROOT/tools/linux"
 OUT="$HERE/out"
 mkdir -p "$OUT"
 
+# Guest /init to embed. Defaults to the M2 vm-smoke init; callers pass a
+# name ("probe-ok", "streamon", ...) to pick a different one from
+# tools/rootfs/init.<name>.
+INIT_NAME="${IPU4_INIT:-vm-smoke}"
+INIT_SRC="$HERE/init.$INIT_NAME"
+if [[ ! -f "$INIT_SRC" ]]; then
+	echo "no guest init at $INIT_SRC" >&2
+	exit 3
+fi
+
 BUSYBOX="$(command -v busybox)"
 if [[ -z "$BUSYBOX" ]]; then
 	echo "busybox not installed (apt install busybox-static)" >&2
@@ -42,7 +52,7 @@ dir  /lib/modules        0755 0 0
 dir  /mnt                0755 0 0
 dir  /mnt/tests          0755 0 0
 file /bin/busybox        $BUSYBOX 0755 0 0
-file /init               $HERE/init 0755 0 0
+file /init               $INIT_SRC 0755 0 0
 nod  /dev/console        0622 0 0 c 5 1
 nod  /dev/null           0666 0 0 c 1 3
 nod  /dev/zero           0666 0 0 c 1 5
@@ -54,9 +64,20 @@ for applet in sh mount umount insmod rmmod modprobe lsmod dmesg echo cat ls \
 	echo "slink /bin/$applet      busybox 0777 0 0" >> "$LIST"
 done
 
+# Videobuf2 dependencies of intel-ipu4-isys.ko. videodev is built-in
+# (CONFIG_VIDEO_DEV=y), but vb2 helpers land as modules.
+VB2_DIR="$LINUX_DIR/drivers/media/common/videobuf2"
+for vb2 in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg; do
+	ko="$VB2_DIR/$vb2.ko"
+	if [[ -f "$ko" ]]; then
+		echo "file /lib/modules/$vb2.ko  $ko 0644 0 0" >> "$LIST"
+	fi
+done
+
 # Driver modules (if build.sh has run).
 if compgen -G "$DRV_DIR/*.ko" > /dev/null; then
 	for ko in "$DRV_DIR"/*.ko; do
+		[[ "$(basename "$ko")" == *_kunit.ko ]] && continue
 		echo "file /lib/modules/$(basename "$ko")  $ko 0644 0 0" >> "$LIST"
 	done
 fi

@@ -87,7 +87,7 @@ if [[ -f "$QEMU_HW_KCONFIG" ]] && ! grep -q '^config IPU4$' "$QEMU_HW_KCONFIG"; 
 config IPU4
     bool
     default y if PCI_DEVICES
-    depends on PCI
+    depends on PCI && MSI_NONBROKEN
 EOF
 fi
 if [[ -f "$QEMU_HW_MESON" ]] && ! grep -q "files('ipu4.c')" "$QEMU_HW_MESON"; then

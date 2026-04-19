@@ -46,3 +46,8 @@ jobs:
         run: ./tools/tests/vm-smoke.sh
         env:
           IPU4_ACCEL: tcg
+
+      - name: Boot VM, verify driver probe progresses to firmware load
+        run: ./tools/tests/probe-smoke.sh
+        env:
+          IPU4_ACCEL: tcg
