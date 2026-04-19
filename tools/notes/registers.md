@@ -76,25 +76,29 @@ With this blob, probe progresses through:
 `probe-smoke` reaches `probe:bridge` and passes against the new
 default required marker `probe:fw_valid`.
 
+## M4.5 progress
+
+`kernel/ipu4/virt-sensor.c` (landed under
+`CONFIG_VIDEO_IPU4_VIRT_SENSOR`) installs a software-node graph on
+`pdev->dev.fwnode->secondary` and a `v4l2_subdev` advertising
+`MEDIA_BUS_FMT_RGB888_1X24` at 800×800, replacing the ambu bridge
+call when the option is set. Probe progresses past the fwnode check
+into `ipu6_psys_init()`, then **panics** in `ipu6_dma_unmap_sg()` at
+`sg_dma_address(sglist)` on a null scatterlist. The crash is
+expected until the MMU handler below lands; the kernel command line
+carries `oops=panic` so the VM halts in ~6 s instead of hanging.
+
 ## Next targets (unimplemented)
 
-The next blocker is the ambu-ipu-bridge call. The upstream plan was
-always to replace this bridge with a `virt-sensor` kernel subdev that
-advertises RGB888_1X24/800x800 without needing I2C. The minimum bypass
-list is:
-
-- **virt-sensor** — a new kernel module in
-  `drivers/media/pci/intel/ipu4/virt-sensor.c`, gated by
-  `CONFIG_VIDEO_IPU4_VIRT_SENSOR`, registering a subdev the driver
-  discovers via `v4l2_async`. When enabled, the IPU4 probe path bypasses
-  `ambu_ipu_bridge_init()`.
+- **MMU (0x2e0000)** — the M4.5 panic point.
+  `ipu6_buttress_map_fw_image()` does DMA alloc that walks the IPU's
+  MMU page tables. The QEMU model must translate IOVA→host via
+  `pci_dma_rw()` on page-directory-base writes. This is the first
+  real M5 deliverable.
 - **Firmware magic (BAR+0x8000)** — CPD verifier expects `0xb00710ad`
   at a specific offset after `FW_SOURCE_BASE_*` / `SIZE` are populated.
   Not yet exercised because probe aborts earlier; ready to wire when
   needed.
-- **MMU (0x2e0000)** — page-directory-base write triggers a page-table
-  walk. Will be stubbed to `pci_dma_rw()` translation for host-side
-  paging.
 - **ISYS DMEM (0x200000)** — syscom ring head/tail and doorbell
   registers. Layout comes from `ipu6-fw-com.h` (`FW_COM_WR_REG`,
   `FW_COM_RD_REG`).

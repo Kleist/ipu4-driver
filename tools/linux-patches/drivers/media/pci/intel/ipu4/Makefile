@@ -15,6 +15,8 @@ intel-ipu4-y := \
 	ipu6-cpd.o \
 	ipu6-fw-com.o
 
+intel-ipu4-$(CONFIG_VIDEO_IPU4_VIRT_SENSOR) += virt-sensor.o
+
 obj-$(CONFIG_VIDEO_INTEL_IPU4) += intel-ipu4.o
 
 # Phy sources (ipu6-isys-{mcd,jsl,dwc}-phy.c) reference IPU6-only register

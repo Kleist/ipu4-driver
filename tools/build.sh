@@ -52,6 +52,7 @@ else
 		--enable KUNIT \
 		--disable VIDEO_INTEL_IPU6 \
 		--module VIDEO_INTEL_IPU4 \
+		--enable  VIDEO_IPU4_VIRT_SENSOR \
 		--module VIDEO_INTEL_IPU4_KUNIT_TESTS
 fi
 make olddefconfig
