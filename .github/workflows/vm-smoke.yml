@@ -42,17 +42,29 @@ jobs:
       # the source trees (cheap; cmp-before-cp preserves mtimes) and
       # the ninja / make invocations are near no-ops.
 
+      # restore-keys gives us partial-cache-hit behaviour: even when
+      # the exact-match key changes (every PR touches at least one
+      # driver .c / build script / patch file), actions/cache picks
+      # the most recent entry starting with the prefix and restores
+      # the whole tree. Combined with bootstrap.sh's cmp-before-cp,
+      # unchanged files keep their mtimes and kbuild / ninja only
+      # rebuild the objects whose inputs actually changed.
+
       - name: Cache forked QEMU build
         uses: actions/cache@v4
         with:
           path: tools/qemu
           key: qemu-${{ hashFiles('tools/qemu-patches/**/*', 'tools/bootstrap.sh', 'tools/build-qemu.sh') }}
+          restore-keys: |
+            qemu-
 
       - name: Cache forked Linux build
         uses: actions/cache@v4
         with:
           path: tools/linux
           key: linux-${{ hashFiles('kernel/ipu4/**/*', 'tools/linux-patches/**/*', 'tools/bootstrap.sh', 'tools/build.sh', 'tools/build-kernel.sh') }}
+          restore-keys: |
+            linux-
 
       - name: Bootstrap harness
         run: ./tools/bootstrap.sh
