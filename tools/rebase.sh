@@ -1,30 +1,36 @@
 #!/usr/bin/env bash
-# Weekly rebase: pull linux-6.12.y, rebase the IPU4 branch, run the test
-# tiers, push if green.
+# Weekly rebase-cron entry point. Re-bootstraps the forked Linux and
+# QEMU trees (picking up whatever moved on linux-6.12.y since the last
+# run), rebuilds, and runs every smoke tier we have today. Caller
+# decides whether to push anything; this script's job is green / red.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 LINUX_DIR="$ROOT/tools/linux"
 
-if [[ ! -d "$LINUX_DIR/.git" ]]; then
-	echo "tools/linux/ missing; run tools/bootstrap.sh first" >&2
-	exit 1
+# Point bootstrap at linux-stable on the stable-tree mirror, which
+# carries the linux-6.12.y BRANCH. The default bootstrap URL is
+# torvalds/linux — that mirror only tracks mainline. Pick up the
+# latest 6.12.y point release each week by fetching the branch tip.
+export IPU4_LINUX_URL="${IPU4_LINUX_URL:-https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git}"
+export IPU4_LINUX_TAG="${IPU4_LINUX_TAG:-linux-6.12.y}"
+
+# Fresh tree every week — avoids accidental state carrying over from
+# the previous run and is how CI exercises the full cold path.
+if [[ -d "$LINUX_DIR/.git" ]]; then
+	echo ">>> wiping stale $LINUX_DIR"
+	rm -rf "$LINUX_DIR"
 fi
 
-BRANCH="${IPU4_LINUX_BRANCH:-ipu4-6.12}"
-STABLE_URL="${IPU4_STABLE_URL:-https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git}"
-STABLE_BRANCH="${IPU4_STABLE_BRANCH:-linux-6.12.y}"
+"$ROOT"/tools/bootstrap.sh
+"$ROOT"/tools/build.sh
+"$ROOT"/tools/tests/kunit.sh
+"$ROOT"/tools/build-qemu.sh
+"$ROOT"/tools/build-kernel.sh
+"$ROOT"/tools/rootfs/build.sh
+"$ROOT"/tools/tests/vm-smoke.sh
+"$ROOT"/tools/tests/probe-smoke.sh
+"$ROOT"/tools/tests/streamon-smoke.sh
 
-cd "$LINUX_DIR"
-git remote get-url stable >/dev/null 2>&1 || git remote add stable "$STABLE_URL"
-git fetch --depth=1 stable "$STABLE_BRANCH"
-git checkout "$BRANCH"
-git rebase "stable/$STABLE_BRANCH"
-
-cd "$ROOT"
-tools/tests/kunit.sh
-tools/tests/e2e.sh
-
-# Caller decides whether to push.
-echo ">>> rebase + tests green on $BRANCH"
+echo ">>> weekly rebase + all smoke tiers green on $IPU4_LINUX_TAG"
