@@ -110,11 +110,29 @@ tools/
   `ipu6_buttress_power(on=false)` — the always-ready constant never
   reads 0 so the poll times out, but probe ignores it and continues.
 
-- **M5b — streaming + coverage:** next piece. MMU page-table walks
-  in `hw/misc/ipu4.c` so real DMA allocations land correctly,
-  syscom ring state + doorbell, a QEMUTimer-driven frame generator,
-  the virt-sensor `.s_stream` hook that produces deterministic
-  frames, and the yavta SHA-256 e2e test in `tools/tests/e2e.sh`.
+- **M5b — streaming-smoke baseline:** done as a checkpoint.
+  `tools/tests/streamon.c` is a tiny static v4l2 client that walks
+  the capture API one ioctl at a time and prints a `STREAM:STEP`
+  marker on each. `tools/rootfs/build.sh` compiles it (`gcc -static`)
+  and embeds it as `/bin/streamon` in the initramfs.
+  `tools/tests/streamon-smoke.sh` boots the VM with
+  `init.streamon`, walks the markers, and grades against
+  `IPU4_STREAM_REQUIRED` (default `STREAM:reqbufs`).
+
+  Current furthest reached: `STREAM:qbuf` for both buffers — all of
+  open / QUERYCAP / S_FMT / REQBUFS / QUERYBUF / QBUF succeed.
+  STREAMON returns **`ENOLINK` ("Link has been severed")**. The
+  media graph from virt-sensor → CSI2 RX → ISA → /dev/video0 is
+  not fully linked, so `media_pipeline_start()` rejects STREAMON.
+  Fixing this in the next M5b PR means either auto-enabling the
+  links in virt-sensor / isys, or running `media-ctl --link` from
+  init before STREAMON.
+
+- **M5c — frame delivery + e2e:** after media-link enable lands.
+  MMU page-table walks in `hw/misc/ipu4.c`, syscom ring state +
+  doorbell, a QEMUTimer-driven frame generator, the virt-sensor
+  `.s_stream` hook that produces deterministic frames, and the
+  yavta SHA-256 e2e test in `tools/tests/e2e.sh`.
 
 - **M6/M7/M8 — rebase cadence + 6.18/mainline:** cron workflow in
   place; 6.18 and mainline jobs not yet added — they wait on M5 being
