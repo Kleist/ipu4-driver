@@ -34,6 +34,7 @@ timeout --preserve-status "$TIMEOUT" "$ROOT/tools/run-vm.sh" 2>&1 | tee "$LOG"
 set -e
 
 steps=(
+	"MEDIA:link_enabled"
 	"STREAM:open"
 	"STREAM:querycap"
 	"STREAM:s_fmt"
@@ -55,7 +56,7 @@ echo "streamon-smoke: reached=$reached"
 failline=$(grep -m1 '^STREAM:fail' "$LOG" || true)
 [[ -n "$failline" ]] && echo "streamon-smoke: $failline"
 
-REQUIRED="${IPU4_STREAM_REQUIRED:-STREAM:reqbufs}"
+REQUIRED="${IPU4_STREAM_REQUIRED:-STREAM:qbuf}"
 case "$reached" in
 "")
 	echo "streamon-smoke: FAIL (no STREAM marker)" >&2
