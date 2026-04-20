@@ -757,6 +757,65 @@ static void isys_iwake_watermark_cleanup(struct ipu6_isys *isys)
 }
 #endif
 
+#if IS_ENABLED(CONFIG_VIDEO_IPU4_VIRT_SENSOR)
+/* Install the one active route the IPU4 QEMU harness needs so that
+ * media_pipeline_start() stops rejecting STREAMON with -ENOLINK.
+ * Upstream IPU6 relies on userspace (media-ctl / v4l2-ctl) to set
+ * this; the busybox initramfs has no media manager, so we install
+ * the default sink=0/0 -> source=1/0 route on the CSI2 subdev at
+ * sensor-bind time. The same route is already installed into the
+ * subdev's "try" state by ipu6_isys_subdev_init_cfg(); this mirrors
+ * it into the active state.
+ */
+static void isys_install_virt_sensor_route(struct v4l2_subdev *csi2_sd)
+{
+	/* Must match virt-sensor's default: 800x800 RGB888_1X24. If the
+	 * CSI2 sink format doesn't match the sensor source format,
+	 * media_pipeline_start() rejects STREAMON with -ENOLINK.
+	 * ipu6_isys_subdev_set_routing()'s internal default is
+	 * 4096x3072/SGRBG10 — wrong for the virt-sensor. */
+	struct v4l2_mbus_framefmt fmt = {
+		.width = 800,
+		.height = 800,
+		.code = MEDIA_BUS_FMT_RGB888_1X24,
+		.field = V4L2_FIELD_NONE,
+	};
+	struct v4l2_subdev_route route = {
+		.sink_pad = 0,
+		.sink_stream = 0,
+		.source_pad = 1,
+		.source_stream = 0,
+		.flags = V4L2_SUBDEV_ROUTE_FL_ACTIVE,
+	};
+	struct v4l2_subdev_krouting routing = {
+		.num_routes = 1,
+		.routes = &route,
+	};
+	struct v4l2_subdev_state *state;
+	int ret;
+
+	state = v4l2_subdev_lock_and_get_active_state(csi2_sd);
+	if (!state) {
+		dev_warn(csi2_sd->dev,
+			 "virt-sensor: no active state on %s; skipping route install\n",
+			 csi2_sd->name);
+		return;
+	}
+
+	ret = v4l2_subdev_set_routing_with_fmt(csi2_sd, state, &routing, &fmt);
+	v4l2_subdev_unlock_state(state);
+
+	if (ret)
+		dev_warn(csi2_sd->dev,
+			 "virt-sensor: set_routing on %s failed %d\n",
+			 csi2_sd->name, ret);
+	else
+		dev_info(csi2_sd->dev,
+			 "virt-sensor: installed active route on %s (sink=0/0 -> source=1/0, 800x800 RGB888)\n",
+			 csi2_sd->name);
+}
+#endif
+
 /* The .bound() notifier callback when a match is found */
 static int isys_notifier_bound(struct v4l2_async_notifier *notifier,
 			       struct v4l2_subdev *sd,
@@ -787,6 +846,11 @@ static int isys_notifier_bound(struct v4l2_async_notifier *notifier,
 	ret = isys_complete_ext_device_registration(isys, sd, &s_asd->csi2);
 	if (ret)
 		return ret;
+
+#if IS_ENABLED(CONFIG_VIDEO_IPU4_VIRT_SENSOR)
+	isys_install_virt_sensor_route(
+		&isys->csi2[s_asd->csi2.port].asd.sd);
+#endif
 
 	return v4l2_device_register_subdev_nodes(&isys->v4l2_dev);
 }
