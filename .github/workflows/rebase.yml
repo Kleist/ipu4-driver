@@ -5,23 +5,42 @@ on:
     - cron: '0 6 * * 1'
   workflow_dispatch:
 
+# Weekly drift detector. Re-bootstraps against linux-6.12.y HEAD
+# (moving branch, not pinned v6.12 tag) so a new stable point release
+# gets exercised automatically. Runs every smoke tier we have today:
+# KUnit, VM lspci, probe progression, streaming client.
+
 jobs:
-  rebase-6-12:
+  weekly-6-12:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Install build deps
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             build-essential bc bison flex libelf-dev libssl-dev \
-            python3 qemu-system-x86 lcov ninja-build pkg-config \
-            libglib2.0-dev libpixman-1-dev
+            ninja-build pkg-config libglib2.0-dev libpixman-1-dev \
+            meson python3-venv \
+            busybox-static qemu-system-x86 \
+            cpio gzip
 
-      - name: Bootstrap harness
-        run: ./tools/bootstrap.sh
-
-      - name: Rebase onto linux-6.12.y + run tests
+      - name: Run rebase + smoke tiers against linux-6.12.y HEAD
         run: ./tools/rebase.sh
+        env:
+          IPU4_ACCEL: tcg
+
+      - name: Upload serial logs + artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rebase-failure-${{ github.run_id }}
+          if-no-files-found: ignore
+          path: |
+            tools/tests/out/*.serial
+            tools/rootfs/out/rootfs.cpio.gz
+            tools/linux/.config

@@ -156,6 +156,16 @@ tools/
   Capture entity's `link_validate` needs to accept dynamic links
   differently). `IPU4_STREAM_REQUIRED` remains `STREAM:qbuf`.
 
+- **M6 — weekly rebase cron:** done. `.github/workflows/rebase.yml`
+  runs every Monday 06:00 UTC (and on `workflow_dispatch`).
+  `tools/rebase.sh` wipes `tools/linux/`, re-bootstraps pointing at
+  `linux-6.12.y` on the stable-tree mirror (a moving branch, not
+  the pinned `v6.12` tag), rebuilds, and runs the full smoke tier
+  we have today — `kunit.sh`, `vm-smoke.sh`, `probe-smoke.sh`,
+  `streamon-smoke.sh`. The defunct `e2e.sh` reference is dropped
+  until M5c provides real frame delivery. On failure, the
+  workflow uploads serial logs and `.config` as artifacts.
+
 - **M5c-1 — graceful STREAMON short-circuit when there's no
   firmware:** done. `ipu6_configure_spc()` in the M5b-5 run
   kernel-panicked because the stub CPD blob produces zeroed
