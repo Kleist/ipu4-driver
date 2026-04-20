@@ -121,12 +121,20 @@ tools/
 
   Current furthest reached: `STREAM:qbuf` for both buffers — all of
   open / QUERYCAP / S_FMT / REQBUFS / QUERYBUF / QBUF succeed.
-  STREAMON returns **`ENOLINK` ("Link has been severed")**. The
-  media graph from virt-sensor → CSI2 RX → ISA → /dev/video0 is
-  not fully linked, so `media_pipeline_start()` rejects STREAMON.
-  Fixing this in the next M5b PR means either auto-enabling the
-  links in virt-sensor / isys, or running `media-ctl --link` from
-  init before STREAMON.
+  STREAMON still returns `ENOLINK`, but media-graph state is now
+  explicitly bootstrapped: `streamon.c` locates the media entity
+  wrapping `/dev/video0` (by v4l2 minor with name fallback) and
+  enables the one link that matters — `Intel IPU4 CSI2 0:1 →
+  sink=<video-entity>:0`. The virt-sensor → CSI2 link was already
+  enabled + immutable. Default `IPU4_STREAM_REQUIRED` tightened
+  from `STREAM:reqbufs` to `STREAM:qbuf`.
+
+  STREAMON still fails because the IPU6 driver uses the streams-API
+  (`VIDIOC_SUBDEV_S_ROUTING`) — dynamic links alone don't satisfy
+  `media_pipeline_start()` without a route table entry on the CSI2
+  subdev. Next M5b PR: either populate routes from the guest init
+  (post-QBUF, pre-STREAMON) or have the driver auto-route on
+  sensor bind.
 
 - **M5c — frame delivery + e2e:** after media-link enable lands.
   MMU page-table walks in `hw/misc/ipu4.c`, syscom ring state +
