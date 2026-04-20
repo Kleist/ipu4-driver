@@ -26,7 +26,7 @@ done
 
 APPEND="console=ttyS0 earlyprintk=serial,ttyS0 panic=-1 oops=panic nokaslr"
 APPEND+=" loglevel=7 rdinit=/init"
-APPEND+=" intel_ipu4.dyndbg=+p"
+APPEND+=" intel_ipu4.dyndbg=+p intel_ipu4_isys.dyndbg=+p"
 if [[ "${IPU4_MMIOTRACE:-0}" == 1 ]]; then
 	APPEND+=" trace_event=mmiotrace:* trace_buf_size=16M"
 fi

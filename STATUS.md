@@ -136,6 +136,26 @@ tools/
   (post-QBUF, pre-STREAMON) or have the driver auto-route on
   sensor bind.
 
+- **M5b-3 — CSI2 active route auto-installed on sensor bind:** done
+  as infrastructure. `isys_install_virt_sensor_route()` in
+  `kernel/ipu4/ipu6-isys.c` runs on the `isys_notifier_bound`
+  callback when `CONFIG_VIDEO_IPU4_VIRT_SENSOR=y` and calls
+  `v4l2_subdev_set_routing_with_fmt()` on the CSI2 subdev with
+  `sink=0/0 → source=1/0, 800x800 RGB888` (matching the
+  virt-sensor's reported format). Dmesg now shows
+  `virt-sensor: installed active route on Intel IPU4 CSI2 0`.
+
+  STREAMON still returns `ENOLINK` — `ipu6_isys_setup_video()`
+  fails one layer deeper at
+  `media_pad_remote_pad_unique(&av->pad)`. The Capture-side pad
+  doesn't see the CSI2→Capture link as enabled even after
+  `MEDIA_IOC_SETUP_LINK`, so the pipeline walker can't find the
+  unique remote. Route-install is still needed infrastructure;
+  the remaining barrier is separate (investigating whether the
+  link needs enabling via a different mechanism, or whether the
+  Capture entity's `link_validate` needs to accept dynamic links
+  differently). `IPU4_STREAM_REQUIRED` remains `STREAM:qbuf`.
+
 - **M5c — frame delivery + e2e:** after media-link enable lands.
   MMU page-table walks in `hw/misc/ipu4.c`, syscom ring state +
   doorbell, a QEMUTimer-driven frame generator, the virt-sensor
