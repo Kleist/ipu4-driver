@@ -1,0 +1,42 @@
+#!/bin/sh
+# M5b init: load the driver, run /bin/streamon to walk the v4l2
+# capture API one ioctl at a time. Each STREAM:STEP marker on the
+# serial console tells streamon-smoke.sh how far we got.
+
+PATH=/bin:/sbin
+export PATH
+
+mount -t proc     none /proc
+mount -t sysfs    none /sys
+mount -t debugfs none /sys/kernel/debug 2>/dev/null || true
+mount -t devtmpfs none /dev 2>/dev/null || true
+
+mount -t 9p -o trans=virtio tests /mnt/tests 2>/dev/null || true
+
+for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
+	ambu-ipu-bridge intel-ipu4; do
+	ko=/lib/modules/$m.ko
+	[ -f "$ko" ] || continue
+	insmod "$ko" dyndbg=+p 2>&1 || true
+done
+if grep -q '^intel_ipu4 .* Live' /proc/modules 2>/dev/null; then
+	insmod /lib/modules/intel-ipu4-isys.ko dyndbg=+p 2>&1 || true
+fi
+
+# Wait for the v4l2 core to publish /dev/video0 (async-bind happens
+# after ipu6_pci_probe returns).
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+	[ -e /dev/video0 ] && break
+	sleep 1
+done
+
+if [ ! -e /dev/video0 ]; then
+	echo "STREAM:fail step=node_present errno=2 (no /dev/video0)"
+	echo "STREAM:done"
+	poweroff -f
+fi
+
+/bin/streamon /dev/video0
+echo "STREAM:done"
+
+poweroff -f

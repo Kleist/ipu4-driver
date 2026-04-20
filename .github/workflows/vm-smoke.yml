@@ -76,6 +76,11 @@ jobs:
         env:
           IPU4_ACCEL: tcg
 
+      - name: Boot VM, walk v4l2 capture API
+        run: ./tools/tests/streamon-smoke.sh
+        env:
+          IPU4_ACCEL: tcg
+
       - name: Upload serial logs + artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
