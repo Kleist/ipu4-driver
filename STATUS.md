@@ -156,6 +156,27 @@ tools/
   Capture entity's `link_validate` needs to accept dynamic links
   differently). `IPU4_STREAM_REQUIRED` remains `STREAM:qbuf`.
 
+- **M5b-4 — fix video-entity lookup so the right link gets
+  enabled:** done. Root cause of the M5b-3 `ENOLINK` was a
+  one-line bug in `tools/tests/streamon.c`:
+  `find_video_entity()` started the `MEDIA_IOC_ENUM_ENTITIES`
+  walk at `id=1 | FLAG_NEXT`, which returns entities with id > 1
+  — skipping the first video entity (id=1, "Intel IPU4 ISYS
+  Capture 0", v4l2 minor=0) that actually backs `/dev/video0`.
+  The fallback-by-name was hard-coded to "Capture 1" for the
+  same reason.
+
+  Starting the walk at `id=0 | FLAG_NEXT` and computing the
+  fallback name from `want_minor` (`"Intel IPU4 ISYS Capture
+  %u"`) finds entity id=1 correctly. STREAMON now reaches
+  deeper: `remote_pad` lookup succeeds, the pipeline walker
+  proceeds past `media_pipeline_start()`, and the ioctl returns
+  `-EPIPE` ("Broken pipe") from the subdev `link_validate` or
+  per-pad format propagation. That's the next M5b barrier —
+  investigating whether the virt-sensor + CSI2 subdev formats
+  are advertised consistently for streams-API validation.
+  `IPU4_STREAM_REQUIRED` stays at `STREAM:qbuf`.
+
 - **M5c — frame delivery + e2e:** after media-link enable lands.
   MMU page-table walks in `hw/misc/ipu4.c`, syscom ring state +
   doorbell, a QEMUTimer-driven frame generator, the virt-sensor

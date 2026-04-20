@@ -51,19 +51,22 @@ static int xioctl(int fd, unsigned long req, void *arg, const char *step)
 static __u32 find_video_entity(int mfd, unsigned int want_minor)
 {
 	__u32 fallback_by_name = 0;
-	for (__u32 id = 1; ; id++) {
+	for (__u32 id = 0; ; id++) {
 		struct media_entity_desc ent = { .id = id | MEDIA_ENT_ID_FLAG_NEXT };
 		if (ioctl(mfd, MEDIA_IOC_ENUM_ENTITIES, &ent) < 0)
 			break;
 		id = ent.id;
 		if (ent.dev.major == 81 && ent.dev.minor == want_minor)
 			return ent.id;
-		if (!fallback_by_name &&
-		    strcmp(ent.name, "Intel IPU4 ISYS Capture 1") == 0)
+		/* ipu6-isys names video-device entities "Intel IPU4 ISYS
+		 * Capture N" where N matches the v4l2 minor. Use that as
+		 * the fallback when ent.dev is unset. */
+		char wanted[40];
+		snprintf(wanted, sizeof(wanted),
+			 "Intel IPU4 ISYS Capture %u", want_minor);
+		if (!fallback_by_name && strcmp(ent.name, wanted) == 0)
 			fallback_by_name = ent.id;
 	}
-	/* Older kernel releases leave ent.dev unset for v4l-io entities.
-	 * Fall back to the name the IPU driver gives /dev/video0. */
 	return fallback_by_name;
 }
 
@@ -93,14 +96,17 @@ static int enable_media_links(const char *media_dev, const char *video_dev)
 		close(mfd);
 		return -1;
 	}
-	__u32 video_entity = find_video_entity(mfd, minor(vst.st_rdev));
+	unsigned int want_minor = minor(vst.st_rdev);
+	printf("MEDIA:video %s major=%u minor=%u\n",
+	       video_dev, major(vst.st_rdev), want_minor);
+	__u32 video_entity = find_video_entity(mfd, want_minor);
 	if (!video_entity) {
 		printf("MEDIA:fail step=find_video_entity minor=%u\n",
-		       minor(vst.st_rdev));
+		       want_minor);
 		close(mfd);
 		return -1;
 	}
-	printf("MEDIA:video %s = entity id=%u\n", video_dev, video_entity);
+	printf("MEDIA:video_entity %s = entity id=%u\n", video_dev, video_entity);
 
 	/* Walk every entity that has outbound links to this video entity
 	 * and enable one of them (prefer source.index == 1, then 2, 3, 4).
@@ -113,6 +119,11 @@ static int enable_media_links(const char *media_dev, const char *video_dev)
 		if (ioctl(mfd, MEDIA_IOC_ENUM_ENTITIES, &ent) < 0)
 			break;
 		id = ent.id;
+
+		if (getenv("MEDIA_DUMP"))
+			printf("MEDIA:entity id=%u major=%u minor=%u pads=%u links=%u name=%s\n",
+			       ent.id, ent.dev.major, ent.dev.minor,
+			       ent.pads, ent.links, ent.name);
 
 		if (ent.links == 0)
 			continue;
