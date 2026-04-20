@@ -56,6 +56,13 @@ echo "streamon-smoke: reached=$reached"
 failline=$(grep -m1 '^STREAM:fail' "$LOG" || true)
 [[ -n "$failline" ]] && echo "streamon-smoke: $failline"
 
+# A kernel panic inside STREAMON leaves us without a STREAM:streamon
+# or STREAM:fail marker — the ioctl never returns. Catch it so the
+# caller knows the test moved past qbuf before the panic.
+if grep -q 'Kernel panic' "$LOG" && ! grep -q '^STREAM:done' "$LOG"; then
+	echo "streamon-smoke: kernel panic mid-STREAMON (see $LOG)"
+fi
+
 # Default stays at STREAM:qbuf. M5b-3 installs the CSI2 active route
 # (visible in dmesg as "virt-sensor: installed active route …") but
 # STREAMON still fails inside ipu6_isys_setup_video() at

@@ -156,6 +156,24 @@ tools/
   Capture entity's `link_validate` needs to accept dynamic links
   differently). `IPU4_STREAM_REQUIRED` remains `STREAM:qbuf`.
 
+- **M5b-5 — streamon uses BGR24 so link_validate passes:** done.
+  `ipu6_isys_pfmts[]` has no entry for `V4L2_PIX_FMT_RGB24`; only
+  `V4L2_PIX_FMT_BGR24` maps to `MEDIA_BUS_FMT_RGB888_1X24` — the
+  mbus code the virt-sensor / CSI2 subdev advertise. Asking for
+  `RGB24` from `streamon.c` silently fell back to the first table
+  entry (`SBGGR12`), and `link_validate()` rejected the pipeline
+  with `-EPIPE` on format mismatch.
+
+  Switching the fourcc to `BGR24` (`'BGR3'`) makes
+  `ipu6_isys_setup_video()` pass: `remote_pad` lookup, route walk,
+  `media_pipeline_start()` and `link_validate()` all succeed, and
+  the driver proceeds into `ipu6_configure_spc()` — where it
+  kernel-panics on a null-pointer dereference at
+  `CR2: ffa000008084e048` (firmware control structures not backed
+  by the QEMU model's MMU). `streamon-smoke.sh` now detects and
+  reports "kernel panic mid-STREAMON" explicitly; the next
+  milestone is the first real QEMU MMU / syscom work.
+
 - **M5b-4 — fix video-entity lookup so the right link gets
   enabled:** done. Root cause of the M5b-3 `ENOLINK` was a
   one-line bug in `tools/tests/streamon.c`:

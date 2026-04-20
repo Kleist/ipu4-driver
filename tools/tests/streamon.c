@@ -30,7 +30,13 @@
 
 #define WIDTH		800
 #define HEIGHT		800
-#define PIXFMT		v4l2_fourcc('R', 'G', 'B', '3')	/* RGB24 */
+/* V4L2_PIX_FMT_BGR24 is the only 24-bit RGB entry in
+ * ipu6_isys_pfmts[] that maps to MEDIA_BUS_FMT_RGB888_1X24 — the
+ * mbus code the virt-sensor / CSI2 subdev advertise. Asking for
+ * V4L2_PIX_FMT_RGB24 here silently falls back to the first table
+ * entry (SBGGR12) and STREAMON's link_validate rejects the
+ * pipeline on format mismatch. */
+#define PIXFMT		v4l2_fourcc('B', 'G', 'R', '3')
 #define NUM_BUFS	2
 
 static int xioctl(int fd, unsigned long req, void *arg, const char *step)
