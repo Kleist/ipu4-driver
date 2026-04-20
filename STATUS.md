@@ -156,6 +156,27 @@ tools/
   Capture entity's `link_validate` needs to accept dynamic links
   differently). `IPU4_STREAM_REQUIRED` remains `STREAM:qbuf`.
 
+- **M5c-1 — graceful STREAMON short-circuit when there's no
+  firmware:** done. `ipu6_configure_spc()` in the M5b-5 run
+  kernel-panicked because the stub CPD blob produces zeroed
+  pkg_dir entries, which yields a wild pointer in
+  `ipu6_pkg_dir_configure_spc()` at
+  `kernel/ipu4/ipu6.c:435`.
+
+  Gating `ipu6_fw_isys_open()` with
+  `#if IS_ENABLED(CONFIG_VIDEO_IPU4_VIRT_SENSOR)` to return
+  `-EOPNOTSUPP` up front bypasses the whole SPC / firmware /
+  syscom path during STREAMON. Guest sees
+  `STREAM:fail step=streamon errno=95 (Operation not supported)`
+  and the VM shuts down cleanly — no more kernel panic.
+
+  Actual frame delivery needs a virt-sensor-direct path: the
+  virt-sensor's `.s_stream()` arms a timer, the QEMU device model
+  emits a frame into the buffer DMA address, and an M5c vb2
+  shim returns it to userspace without touching the firmware.
+  That's the next commit (or set of commits — MMU + timer + vb2
+  bypass).
+
 - **M5b-5 — streamon uses BGR24 so link_validate passes:** done.
   `ipu6_isys_pfmts[]` has no entry for `V4L2_PIX_FMT_RGB24`; only
   `V4L2_PIX_FMT_BGR24` maps to `MEDIA_BUS_FMT_RGB888_1X24` — the
