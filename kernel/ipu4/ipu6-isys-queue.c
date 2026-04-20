@@ -6,6 +6,7 @@
 #include <linux/bug.h>
 #include <linux/delay.h>
 #include <linux/device.h>
+#include <linux/ktime.h>
 #include <linux/list.h>
 #include <linux/lockdep.h>
 #include <linux/mutex.h>
@@ -418,8 +419,18 @@ out_requeue:
 	return ret;
 }
 
+#if IS_ENABLED(CONFIG_VIDEO_IPU4_VIRT_SENSOR)
+static void buf_queue_virt(struct vb2_buffer *vb);
+static int start_streaming_virt(struct vb2_queue *q, unsigned int count);
+static void stop_streaming_virt(struct vb2_queue *q);
+#endif
+
 static void buf_queue(struct vb2_buffer *vb)
 {
+#if IS_ENABLED(CONFIG_VIDEO_IPU4_VIRT_SENSOR)
+	buf_queue_virt(vb);
+	return;
+#endif
 	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(vb->vb2_queue);
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
 	struct vb2_v4l2_buffer *vvb = to_vb2_v4l2_buffer(vb);
@@ -620,8 +631,98 @@ static void ipu6_isys_stream_cleanup(struct ipu6_isys_video *av)
 	av->stream = NULL;
 }
 
+#if IS_ENABLED(CONFIG_VIDEO_IPU4_VIRT_SENSOR)
+/*
+ * M5c-2 software streaming path. Under CONFIG_VIDEO_IPU4_VIRT_SENSOR
+ * the QEMU harness has no firmware / MMU / syscom to drive a real
+ * ISP capture, so the regular start_streaming's fw_get /
+ * prepare_stream / stream_start path is skipped entirely.
+ *
+ * Instead:
+ *   - start_streaming_virt() runs setup_video() (brings up the
+ *     media pipeline) and marks the stream streaming so
+ *     stop_streaming_virt() has matching state to tear down.
+ *   - buf_queue_virt() completes each buffer immediately with
+ *     zero-filled content and sets bytesused = length so DQBUF
+ *     unblocks in userspace. A follow-up commit will replace the
+ *     zero fill with a deterministic pattern written from the QEMU
+ *     device model.
+ *   - stop_streaming_virt() drops the streaming state and flushes
+ *     any remaining buffers with VB2_BUF_STATE_ERROR.
+ */
+static int start_streaming_virt(struct vb2_queue *q, unsigned int count)
+{
+	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(q);
+	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
+	struct device *dev = &av->isys->adev->auxdev.dev;
+	struct media_entity *source_entity = NULL;
+	int nr_queues, ret;
+
+	ret = ipu6_isys_setup_video(av, &source_entity, &nr_queues);
+	if (ret < 0) {
+		dev_err(dev, "virt-sensor: setup_video failed: %d\n", ret);
+		goto err_return_buffers;
+	}
+
+	mutex_lock(&av->stream->mutex);
+	av->stream->nr_streaming++;
+	list_add(&aq->node, &av->stream->queues);
+	av->stream->streaming = 1;
+	mutex_unlock(&av->stream->mutex);
+
+	dev_info(dev, "virt-sensor: start_streaming (software-only)\n");
+	return 0;
+
+err_return_buffers:
+	return_buffers(aq, VB2_BUF_STATE_QUEUED);
+	return ret;
+}
+
+static void stop_streaming_virt(struct vb2_queue *q)
+{
+	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(q);
+	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
+	struct ipu6_isys_stream *stream = av->stream;
+
+	if (!stream) {
+		return_buffers(aq, VB2_BUF_STATE_ERROR);
+		return;
+	}
+
+	mutex_lock(&stream->mutex);
+	stream->nr_streaming--;
+	list_del(&aq->node);
+	stream->streaming = 0;
+	mutex_unlock(&stream->mutex);
+
+	ipu6_isys_stream_cleanup(av);
+	return_buffers(aq, VB2_BUF_STATE_ERROR);
+}
+
+static void buf_queue_virt(struct vb2_buffer *vb)
+{
+	struct vb2_v4l2_buffer *vvb = to_vb2_v4l2_buffer(vb);
+	unsigned int i;
+
+	/* vb2 already allocated DMA-coherent pages; the contents are
+	 * whatever was last there (zeros on fresh allocation). Mark
+	 * the full length as produced so DQBUF reports the frame
+	 * size userspace expects. */
+	for (i = 0; i < vb->num_planes; i++)
+		vb2_set_plane_payload(vb, i, vb->planes[i].length);
+
+	vvb->sequence = 0;
+	vvb->field = V4L2_FIELD_NONE;
+	vb->timestamp = ktime_get_ns();
+	vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
+}
+#endif	/* CONFIG_VIDEO_IPU4_VIRT_SENSOR */
+
 static int start_streaming(struct vb2_queue *q, unsigned int count)
 {
+#if IS_ENABLED(CONFIG_VIDEO_IPU4_VIRT_SENSOR)
+	return start_streaming_virt(q, count);
+#endif
 	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(q);
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
 	struct device *dev = &av->isys->adev->auxdev.dev;
@@ -818,6 +919,10 @@ int ipu6_isys_queue_restart_streams(struct ipu6_isys_video *av)
 
 static void stop_streaming(struct vb2_queue *q)
 {
+#if IS_ENABLED(CONFIG_VIDEO_IPU4_VIRT_SENSOR)
+	stop_streaming_virt(q);
+	return;
+#endif
 	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(q);
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
 	struct ipu6_isys_stream *stream = av->stream;
