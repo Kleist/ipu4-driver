@@ -166,6 +166,46 @@ tools/
   until M5c provides real frame delivery. On failure, the
   workflow uploads serial logs and `.config` as artifacts.
 
+- **M5c-2 — software streaming path, STREAMON and DQBUF green:**
+  done. `kernel/ipu4/ipu6-isys-queue.c` now has
+  `start_streaming_virt`, `stop_streaming_virt`, and
+  `buf_queue_virt` gated by
+  `#if IS_ENABLED(CONFIG_VIDEO_IPU4_VIRT_SENSOR)`. The main
+  `start_streaming` / `stop_streaming` / `buf_queue` ops
+  early-dispatch to the virt variants.
+
+  The virt path:
+  - runs `ipu6_isys_setup_video()` (brings up the media pipeline
+    and allocates `av->stream`),
+  - increments `stream->nr_streaming` and sets `streaming = 1`
+    so the stop path has matching state to tear down,
+  - returns every queued buffer immediately from `buf_queue_virt`
+    with `VB2_BUF_STATE_DONE`, `bytesused = plane length`, and
+    `timestamp = ktime_get_ns()` — vb2's already-allocated
+    DMA-coherent pages hold zeros,
+  - on stop, releases the stream ref and flushes any stragglers
+    with `VB2_BUF_STATE_ERROR`.
+
+  `streamon-smoke.sh` now reaches `STREAM:dqbuf` — the full
+  capture-API walk:
+  open / QUERYCAP / S_FMT / REQBUFS / QUERYBUF / QBUF / **STREAMON /
+  DQBUF**. `STREAM:done bytes=1948032` on success. Default
+  `IPU4_STREAM_REQUIRED` raised to `STREAM:dqbuf`.
+
+  The M5c-1 `-EOPNOTSUPP` guard in `ipu6_fw_isys_open()` stays as
+  defensive — the new code path never calls it, but leaving the
+  guard in place means a stray call (e.g. the restart-streams
+  recovery branch) still fails cleanly instead of trying firmware
+  that isn't backed.
+
+  Not in this PR:
+  - Deterministic frame content — buffers are zero-filled.
+    A follow-up commit will either fill a pattern in kernel
+    (simple) or push data from the QEMU device model via an
+    MMU walker (closer to real hardware, bigger).
+  - Frame timing — buffers complete synchronously from buf_queue;
+    nothing emulates a sensor's frame-rate cadence yet.
+
 - **M5c-1 — graceful STREAMON short-circuit when there's no
   firmware:** done. `ipu6_configure_spc()` in the M5b-5 run
   kernel-panicked because the stub CPD blob produces zeroed
