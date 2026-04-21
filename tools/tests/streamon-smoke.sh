@@ -43,6 +43,7 @@ steps=(
 	"STREAM:qbuf"
 	"STREAM:streamon"
 	"STREAM:dqbuf"
+	"STREAM:pattern_ok"
 )
 
 reached=""
@@ -68,7 +69,7 @@ fi
 # STREAMON still fails inside ipu6_isys_setup_video() at
 # media_pad_remote_pad_unique() on the Capture-side pad. The required
 # marker tightens to STREAM:streamon once that barrier falls.
-REQUIRED="${IPU4_STREAM_REQUIRED:-STREAM:dqbuf}"
+REQUIRED="${IPU4_STREAM_REQUIRED:-STREAM:pattern_ok}"
 case "$reached" in
 "")
 	echo "streamon-smoke: FAIL (no STREAM marker)" >&2
