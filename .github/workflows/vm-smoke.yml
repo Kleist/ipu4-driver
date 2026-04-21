@@ -35,7 +35,7 @@ jobs:
             ninja-build pkg-config libglib2.0-dev libpixman-1-dev \
             meson python3-venv \
             busybox-static qemu-system-x86 \
-            cpio gzip
+            cpio gzip lcov
 
       # Cache keys are hashed over the inputs that can change the
       # corresponding build output. On cache hit, bootstrap re-clones
@@ -93,6 +93,16 @@ jobs:
         env:
           IPU4_ACCEL: tcg
 
+      - name: Build coverage report from streamon-smoke gcov harvest
+        run: ./tools/coverage/collect.sh
+
+      - name: Upload coverage HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html-${{ github.run_id }}
+          path: tools/coverage/html
+          if-no-files-found: warn
+
       - name: Upload serial logs + artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -101,6 +111,7 @@ jobs:
           if-no-files-found: ignore
           path: |
             tools/tests/out/*.serial
+            tools/tests/out/gcov.tar
             tools/rootfs/out/rootfs.cpio.gz
             tools/linux/arch/x86/boot/bzImage
             tools/linux/.config

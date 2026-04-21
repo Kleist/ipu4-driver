@@ -166,6 +166,23 @@ tools/
   until M5c provides real frame delivery. On failure, the
   workflow uploads serial logs and `.config` as artifacts.
 
+- **M5c-4 — gcov harvest + lcov HTML:** done. `init.streamon`
+  rounds each `.gcda` in `/sys/kernel/debug/gcov/` through `cat`
+  into a regular-file scratch tree (debugfs reports size=0 so a
+  plain `tar` under-captures), tars it onto the 9p share, and
+  the host's `tools/coverage/collect.sh` overlays each `.gcda`
+  onto the build tree before running `lcov --capture` +
+  `genhtml`. The report is filtered to
+  `*/drivers/media/pci/intel/ipu4/*` so v4l2-core lines don't
+  dilute the driver picture.
+
+  `vm-smoke.yml` installs `lcov`, runs `collect.sh` after
+  `streamon-smoke.sh`, and uploads the HTML tree as
+  `coverage-html-<run-id>`. Current baseline:
+  **33.1% lines / 40.7% functions** of the IPU4 driver covered
+  by one streamon-smoke run. The number moves visibly when the
+  smoke tier exercises new paths — future PRs can watch it.
+
 - **M5c-3 — deterministic frame pattern + verifier:** done.
   `buf_queue_virt` now fills each plane with `byte[k] = (k +
   sequence) & 0xff` and increments a sequence counter per frame.

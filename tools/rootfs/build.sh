@@ -69,7 +69,7 @@ EOF
 
 # Busybox applet symlinks.
 for applet in sh mount umount insmod rmmod modprobe lsmod dmesg echo cat ls \
-	ln sleep poweroff reboot mkdir grep sed awk head tail find; do
+	ln sleep poweroff reboot mkdir grep sed awk head tail find tar; do
 	echo "slink /bin/$applet      busybox 0777 0 0" >> "$LIST"
 done
 
