@@ -96,7 +96,9 @@ change, or is the fork drifting?" Three sub-categories:
 
 **Action:** walk every `#ifdef IPU6` hunk, tag with `(a|b|c)`, and
 produce a pre-upstream cleanup list. Biggest payoff per hour of
-work.
+work. **Done — see `tools/notes/ifdef-ipu6-audit.md`** for the
+per-site table (35 sites: 2 (b), 15 (a), 18 (c)) and the five (a)
+clusters that become upstream patches.
 
 ### 3. `ipu4-compat.h` uses (kernel-version shims)
 
@@ -161,8 +163,11 @@ In rough priority order (smallest / highest-leverage first):
 
 1. **Delete `ipu4-compat.h`** on an upstream-prep branch (single
    commit, no behaviour change on 6.12). Small.
-2. **Walk the 40 `#ifdef IPU6` hunks**, tag each (a/b/c), file bug
-   reports for the (b)s. Medium.
+2. **Walk the `#ifdef IPU6` hunks**, tag each (a/b/c), file bug
+   reports for the (b)s. Medium. *Done — 35 sites tagged in
+   `tools/notes/ifdef-ipu6-audit.md`.* Actual count came in at
+   35 (not 40); two (b) sites are SOF/EOF double-dispatch
+   suspicions in `ipu6-isys.c`, both on the CSI2 FS/FE ISR path.
 3. **Replace `#ifdef IPU6` (a) hunks with `is_ipu4(hw_ver)`
    runtime checks.** Medium-large; each is a real patch
    candidate.
