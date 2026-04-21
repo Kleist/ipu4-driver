@@ -66,12 +66,10 @@ firmware path intact.
 
 **Action:** when we start the upstream branch, `grep -v
 CONFIG_VIDEO_IPU4_VIRT_SENSOR` on each file should produce the
-"production" variant. Current code is close to that discipline but
-a mechanical audit is needed — `M5b-3`'s
-`isys_install_virt_sensor_route` helper sits outside the `#if`
-block and is dead code when the symbol is off (OK, just
-gratuitous). Move it *inside* the guard to keep the production
-view pristine.
+"production" variant. Current code is already holding that
+discipline — spot-checked every `virt_sensor` match in the top
+five shared files and all of them (helpers and call sites) are
+inside the guard.
 
 ### 2. `#ifdef IPU6` / `#ifndef IPU6` (IPU4-vs-IPU6 behavioural fork)
 
@@ -161,24 +159,21 @@ one of:
 
 In rough priority order (smallest / highest-leverage first):
 
-1. **Move `isys_install_virt_sensor_route` inside the
-   `CONFIG_VIDEO_IPU4_VIRT_SENSOR` guard** in `ipu6-isys.c` so the
-   production file is bit-for-bit cleaner. Trivial.
-2. **Delete `ipu4-compat.h`** on an upstream-prep branch (single
+1. **Delete `ipu4-compat.h`** on an upstream-prep branch (single
    commit, no behaviour change on 6.12). Small.
-3. **Walk the 40 `#ifdef IPU6` hunks**, tag each (a/b/c), file bug
+2. **Walk the 40 `#ifdef IPU6` hunks**, tag each (a/b/c), file bug
    reports for the (b)s. Medium.
-4. **Replace `#ifdef IPU6` (a) hunks with `is_ipu4(hw_ver)`
+3. **Replace `#ifdef IPU6` (a) hunks with `is_ipu4(hw_ver)`
    runtime checks.** Medium-large; each is a real patch
    candidate.
-5. **Bare-diff audit** on `ipu6-dma.c`, `ipu6-fw-com.c`,
+4. **Bare-diff audit** on `ipu6-dma.c`, `ipu6-fw-com.c`,
    `ipu6-fw-isys.h` and friends; cherry-pick vs. revert vs.
    upstream-patch. Large.
-6. **Retire `ambu-ipu-bridge`** in the upstream-prep branch and
+5. **Retire `ambu-ipu-bridge`** in the upstream-prep branch and
    make `ipu6.c` dispatch upstream `ipu_bridge_init` / harness
    `virt-sensor`.
-7. **Produce a split patch series:** core IPU6 improvements we
-   have landed (steps 3–5's cherry-picks), then the IPU4-only
+6. **Produce a split patch series:** core IPU6 improvements we
+   have landed (steps 2–4's cherry-picks), then the IPU4-only
    additions. That's the unit of submission to LKML.
 
 ## What this note does NOT claim
