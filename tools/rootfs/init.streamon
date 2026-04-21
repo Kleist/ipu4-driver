@@ -48,4 +48,27 @@ fi
 /bin/streamon /dev/video0
 echo "STREAM:done"
 
+# Harvest gcov counters onto the 9p share so the host can run lcov.
+# debugfs's .gcda files report size=0 to stat() (they're streamed on
+# read), so `tar` under-captures them. Round-trip through `cat` into
+# a regular-file scratch tree, which reads to EOF and writes real
+# bytes, then tar that. .gcno files live in the build tree on the
+# host already and don't need to travel.
+if [ -d /sys/kernel/debug/gcov ] && [ -d /mnt/tests ]; then
+	mkdir -p /tmp/gcov
+	cd /sys/kernel/debug/gcov
+	find . -name '*.gcda' | while read -r gcda; do
+		mkdir -p "/tmp/gcov/$(dirname "$gcda")"
+		cat "$gcda" > "/tmp/gcov/$gcda"
+	done
+	cd /
+	if tar -cf /mnt/tests/gcov.tar -C /tmp/gcov . 2>/dev/null; then
+		echo "GCOV:harvested $(find /tmp/gcov -name '*.gcda' | wc -l) gcda, $(wc -c < /mnt/tests/gcov.tar) bytes"
+	else
+		echo "GCOV:fail step=tar errno=$?"
+	fi
+else
+	echo "GCOV:skipped (no /sys/kernel/debug/gcov or /mnt/tests)"
+fi
+
 poweroff -f
