@@ -166,6 +166,25 @@ tools/
   until M5c provides real frame delivery. On failure, the
   workflow uploads serial logs and `.config` as artifacts.
 
+- **M5c-3 — deterministic frame pattern + verifier:** done.
+  `buf_queue_virt` now fills each plane with `byte[k] = (k +
+  sequence) & 0xff` and increments a sequence counter per frame.
+  `tools/tests/streamon.c` mmaps the queued buffers, and after
+  `VIDIOC_DQBUF` checks the pattern at a handful of offsets
+  (0, 1, 127, 128, 255, 256, 4095, 65535) against the per-frame
+  expected byte. Mismatch reports the offset, got/want, and
+  sequence so a regression in either the kernel fill or the DMA
+  mapping shows up immediately.
+
+  `streamon-smoke.sh` default `IPU4_STREAM_REQUIRED` raised to
+  `STREAM:pattern_ok`. First DQBUF now reports
+  `STREAM:pattern_ok seq=0 bytes=1948032`.
+
+  Not yet: frame-rate pacing (buffers still complete synchronously
+  from `buf_queue`), multi-frame sequence verification (the test
+  reads just one DQBUF), and the full-buffer SHA check — follow-up
+  commits.
+
 - **M5c-2 — software streaming path, STREAMON and DQBUF green:**
   done. `kernel/ipu4/ipu6-isys-queue.c` now has
   `start_streaming_virt`, `stop_streaming_virt`, and

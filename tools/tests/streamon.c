@@ -235,6 +235,8 @@ int main(int argc, char **argv)
 	if (xioctl(fd, VIDIOC_REQBUFS, &reqbufs, "reqbufs") < 0)
 		return 1;
 
+	void *buf_ptr[NUM_BUFS] = {0};
+	__u32 buf_len[NUM_BUFS] = {0};
 	for (i = 0; i < NUM_BUFS; i++) {
 		struct v4l2_buffer buf = {
 			.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
@@ -250,6 +252,8 @@ int main(int argc, char **argv)
 			       errno, strerror(errno));
 			return 1;
 		}
+		buf_ptr[i] = p;
+		buf_len[i] = buf.length;
 		if (xioctl(fd, VIDIOC_QBUF, &buf, "qbuf") < 0)
 			return 1;
 	}
@@ -272,6 +276,44 @@ int main(int argc, char **argv)
 	};
 	if (xioctl(fd, VIDIOC_DQBUF, &dq, "dqbuf") < 0)
 		return 1;
+
+	/* The kernel side (buf_queue_virt in ipu6-isys-queue.c) fills
+	 * byte[k] = (k + sequence) & 0xff. For the first DQBUF the
+	 * frame sequence is 0 so byte[k] == k & 0xff. Check a handful
+	 * of positions rather than the whole 1.9 MB — a single
+	 * mismatch is enough to flag a regression in either the
+	 * kernel fill or the DMA mapping. */
+	if (dq.index >= NUM_BUFS || !buf_ptr[dq.index]) {
+		printf("STREAM:fail step=pattern_map dq.index=%u\n", dq.index);
+		return 1;
+	}
+	{
+		const uint8_t *p = buf_ptr[dq.index];
+		uint32_t seq = dq.sequence;
+		size_t len = dq.bytesused;
+		static const size_t probes[] = {
+			0, 1, 127, 128, 255, 256, 4095, 65535,
+		};
+		size_t j;
+		int bad = -1;
+
+		for (j = 0; j < sizeof(probes) / sizeof(*probes); j++) {
+			size_t k = probes[j];
+			if (k >= len)
+				continue;
+			uint8_t expect = (uint8_t)(k + seq);
+			if (p[k] != expect) {
+				bad = (int)k;
+				break;
+			}
+		}
+		if (bad >= 0) {
+			printf("STREAM:fail step=pattern offset=%d got=0x%02x want=0x%02x seq=%u\n",
+			       bad, p[bad], (uint8_t)(bad + seq), seq);
+			return 1;
+		}
+		printf("STREAM:pattern_ok seq=%u bytes=%zu\n", seq, len);
+	}
 
 	printf("STREAM:done bytes=%u\n", dq.bytesused);
 	return 0;

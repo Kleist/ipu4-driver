@@ -702,16 +702,28 @@ static void stop_streaming_virt(struct vb2_queue *q)
 static void buf_queue_virt(struct vb2_buffer *vb)
 {
 	struct vb2_v4l2_buffer *vvb = to_vb2_v4l2_buffer(vb);
+	static u32 sequence;
 	unsigned int i;
 
-	/* vb2 already allocated DMA-coherent pages; the contents are
-	 * whatever was last there (zeros on fresh allocation). Mark
-	 * the full length as produced so DQBUF reports the frame
-	 * size userspace expects. */
-	for (i = 0; i < vb->num_planes; i++)
-		vb2_set_plane_payload(vb, i, vb->planes[i].length);
+	/* Deterministic pattern the userspace smoke test verifies:
+	 * byte[i] = (i + frame_sequence) & 0xff. The sequence counter
+	 * lets a future test check per-frame variation; for the first
+	 * DQBUF it reads 0 so byte[i] == i & 0xff. */
+	for (i = 0; i < vb->num_planes; i++) {
+		void *vaddr = vb2_plane_vaddr(vb, i);
+		size_t len = vb->planes[i].length;
 
-	vvb->sequence = 0;
+		if (vaddr && len) {
+			u8 *p = vaddr;
+			size_t k;
+
+			for (k = 0; k < len; k++)
+				p[k] = (u8)(k + sequence);
+		}
+		vb2_set_plane_payload(vb, i, len);
+	}
+
+	vvb->sequence = sequence++;
 	vvb->field = V4L2_FIELD_NONE;
 	vb->timestamp = ktime_get_ns();
 	vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
