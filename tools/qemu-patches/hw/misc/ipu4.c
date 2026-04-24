@@ -145,6 +145,16 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define CSI2P0_S2M_IRQ_ENABLE            (CSI2P0_BASE + 0x610)
 #define CSI2P0_S2M_IRQ_LEVEL_NOT_PULSE   (CSI2P0_BASE + 0x614)
 
+/* CSI2 ports 1..5 live at
+ * 0x65000 (p1), 0x66000 (p2), 0x67000 (p3), 0x6c000 (p4), 0x6c800 (p5)
+ * (kernel/ipu4/ipu4-platform-isys-csi2-reg.h:13-15). We don't model
+ * them because data/trace.txt only exercises port 0; any access to
+ * this range means a driver configuration we haven't captured and
+ * the "port 0 only" assumption in the CSI2 block needs rework.
+ */
+#define CSI2_PORTS_1_5_RANGE_BEGIN       0x65000
+#define CSI2_PORTS_1_5_RANGE_END         0x6d800
+
 /* PWR_STATE target values the driver polls for. IPU4 uses:
  *   - bits 13:12  HH (TSC-sync) status: DONE = 2
  *   - bits 23:20  IS (ISYS) power FSM: IS_RDY = 0xa
@@ -309,9 +319,18 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
     case CSI2P0_S2M_IRQ_LEVEL_NOT_PULSE: val = s->csi2p0_s2m_level; break;
 
     default:
-        qemu_log_mask(LOG_UNIMP,
-                      "ipu4: read unimpl +0x%06" HWADDR_PRIx " size=%u\n",
-                      addr, size);
+        if (addr >= CSI2_PORTS_1_5_RANGE_BEGIN &&
+            addr < CSI2_PORTS_1_5_RANGE_END) {
+            qemu_log_mask(LOG_UNIMP,
+                          "ipu4: CSI2 port>=1 read +0x%06" HWADDR_PRIx
+                          " — only port 0 is modelled; data/trace.txt "
+                          "only exercised port 0, so this means a new "
+                          "driver path hit an unmodelled port.\n", addr);
+        } else {
+            qemu_log_mask(LOG_UNIMP,
+                          "ipu4: read unimpl +0x%06" HWADDR_PRIx
+                          " size=%u\n", addr, size);
+        }
         return 0;
     }
 
@@ -406,6 +425,14 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
          * the bits in SW_IRQ_MUX into IRQ_STATUS, but with value 0
          * nothing changes. Absorb the write without modelling the
          * mux routing until a driver path actually sets bits here. */
+        if (val != 0) {
+            qemu_log_mask(LOG_UNIMP,
+                          "ipu4: unispart SW_IRQ written non-zero "
+                          "val=0x%" PRIx64 " — model's zero-only-absorb "
+                          "assumption broken; SW_IRQ_MUX routing is "
+                          "unmodelled. See tools/notes/registers.md "
+                          "(0x17c414).\n", val);
+        }
         break;
     case IS_UNISPART_SW_IRQ_MUX:
         s->is_unispart_sw_irq_mux = val;
@@ -444,10 +471,20 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
     case CSI2P0_S2M_IRQ_LEVEL_NOT_PULSE: s->csi2p0_s2m_level = val; break;
 
     default:
-        qemu_log_mask(LOG_UNIMP,
-                      "ipu4: write unimpl +0x%06" HWADDR_PRIx
-                      " val=0x%" PRIx64 " size=%u\n",
-                      addr, val, size);
+        if (addr >= CSI2_PORTS_1_5_RANGE_BEGIN &&
+            addr < CSI2_PORTS_1_5_RANGE_END) {
+            qemu_log_mask(LOG_UNIMP,
+                          "ipu4: CSI2 port>=1 write +0x%06" HWADDR_PRIx
+                          " val=0x%" PRIx64 " — only port 0 is modelled; "
+                          "data/trace.txt only exercised port 0, so this "
+                          "means a new driver path hit an unmodelled port.\n",
+                          addr, val);
+        } else {
+            qemu_log_mask(LOG_UNIMP,
+                          "ipu4: write unimpl +0x%06" HWADDR_PRIx
+                          " val=0x%" PRIx64 " size=%u\n",
+                          addr, val, size);
+        }
         break;
     }
 }
