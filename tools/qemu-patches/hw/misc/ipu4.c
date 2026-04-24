@@ -663,12 +663,16 @@ static void ipu4_reset(DeviceState *dev)
     s->fw_src_lo = 0;
     s->fw_src_hi = 0;
     s->fw_src_size = 0;
-    /* Silicon's SECURITY_CTL reads 0x37002 before any driver write.
-     * Bit 0 (secure-mode) is clear in both 0 and 0x37002, so the
-     * existing "skip IPC reset for non-secure mode" branch still
-     * fires and probe continues unchanged — this just closes the
-     * remaining read-value mismatch. */
-    s->security_ctl = 0x37002;
+    /* Silicon's SECURITY_CTL reads 0x37002 before any driver write —
+     * the value has BUTTRESS_SECURITY_CTL_FW_SECURE_MODE (BIT(16))
+     * set, so the real silicon runs the IPU4 in secure mode. Our
+     * model can't complete the CSE IPC authentication handshake
+     * that secure mode requires, so reset to 0 instead and let the
+     * driver fall into the non-secure branch (same shortcut the M3
+     * buttress rows in registers.md document). compare.py will
+     * flag a persistent value_mismatch here until secure-mode CSE
+     * IPC is modelled; that's intentional. */
+    s->security_ctl = 0;
     s->iu2cse_csr = 0;
     s->cse2iu_csr = 0;
     s->cse2iu_data0 = 0;
