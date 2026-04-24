@@ -183,6 +183,26 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define IS_DMEM_FW_COM_RECV_WR_POS       (IS_DMEM_BASE + 0x070)
 #define IS_DMEM_FW_COM_RECV_RD_POS       (IS_DMEM_BASE + 0x074)
 
+/* ISYS / PSYS MMU windows. postprocess_trace.py breaks each side into
+ * sub-regions (isys0/isys1; psys0/psys1/psys2), but the driver treats
+ * each side as a single page-table programming window, so we back them
+ * with one flat array per side:
+ *
+ *   ISYS MMU   BAR+0x1e0000..0x1e04ff   (isys0 + isys1)
+ *   PSYS MMU   BAR+0x4b0000..0x4b09ff   (psys0 + psys1 + psys2)
+ *
+ * data/trace.txt writes 208 entries into the ISYS side and 200 into
+ * the PSYS side, all during FW bringup — page directory + L1/L2
+ * entries + invalidate bits — and does not read any of them back in
+ * this capture. Minimum viable handling: latch writes, return latched
+ * value on reads. Real streaming (M5b) will need pci_dma_rw() off the
+ * PDE writes; that's a later PR.
+ */
+#define IS_MMU_BASE                      0x1e0000
+#define IS_MMU_SIZE                      0x500
+#define PS_MMU_BASE                      0x4b0000
+#define PS_MMU_SIZE                      0xa00
+
 /* PWR_STATE target values the driver polls for. IPU4 uses:
  *   - bits 13:12  HH (TSC-sync) status: DONE = 2
  *   - bits 23:20  IS (ISYS) power FSM: IS_RDY = 0xa
@@ -238,6 +258,10 @@ struct Ipu4State {
 
     /* ISYS DMEM syscom window (0x108000..0x1080ff). */
     uint32_t is_dmem[IS_DMEM_SIZE / 4];
+
+    /* ISYS / PSYS MMU page-table programming windows. */
+    uint32_t is_mmu[IS_MMU_SIZE / 4];
+    uint32_t ps_mmu[PS_MMU_SIZE / 4];
 };
 
 static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
@@ -359,6 +383,27 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
             } else {
                 val = s->is_dmem[(addr - IS_DMEM_BASE) / 4];
             }
+            break;
+        }
+        if (addr >= IS_MMU_BASE && addr < IS_MMU_BASE + IS_MMU_SIZE) {
+            /* data/trace.txt does 208 writes into this window during
+             * FW bringup and zero reads. If the driver reads here,
+             * our "write-only latch" assumption breaks — a real DMA
+             * path would need pci_dma_rw() off the stored PDEs and
+             * returning the raw latched value could hide that. */
+            qemu_log_mask(LOG_UNIMP,
+                          "ipu4: ISYS MMU read +0x%06" HWADDR_PRIx
+                          " — model's write-only-latch assumption "
+                          "broken; DMA backing is unmodelled.\n", addr);
+            val = s->is_mmu[(addr - IS_MMU_BASE) / 4];
+            break;
+        }
+        if (addr >= PS_MMU_BASE && addr < PS_MMU_BASE + PS_MMU_SIZE) {
+            qemu_log_mask(LOG_UNIMP,
+                          "ipu4: PSYS MMU read +0x%06" HWADDR_PRIx
+                          " — model's write-only-latch assumption "
+                          "broken; DMA backing is unmodelled.\n", addr);
+            val = s->ps_mmu[(addr - PS_MMU_BASE) / 4];
             break;
         }
         if (addr >= CSI2_PORTS_1_5_RANGE_BEGIN &&
@@ -528,6 +573,14 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
             s->is_dmem[(addr - IS_DMEM_BASE) / 4] = val;
             break;
         }
+        if (addr >= IS_MMU_BASE && addr < IS_MMU_BASE + IS_MMU_SIZE) {
+            s->is_mmu[(addr - IS_MMU_BASE) / 4] = val;
+            break;
+        }
+        if (addr >= PS_MMU_BASE && addr < PS_MMU_BASE + PS_MMU_SIZE) {
+            s->ps_mmu[(addr - PS_MMU_BASE) / 4] = val;
+            break;
+        }
         if (addr >= CSI2_PORTS_1_5_RANGE_BEGIN &&
             addr < CSI2_PORTS_1_5_RANGE_END) {
             qemu_log_mask(LOG_UNIMP,
@@ -622,11 +675,13 @@ static void ipu4_reset(DeviceState *dev)
     s->csi2p0_s2m_edge = s->csi2p0_s2m_mask = s->csi2p0_s2m_status = 0;
     s->csi2p0_s2m_enable = s->csi2p0_s2m_level = 0;
     memset(s->is_dmem, 0, sizeof(s->is_dmem));
+    memset(s->is_mmu, 0, sizeof(s->is_mmu));
+    memset(s->ps_mmu, 0, sizeof(s->ps_mmu));
 }
 
 static const VMStateDescription vmstate_ipu4 = {
     .name = "ipu4",
-    .version_id = 5,
+    .version_id = 6,
     .minimum_version_id = 1,
     .fields = (const VMStateField[]) {
         VMSTATE_PCI_DEVICE(parent_obj, Ipu4State),
@@ -674,6 +729,8 @@ static const VMStateDescription vmstate_ipu4 = {
         VMSTATE_UINT32_V(csi2p0_s2m_enable, Ipu4State, 4),
         VMSTATE_UINT32_V(csi2p0_s2m_level, Ipu4State, 4),
         VMSTATE_UINT32_ARRAY_V(is_dmem, Ipu4State, IS_DMEM_SIZE / 4, 5),
+        VMSTATE_UINT32_ARRAY_V(is_mmu, Ipu4State, IS_MMU_SIZE / 4, 6),
+        VMSTATE_UINT32_ARRAY_V(ps_mmu, Ipu4State, PS_MMU_SIZE / 4, 6),
         VMSTATE_END_OF_LIST()
     }
 };

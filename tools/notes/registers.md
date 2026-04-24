@@ -61,6 +61,8 @@ Columns:
 | 0x64500-0x64514 | CSI2-0 | `ipu6-isys-csi2.c` CSI RX IRQ trio   | Same shape as the PART trio.                                 | inferred   |
 | 0x64600-0x64614 | CSI2-0 | `ipu6-isys-csi2.c` S2M IRQ trio      | Same shape as the PART trio.                                 | inferred   |
 | 0x108000-0x1080ff | ISYS | `ipu6-fw-com.c` DMEM syscom window   | Backed by a flat `uint32_t[0x40]` array: every slot is a latch, with one exception — `SEND_RD_POS` (offset 0x2c) echoes `SEND_WR_POS` so the driver sees "firmware has caught up" and doesn't block on the ring filling. `RECV_WR_POS` (offset 0x70) stays at whatever the driver last wrote (0 after reset); silicon sees real firmware updates, so compare.py flags it as value_mismatch until firmware simulation lands. | inferred |
+| 0x1e0000-0x1e04ff | MMU | `ipu6-mmu.c` ISYS MMU page-table window | Flat `uint32_t[0x140]` array, plain R/W latches. Silicon does 208 writes here during FW bringup (page directory + L1/L2 entries + invalidate bits) and no reads. Streaming (M5b) will need `pci_dma_rw()` off the PDE writes; that's a later PR. | inferred |
+| 0x4b0000-0x4b09ff | MMU | `ipu6-mmu.c` PSYS MMU page-table window | Same shape as the ISYS MMU — flat `uint32_t[0x280]` latch. 200 silicon writes, no reads. | inferred |
 
 ## M3 progress
 
