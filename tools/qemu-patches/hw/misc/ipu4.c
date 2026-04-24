@@ -18,6 +18,7 @@
 #include "qemu/bitops.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
+#include "qemu/timer.h"
 #include "qemu/units.h"
 #include "hw/pci/pci_device.h"
 #include "hw/pci/msi.h"
@@ -38,10 +39,13 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define BTRS_REG_WDT               0x008
 #define BTRS_REG_BTRS_CTRL         0x00c
 #define BTRS_REG_FW_RESET_CTL      0x030
+#define BTRS_REG_IS_FREQ_CTL       0x034
+#define BTRS_REG_PS_FREQ_CTL       0x038
 #define BTRS_REG_PWR_STATE         0x05c
 #define BTRS_REG_FW_SOURCE_BASE_LO 0x078
 #define BTRS_REG_FW_SOURCE_BASE_HI 0x07c
 #define BTRS_REG_FW_SOURCE_SIZE    0x080
+#define BTRS_REG_FABRIC_CMD        0x088
 #define BTRS_REG_ISR_STATUS        0x090
 #define BTRS_REG_ISR_ENABLED_STATUS 0x094
 #define BTRS_REG_ISR_ENABLE        0x098
@@ -49,6 +53,8 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define BTRS_REG_IU2CSEDB0         0x100
 #define BTRS_REG_IU2CSEDATA0       0x104
 #define BTRS_REG_IU2CSECSR         0x108
+#define BTRS_REG_TSC_LO            0x164
+#define BTRS_REG_TSC_HI            0x168
 #define BTRS_REG_SECURITY_CTL      0x300
 #define BTRS_REG_CSE2IUDB0         0x304
 #define BTRS_REG_CSE2IUDATA0       0x308
@@ -74,6 +80,9 @@ struct Ipu4State {
     /* Latched registers. */
     uint32_t btrs_ctrl;
     uint32_t fw_reset_ctl;
+    uint32_t is_freq_ctl;
+    uint32_t ps_freq_ctl;
+    uint32_t fabric_cmd;
     uint32_t pwr_state;
     uint32_t isr_enable;
     uint32_t isr_status;
@@ -130,6 +139,20 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
     case BTRS_REG_SKU:
         val = 0; /* unfused */
         break;
+    case BTRS_REG_TSC_LO:
+    case BTRS_REG_TSC_HI: {
+        /* 64-bit free-running timestamp counter. data/trace.txt shows
+         * the driver reading HI, LO, HI in sequence and retrying when
+         * the two HI samples disagree; we re-sample QEMU_CLOCK_VIRTUAL
+         * per read rather than latching a shared snapshot. The HI half
+         * (top 32 bits of nanoseconds) only flips every ~4.3 seconds
+         * of guest time, so the chance of an in-flight HI rollover
+         * between two adjacent MMIO accesses in the same vcpu thread
+         * is effectively nil — the driver's retry path stays cold. */
+        uint64_t tsc = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+        val = (addr == BTRS_REG_TSC_HI) ? (tsc >> 32) : (uint32_t)tsc;
+        break;
+    }
     default:
         qemu_log_mask(LOG_UNIMP,
                       "ipu4: read unimpl +0x%06" HWADDR_PRIx " size=%u\n",
@@ -154,6 +177,22 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
         break;
     case BTRS_REG_FW_RESET_CTL:
         s->fw_reset_ctl = val;
+        break;
+    case BTRS_REG_IS_FREQ_CTL:
+        /* Driver writes a clock divisor (low byte) plus the ICCMAX
+         * level (bit 31 set when active). Latched only — there's no
+         * actual clock to scale in the model, and the driver doesn't
+         * read this back to validate. */
+        s->is_freq_ctl = val;
+        break;
+    case BTRS_REG_PS_FREQ_CTL:
+        s->ps_freq_ctl = val;
+        break;
+    case BTRS_REG_FABRIC_CMD:
+        /* Single-shot fabric command write (data/trace.txt shows one
+         * write of 0x1 during init). No driver readback; latch and
+         * move on. */
+        s->fabric_cmd = val;
         break;
     case BTRS_REG_FW_SOURCE_BASE_LO:
         s->fw_src_lo = val;
@@ -242,6 +281,9 @@ static void ipu4_reset(DeviceState *dev)
 
     s->btrs_ctrl = 0;
     s->fw_reset_ctl = 0;
+    s->is_freq_ctl = 0;
+    s->ps_freq_ctl = 0;
+    s->fabric_cmd = 0;
     s->pwr_state = 0;
     s->isr_enable = 0;
     s->isr_status = 0;
@@ -256,7 +298,7 @@ static void ipu4_reset(DeviceState *dev)
 
 static const VMStateDescription vmstate_ipu4 = {
     .name = "ipu4",
-    .version_id = 1,
+    .version_id = 2,
     .minimum_version_id = 1,
     .fields = (const VMStateField[]) {
         VMSTATE_PCI_DEVICE(parent_obj, Ipu4State),
@@ -272,6 +314,9 @@ static const VMStateDescription vmstate_ipu4 = {
         VMSTATE_UINT32(iu2cse_csr, Ipu4State),
         VMSTATE_UINT32(cse2iu_csr, Ipu4State),
         VMSTATE_UINT32(cse2iu_data0, Ipu4State),
+        VMSTATE_UINT32_V(is_freq_ctl, Ipu4State, 2),
+        VMSTATE_UINT32_V(ps_freq_ctl, Ipu4State, 2),
+        VMSTATE_UINT32_V(fabric_cmd, Ipu4State, 2),
         VMSTATE_END_OF_LIST()
     }
 };
