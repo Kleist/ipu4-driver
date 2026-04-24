@@ -18,8 +18,8 @@ Columns:
 
 | Offset | Block    | Driver caller                           | Model behavior                                              | Confidence |
 |--------|----------|-----------------------------------------|-------------------------------------------------------------|------------|
-| 0x008  | Buttress | `ipu6-buttress.c` WDT kick              | Write: ignored. Read: 0.                                    | inferred   |
-| 0x00c  | Buttress | `ipu6-buttress.c` BTRS_CTRL             | R/W latched; value replayed on read.                        | inferred   |
+| 0x008  | Buttress | `ipu6-buttress.c` WDT kick              | Write: ignored (watchdog kick). Read: `0xfff0fff` (silicon's constant from data/trace.txt). | inferred   |
+| 0x00c  | Buttress | `ipu6-buttress.c` BTRS_CTRL             | R/W latched; reset value `0x10` to match silicon's pre-write read. | inferred   |
 | 0x030  | Buttress | `ipu6-buttress.c` FW_RESET_CTL          | Write START → read DONE on next read (no timer).            | inferred   |
 | 0x034  | Buttress | `ipu6-buttress.c` IS_FREQ_CTL           | Write latched. Driver writes divisor + ICCMAX-level bit; no readback in trace. | inferred   |
 | 0x038  | Buttress | `ipu6-buttress.c` PS_FREQ_CTL           | Write latched. Same shape as IS_FREQ_CTL, distinct register. | inferred   |
@@ -37,7 +37,7 @@ Columns:
 | 0x108  | CSE IPC  | `ipu6-buttress.c` IU2CSECSR             | Write: echo to `cse2iu_csr` so receive-side poll passes.    | guess      |
 | 0x164  | Buttress | `ipu6-buttress.c` TSC_LO                | Read returns low 32 bits of `qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL)`. Re-sampled per read; the driver's HI/LO/HI rollover-retry stays cold because HI only flips every ~4.3s. | inferred   |
 | 0x168  | Buttress | `ipu6-buttress.c` TSC_HI                | Read returns high 32 bits of the same clock. Silicon shows 0x4 throughout the trace (host uptime when captured); ours starts at 0 since QEMU_CLOCK_VIRTUAL counts guest time. | inferred   |
-| 0x300  | Buttress | `ipu6-buttress.c` SECURITY_CTL          | R/W latched.                                                | inferred   |
+| 0x300  | Buttress | `ipu6-buttress.c` SECURITY_CTL          | R/W latched; reset value `0x37002` to match silicon's pre-write read. Bit 0 (secure-mode) stays 0 in both this value and the old reset, so the "non-secure mode" IPC-skip branch still fires. | inferred   |
 | 0x304  | CSE IPC  | `ipu6-buttress.c` CSE2IUDB0             | Read: 0.                                                    | guess      |
 | 0x308  | CSE IPC  | `ipu6-buttress.c` CSE2IUDATA0           | Read: 0.                                                    | guess      |
 | 0x30c  | CSE IPC  | `ipu6-buttress.c` CSE2IUCSR             | Echoed IU2CSECSR; driver write clears it.                   | guess      |

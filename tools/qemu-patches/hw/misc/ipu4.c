@@ -270,6 +270,14 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
     uint64_t val = 0;
 
     switch (addr) {
+    case BTRS_REG_WDT:
+        /* Silicon returns 0xfff0fff on reads (likely a timeout/fuse
+         * constant; value lifted verbatim from data/trace.txt). The
+         * driver doesn't write it back, so a fixed return is enough.
+         * Writes are still absorbed as watchdog kicks in the write
+         * handler below. */
+        val = 0xfff0fff;
+        break;
     case BTRS_REG_BTRS_CTRL:
         val = s->btrs_ctrl;
         break;
@@ -640,7 +648,11 @@ static void ipu4_reset(DeviceState *dev)
 {
     Ipu4State *s = IPU4(dev);
 
-    s->btrs_ctrl = 0;
+    /* Hardware-default reset values from data/trace.txt. BTRS_CTRL
+     * reads 0x10 before any write (bit 4, fixed by silicon); the
+     * driver never writes it back, so the reset needs to match or
+     * compare.py sees a read-value mismatch. */
+    s->btrs_ctrl = 0x10;
     s->fw_reset_ctl = 0;
     s->is_freq_ctl = 0;
     s->ps_freq_ctl = 0;
@@ -651,7 +663,12 @@ static void ipu4_reset(DeviceState *dev)
     s->fw_src_lo = 0;
     s->fw_src_hi = 0;
     s->fw_src_size = 0;
-    s->security_ctl = 0;
+    /* Silicon's SECURITY_CTL reads 0x37002 before any driver write.
+     * Bit 0 (secure-mode) is clear in both 0 and 0x37002, so the
+     * existing "skip IPC reset for non-secure mode" branch still
+     * fires and probe continues unchanged — this just closes the
+     * remaining read-value mismatch. */
+    s->security_ctl = 0x37002;
     s->iu2cse_csr = 0;
     s->cse2iu_csr = 0;
     s->cse2iu_data0 = 0;
