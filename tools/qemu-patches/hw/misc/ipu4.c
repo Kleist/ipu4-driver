@@ -155,6 +155,34 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define CSI2_PORTS_1_5_RANGE_BEGIN       0x65000
 #define CSI2_PORTS_1_5_RANGE_END         0x6d800
 
+/* ISYS DMEM syscom ring-pointer block at BAR+0x108000 (from
+ * postprocess_trace.py's NAMED_REGIONS; the driver derives offsets
+ * via FW_COM_WR_REG / FW_COM_RD_REG in kernel/ipu4/ipu6-fw-com.h).
+ * The first 0x100 bytes are firmware-parameter + ring-pointer slots
+ * the driver writes during FW bringup and polls during streaming.
+ * We back the whole window with a flat array:
+ *
+ *   0x008 SYSCOM_STATE     latched
+ *   0x028 SEND_WR_POS      latched
+ *   0x02c SEND_RD_POS      echoes SEND_WR so the driver sees
+ *                          "firmware consumed everything"
+ *   0x070 RECV_WR_POS      stays at whatever driver last wrote
+ *                          (0 initially). Silicon sees real firmware
+ *                          updates; the model doesn't, so compare.py
+ *                          will flag this as a value_mismatch until
+ *                          firmware simulation lands.
+ *   0x074 RECV_RD_POS      latched (driver-written ack cursor)
+ *   others (0x00-0x7f)     firmware parameter slots; no readback,
+ *                          plain latching is enough.
+ */
+#define IS_DMEM_BASE                     0x108000
+#define IS_DMEM_SIZE                     0x100
+#define IS_DMEM_SYSCOM_STATE             (IS_DMEM_BASE + 0x008)
+#define IS_DMEM_FW_COM_SEND_WR_POS       (IS_DMEM_BASE + 0x028)
+#define IS_DMEM_FW_COM_SEND_RD_POS       (IS_DMEM_BASE + 0x02c)
+#define IS_DMEM_FW_COM_RECV_WR_POS       (IS_DMEM_BASE + 0x070)
+#define IS_DMEM_FW_COM_RECV_RD_POS       (IS_DMEM_BASE + 0x074)
+
 /* PWR_STATE target values the driver polls for. IPU4 uses:
  *   - bits 13:12  HH (TSC-sync) status: DONE = 2
  *   - bits 23:20  IS (ISYS) power FSM: IS_RDY = 0xa
@@ -207,6 +235,9 @@ struct Ipu4State {
     uint32_t csi2p0_rx_enable_irq, csi2p0_rx_level;
     uint32_t csi2p0_s2m_edge, csi2p0_s2m_mask, csi2p0_s2m_status;
     uint32_t csi2p0_s2m_enable, csi2p0_s2m_level;
+
+    /* ISYS DMEM syscom window (0x108000..0x1080ff). */
+    uint32_t is_dmem[IS_DMEM_SIZE / 4];
 };
 
 static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
@@ -319,6 +350,17 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
     case CSI2P0_S2M_IRQ_LEVEL_NOT_PULSE: val = s->csi2p0_s2m_level; break;
 
     default:
+        if (addr >= IS_DMEM_BASE && addr < IS_DMEM_BASE + IS_DMEM_SIZE) {
+            /* SEND_RD_POS echoes SEND_WR_POS so the driver sees
+             * "firmware has caught up" and doesn't block on the ring
+             * filling. All other slots return their latched value. */
+            if (addr == IS_DMEM_FW_COM_SEND_RD_POS) {
+                val = s->is_dmem[(IS_DMEM_FW_COM_SEND_WR_POS - IS_DMEM_BASE) / 4];
+            } else {
+                val = s->is_dmem[(addr - IS_DMEM_BASE) / 4];
+            }
+            break;
+        }
         if (addr >= CSI2_PORTS_1_5_RANGE_BEGIN &&
             addr < CSI2_PORTS_1_5_RANGE_END) {
             qemu_log_mask(LOG_UNIMP,
@@ -471,6 +513,21 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
     case CSI2P0_S2M_IRQ_LEVEL_NOT_PULSE: s->csi2p0_s2m_level = val; break;
 
     default:
+        if (addr >= IS_DMEM_BASE && addr < IS_DMEM_BASE + IS_DMEM_SIZE) {
+            if (addr == IS_DMEM_FW_COM_SEND_RD_POS) {
+                /* The read path echoes SEND_WR_POS here; the driver is
+                 * only expected to *read* this slot. A write means our
+                 * "firmware-owned cursor, driver never writes"
+                 * assumption is wrong — the echo logic would then hide
+                 * the driver's intended value. */
+                qemu_log_mask(LOG_UNIMP,
+                              "ipu4: driver wrote SEND_RD_POS val=0x%"
+                              PRIx64 " — model only echoes SEND_WR_POS "
+                              "on reads; this write is lost.\n", val);
+            }
+            s->is_dmem[(addr - IS_DMEM_BASE) / 4] = val;
+            break;
+        }
         if (addr >= CSI2_PORTS_1_5_RANGE_BEGIN &&
             addr < CSI2_PORTS_1_5_RANGE_END) {
             qemu_log_mask(LOG_UNIMP,
@@ -564,11 +621,12 @@ static void ipu4_reset(DeviceState *dev)
     s->csi2p0_rx_enable_irq = s->csi2p0_rx_level = 0;
     s->csi2p0_s2m_edge = s->csi2p0_s2m_mask = s->csi2p0_s2m_status = 0;
     s->csi2p0_s2m_enable = s->csi2p0_s2m_level = 0;
+    memset(s->is_dmem, 0, sizeof(s->is_dmem));
 }
 
 static const VMStateDescription vmstate_ipu4 = {
     .name = "ipu4",
-    .version_id = 4,
+    .version_id = 5,
     .minimum_version_id = 1,
     .fields = (const VMStateField[]) {
         VMSTATE_PCI_DEVICE(parent_obj, Ipu4State),
@@ -615,6 +673,7 @@ static const VMStateDescription vmstate_ipu4 = {
         VMSTATE_UINT32_V(csi2p0_s2m_status, Ipu4State, 4),
         VMSTATE_UINT32_V(csi2p0_s2m_enable, Ipu4State, 4),
         VMSTATE_UINT32_V(csi2p0_s2m_level, Ipu4State, 4),
+        VMSTATE_UINT32_ARRAY_V(is_dmem, Ipu4State, IS_DMEM_SIZE / 4, 5),
         VMSTATE_END_OF_LIST()
     }
 };
