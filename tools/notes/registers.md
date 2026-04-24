@@ -60,6 +60,7 @@ Columns:
 | 0x64400-0x64414 | CSI2-0 | `ipu6-isys-csi2.c` CSI2PART IRQ trio | EDGE/MASK/ENABLE/LEVEL_NOT_PULSE latched; STATUS = `status & enable`; CLEAR is W1C. `status` stays 0 (no backing event generator). | inferred |
 | 0x64500-0x64514 | CSI2-0 | `ipu6-isys-csi2.c` CSI RX IRQ trio   | Same shape as the PART trio.                                 | inferred   |
 | 0x64600-0x64614 | CSI2-0 | `ipu6-isys-csi2.c` S2M IRQ trio      | Same shape as the PART trio.                                 | inferred   |
+| 0x108000-0x1080ff | ISYS | `ipu6-fw-com.c` DMEM syscom window   | Backed by a flat `uint32_t[0x40]` array: every slot is a latch, with one exception — `SEND_RD_POS` (offset 0x2c) echoes `SEND_WR_POS` so the driver sees "firmware has caught up" and doesn't block on the ring filling. `RECV_WR_POS` (offset 0x70) stays at whatever the driver last wrote (0 after reset); silicon sees real firmware updates, so compare.py flags it as value_mismatch until firmware simulation lands. | inferred |
 
 ## M3 progress
 
