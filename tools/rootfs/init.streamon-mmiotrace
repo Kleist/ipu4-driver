@@ -1,0 +1,111 @@
+#!/bin/sh
+# Merged mmiotrace+streamon init. Arms the mmiotrace tracer before
+# insmod (same ordering invariant as init.mmiotrace; current_tracer
+# must be set before the driver's ioremap runs), then walks the v4l2
+# capture API once via /bin/streamon (same workload as init.streamon)
+# before dumping the trace to the 9p share.
+#
+# Resulting trace covers both probe and streamon paths, matching the
+# workflow that produced data/trace.txt on real silicon. The FW_COM
+# ring pointers the probe-only capture misses (SEND/RECV_{WR,RD}_POS
+# on BAR+0x108000) show up here.
+
+PATH=/bin:/sbin
+export PATH
+
+fail() {
+	echo "MMIOTRACE: FAIL ($*)"
+	echo "MMIOTRACE: DONE"
+	poweroff -f
+}
+
+mount -t proc     none /proc
+mount -t sysfs    none /sys
+mount -t debugfs none /sys/kernel/debug 2>/dev/null || true
+mount -t devtmpfs none /dev 2>/dev/null || true
+mount -t tracefs none /sys/kernel/tracing 2>/dev/null || true
+
+mount -t 9p -o trans=virtio tests /mnt/tests 2>/dev/null || true
+
+if ! grep -q ' /mnt/tests 9p ' /proc/mounts; then
+	cat /proc/mounts | grep -E '/mnt|9p' || true
+	fail "9p share not mounted at /mnt/tests"
+fi
+
+echo 0 > /proc/sys/kernel/printk_devkmsg 2>/dev/null || true
+
+# ---- mmiotrace tracer prologue (must run before insmod) ----
+if [ ! -w /sys/kernel/tracing/current_tracer ]; then
+	fail "tracefs not writable"
+fi
+
+if ! grep -qw mmiotrace /sys/kernel/tracing/available_tracers; then
+	echo "MMIOTRACE: available_tracers=$(cat /sys/kernel/tracing/available_tracers)"
+	fail "mmiotrace tracer not built into kernel (CONFIG_MMIOTRACE?)"
+fi
+
+# 16 MiB buffer — probe alone fills ~70 KB; streamon adds a few
+# hundred more distinct addresses but stays well under the margin.
+echo 16384 > /sys/kernel/tracing/buffer_size_kb 2>/dev/null || true
+echo mmiotrace > /sys/kernel/tracing/current_tracer
+echo 1 > /sys/kernel/tracing/tracing_on
+
+active=$(cat /sys/kernel/tracing/current_tracer)
+if [ "$active" != "mmiotrace" ]; then
+	fail "current_tracer=$active after set (expected mmiotrace)"
+fi
+echo "MMIOTRACE: tracer armed (current_tracer=$active)"
+
+# ---- Driver load (shape from init.streamon) ----
+for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
+	ambu-ipu-bridge intel-ipu4; do
+	ko=/lib/modules/$m.ko
+	[ -f "$ko" ] || continue
+	insmod "$ko" dyndbg=+p 2>&1 || true
+done
+if grep -q '^intel_ipu4 .* Live' /proc/modules 2>/dev/null; then
+	insmod /lib/modules/intel-ipu4-isys.ko dyndbg=+p 2>&1 || true
+fi
+
+# Wait for the v4l2 core to publish /dev/video0 (async-bind happens
+# after ipu6_pci_probe returns).
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+	[ -e /dev/video0 ] && break
+	sleep 1
+done
+
+# Run the streamon workload if /dev/video0 came up; tolerate failure
+# so the mmiotrace capture still drops to the 9p share even if the
+# streaming path has a regression. A pure-probe capture is still
+# strictly more useful than no capture — the "unimplemented" list
+# stays the conservative shape.
+if [ -e /dev/video0 ]; then
+	/bin/streamon /dev/video0 || true
+else
+	echo "STREAM:skip (no /dev/video0; capturing probe-only trace)"
+fi
+
+# Give any late threads a moment before freezing the tracer. mmiotrace
+# keeps logging until tracing_on flips off.
+sleep 1
+
+# ---- Dump ----
+echo 0 > /sys/kernel/tracing/tracing_on
+if [ ! -r /sys/kernel/tracing/trace ]; then
+	fail "no /sys/kernel/tracing/trace"
+fi
+
+cat /sys/kernel/tracing/trace > /mnt/tests/qemu.trace
+sync
+size=$(wc -c < /mnt/tests/qemu.trace 2>/dev/null || echo 0)
+echo "MMIOTRACE: captured $size bytes"
+echo "--- head of captured trace ---"
+head -n 20 /mnt/tests/qemu.trace
+echo "--- end head ---"
+
+if [ "$size" = "0" ]; then
+	fail "captured trace is empty"
+fi
+
+echo "MMIOTRACE: DONE"
+poweroff -f
