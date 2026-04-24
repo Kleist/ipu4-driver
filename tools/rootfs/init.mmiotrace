@@ -1,0 +1,112 @@
+#!/bin/sh
+# Step-4 init: enable the mmiotrace tracer, load the IPU4 driver, dump
+# /sys/kernel/tracing/trace to the 9p share so the host can diff it
+# against data/trace.txt.
+#
+# Same ordering invariant as trace_functions.sh:33 on real hardware:
+# current_tracer must be set BEFORE the driver's ioremap runs,
+# otherwise the IPU4 BAR mapping isn't hooked and no MMIO is recorded.
+# That's why the tracer prologue runs before the module-load loop.
+#
+# Every failure mode prints a distinct `MMIOTRACE: FAIL (...)` marker so
+# the host-side runner (tools/tests/mmiotrace.sh) and the CI serial log
+# pin down exactly which check failed.
+
+PATH=/bin:/sbin
+export PATH
+
+fail() {
+	echo "MMIOTRACE: FAIL ($*)"
+	echo "MMIOTRACE: DONE"
+	poweroff -f
+}
+
+mount -t proc     none /proc
+mount -t sysfs    none /sys
+mount -t debugfs none /sys/kernel/debug 2>/dev/null || true
+mount -t devtmpfs none /dev 2>/dev/null || true
+mount -t tracefs none /sys/kernel/tracing 2>/dev/null || true
+
+# Landing spot for the captured trace. The host-side runner reads
+# qemu.trace back out via 9p after the VM powers off.
+mount -t 9p -o trans=virtio tests /mnt/tests 2>/dev/null || true
+
+# Verify the 9p share is actually mounted; without it, writes to
+# /mnt/tests/qemu.trace land in the initramfs and vanish on poweroff.
+if ! grep -q ' /mnt/tests 9p ' /proc/mounts; then
+	cat /proc/mounts | grep -E '/mnt|9p' || true
+	fail "9p share not mounted at /mnt/tests"
+fi
+
+echo 0 > /proc/sys/kernel/printk_devkmsg 2>/dev/null || true
+
+# ---- mmiotrace tracer prologue (must run before insmod) ----
+if [ ! -w /sys/kernel/tracing/current_tracer ]; then
+	fail "tracefs not writable"
+fi
+
+if ! grep -qw mmiotrace /sys/kernel/tracing/available_tracers; then
+	echo "MMIOTRACE: available_tracers=$(cat /sys/kernel/tracing/available_tracers)"
+	fail "mmiotrace tracer not built into kernel (CONFIG_MMIOTRACE?)"
+fi
+
+# Match the buffer size run-vm.sh's IPU4_MMIOTRACE=1 path allocates
+# (16 MiB) so a whole probe fits without wrapping.
+echo 16384 > /sys/kernel/tracing/buffer_size_kb 2>/dev/null || true
+echo mmiotrace > /sys/kernel/tracing/current_tracer
+echo 1 > /sys/kernel/tracing/tracing_on
+
+active=$(cat /sys/kernel/tracing/current_tracer)
+if [ "$active" != "mmiotrace" ]; then
+	fail "current_tracer=$active after set (expected mmiotrace)"
+fi
+echo "MMIOTRACE: tracer armed (current_tracer=$active)"
+
+# ---- Driver load (identical shape to init.probe-ok) ----
+for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
+	ambu-ipu-bridge intel-ipu4; do
+	ko=/lib/modules/$m.ko
+	[ -f "$ko" ] || continue
+	insmod "$ko" dyndbg=+p 2>&1 || true
+done
+
+if grep -q '^intel_ipu4 .* Live' /proc/modules 2>/dev/null; then
+	insmod /lib/modules/intel-ipu4-isys.ko dyndbg=+p 2>&1 || true
+fi
+
+# Give any late probe threads a moment to finish before freezing the
+# tracer. mmiotrace will keep logging until tracing_on flips off, and
+# the post-probe noise (clock gating, frame generator kickoff, ...)
+# is exactly what we want in the capture.
+sleep 1
+
+# ---- Dump ----
+echo 0 > /sys/kernel/tracing/tracing_on
+if [ ! -r /sys/kernel/tracing/trace ]; then
+	fail "no /sys/kernel/tracing/trace"
+fi
+
+cat /sys/kernel/tracing/trace > /mnt/tests/qemu.trace
+sync
+size=$(wc -c < /mnt/tests/qemu.trace 2>/dev/null || echo 0)
+echo "MMIOTRACE: captured $size bytes"
+# Dump the trace head to serial so any format / "wrong tracer" /
+# "buffer empty" surprise is immediately debuggable from the job log
+# without an artifact download.
+echo "--- head of captured trace ---"
+head -n 20 /mnt/tests/qemu.trace
+echo "--- end head ---"
+
+if [ "$size" = "0" ]; then
+	fail "captured trace is empty"
+fi
+
+# Don't bother checking for the mmiotrace-specific VERSION line here:
+# the tracer's print_header callback fires inconsistently depending on
+# how the buffer is read (trace vs trace_pipe) and which events are in
+# the ring buffer. The host-side runner validates the capture by grep
+# for IPU4-BAR R/W lines, which is the signal we actually care about.
+# current_tracer=mmiotrace was already readback-verified above.
+
+echo "MMIOTRACE: DONE"
+poweroff -f
