@@ -12,9 +12,7 @@ python_files = ["test_*.py"]
 branch = true
 source = [
     "postprocess_trace",
-    # tools/trace/compare.py added in the Step 2 commit once the module
-    # exists; keep the source list accurate so --cov-fail-under=90 is a
-    # meaningful gate rather than a denominator fudge.
+    "compare",
 ]
 
 [tool.coverage.report]
