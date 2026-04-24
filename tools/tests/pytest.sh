@@ -21,6 +21,7 @@ fi
 
 exec pytest tests/ \
 	--cov=postprocess_trace \
+	--cov=compare \
 	--cov-report=term-missing \
 	--cov-fail-under=90 \
 	"$@"
