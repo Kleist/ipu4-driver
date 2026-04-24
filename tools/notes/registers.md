@@ -50,6 +50,16 @@ Columns:
 | 0x17c014 | ISYS   | `ipu6-isys.c` unispart IRQ_LEVEL_NOT_PULSE | R/W latched.                                             | inferred   |
 | 0x17c414 | ISYS   | `ipu6-isys.c` unispart SW_IRQ           | Silicon writes 0 on every access; absorb the write as a no-op. Once a driver path writes non-zero the mux wiring needs modelling. | inferred   |
 | 0x17c418 | ISYS   | `ipu6-isys.c` unispart SW_IRQ_MUX       | R/W latched.                                                | inferred   |
+| 0x64000 | CSI2-0  | `ipu6-isys-csi2.c` RX_ENABLE            | R/W latched; bit 0 = enable.                                | inferred   |
+| 0x64004 | CSI2-0  | `ipu6-isys-csi2.c` RX_NOF_ENABLED_LANES | R/W latched.                                                | inferred   |
+| 0x64008 | CSI2-0  | `ipu6-isys-csi2.c` RX_CONFIG            | R/W latched. Silicon writes 0x3 (RELEASE_LP11 + DISABLE_BYTE_CLK_GATING) then 0, and reads back; the latch is authoritative. | inferred   |
+| 0x6402c | CSI2-0  | `ipu6-isys-csi2.c` DLY_CNT_TERMEN_CLANE | R/W latched.                                                | inferred   |
+| 0x64030 | CSI2-0  | `ipu6-isys-csi2.c` DLY_CNT_SETTLE_CLANE | R/W latched.                                                | inferred   |
+| 0x64034 | CSI2-0  | `ipu6-isys-csi2.c` DLY_CNT_TERMEN_DLANE(0) | R/W latched.                                             | inferred   |
+| 0x64038 | CSI2-0  | `ipu6-isys-csi2.c` DLY_CNT_SETTLE_DLANE(0) | R/W latched.                                             | inferred   |
+| 0x64400-0x64414 | CSI2-0 | `ipu6-isys-csi2.c` CSI2PART IRQ trio | EDGE/MASK/ENABLE/LEVEL_NOT_PULSE latched; STATUS = `status & enable`; CLEAR is W1C. `status` stays 0 (no backing event generator). | inferred |
+| 0x64500-0x64514 | CSI2-0 | `ipu6-isys-csi2.c` CSI RX IRQ trio   | Same shape as the PART trio.                                 | inferred   |
+| 0x64600-0x64614 | CSI2-0 | `ipu6-isys-csi2.c` S2M IRQ trio      | Same shape as the PART trio.                                 | inferred   |
 
 ## M3 progress
 
