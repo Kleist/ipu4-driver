@@ -30,3 +30,19 @@ jobs:
 
       - name: Run KUnit
         run: ./tools/tests/kunit.sh
+
+      - name: MMIO trace coverage report
+        # Always run so the report is published every PR. The diff
+        # between data/trace.txt and the (currently absent) QEMU-side
+        # capture exits non-zero by design today — that *is* the
+        # worklist for ipu4.c handler PRs. `|| true` keeps CI green.
+        if: always()
+        run: ./tools/tests/compare-mmio.sh || true
+
+      - name: Upload MMIO trace coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmio-trace-coverage
+          path: tools/tests/out/compare-mmio/
+          if-no-files-found: ignore
