@@ -42,6 +42,14 @@ Columns:
 | 0x308  | CSE IPC  | `ipu6-buttress.c` CSE2IUDATA0           | Read: 0.                                                    | guess      |
 | 0x30c  | CSE IPC  | `ipu6-buttress.c` CSE2IUCSR             | Echoed IU2CSECSR; driver write clears it.                   | guess      |
 | 0x314  | Buttress | `ipu6-buttress.c` SKU                   | Read: 0 (unfused).                                          | guess      |
+| 0x17c000 | ISYS   | `ipu6-isys.c` unispart IRQ_EDGE         | R/W latched.                                                | inferred   |
+| 0x17c004 | ISYS   | `ipu6-isys.c` unispart IRQ_MASK         | R/W latched.                                                | inferred   |
+| 0x17c008 | ISYS   | `ipu6-isys.c` unispart IRQ_STATUS       | Read: `status & enable`. `status` stays 0 without a backing ISYS frame generator; silicon cycles 0/0x40000000 as real IRQs fire, which compare.py will flag as a legitimate value_mismatch until the ISYS simulator lands. | inferred   |
+| 0x17c00c | ISYS   | `ipu6-isys.c` unispart IRQ_CLEAR        | Write-1-to-clear bits of `status`.                          | inferred   |
+| 0x17c010 | ISYS   | `ipu6-isys.c` unispart IRQ_ENABLE       | R/W latched.                                                | inferred   |
+| 0x17c014 | ISYS   | `ipu6-isys.c` unispart IRQ_LEVEL_NOT_PULSE | R/W latched.                                             | inferred   |
+| 0x17c414 | ISYS   | `ipu6-isys.c` unispart SW_IRQ           | Silicon writes 0 on every access; absorb the write as a no-op. Once a driver path writes non-zero the mux wiring needs modelling. | inferred   |
+| 0x17c418 | ISYS   | `ipu6-isys.c` unispart SW_IRQ_MUX       | R/W latched.                                                | inferred   |
 
 ## M3 progress
 

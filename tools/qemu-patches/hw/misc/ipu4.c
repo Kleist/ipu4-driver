@@ -64,6 +64,35 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define BTRS_FW_RESET_CTL_START    BIT(0)
 #define BTRS_FW_RESET_CTL_DONE     BIT(1)
 
+/* ISYS unispart IRQ block. The driver derives the address as
+ * ISYS_BASE (0x100000) + UNISPART_OFFSET (0x7c000) = 0x17c000 from
+ * BAR0 (kernel/ipu4/ipu4-platform-regs.h:49 + ISYS base), and the
+ * silicon trace confirms it. Same W1C / enable / level-select shape
+ * as the buttress ISR trio:
+ *
+ *   STATUS         read returns `status & enable`
+ *   CLEAR          write-1-to-clear bits of `status`
+ *   EDGE/MASK/ENABLE/LEVEL_NOT_PULSE/SW_IRQ_MUX  latched R/W
+ *   SW_IRQ         trigger register; the driver writes 0 on silicon
+ *                  so the model treats it as a no-op for now.
+ *
+ * `status` stays zero under QEMU because we don't model the ISYS
+ * hardware that normally raises these interrupts (frame generator,
+ * CSI2 port events, …). That's a legitimate value_mismatch under
+ * compare.py — STATUS reads 0 here, silicon cycles 0/0x40000000 as
+ * real IRQs fire — but it's intrinsic to the lack of a backing
+ * device, not a handler bug.
+ */
+#define IS_UNISPART_BASE                 0x17c000
+#define IS_UNISPART_IRQ_EDGE             (IS_UNISPART_BASE + 0x000)
+#define IS_UNISPART_IRQ_MASK             (IS_UNISPART_BASE + 0x004)
+#define IS_UNISPART_IRQ_STATUS           (IS_UNISPART_BASE + 0x008)
+#define IS_UNISPART_IRQ_CLEAR            (IS_UNISPART_BASE + 0x00c)
+#define IS_UNISPART_IRQ_ENABLE           (IS_UNISPART_BASE + 0x010)
+#define IS_UNISPART_IRQ_LEVEL_NOT_PULSE  (IS_UNISPART_BASE + 0x014)
+#define IS_UNISPART_SW_IRQ               (IS_UNISPART_BASE + 0x414)
+#define IS_UNISPART_SW_IRQ_MUX           (IS_UNISPART_BASE + 0x418)
+
 /* PWR_STATE target values the driver polls for. IPU4 uses:
  *   - bits 13:12  HH (TSC-sync) status: DONE = 2
  *   - bits 23:20  IS (ISYS) power FSM: IS_RDY = 0xa
@@ -93,6 +122,14 @@ struct Ipu4State {
     uint32_t iu2cse_csr;
     uint32_t cse2iu_csr;
     uint32_t cse2iu_data0;
+
+    /* ISYS unispart IRQ block. */
+    uint32_t is_unispart_irq_edge;
+    uint32_t is_unispart_irq_mask;
+    uint32_t is_unispart_irq_status;
+    uint32_t is_unispart_irq_enable;
+    uint32_t is_unispart_irq_level_not_pulse;
+    uint32_t is_unispart_sw_irq_mux;
 };
 
 static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
@@ -153,6 +190,24 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
         val = (addr == BTRS_REG_TSC_HI) ? (tsc >> 32) : (uint32_t)tsc;
         break;
     }
+    case IS_UNISPART_IRQ_EDGE:
+        val = s->is_unispart_irq_edge;
+        break;
+    case IS_UNISPART_IRQ_MASK:
+        val = s->is_unispart_irq_mask;
+        break;
+    case IS_UNISPART_IRQ_STATUS:
+        val = s->is_unispart_irq_status & s->is_unispart_irq_enable;
+        break;
+    case IS_UNISPART_IRQ_ENABLE:
+        val = s->is_unispart_irq_enable;
+        break;
+    case IS_UNISPART_IRQ_LEVEL_NOT_PULSE:
+        val = s->is_unispart_irq_level_not_pulse;
+        break;
+    case IS_UNISPART_SW_IRQ_MUX:
+        val = s->is_unispart_sw_irq_mux;
+        break;
     default:
         qemu_log_mask(LOG_UNIMP,
                       "ipu4: read unimpl +0x%06" HWADDR_PRIx " size=%u\n",
@@ -229,6 +284,32 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
         /* IPC receive side: the driver acks by writing here; clear state. */
         s->cse2iu_csr = 0;
         break;
+    case IS_UNISPART_IRQ_EDGE:
+        s->is_unispart_irq_edge = val;
+        break;
+    case IS_UNISPART_IRQ_MASK:
+        s->is_unispart_irq_mask = val;
+        break;
+    case IS_UNISPART_IRQ_CLEAR:
+        /* Write-1-to-clear. */
+        s->is_unispart_irq_status &= ~(uint32_t)val;
+        break;
+    case IS_UNISPART_IRQ_ENABLE:
+        s->is_unispart_irq_enable = val;
+        break;
+    case IS_UNISPART_IRQ_LEVEL_NOT_PULSE:
+        s->is_unispart_irq_level_not_pulse = val;
+        break;
+    case IS_UNISPART_SW_IRQ:
+        /* Silicon writes 0 here on every path (51 accesses, all 0x0).
+         * On real hardware this is presumably a trigger that raises
+         * the bits in SW_IRQ_MUX into IRQ_STATUS, but with value 0
+         * nothing changes. Absorb the write without modelling the
+         * mux routing until a driver path actually sets bits here. */
+        break;
+    case IS_UNISPART_SW_IRQ_MUX:
+        s->is_unispart_sw_irq_mux = val;
+        break;
     default:
         qemu_log_mask(LOG_UNIMP,
                       "ipu4: write unimpl +0x%06" HWADDR_PRIx
@@ -294,11 +375,17 @@ static void ipu4_reset(DeviceState *dev)
     s->iu2cse_csr = 0;
     s->cse2iu_csr = 0;
     s->cse2iu_data0 = 0;
+    s->is_unispart_irq_edge = 0;
+    s->is_unispart_irq_mask = 0;
+    s->is_unispart_irq_status = 0;
+    s->is_unispart_irq_enable = 0;
+    s->is_unispart_irq_level_not_pulse = 0;
+    s->is_unispart_sw_irq_mux = 0;
 }
 
 static const VMStateDescription vmstate_ipu4 = {
     .name = "ipu4",
-    .version_id = 2,
+    .version_id = 3,
     .minimum_version_id = 1,
     .fields = (const VMStateField[]) {
         VMSTATE_PCI_DEVICE(parent_obj, Ipu4State),
@@ -317,6 +404,12 @@ static const VMStateDescription vmstate_ipu4 = {
         VMSTATE_UINT32_V(is_freq_ctl, Ipu4State, 2),
         VMSTATE_UINT32_V(ps_freq_ctl, Ipu4State, 2),
         VMSTATE_UINT32_V(fabric_cmd, Ipu4State, 2),
+        VMSTATE_UINT32_V(is_unispart_irq_edge, Ipu4State, 3),
+        VMSTATE_UINT32_V(is_unispart_irq_mask, Ipu4State, 3),
+        VMSTATE_UINT32_V(is_unispart_irq_status, Ipu4State, 3),
+        VMSTATE_UINT32_V(is_unispart_irq_enable, Ipu4State, 3),
+        VMSTATE_UINT32_V(is_unispart_irq_level_not_pulse, Ipu4State, 3),
+        VMSTATE_UINT32_V(is_unispart_sw_irq_mux, Ipu4State, 3),
         VMSTATE_END_OF_LIST()
     }
 };
