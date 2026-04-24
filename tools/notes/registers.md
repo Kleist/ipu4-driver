@@ -21,10 +21,13 @@ Columns:
 | 0x008  | Buttress | `ipu6-buttress.c` WDT kick              | Write: ignored. Read: 0.                                    | inferred   |
 | 0x00c  | Buttress | `ipu6-buttress.c` BTRS_CTRL             | R/W latched; value replayed on read.                        | inferred   |
 | 0x030  | Buttress | `ipu6-buttress.c` FW_RESET_CTL          | Write START → read DONE on next read (no timer).            | inferred   |
+| 0x034  | Buttress | `ipu6-buttress.c` IS_FREQ_CTL           | Write latched. Driver writes divisor + ICCMAX-level bit; no readback in trace. | inferred   |
+| 0x038  | Buttress | `ipu6-buttress.c` PS_FREQ_CTL           | Write latched. Same shape as IS_FREQ_CTL, distinct register. | inferred   |
 | 0x05c  | Buttress | `ipu6-buttress.c` PWR_STATE poll        | Read returns `0x0fa02003` (HH_DONE[13:12]=2, IS_RDY[23:20]=0xa, PS_PWR_UP[28:24]=0xf, PWR_RDY[1:0]=3). Power-DOWN poll logs cosmetic timeout. | inferred   |
 | 0x078  | Buttress | `ipu6-buttress.c` FW_SOURCE_BASE_LO     | R/W latched.                                                | inferred   |
 | 0x07c  | Buttress | `ipu6-buttress.c` FW_SOURCE_BASE_HI     | R/W latched.                                                | inferred   |
 | 0x080  | Buttress | `ipu6-buttress.c` FW_SOURCE_SIZE        | R/W latched.                                                | inferred   |
+| 0x088  | Buttress | `ipu6-buttress.c` FABRIC_CMD            | Write latched. data/trace.txt shows a single 0x1 write during init; no readback. | inferred   |
 | 0x090  | Buttress | `ipu6-buttress.c` ISR_STATUS            | Read: `status & enable`.                                    | inferred   |
 | 0x094  | Buttress | `ipu6-buttress.c` ISR_ENABLED_STATUS    | Read: `status & enable`.                                    | inferred   |
 | 0x098  | Buttress | `ipu6-buttress.c` ISR_ENABLE            | R/W latched.                                                | inferred   |
@@ -32,6 +35,8 @@ Columns:
 | 0x100  | CSE IPC  | `ipu6-buttress.c` IU2CSEDB0             | Write: ignored for now. Starts IPC reset handshake.         | guess      |
 | 0x104  | CSE IPC  | `ipu6-buttress.c` IU2CSEDATA0           | Write: ignored.                                             | guess      |
 | 0x108  | CSE IPC  | `ipu6-buttress.c` IU2CSECSR             | Write: echo to `cse2iu_csr` so receive-side poll passes.    | guess      |
+| 0x164  | Buttress | `ipu6-buttress.c` TSC_LO                | Read returns low 32 bits of `qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL)`. Re-sampled per read; the driver's HI/LO/HI rollover-retry stays cold because HI only flips every ~4.3s. | inferred   |
+| 0x168  | Buttress | `ipu6-buttress.c` TSC_HI                | Read returns high 32 bits of the same clock. Silicon shows 0x4 throughout the trace (host uptime when captured); ours starts at 0 since QEMU_CLOCK_VIRTUAL counts guest time. | inferred   |
 | 0x300  | Buttress | `ipu6-buttress.c` SECURITY_CTL          | R/W latched.                                                | inferred   |
 | 0x304  | CSE IPC  | `ipu6-buttress.c` CSE2IUDB0             | Read: 0.                                                    | guess      |
 | 0x308  | CSE IPC  | `ipu6-buttress.c` CSE2IUDATA0           | Read: 0.                                                    | guess      |
