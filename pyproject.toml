@@ -1,0 +1,27 @@
+# Config for pytest + coverage.py. This file is the only pyproject.toml in
+# the repo and is deliberately minimal: no build system, no packaging
+# metadata. The driver is a kernel module built via Make; this file only
+# configures how ./tools/tests/pytest.sh invokes pytest for the internal
+# Python tools (postprocess_trace.py, tools/trace/compare.py).
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.coverage.run]
+branch = true
+source = [
+    "postprocess_trace",
+    # tools/trace/compare.py added in the Step 2 commit once the module
+    # exists; keep the source list accurate so --cov-fail-under=90 is a
+    # meaningful gate rather than a denominator fudge.
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]

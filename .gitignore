@@ -1,4 +1,10 @@
 tools/trace/__pycache__/
+__pycache__/
+tests/__pycache__/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 # Forked upstream trees and ephemeral build / test artifacts.
 # These are populated by tools/bootstrap.sh and tools/tests/*.sh but never
 # committed: the forked repos live behind their own URLs (see
