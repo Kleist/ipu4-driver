@@ -32,9 +32,14 @@ fail() {
 	exit 1
 }
 
-IPU4_INIT=mmiotrace "$ROOT/tools/rootfs/build.sh" >/dev/null
+IPU4_INIT=streamon-mmiotrace "$ROOT/tools/rootfs/build.sh" >/dev/null
 
-TIMEOUT="${IPU4_MMIOTRACE_TIMEOUT:-180}"
+# 300s because the init now runs the full streamon walk after the
+# tracer is armed; the probe-only variant used to fit in 180s. If
+# streamon hangs mid-ioctl we still want to time out while there's
+# headroom for the guest to dump whatever the tracer captured up to
+# that point.
+TIMEOUT="${IPU4_MMIOTRACE_TIMEOUT:-300}"
 
 # IPU4_TESTS_SHARE aims run-vm.sh's 9p share at $OUT so the guest's
 # /mnt/tests/qemu.trace writes land exactly where we look for them.
