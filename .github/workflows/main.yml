@@ -38,18 +38,8 @@ jobs:
       - name: KUnit
         run: ./tools/tests/kunit.sh
 
-      - name: MMIO trace coverage report
-        # Always run so each push to main/master ships the current
-        # silicon-vs-QEMU divergence report as an artifact. Exit code
-        # is intentionally swallowed: divergence is expected today and
-        # is what the report is for.
-        if: always()
-        run: ./tools/tests/compare-mmio.sh || true
-
-      - name: Upload MMIO trace coverage report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mmio-trace-coverage
-          path: tools/tests/out/compare-mmio/
-          if-no-files-found: ignore
+      # MMIO trace coverage is produced by the vm-smoke workflow,
+      # which has the full QEMU+kernel build chain. Running
+      # compare-mmio.sh here would just fail for lack of a qemu.trace
+      # — the silicon-only fallback was removed deliberately so the
+      # pipeline must emit a real diff or error loudly.

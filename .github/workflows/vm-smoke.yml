@@ -93,6 +93,34 @@ jobs:
         env:
           IPU4_ACCEL: tcg
 
+      - name: Capture QEMU MMIO trace
+        # Strict: a capture regression blocks merge. This is the QEMU
+        # side that makes the coverage report's value-mismatch
+        # classification meaningful (without it, only the
+        # silicon-only unimplemented list can fire).
+        run: ./tools/tests/mmiotrace.sh
+        env:
+          IPU4_ACCEL: tcg
+
+      - name: Full MMIO trace coverage report (silicon vs QEMU)
+        # Always run so the diff is published even when the capture
+        # above failed. compare-mmio.sh distinguishes harness faults
+        # (missing inputs / empty outputs → exit 1, blocks merge)
+        # from divergence-only (expected until the model catches up
+        # → exit 0, report still produced as the artifact).
+        if: always()
+        run: ./tools/tests/compare-mmio.sh
+
+      - name: Upload MMIO trace coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmio-trace-coverage-vm-smoke-${{ github.run_id }}
+          path: |
+            tools/tests/out/compare-mmio/
+            tools/tests/out/mmiotrace/
+          if-no-files-found: ignore
+
       - name: Build coverage report from streamon-smoke gcov harvest
         run: ./tools/coverage/collect.sh
 
