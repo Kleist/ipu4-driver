@@ -93,6 +93,58 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define IS_UNISPART_SW_IRQ               (IS_UNISPART_BASE + 0x414)
 #define IS_UNISPART_SW_IRQ_MUX           (IS_UNISPART_BASE + 0x418)
 
+/* CSI2 port 0. Bases for ports 1..5 are in
+ * kernel/ipu4/ipu4-platform-isys-csi2-reg.h:13-15 (0x65000, 0x66000,
+ * 0x67000, 0x6C000, 0x6C800 — note ports 4/5 live at their own offsets).
+ * Silicon touches only port 0 in data/trace.txt; we model it explicitly
+ * and leave the other ports unimplemented until a trace covers them.
+ * Per-port register offsets (from
+ * kernel/ipu4/ipu4-platform-isys-csi2-reg.h:19-56):
+ *
+ *   0x000  CSI_RX_ENABLE             R/W latched, bit 0 = enable.
+ *   0x004  CSI_RX_NOF_ENABLED_LANES  R/W latched.
+ *   0x008  CSI_RX_CONFIG             R/W latched; driver reads back.
+ *   0x02c/0x030         DLY_CNT_{TERMEN,SETTLE}_CLANE   R/W latched.
+ *   0x034/0x038         DLY_CNT_{TERMEN,SETTLE}_DLANE(0) R/W latched.
+ *   0x400-0x414  CSI2PART IRQ trio (same W1C shape as unispart).
+ *   0x500-0x514  CSI RX IRQ trio.
+ *   0x600-0x614  S2M IRQ trio.
+ *
+ * Same caveat as the unispart IRQ: `status` stays 0 because nothing
+ * in the model raises CSI2 interrupts. That's a backing-device gap,
+ * not a handler bug — compare.py will flag the corresponding STATUS
+ * reads as value_mismatch until frame generation lands.
+ */
+#define CSI2P0_BASE                      0x64000
+#define CSI2P0_RX_ENABLE                 (CSI2P0_BASE + 0x000)
+#define CSI2P0_RX_NOF_LANES              (CSI2P0_BASE + 0x004)
+#define CSI2P0_RX_CONFIG                 (CSI2P0_BASE + 0x008)
+#define CSI2P0_DLY_TERMEN_C              (CSI2P0_BASE + 0x02c)
+#define CSI2P0_DLY_SETTLE_C              (CSI2P0_BASE + 0x030)
+#define CSI2P0_DLY_TERMEN_D0             (CSI2P0_BASE + 0x034)
+#define CSI2P0_DLY_SETTLE_D0             (CSI2P0_BASE + 0x038)
+
+#define CSI2P0_PART_IRQ_EDGE             (CSI2P0_BASE + 0x400)
+#define CSI2P0_PART_IRQ_MASK             (CSI2P0_BASE + 0x404)
+#define CSI2P0_PART_IRQ_STATUS           (CSI2P0_BASE + 0x408)
+#define CSI2P0_PART_IRQ_CLEAR            (CSI2P0_BASE + 0x40c)
+#define CSI2P0_PART_IRQ_ENABLE           (CSI2P0_BASE + 0x410)
+#define CSI2P0_PART_IRQ_LEVEL_NOT_PULSE  (CSI2P0_BASE + 0x414)
+
+#define CSI2P0_RX_IRQ_EDGE               (CSI2P0_BASE + 0x500)
+#define CSI2P0_RX_IRQ_MASK               (CSI2P0_BASE + 0x504)
+#define CSI2P0_RX_IRQ_STATUS             (CSI2P0_BASE + 0x508)
+#define CSI2P0_RX_IRQ_CLEAR              (CSI2P0_BASE + 0x50c)
+#define CSI2P0_RX_IRQ_ENABLE             (CSI2P0_BASE + 0x510)
+#define CSI2P0_RX_IRQ_LEVEL_NOT_PULSE    (CSI2P0_BASE + 0x514)
+
+#define CSI2P0_S2M_IRQ_EDGE              (CSI2P0_BASE + 0x600)
+#define CSI2P0_S2M_IRQ_MASK              (CSI2P0_BASE + 0x604)
+#define CSI2P0_S2M_IRQ_STATUS            (CSI2P0_BASE + 0x608)
+#define CSI2P0_S2M_IRQ_CLEAR             (CSI2P0_BASE + 0x60c)
+#define CSI2P0_S2M_IRQ_ENABLE            (CSI2P0_BASE + 0x610)
+#define CSI2P0_S2M_IRQ_LEVEL_NOT_PULSE   (CSI2P0_BASE + 0x614)
+
 /* PWR_STATE target values the driver polls for. IPU4 uses:
  *   - bits 13:12  HH (TSC-sync) status: DONE = 2
  *   - bits 23:20  IS (ISYS) power FSM: IS_RDY = 0xa
@@ -130,6 +182,21 @@ struct Ipu4State {
     uint32_t is_unispart_irq_enable;
     uint32_t is_unispart_irq_level_not_pulse;
     uint32_t is_unispart_sw_irq_mux;
+
+    /* CSI2 port 0. */
+    uint32_t csi2p0_rx_enable;
+    uint32_t csi2p0_rx_nof_lanes;
+    uint32_t csi2p0_rx_config;
+    uint32_t csi2p0_dly_termen_c;
+    uint32_t csi2p0_dly_settle_c;
+    uint32_t csi2p0_dly_termen_d0;
+    uint32_t csi2p0_dly_settle_d0;
+    uint32_t csi2p0_part_edge, csi2p0_part_mask, csi2p0_part_status;
+    uint32_t csi2p0_part_enable, csi2p0_part_level;
+    uint32_t csi2p0_rx_edge, csi2p0_rx_mask, csi2p0_rx_status;
+    uint32_t csi2p0_rx_enable_irq, csi2p0_rx_level;
+    uint32_t csi2p0_s2m_edge, csi2p0_s2m_mask, csi2p0_s2m_status;
+    uint32_t csi2p0_s2m_enable, csi2p0_s2m_level;
 };
 
 static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
@@ -208,6 +275,39 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
     case IS_UNISPART_SW_IRQ_MUX:
         val = s->is_unispart_sw_irq_mux;
         break;
+
+    case CSI2P0_RX_ENABLE:        val = s->csi2p0_rx_enable; break;
+    case CSI2P0_RX_NOF_LANES:     val = s->csi2p0_rx_nof_lanes; break;
+    case CSI2P0_RX_CONFIG:        val = s->csi2p0_rx_config; break;
+    case CSI2P0_DLY_TERMEN_C:     val = s->csi2p0_dly_termen_c; break;
+    case CSI2P0_DLY_SETTLE_C:     val = s->csi2p0_dly_settle_c; break;
+    case CSI2P0_DLY_TERMEN_D0:    val = s->csi2p0_dly_termen_d0; break;
+    case CSI2P0_DLY_SETTLE_D0:    val = s->csi2p0_dly_settle_d0; break;
+
+    case CSI2P0_PART_IRQ_EDGE:    val = s->csi2p0_part_edge; break;
+    case CSI2P0_PART_IRQ_MASK:    val = s->csi2p0_part_mask; break;
+    case CSI2P0_PART_IRQ_STATUS:
+        val = s->csi2p0_part_status & s->csi2p0_part_enable;
+        break;
+    case CSI2P0_PART_IRQ_ENABLE:  val = s->csi2p0_part_enable; break;
+    case CSI2P0_PART_IRQ_LEVEL_NOT_PULSE: val = s->csi2p0_part_level; break;
+
+    case CSI2P0_RX_IRQ_EDGE:      val = s->csi2p0_rx_edge; break;
+    case CSI2P0_RX_IRQ_MASK:      val = s->csi2p0_rx_mask; break;
+    case CSI2P0_RX_IRQ_STATUS:
+        val = s->csi2p0_rx_status & s->csi2p0_rx_enable_irq;
+        break;
+    case CSI2P0_RX_IRQ_ENABLE:    val = s->csi2p0_rx_enable_irq; break;
+    case CSI2P0_RX_IRQ_LEVEL_NOT_PULSE: val = s->csi2p0_rx_level; break;
+
+    case CSI2P0_S2M_IRQ_EDGE:     val = s->csi2p0_s2m_edge; break;
+    case CSI2P0_S2M_IRQ_MASK:     val = s->csi2p0_s2m_mask; break;
+    case CSI2P0_S2M_IRQ_STATUS:
+        val = s->csi2p0_s2m_status & s->csi2p0_s2m_enable;
+        break;
+    case CSI2P0_S2M_IRQ_ENABLE:   val = s->csi2p0_s2m_enable; break;
+    case CSI2P0_S2M_IRQ_LEVEL_NOT_PULSE: val = s->csi2p0_s2m_level; break;
+
     default:
         qemu_log_mask(LOG_UNIMP,
                       "ipu4: read unimpl +0x%06" HWADDR_PRIx " size=%u\n",
@@ -310,6 +410,39 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
     case IS_UNISPART_SW_IRQ_MUX:
         s->is_unispart_sw_irq_mux = val;
         break;
+
+    case CSI2P0_RX_ENABLE:        s->csi2p0_rx_enable = val; break;
+    case CSI2P0_RX_NOF_LANES:     s->csi2p0_rx_nof_lanes = val; break;
+    case CSI2P0_RX_CONFIG:        s->csi2p0_rx_config = val; break;
+    case CSI2P0_DLY_TERMEN_C:     s->csi2p0_dly_termen_c = val; break;
+    case CSI2P0_DLY_SETTLE_C:     s->csi2p0_dly_settle_c = val; break;
+    case CSI2P0_DLY_TERMEN_D0:    s->csi2p0_dly_termen_d0 = val; break;
+    case CSI2P0_DLY_SETTLE_D0:    s->csi2p0_dly_settle_d0 = val; break;
+
+    case CSI2P0_PART_IRQ_EDGE:    s->csi2p0_part_edge = val; break;
+    case CSI2P0_PART_IRQ_MASK:    s->csi2p0_part_mask = val; break;
+    case CSI2P0_PART_IRQ_CLEAR:
+        s->csi2p0_part_status &= ~(uint32_t)val;
+        break;
+    case CSI2P0_PART_IRQ_ENABLE:  s->csi2p0_part_enable = val; break;
+    case CSI2P0_PART_IRQ_LEVEL_NOT_PULSE: s->csi2p0_part_level = val; break;
+
+    case CSI2P0_RX_IRQ_EDGE:      s->csi2p0_rx_edge = val; break;
+    case CSI2P0_RX_IRQ_MASK:      s->csi2p0_rx_mask = val; break;
+    case CSI2P0_RX_IRQ_CLEAR:
+        s->csi2p0_rx_status &= ~(uint32_t)val;
+        break;
+    case CSI2P0_RX_IRQ_ENABLE:    s->csi2p0_rx_enable_irq = val; break;
+    case CSI2P0_RX_IRQ_LEVEL_NOT_PULSE: s->csi2p0_rx_level = val; break;
+
+    case CSI2P0_S2M_IRQ_EDGE:     s->csi2p0_s2m_edge = val; break;
+    case CSI2P0_S2M_IRQ_MASK:     s->csi2p0_s2m_mask = val; break;
+    case CSI2P0_S2M_IRQ_CLEAR:
+        s->csi2p0_s2m_status &= ~(uint32_t)val;
+        break;
+    case CSI2P0_S2M_IRQ_ENABLE:   s->csi2p0_s2m_enable = val; break;
+    case CSI2P0_S2M_IRQ_LEVEL_NOT_PULSE: s->csi2p0_s2m_level = val; break;
+
     default:
         qemu_log_mask(LOG_UNIMP,
                       "ipu4: write unimpl +0x%06" HWADDR_PRIx
@@ -381,11 +514,24 @@ static void ipu4_reset(DeviceState *dev)
     s->is_unispart_irq_enable = 0;
     s->is_unispart_irq_level_not_pulse = 0;
     s->is_unispart_sw_irq_mux = 0;
+    s->csi2p0_rx_enable = 0;
+    s->csi2p0_rx_nof_lanes = 0;
+    s->csi2p0_rx_config = 0;
+    s->csi2p0_dly_termen_c = 0;
+    s->csi2p0_dly_settle_c = 0;
+    s->csi2p0_dly_termen_d0 = 0;
+    s->csi2p0_dly_settle_d0 = 0;
+    s->csi2p0_part_edge = s->csi2p0_part_mask = s->csi2p0_part_status = 0;
+    s->csi2p0_part_enable = s->csi2p0_part_level = 0;
+    s->csi2p0_rx_edge = s->csi2p0_rx_mask = s->csi2p0_rx_status = 0;
+    s->csi2p0_rx_enable_irq = s->csi2p0_rx_level = 0;
+    s->csi2p0_s2m_edge = s->csi2p0_s2m_mask = s->csi2p0_s2m_status = 0;
+    s->csi2p0_s2m_enable = s->csi2p0_s2m_level = 0;
 }
 
 static const VMStateDescription vmstate_ipu4 = {
     .name = "ipu4",
-    .version_id = 3,
+    .version_id = 4,
     .minimum_version_id = 1,
     .fields = (const VMStateField[]) {
         VMSTATE_PCI_DEVICE(parent_obj, Ipu4State),
@@ -410,6 +556,28 @@ static const VMStateDescription vmstate_ipu4 = {
         VMSTATE_UINT32_V(is_unispart_irq_enable, Ipu4State, 3),
         VMSTATE_UINT32_V(is_unispart_irq_level_not_pulse, Ipu4State, 3),
         VMSTATE_UINT32_V(is_unispart_sw_irq_mux, Ipu4State, 3),
+        VMSTATE_UINT32_V(csi2p0_rx_enable, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_rx_nof_lanes, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_rx_config, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_dly_termen_c, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_dly_settle_c, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_dly_termen_d0, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_dly_settle_d0, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_part_edge, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_part_mask, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_part_status, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_part_enable, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_part_level, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_rx_edge, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_rx_mask, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_rx_status, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_rx_enable_irq, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_rx_level, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_s2m_edge, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_s2m_mask, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_s2m_status, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_s2m_enable, Ipu4State, 4),
+        VMSTATE_UINT32_V(csi2p0_s2m_level, Ipu4State, 4),
         VMSTATE_END_OF_LIST()
     }
 };
