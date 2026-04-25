@@ -66,15 +66,15 @@ fi
 
 # Default tracks the firmware-responder rollout (see plan in
 # /root/.claude/plans/data-trace-txt-is-an-mmiotrace-tranquil-babbage.md).
-# Step 2 routes STREAMON through the regular firmware path
-# (start_streaming_virt and buf_queue_virt are gone), so DQBUF can no
-# longer rely on the synchronous pattern fill — frame delivery via
-# PIN_DATA_READY lands in Step 4 and re-tightens this back to
-# STREAM:pattern_ok. Until then STREAM:streamon is the right gate:
-# it confirms STREAM_OPEN_DONE + STREAM_START_AND_CAPTURE_ACK are
-# delivered and v4l2_subdev_enable_streams() runs CSI2 set_stream(),
-# which is what the mmiotrace coverage report wants exercised.
-REQUIRED="${IPU4_STREAM_REQUIRED:-STREAM:streamon}"
+# Step 4 wires up PIN_DATA_READY frame delivery, so DQBUF returns the
+# first qbuf'd buffer with the same deterministic byte[k] = (k + seq)
+# pattern that pre-Step-2 buf_queue_virt() used to fill — written this
+# time by the QEMU device model via DMA. STREAM:pattern_ok is the
+# strictest gate: it asserts that the firmware path opened the
+# stream, kicked CSI2 set_stream(), DMA-wrote a frame, signalled
+# PIN_DATA_READY, the driver matched it to the qbuf'd buffer, and
+# the userspace pattern probes verified.
+REQUIRED="${IPU4_STREAM_REQUIRED:-STREAM:pattern_ok}"
 case "$reached" in
 "")
 	echo "streamon-smoke: FAIL (no STREAM marker)" >&2

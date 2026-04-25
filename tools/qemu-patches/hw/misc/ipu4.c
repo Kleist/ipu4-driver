@@ -315,6 +315,8 @@ enum {
     IPU4_FW_RESP_STREAM_STOP_ACK               = 4,
     IPU4_FW_RESP_STREAM_FLUSH_ACK              = 5,
     IPU4_FW_RESP_STREAM_CLOSE_ACK              = 6,
+    IPU4_FW_RESP_STREAM_PIN_DATA_READY         = 7,
+    IPU4_FW_RESP_FRAME_SOF                     = 9,
 };
 
 /* IPU6 FW response struct sizes — verified against the IPU4 (non-IPU6)
@@ -568,6 +570,59 @@ static bool ipu4_dma_write_iova(Ipu4State *s, uint32_t iova, const void *buf,
     return pci_dma_write(&s->parent_obj, phys, buf, len) == MEMTX_OK;
 }
 
+/* Step-4 deterministic frame pattern: write `total` bytes starting at
+ * `base_iova`, where byte[k] = (k + seq) & 0xff. The IOVA range may
+ * span many 4K pages backed by physically discontiguous host pages
+ * (vb2_dma_sg memops in kernel/ipu4/ipu6-isys-queue.c:1029), so walk
+ * page-by-page and translate each IOVA chunk through the IPU MMU.
+ *
+ * `total` is bounded by `IPU4_FRAME_PATTERN_BYTES` rather than the
+ * full vb2 buffer size because we don't have the buffer length in
+ * the STREAM_CAPTURE token (only out_buf_id + addr). The Step-4
+ * test (tools/tests/streamon.c) only verifies offsets up to 65535
+ * so 64 KB is sufficient. Walking until the IPU MMU walk fails
+ * would be slightly more general but risks writing past the end of
+ * a smaller buffer — bounded chunk is conservative.
+ */
+#define IPU4_FRAME_PATTERN_BYTES (64 * 1024)
+#define IPU4_PAGE_SIZE_BYTES     4096
+
+static void ipu4_dma_write_iova_pattern(Ipu4State *s, uint32_t base_iova,
+                                        size_t total, uint8_t seq)
+{
+    uint8_t buf[IPU4_PAGE_SIZE_BYTES];
+    size_t off = 0;
+
+    while (off < total) {
+        uint32_t iova = base_iova + (uint32_t)off;
+        uint32_t page_off = iova & (IPU4_PAGE_SIZE_BYTES - 1);
+        size_t chunk = MIN(total - off,
+                           IPU4_PAGE_SIZE_BYTES - (size_t)page_off);
+        hwaddr phys;
+        size_t i;
+
+        if (!ipu4_iova_to_phys(s, iova, &phys)) {
+            qemu_log_mask(LOG_UNIMP,
+                          "ipu4: frame-pattern write stopped at "
+                          "off=%zu (iova=0x%x): page unmapped — "
+                          "buffer ends or IPU MMU not programmed\n",
+                          off, iova);
+            return;
+        }
+        for (i = 0; i < chunk; i++) {
+            buf[i] = (uint8_t)((off + i + seq) & 0xff);
+        }
+        if (pci_dma_write(&s->parent_obj, phys, buf, chunk) != MEMTX_OK) {
+            qemu_log_mask(LOG_UNIMP,
+                          "ipu4: pci_dma_write failed at "
+                          "iova=0x%x phys=0x%" HWADDR_PRIx "\n",
+                          iova, phys);
+            return;
+        }
+        off += chunk;
+    }
+}
+
 /* Read the `i`-th queue descriptor from the IOVA-addressed queue array
  * pointed to by `array_iova`. */
 static bool ipu4_load_queue_desc(Ipu4State *s, uint32_t array_iova,
@@ -634,37 +689,30 @@ static Ipu4FwSysQueue *ipu4_get_recv_queue(Ipu4State *s)
     return &s->is_recv_q;
 }
 
-/* Post a response token on the msg-recv queue and raise the IS-side
- * MSI so the driver's ISR drains it. The response is DMA-written into
- * the recv-queue's host backing (translated through the IPU MMU), the
+/* Post a pre-filled response token on the msg-recv queue and raise
+ * the IS-side MSI so the driver's ISR drains it. Caller fills `resp`
+ * before calling — at minimum `type` and `stream_handle`; pin and
+ * timestamp fields stay zeroed for the simple ack types and get
+ * populated for PIN_DATA_READY. The response is DMA-written into the
+ * recv-queue's host backing (translated through the IPU MMU), the
  * recv WR cursor in DMEM is bumped, and both buttress + unispart IRQ
  * status bits are set so `ipu6_buttress_isr` → `ipu4_isys_isr` →
  * `isys_isr_one` traverses the same path silicon would.
  */
-static void ipu4_post_response(Ipu4State *s, uint8_t resp_type,
-                               uint8_t stream_handle)
+static void ipu4_post_response_full(Ipu4State *s,
+                                    const Ipu4FwIsysRespInfo *resp)
 {
     Ipu4FwSysQueue *rq = ipu4_get_recv_queue(s);
-    Ipu4FwIsysRespInfo resp = { 0 };
     uint32_t *recv_wr_slot;
     uint32_t wr;
 
-    if (!rq || rq->size == 0 || rq->token_size < sizeof(resp)) {
+    if (!rq || rq->size == 0 || rq->token_size < sizeof(*resp)) {
         qemu_log_mask(LOG_UNIMP,
                       "ipu4: cannot post FW response type=%u stream=%u "
                       "(recv queue not loaded or token_size too small)\n",
-                      resp_type, stream_handle);
+                      resp->type, resp->stream_handle);
         return;
     }
-
-    resp.type = resp_type;
-    resp.stream_handle = stream_handle;
-    /* buf_handle = 0 makes the driver's ipu6_put_fw_msg_buf a no-op
-     * (kernel/ipu4/ipu6-isys.c:1185-1192). Step 4 will populate it
-     * with the original send-token's buf_handle once we DMA-read the
-     * token to learn it; until then a small fw-msg-buf leak per
-     * STREAMON is acceptable for the smoke harness. */
-    resp.buf_handle = 0;
 
     /* Locate the slot the recv-side wr cursor points at. The driver
      * caches the wr/rd cursors in DMEM at q->wr_reg*4 / q->rd_reg*4.
@@ -686,7 +734,7 @@ static void ipu4_post_response(Ipu4State *s, uint8_t resp_type,
      * better that than corrupting an unrelated guest page. */
     if (!ipu4_dma_write_iova(s,
                              rq->vied_address + wr * rq->token_size,
-                             &resp, sizeof(resp))) {
+                             resp, sizeof(*resp))) {
         qemu_log_mask(LOG_UNIMP,
                       "ipu4: failed to DMA response to recv slot wr=%u "
                       "iova=0x%x — IPU MMU mapping missing?\n",
@@ -709,6 +757,101 @@ static void ipu4_post_response(Ipu4State *s, uint8_t resp_type,
 
     if (msi_enabled(&s->parent_obj)) {
         msi_notify(&s->parent_obj, 0);
+    }
+}
+
+/* Wrapper for simple ack types (OPEN_DONE, START_*_ACK, FLUSH_ACK,
+ * CLOSE_ACK) that only need the type and stream_handle filled.
+ * buf_handle stays 0 — the driver's ipu6_put_fw_msg_buf is a no-op
+ * for buf_handle == 0 (kernel/ipu4/ipu6-isys.c:1185-1192).
+ */
+static void ipu4_post_response(Ipu4State *s, uint8_t resp_type,
+                               uint8_t stream_handle)
+{
+    Ipu4FwIsysRespInfo resp = {
+        .type = resp_type,
+        .stream_handle = stream_handle,
+    };
+    ipu4_post_response_full(s, &resp);
+}
+
+/* Step-4: synthesise a PIN_DATA_READY response that the driver's
+ * ipu6_isys_queue_buf_ready() (kernel/ipu4/ipu6-isys-queue.c:935)
+ * matches against the buffer's IPU IOVA via `info->pin.addr`.
+ * timestamp[] = 0 so get_sof_sequence_by_timestamp() falls into the
+ * `time == 0` branch and returns `atomic_read(stream->sequence) - 1`,
+ * which equals 0 after our preceding FRAME_SOF response increments
+ * stream->sequence from 0 to 1 — that's the value the streamon-smoke
+ * pattern check (k + seq) was written for.
+ */
+static void ipu4_post_pin_data_ready(Ipu4State *s, uint8_t stream_handle,
+                                     uint8_t pin_id, uint32_t pin_addr,
+                                     uint64_t pin_buf_id)
+{
+    Ipu4FwIsysRespInfo resp = {
+        .type = IPU4_FW_RESP_STREAM_PIN_DATA_READY,
+        .stream_handle = stream_handle,
+        .pin_id = pin_id,
+        .pin = {
+            .out_buf_id = pin_buf_id,
+            .addr = pin_addr,
+        },
+    };
+    ipu4_post_response_full(s, &resp);
+}
+
+/* Step-4: deliver a frame for every non-zero output pin in the
+ * `frame_buff_set` payload that the driver attached to a
+ * STREAM_START_AND_CAPTURE / STREAM_CAPTURE token. For each pin we
+ * (a) DMA-write IPU4_FRAME_PATTERN_BYTES of the deterministic pattern
+ *     `byte[k] = (k + seq) & 0xff` (seq=0 — see ipu4_post_pin_data_ready)
+ *     into the IOVA-mapped buffer at output_pins[i].addr,
+ * (b) post a FRAME_SOF response to bump stream->sequence (so
+ *     get_sof_sequence_by_timestamp() returns 0 for the first frame),
+ * (c) post a PIN_DATA_READY response that the driver matches against
+ *     the buffer's IOVA.
+ *
+ * The frame_buff_set layout (kernel/ipu4/ipu6-fw-isys.h:688) starts
+ * with output_pins[IPU4_MAX_OPINS=6], each 16 bytes packed —
+ * Ipu4FwOutputPin in this file. We only read the first 96 bytes;
+ * process_group_light + the trailing u8 flags don't gate frame
+ * delivery in our model.
+ */
+#define IPU4_MAX_OPINS 6
+
+static void ipu4_deliver_frame(Ipu4State *s, uint8_t stream,
+                               uint32_t frame_buff_set_iova)
+{
+    Ipu4FwOutputPin pins[IPU4_MAX_OPINS];
+    unsigned int i;
+
+    if (!ipu4_dma_read_iova(s, frame_buff_set_iova, pins, sizeof(pins))) {
+        qemu_log_mask(LOG_UNIMP,
+                      "ipu4: failed to DMA-read frame_buff_set at "
+                      "iova=0x%x — driver will not see frames\n",
+                      frame_buff_set_iova);
+        return;
+    }
+
+    /* FRAME_SOF first so the driver's atomic_fetch_inc on
+     * stream->sequence (ipu6-isys-csi2.c:725) takes effect before
+     * PIN_DATA_READY's get_sof_sequence_by_timestamp() reads it. */
+    {
+        Ipu4FwIsysRespInfo sof = {
+            .type = IPU4_FW_RESP_FRAME_SOF,
+            .stream_handle = stream,
+        };
+        ipu4_post_response_full(s, &sof);
+    }
+
+    for (i = 0; i < IPU4_MAX_OPINS; i++) {
+        if (pins[i].addr == 0) {
+            continue;
+        }
+        ipu4_dma_write_iova_pattern(s, pins[i].addr,
+                                    IPU4_FRAME_PATTERN_BYTES, 0);
+        ipu4_post_pin_data_ready(s, stream, (uint8_t)i,
+                                 pins[i].addr, pins[i].out_buf_id);
     }
 }
 
@@ -765,18 +908,30 @@ static void ipu4_handle_send_bump(Ipu4State *s, unsigned int stream,
                                (uint8_t)stream);
             break;
         case IPU4_FW_SEND_STREAM_START:
-        case IPU4_FW_SEND_STREAM_START_AND_CAPTURE:
-            /* The driver completes stream_start_completion on both
-             * START_ACK and START_AND_CAPTURE_ACK
-             * (ipu6-isys.c:1441-1448). START_AND_CAPTURE_ACK also
-             * triggers ipu6_put_fw_msg_buf(resp->buf_handle), which
-             * is a no-op for buf_handle == 0 (ipu6-isys.c:1185-1192).
-             * Use the matching ack per send for ABI-correctness. */
-            ipu4_post_response(s,
-                               token.send_type == IPU4_FW_SEND_STREAM_START
-                               ? IPU4_FW_RESP_STREAM_START_ACK
-                               : IPU4_FW_RESP_STREAM_START_AND_CAPTURE_ACK,
+            /* No buffer attached — STREAM_START is the bufless variant,
+             * so just complete stream_start_completion. */
+            ipu4_post_response(s, IPU4_FW_RESP_STREAM_START_ACK,
                                (uint8_t)stream);
+            break;
+        case IPU4_FW_SEND_STREAM_START_AND_CAPTURE:
+            /* Bundle: ack the start completion AND deliver the frame
+             * for the buffer attached via token.payload. The driver's
+             * isys_isr_one drains responses one at a time per IRQ, so
+             * the ordering doesn't matter — both fire before
+             * start_stream_firmware's wait_for_completion_timeout
+             * returns to streamon. */
+            ipu4_post_response(s,
+                               IPU4_FW_RESP_STREAM_START_AND_CAPTURE_ACK,
+                               (uint8_t)stream);
+            ipu4_deliver_frame(s, (uint8_t)stream, token.payload);
+            break;
+        case IPU4_FW_SEND_STREAM_CAPTURE:
+            /* Step 4: deliver the frame attached to this token. The
+             * driver doesn't wait on a per-CAPTURE completion (the
+             * only acks the streamon path waits on are STREAM_OPEN
+             * and STREAM_*_START), so a single PIN_DATA_READY per
+             * non-zero output_pins[i].addr is sufficient. */
+            ipu4_deliver_frame(s, (uint8_t)stream, token.payload);
             break;
         case IPU4_FW_SEND_STREAM_FLUSH:
             /* Driver completes stream_stop_completion
@@ -794,12 +949,6 @@ static void ipu4_handle_send_bump(Ipu4State *s, unsigned int stream,
              * naturally follows. No per-stream state to reset. */
             ipu4_post_response(s, IPU4_FW_RESP_STREAM_CLOSE_ACK,
                                (uint8_t)stream);
-            break;
-        case IPU4_FW_SEND_STREAM_CAPTURE:
-            /* Step 4 turns this into a PIN_DATA_READY response after
-             * DMA-writing the deterministic frame pattern. For Step 3
-             * still fire-and-forget — the driver doesn't wait on a
-             * completion for individual capture submissions. */
             break;
         case IPU4_FW_SEND_STREAM_STOP:
             /* The IPU4 driver routes STREAMOFF through STREAM_FLUSH
