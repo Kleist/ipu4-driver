@@ -286,22 +286,35 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define IPU4_MAX_MSG_STREAMS             8
 #define SYSCOM_QPR_BASE_REG              6
 
-/* Per-stream send-token counts the model uses to decide which response
- * to post without parsing the token itself. The driver's call sequence
- * during STREAMON is fixed (kernel/ipu4/ipu6-isys-video.c:599):
- *   1.  STREAM_OPEN                       — needs STREAM_OPEN_DONE
- *   2.  STREAM_START / STREAM_START_AND_CAPTURE — both completions are
- *       fed by stream_start_completion (ipu6-isys.c:1441-1448), so
- *       STREAM_START_AND_CAPTURE_ACK works for both. The driver also
- *       calls ipu6_put_fw_msg_buf(resp->buf_handle), which is a no-op
- *       on buf_handle == 0 (ipu6-isys.c:1185-1192).
- *   3+. STREAM_CAPTURE                    — fire-and-forget; not acked
- *       in Step 2. Step 4 turns the third+ slot into PIN_DATA_READY.
- * STREAMOFF (Step 3) will add STREAM_FLUSH_ACK / STREAM_CLOSE_ACK.
+/* IPU6 ISYS firmware send-token opcodes (kernel/ipu4/ipu6-fw-isys.h:131).
+ * The driver's call sequence is well-defined per stream lifecycle but
+ * STREAM_CAPTUREs interleave freely between STREAM_START and
+ * STREAM_FLUSH (ipu6_isys_stream_start() drains any pre-queued buffers
+ * after start_stream_firmware returns; buf_queue() pushes a CAPTURE
+ * for every fresh QBUF), so we read the token's send_type directly
+ * out of the input ring instead of counting bumps. The token is
+ * `struct ipu6_fw_send_queue_token { u64 buf_handle; u32 payload;
+ * u16 send_type; u16 stream_id; }` — 16 bytes packed
+ * (ipu6-fw-isys.h:806).
  */
 enum {
-    SEND_COUNT_OPEN  = 1,
-    SEND_COUNT_START = 2,
+    IPU4_FW_SEND_STREAM_OPEN              = 0,
+    IPU4_FW_SEND_STREAM_START             = 1,
+    IPU4_FW_SEND_STREAM_START_AND_CAPTURE = 2,
+    IPU4_FW_SEND_STREAM_CAPTURE           = 3,
+    IPU4_FW_SEND_STREAM_STOP              = 4,
+    IPU4_FW_SEND_STREAM_FLUSH             = 5,
+    IPU4_FW_SEND_STREAM_CLOSE             = 6,
+};
+
+enum {
+    IPU4_FW_RESP_STREAM_OPEN_DONE              = 0,
+    IPU4_FW_RESP_STREAM_START_ACK              = 1,
+    IPU4_FW_RESP_STREAM_START_AND_CAPTURE_ACK  = 2,
+    IPU4_FW_RESP_STREAM_CAPTURE_ACK            = 3,
+    IPU4_FW_RESP_STREAM_STOP_ACK               = 4,
+    IPU4_FW_RESP_STREAM_FLUSH_ACK              = 5,
+    IPU4_FW_RESP_STREAM_CLOSE_ACK              = 6,
 };
 
 /* IPU6 FW response struct sizes — verified against the IPU4 (non-IPU6)
@@ -369,6 +382,19 @@ typedef struct QEMU_PACKED Ipu4FwSysQueue {
     uint32_t rd_reg;
     uint32_t _align;
 } Ipu4FwSysQueue;
+
+/* Mirror of ipu6_fw_send_queue_token (kernel/ipu4/ipu6-fw-isys.h:806).
+ * Step 3 reads this off the input ring to dispatch by send_type
+ * (FLUSH/CLOSE among others) — counting bumps doesn't work because
+ * STREAM_CAPTUREs interleave between START and FLUSH. */
+typedef struct QEMU_PACKED Ipu4FwSendToken {
+    uint64_t buf_handle;
+    uint32_t payload;
+    uint16_t send_type;
+    uint16_t stream_id;
+} Ipu4FwSendToken;
+
+QEMU_BUILD_BUG_ON(sizeof(Ipu4FwSendToken) != 16);
 
 /* Per-stream, per-direction state the model needs after the FW is up. */
 #define IPU4_NUM_INPUT_QUEUES  (1 + 1 + IPU4_MAX_MSG_STREAMS)   /* proxy + dev + msg */
@@ -456,15 +482,12 @@ struct Ipu4State {
     Ipu4FwSysQueue is_recv_q;
     bool is_recv_q_loaded;
 
-    /* Last-seen wr cursor per msg-send queue, used to count how many
-     * tokens the driver pushed since the previous bump (the cursor is
-     * a free-running modular index). */
+    /* Last-seen wr cursor per msg-send queue. Each driver-side bump
+     * pushes (new_wr - prev) % q->size tokens; we read each new
+     * token's send_type out of the input ring and dispatch on that
+     * (Step 3 — counting alone doesn't survive STREAM_CAPTURE
+     * interleaving between STREAM_START and STREAM_FLUSH). */
     uint32_t is_send_wr_seen[IPU4_MAX_MSG_STREAMS];
-
-    /* How many tokens the driver has shipped on each msg-send queue
-     * since fwcom-open. Used to decide which response opcode to
-     * synthesise (1 = OPEN_DONE, 2 = START_AND_CAPTURE_ACK). */
-    uint32_t is_send_count[IPU4_MAX_MSG_STREAMS];
 };
 
 /* Walk the IPU MMU page tables to translate an IPU IOVA into a host
@@ -691,13 +714,19 @@ static void ipu4_post_response(Ipu4State *s, uint8_t resp_type,
 
 /* Detect a driver-side bump of the wr cursor for msg-send queue `stream`
  * and synthesise a response per the protocol's request/ack pairing.
+ *
+ * The driver places a token at slot wr-1 (mod size) and then bumps the
+ * WR cursor — see ipu6_send_get_token / ipu6_send_put_token in
+ * kernel/ipu4/ipu6-fw-com.c:331-369. We DMA-read each pushed token's
+ * 16-byte header out of the input ring (vied_address + slot * 16) and
+ * dispatch on its send_type (Ipu4FwSendToken.send_type at byte 12).
  */
 static void ipu4_handle_send_bump(Ipu4State *s, unsigned int stream,
                                   uint32_t new_wr)
 {
     Ipu4FwSysQueue *q = ipu4_get_send_queue(s, stream);
     uint32_t prev = s->is_send_wr_seen[stream];
-    uint32_t pushed;
+    uint32_t pushed, slot;
 
     if (!q || q->size == 0) {
         /* Without the descriptor we can't tell wrap from increment;
@@ -710,32 +739,82 @@ static void ipu4_handle_send_bump(Ipu4State *s, unsigned int stream,
         return;
     }
     pushed = (new_wr + q->size - prev) % q->size;
+    slot = prev;
     s->is_send_wr_seen[stream] = new_wr;
 
     while (pushed-- > 0) {
-        uint32_t count = ++s->is_send_count[stream];
+        Ipu4FwSendToken token;
 
-        switch (count) {
-        case SEND_COUNT_OPEN:
-            /* IPU6_FW_ISYS_RESP_TYPE_STREAM_OPEN_DONE = 0
-             * (kernel/ipu4/ipu6-fw-isys.h:110). */
-            ipu4_post_response(s, 0, (uint8_t)stream);
+        if (q->token_size < sizeof(token) ||
+            !ipu4_dma_read_iova(s,
+                                q->vied_address + slot * q->token_size,
+                                &token, sizeof(token))) {
+            qemu_log_mask(LOG_UNIMP,
+                          "ipu4: cannot read send token (stream=%u "
+                          "slot=%u vied=0x%x token_size=%u) — driver "
+                          "will time out on stream completion.\n",
+                          stream, slot, q->vied_address, q->token_size);
+            slot = (slot + 1) % q->size;
+            continue;
+        }
+        slot = (slot + 1) % q->size;
+
+        switch (token.send_type) {
+        case IPU4_FW_SEND_STREAM_OPEN:
+            ipu4_post_response(s, IPU4_FW_RESP_STREAM_OPEN_DONE,
+                               (uint8_t)stream);
             break;
-        case SEND_COUNT_START:
-            /* IPU6_FW_ISYS_RESP_TYPE_STREAM_START_AND_CAPTURE_ACK = 2
-             * (ipu6-fw-isys.h:112). The driver completes the same
-             * stream_start_completion for both _ACK variants, and
-             * its ipu6_put_fw_msg_buf(buf_handle=0) path is a no-op
-             * for STREAM_START, so this single response covers both
-             * STREAM_START and STREAM_START_AND_CAPTURE sends. */
-            ipu4_post_response(s, 2, (uint8_t)stream);
+        case IPU4_FW_SEND_STREAM_START:
+        case IPU4_FW_SEND_STREAM_START_AND_CAPTURE:
+            /* The driver completes stream_start_completion on both
+             * START_ACK and START_AND_CAPTURE_ACK
+             * (ipu6-isys.c:1441-1448). START_AND_CAPTURE_ACK also
+             * triggers ipu6_put_fw_msg_buf(resp->buf_handle), which
+             * is a no-op for buf_handle == 0 (ipu6-isys.c:1185-1192).
+             * Use the matching ack per send for ABI-correctness. */
+            ipu4_post_response(s,
+                               token.send_type == IPU4_FW_SEND_STREAM_START
+                               ? IPU4_FW_RESP_STREAM_START_ACK
+                               : IPU4_FW_RESP_STREAM_START_AND_CAPTURE_ACK,
+                               (uint8_t)stream);
+            break;
+        case IPU4_FW_SEND_STREAM_FLUSH:
+            /* Driver completes stream_stop_completion
+             * (ipu6-isys.c:1452-1453). Without this ack, every
+             * STREAMOFF logs "stream stop time out". */
+            ipu4_post_response(s, IPU4_FW_RESP_STREAM_FLUSH_ACK,
+                               (uint8_t)stream);
+            break;
+        case IPU4_FW_SEND_STREAM_CLOSE:
+            /* Driver completes stream_close_completion
+             * (ipu6-isys.c:1438-1439). After CLOSE_ACK the driver
+             * may re-STREAMON the same stream handle; the input
+             * queue's wr/rd cursors keep going (firmware-com layer
+             * doesn't reset them on close), so our wr_seen tracker
+             * naturally follows. No per-stream state to reset. */
+            ipu4_post_response(s, IPU4_FW_RESP_STREAM_CLOSE_ACK,
+                               (uint8_t)stream);
+            break;
+        case IPU4_FW_SEND_STREAM_CAPTURE:
+            /* Step 4 turns this into a PIN_DATA_READY response after
+             * DMA-writing the deterministic frame pattern. For Step 3
+             * still fire-and-forget — the driver doesn't wait on a
+             * completion for individual capture submissions. */
+            break;
+        case IPU4_FW_SEND_STREAM_STOP:
+            /* The IPU4 driver routes STREAMOFF through STREAM_FLUSH
+             * (kernel/ipu4/ipu6-isys-video.c:750), not STREAM_STOP,
+             * so STREAM_STOP arriving here would mean a path we
+             * haven't characterised. Log and drop. */
+            qemu_log_mask(LOG_UNIMP,
+                          "ipu4: STREAM_STOP send on stream=%u "
+                          "(driver shouldn't use this opcode)\n",
+                          stream);
             break;
         default:
-            /* STREAM_CAPTURE / STREAM_FLUSH / STREAM_CLOSE land here.
-             * Step 3 will ack STREAM_FLUSH/CLOSE; Step 4 turns the
-             * STREAM_CAPTURE slot into a frame-data-ready response.
-             * For Step 2 this leaves the driver waiting for STREAMOFF
-             * (which times out cosmetically, see step note in plan). */
+            qemu_log_mask(LOG_UNIMP,
+                          "ipu4: unknown send_type=%u on stream=%u\n",
+                          token.send_type, stream);
             break;
         }
     }
@@ -1102,18 +1181,16 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
                 s->syscom_config_iova = val;
                 memset(s->is_send_q_loaded, 0, sizeof(s->is_send_q_loaded));
                 s->is_recv_q_loaded = false;
-                memset(s->is_send_count, 0, sizeof(s->is_send_count));
                 memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
             }
 
             /* DMEM[2] = SYSCOM_STATE_REG. Driver writes UNINIT before
              * polling for READY. Treat it as the firmware-init reset
-             * marker for the syscom layer — same accounting reset as
-             * the SYSCOM_CONFIG path above so a re-open without a
-             * config rewrite still gets clean counters. */
+             * marker for the syscom layer — clear the wr-cursor cache
+             * so a re-open without a config rewrite still tracks the
+             * fresh ring correctly. */
             if (reg == 2 /* SYSCOM_STATE_REG */ &&
                 val == SYSCOM_STATE_UNINIT) {
-                memset(s->is_send_count, 0, sizeof(s->is_send_count));
                 memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
             }
 
@@ -1264,7 +1341,6 @@ static void ipu4_reset(DeviceState *dev)
     memset(&s->is_recv_q, 0, sizeof(s->is_recv_q));
     s->is_recv_q_loaded = false;
     memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
-    memset(s->is_send_count, 0, sizeof(s->is_send_count));
 }
 
 static const VMStateDescription vmstate_ipu4 = {
@@ -1324,8 +1400,6 @@ static const VMStateDescription vmstate_ipu4 = {
         VMSTATE_UINT32_V(is_mmu_l1_pfn, Ipu4State, 8),
         VMSTATE_UINT32_V(syscom_config_iova, Ipu4State, 8),
         VMSTATE_UINT32_ARRAY_V(is_send_wr_seen, Ipu4State,
-                               IPU4_MAX_MSG_STREAMS, 8),
-        VMSTATE_UINT32_ARRAY_V(is_send_count, Ipu4State,
                                IPU4_MAX_MSG_STREAMS, 8),
         VMSTATE_END_OF_LIST()
     }
