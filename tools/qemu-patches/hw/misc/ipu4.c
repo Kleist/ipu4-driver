@@ -261,6 +261,16 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define BTRS_PWR_STATE_PS_PWR_UP          (0xfu << 24)
 #define BTRS_FREQ_CTL_START               (1u << 31)
 
+/* CSE↔IU IPC CSR token bits (kernel/ipu4/ipu6-platform-buttress-regs.h:184).
+ * The driver uses CSR_OUT (IU2CSECSR=0x108) to signal phase tokens to
+ * the CSE side and CSR_IN (CSE2IUCSR=0x30c) as the peer-ack channel
+ * (W1C-cleared by the driver). The model mirrors a minimal subset
+ * sufficient for ipu6_buttress_ipc_reset() to terminate. */
+#define BUTTRESS_IU2CSECSR_ENTRY                       (1u << 0)
+#define BUTTRESS_IU2CSECSR_EXIT                        (1u << 1)
+#define BUTTRESS_IU2CSECSR_ASSERTED_REG_VALID_REQ      (1u << 3)
+#define BUTTRESS_IU2CSECSR_ACKED_REG_VALID             (1u << 4)
+
 /* IPU4 ISYS MMU sub-block 0 lives at BAR + ISYS_OFFSET (0x100000) +
  * IOMMU0_OFFSET (0xe0000) = 0x1e0000 (kernel/ipu4/ipu4-platform-regs.h).
  * The L1 page-table physical pfn is programmed at sub-block + 0x004
@@ -1257,21 +1267,52 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
     case BTRS_REG_SECURITY_CTL:
         s->security_ctl = val;
         break;
-    case BTRS_REG_IU2CSEDB0:
     case BTRS_REG_IU2CSEDATA0:
+        /* Driver-to-CSE command word. Step-1-followup secure-mode
+         * model leaves the actual command unchecked because
+         * ipu6_buttress_authenticate() short-circuits on the
+         * AUTH_DONE bit we pre-set in SECURITY_CTL — no BOOT_LOAD /
+         * AUTH_RUN ever ships. Latch for completeness. */
+        s->iu2cse_csr = val;
+        break;
+    case BTRS_REG_IU2CSEDB0:
+        /* IU2CSEDB0 with BUSY (BIT(31)) is the "command ready" trigger.
+         * In a full secure-mode model we'd drive the CSE-side response
+         * dance here; auth_done short-circuits keep it as a latch. */
+        break;
     case BTRS_REG_IU2CSECSR:
-        /* IPC send path. The reset handshake is a no-op: echo CSR bits
-         * back via CSE2IU* so ipu6_buttress_ipc_reset() completes. */
-        if (addr == BTRS_REG_IU2CSECSR) {
-            s->iu2cse_csr = val;
-            s->cse2iu_csr = val; /* echo */
-            s->cse2iu_data0 = 0;
+        /* CSR_OUT — driver writes ENTRY/EXIT/QUERY/VALID-REQ tokens
+         * to step the IPC reset state machine
+         * (kernel/ipu4/ipu6-buttress.c:67-181). Mirror the minimum set
+         * of CSE-side responses so the driver's loop terminates on
+         * the success path:
+         *   - BIT(0) ENTRY  written → set BIT(1) EXIT in CSR_IN.
+         *     Drives the loop straight to the `case EXIT:` branch
+         *     which clears state and returns 0.
+         *   - BIT(3) ASSERTED_REG_VALID_REQ → set BIT(4)
+         *     ACKED_REG_VALID in CSR_IN so
+         *     ipu6_buttress_ipc_validity_open() succeeds. (The
+         *     auth_done short-circuit means this isn't actually
+         *     exercised today, but model it for completeness.)
+         *   - BIT(5) DEASSERTED_REG_VALID_REQ → no response needed
+         *     (validity_close is fire-and-forget). */
+        s->iu2cse_csr = val;
+        if (val & BUTTRESS_IU2CSECSR_ENTRY) {
+            s->cse2iu_csr |= BUTTRESS_IU2CSECSR_EXIT;
+        }
+        if (val & BUTTRESS_IU2CSECSR_ASSERTED_REG_VALID_REQ) {
+            s->cse2iu_csr |= BUTTRESS_IU2CSECSR_ACKED_REG_VALID;
         }
         break;
-    case BTRS_REG_CSE2IUDB0:
     case BTRS_REG_CSE2IUCSR:
-        /* IPC receive side: the driver acks by writing here; clear state. */
-        s->cse2iu_csr = 0;
+        /* CSR_IN is W1C from the driver's side: every bit the driver
+         * writes a 1 to is cleared. */
+        s->cse2iu_csr &= ~(uint32_t)val;
+        break;
+    case BTRS_REG_CSE2IUDB0:
+        /* Driver clears the incoming doorbell after consuming a
+         * response. Latched only — no behaviour. */
+        s->cse2iu_data0 = 0;
         break;
     case IS_UNISPART_IRQ_EDGE:
         s->is_unispart_irq_edge = val;
@@ -1491,16 +1532,18 @@ static void ipu4_reset(DeviceState *dev)
     s->fw_src_lo = 0;
     s->fw_src_hi = 0;
     s->fw_src_size = 0;
-    /* Silicon's SECURITY_CTL reads 0x37002 before any driver write —
-     * the value has BUTTRESS_SECURITY_CTL_FW_SECURE_MODE (BIT(16))
-     * set, so the real silicon runs the IPU4 in secure mode. Our
-     * model can't complete the CSE IPC authentication handshake
-     * that secure mode requires, so reset to 0 instead and let the
-     * driver fall into the non-secure branch (same shortcut the M3
-     * buttress rows in registers.md document). compare.py will
-     * flag a persistent value_mismatch here until secure-mode CSE
-     * IPC is modelled; that's intentional. */
-    s->security_ctl = 0;
+    /* Silicon's SECURITY_CTL reads 0x37002 before any driver write.
+     * Bit layout (kernel/ipu4/ipu6-platform-buttress-regs.h:127-132):
+     *   bit  1   AUTH_DONE
+     *   bits 12-14, 17  silicon-specific (fuse / config bits)
+     *   bit 16   FW_SECURE_MODE
+     * AUTH_DONE is asserted at reset so ipu6_buttress_authenticate()
+     * fast-paths into ipu6_buttress_auth_done() and skips the full
+     * BOOT_LOAD / AUTH_RUN dance — those would require a richer CSE
+     * IPC model than we have. Secure mode (BIT(16)) still routes the
+     * driver through ipu6_buttress_ipc_reset() at probe time, which
+     * the BIT(1)→BIT(0) CSR ping-pong below handles. */
+    s->security_ctl = 0x37002;
     s->iu2cse_csr = 0;
     s->cse2iu_csr = 0;
     s->cse2iu_data0 = 0;
