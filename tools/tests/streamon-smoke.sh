@@ -64,12 +64,17 @@ if grep -q 'Kernel panic' "$LOG" && ! grep -q '^STREAM:done' "$LOG"; then
 	echo "streamon-smoke: kernel panic mid-STREAMON (see $LOG)"
 fi
 
-# Default stays at STREAM:qbuf. M5b-3 installs the CSI2 active route
-# (visible in dmesg as "virt-sensor: installed active route …") but
-# STREAMON still fails inside ipu6_isys_setup_video() at
-# media_pad_remote_pad_unique() on the Capture-side pad. The required
-# marker tightens to STREAM:streamon once that barrier falls.
-REQUIRED="${IPU4_STREAM_REQUIRED:-STREAM:pattern_ok}"
+# Default tracks the firmware-responder rollout (see plan in
+# /root/.claude/plans/data-trace-txt-is-an-mmiotrace-tranquil-babbage.md).
+# Step 2 routes STREAMON through the regular firmware path
+# (start_streaming_virt and buf_queue_virt are gone), so DQBUF can no
+# longer rely on the synchronous pattern fill — frame delivery via
+# PIN_DATA_READY lands in Step 4 and re-tightens this back to
+# STREAM:pattern_ok. Until then STREAM:streamon is the right gate:
+# it confirms STREAM_OPEN_DONE + STREAM_START_AND_CAPTURE_ACK are
+# delivered and v4l2_subdev_enable_streams() runs CSI2 set_stream(),
+# which is what the mmiotrace coverage report wants exercised.
+REQUIRED="${IPU4_STREAM_REQUIRED:-STREAM:streamon}"
 case "$reached" in
 "")
 	echo "streamon-smoke: FAIL (no STREAM marker)" >&2

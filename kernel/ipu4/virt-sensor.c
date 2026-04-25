@@ -26,6 +26,7 @@
 #include <linux/types.h>
 
 #include <media/media-entity.h>
+#include <media/v4l2-ctrls.h>
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-subdev.h>
 
@@ -46,6 +47,7 @@
 struct virt_sensor {
 	struct v4l2_subdev sd;
 	struct media_pad pad;
+	struct v4l2_ctrl_handler ctrl_handler;
 
 	/* Nodes are in the order expected by software_node_register_node_group. */
 	struct software_node ipu_node;
@@ -244,6 +246,33 @@ int ipu4_virt_sensor_install(struct pci_dev *pdev)
 	vs->sd.flags	= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	strscpy(vs->sd.name, SENSOR_NAME, sizeof(vs->sd.name));
 
+	/*
+	 * Expose V4L2_CID_LINK_FREQ so ipu6_isys_csi2_get_link_freq()
+	 * (kernel/ipu4/ipu6-isys-csi2.c:108) can read a sane value from
+	 * `v4l2_get_link_freq(ext_sd->ctrl_handler, 0, 0)`. Without the
+	 * ctrl, that helper returns -ENOENT, ipu6_isys_csi2_calc_timing()
+	 * propagates the error back, and CSI2 enable_streams aborts
+	 * before set_stream() ever writes the per-port RX_ENABLE /
+	 * DLY_CNT_* / IRQ_* registers — exactly the silicon writes the
+	 * Step-2 mmio-trace coverage report wants to drop from
+	 * `unimplemented`.
+	 */
+	ret = v4l2_ctrl_handler_init(&vs->ctrl_handler, 1);
+	if (ret) {
+		dev_err(dev, "virt-sensor: ctrl handler init failed %d\n", ret);
+		goto err_fwnode;
+	}
+	v4l2_ctrl_new_int_menu(&vs->ctrl_handler, NULL, V4L2_CID_LINK_FREQ,
+			       0, 0, vs->link_freqs);
+	if (vs->ctrl_handler.error) {
+		ret = vs->ctrl_handler.error;
+		dev_err(dev, "virt-sensor: failed to add LINK_FREQ ctrl %d\n",
+			ret);
+		v4l2_ctrl_handler_free(&vs->ctrl_handler);
+		goto err_fwnode;
+	}
+	vs->sd.ctrl_handler = &vs->ctrl_handler;
+
 	vs->pad.flags		 = MEDIA_PAD_FL_SOURCE;
 	vs->sd.entity.function	 = MEDIA_ENT_F_CAM_SENSOR;
 	vs->sd.entity.name	 = vs->sd.name;
@@ -267,6 +296,7 @@ int ipu4_virt_sensor_install(struct pci_dev *pdev)
 
 err_entity:
 	media_entity_cleanup(&vs->sd.entity);
+	v4l2_ctrl_handler_free(&vs->ctrl_handler);
 err_fwnode:
 	dev->fwnode->secondary = NULL;
 	vs->fwnode_secondary_set = false;
@@ -286,6 +316,7 @@ void ipu4_virt_sensor_remove(struct pci_dev *pdev)
 		return;
 	v4l2_async_unregister_subdev(&vs->sd);
 	media_entity_cleanup(&vs->sd.entity);
+	v4l2_ctrl_handler_free(&vs->ctrl_handler);
 	if (vs->fwnode_secondary_set)
 		pdev->dev.fwnode->secondary = NULL;
 	software_node_unregister_node_group(vs->group);

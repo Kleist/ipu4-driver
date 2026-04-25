@@ -277,12 +277,12 @@ int main(int argc, char **argv)
 	if (xioctl(fd, VIDIOC_DQBUF, &dq, "dqbuf") < 0)
 		return 1;
 
-	/* The kernel side (buf_queue_virt in ipu6-isys-queue.c) fills
-	 * byte[k] = (k + sequence) & 0xff. For the first DQBUF the
-	 * frame sequence is 0 so byte[k] == k & 0xff. Check a handful
-	 * of positions rather than the whole 1.9 MB — a single
-	 * mismatch is enough to flag a regression in either the
-	 * kernel fill or the DMA mapping. */
+	/* Pre-Step-4: the kernel filled the buffer in buf_queue_virt
+	 * with byte[k] = (k + sequence) & 0xff. Step 4 of the
+	 * firmware-responder rollout replaces that with PIN_DATA_READY
+	 * frames the QEMU device model writes via DMA — same pattern,
+	 * different writer. The check below stays unchanged. For the
+	 * first DQBUF sequence is 0, so byte[k] == k & 0xff. */
 	if (dq.index >= NUM_BUFS || !buf_ptr[dq.index]) {
 		printf("STREAM:fail step=pattern_map dq.index=%u\n", dq.index);
 		return 1;
