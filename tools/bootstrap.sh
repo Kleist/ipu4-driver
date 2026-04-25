@@ -103,9 +103,20 @@ config IPU4
     depends on PCI && MSI_NONBROKEN
 EOF
 fi
-if [[ -f "$QEMU_HW_MESON" ]] && ! grep -q "files('ipu4.c')" "$QEMU_HW_MESON"; then
-	echo ">>> wiring ipu4.c into $QEMU_HW_MESON"
-	printf "\nsystem_ss.add(when: 'CONFIG_IPU4', if_true: files('ipu4.c'))\n" >> "$QEMU_HW_MESON"
+# The ipu4 device model is split across multiple .c files (ipu4.c plus
+# the per-block helpers ipu4-mmu.c etc.). meson's `files('ipu4.c', ...)`
+# wiring is appended once and grown when new modules are added; the
+# fixed marker lets `grep -q` decide whether to skip the append.
+if [[ -f "$QEMU_HW_MESON" ]] && ! grep -q "# ipu4 device model sources" "$QEMU_HW_MESON"; then
+	echo ">>> wiring ipu4 sources into $QEMU_HW_MESON"
+	cat >> "$QEMU_HW_MESON" <<'EOF'
+
+# ipu4 device model sources
+system_ss.add(when: 'CONFIG_IPU4', if_true: files(
+  'ipu4.c',
+  'ipu4-mmu.c',
+))
+EOF
 fi
 
 echo ">>> bootstrap complete"
