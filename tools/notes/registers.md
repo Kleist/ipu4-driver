@@ -23,7 +23,7 @@ Columns:
 | 0x030  | Buttress | `ipu6-buttress.c` FW_RESET_CTL          | Write START → read DONE on next read (no timer).            | inferred   |
 | 0x034  | Buttress | `ipu6-buttress.c` IS_FREQ_CTL           | Write latched. Driver writes divisor + ICCMAX-level bit; no readback in trace. | inferred   |
 | 0x038  | Buttress | `ipu6-buttress.c` PS_FREQ_CTL           | Write latched. Same shape as IS_FREQ_CTL, distinct register. | inferred   |
-| 0x05c  | Buttress | `ipu6-buttress.c` PWR_STATE poll        | Read returns `0x0fa02003` (HH_DONE[13:12]=2, IS_RDY[23:20]=0xa, PS_PWR_UP[28:24]=0xf, PWR_RDY[1:0]=3). Power-DOWN poll logs cosmetic timeout. | inferred   |
+| 0x05c  | Buttress | `ipu6-buttress.c` PWR_STATE poll        | Step 5 FSM: read composes the word from per-island `is_powered` / `ps_powered` flags (mirrored from the FREQ_CTL writes' BIT(31) START bit) plus tied-high PWR_RDY[1:0]=3 and HH_DONE[13:12]=2. Powered up reads as `0x0fa02003`; powered down reads as `0x00002003`; either side independently. Lets the bus-level runtime-PM suspend complete cleanly, which is what made Step 2 need a driver-side `isys->power = 1` workaround. | inferred |
 | 0x078  | Buttress | `ipu6-buttress.c` FW_SOURCE_BASE_LO     | R/W latched.                                                | inferred   |
 | 0x07c  | Buttress | `ipu6-buttress.c` FW_SOURCE_BASE_HI     | R/W latched.                                                | inferred   |
 | 0x080  | Buttress | `ipu6-buttress.c` FW_SOURCE_SIZE        | R/W latched.                                                | inferred   |
