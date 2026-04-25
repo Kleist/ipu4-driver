@@ -183,6 +183,35 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define IS_DMEM_FW_COM_RECV_WR_POS       (IS_DMEM_BASE + 0x070)
 #define IS_DMEM_FW_COM_RECV_RD_POS       (IS_DMEM_BASE + 0x074)
 
+/* SYSCOM_STATE values (kernel/ipu4/ipu6-fw-com.c:44). The driver
+ * writes UNINIT and polls SYSCOM_STATE until it reads READY before
+ * proceeding past `ipu6_fw_com_open()` / `ipu6_fw_com_ready()`. The
+ * model returns READY unconditionally on read so the poll completes
+ * on the first iteration — the real SPC handshake isn't simulated.
+ */
+#define SYSCOM_STATE_UNINIT              0x57A7E000
+#define SYSCOM_STATE_READY               0x57A7E001
+#define SYSCOM_STATE_INACTIVE            0x57A7E002
+
+/* SPC status/control register lives at offset 0 of each SPC region.
+ * IPU4 maps ISYS SPC at BAR+0x100000 and PSYS SPC at BAR+0x400000
+ * (kernel/ipu4/ipu4-platform-regs.h:26-27 + ipu4-platform-regs.h's
+ * ISYS/PSYS_BASE). Bit map (kernel/ipu4/ipu6-platform-regs.h:81-87):
+ *   BIT(1)  START
+ *   BIT(3)  RUN
+ *   BIT(5)  READY
+ *   BIT(12) ICACHE_INVALIDATE
+ *   BIT(13) ICACHE_PREFETCH
+ * `query_sp()` waits for `(val & (READY | START)) == READY` — i.e.
+ * READY set, START cleared. To make that test pass on the first
+ * read the model latches whatever the driver writes but always
+ * folds in READY and folds out START on read.
+ */
+#define IS_SPC_STATUS_CTRL               0x100000
+#define PS_SPC_STATUS_CTRL               0x400000
+#define SPC_STATUS_START                 (1u << 1)
+#define SPC_STATUS_READY                 (1u << 5)
+
 /* ISYS / PSYS MMU windows. postprocess_trace.py breaks each side into
  * sub-regions (isys0/isys1; psys0/psys1/psys2), but the driver treats
  * each side as a single page-table programming window, so we back them
@@ -258,6 +287,12 @@ struct Ipu4State {
 
     /* ISYS DMEM syscom window (0x108000..0x1080ff). */
     uint32_t is_dmem[IS_DMEM_SIZE / 4];
+
+    /* ISYS / PSYS SPC status-control latches. Reads return the
+     * latched value with READY forced on / START forced off so
+     * `query_sp()` succeeds on the first poll. */
+    uint32_t is_spc_status_ctrl;
+    uint32_t ps_spc_status_ctrl;
 
     /* ISYS / PSYS MMU page-table programming windows. */
     uint32_t is_mmu[IS_MMU_SIZE / 4];
@@ -381,13 +416,29 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
     case CSI2P0_S2M_IRQ_ENABLE:   val = s->csi2p0_s2m_enable; break;
     case CSI2P0_S2M_IRQ_LEVEL_NOT_PULSE: val = s->csi2p0_s2m_level; break;
 
+    case IS_SPC_STATUS_CTRL:
+        /* See the bit-map comment near the constant: force READY on,
+         * START off so query_sp() reads "SPC is idle and ready"
+         * regardless of what the driver kicked into the latch. */
+        val = (s->is_spc_status_ctrl & ~SPC_STATUS_START) | SPC_STATUS_READY;
+        break;
+    case PS_SPC_STATUS_CTRL:
+        val = (s->ps_spc_status_ctrl & ~SPC_STATUS_START) | SPC_STATUS_READY;
+        break;
+
     default:
         if (addr >= IS_DMEM_BASE && addr < IS_DMEM_BASE + IS_DMEM_SIZE) {
             /* SEND_RD_POS echoes SEND_WR_POS so the driver sees
              * "firmware has caught up" and doesn't block on the ring
-             * filling. All other slots return their latched value. */
+             * filling. SYSCOM_STATE always returns READY so
+             * ipu6_fw_com_ready()'s 500ms poll terminates on the
+             * first read — the firmware-handshake shortcut documented
+             * in the Step 1 plan. All other slots return their
+             * latched value. */
             if (addr == IS_DMEM_FW_COM_SEND_RD_POS) {
                 val = s->is_dmem[(IS_DMEM_FW_COM_SEND_WR_POS - IS_DMEM_BASE) / 4];
+            } else if (addr == IS_DMEM_SYSCOM_STATE) {
+                val = SYSCOM_STATE_READY;
             } else {
                 val = s->is_dmem[(addr - IS_DMEM_BASE) / 4];
             }
@@ -565,6 +616,13 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
     case CSI2P0_S2M_IRQ_ENABLE:   s->csi2p0_s2m_enable = val; break;
     case CSI2P0_S2M_IRQ_LEVEL_NOT_PULSE: s->csi2p0_s2m_level = val; break;
 
+    case IS_SPC_STATUS_CTRL:
+        s->is_spc_status_ctrl = val;
+        break;
+    case PS_SPC_STATUS_CTRL:
+        s->ps_spc_status_ctrl = val;
+        break;
+
     default:
         if (addr >= IS_DMEM_BASE && addr < IS_DMEM_BASE + IS_DMEM_SIZE) {
             if (addr == IS_DMEM_FW_COM_SEND_RD_POS) {
@@ -698,11 +756,13 @@ static void ipu4_reset(DeviceState *dev)
     memset(s->is_dmem, 0, sizeof(s->is_dmem));
     memset(s->is_mmu, 0, sizeof(s->is_mmu));
     memset(s->ps_mmu, 0, sizeof(s->ps_mmu));
+    s->is_spc_status_ctrl = 0;
+    s->ps_spc_status_ctrl = 0;
 }
 
 static const VMStateDescription vmstate_ipu4 = {
     .name = "ipu4",
-    .version_id = 6,
+    .version_id = 7,
     .minimum_version_id = 1,
     .fields = (const VMStateField[]) {
         VMSTATE_PCI_DEVICE(parent_obj, Ipu4State),
@@ -752,6 +812,8 @@ static const VMStateDescription vmstate_ipu4 = {
         VMSTATE_UINT32_ARRAY_V(is_dmem, Ipu4State, IS_DMEM_SIZE / 4, 5),
         VMSTATE_UINT32_ARRAY_V(is_mmu, Ipu4State, IS_MMU_SIZE / 4, 6),
         VMSTATE_UINT32_ARRAY_V(ps_mmu, Ipu4State, PS_MMU_SIZE / 4, 6),
+        VMSTATE_UINT32_V(is_spc_status_ctrl, Ipu4State, 7),
+        VMSTATE_UINT32_V(ps_spc_status_ctrl, Ipu4State, 7),
         VMSTATE_END_OF_LIST()
     }
 };

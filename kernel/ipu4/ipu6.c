@@ -426,6 +426,23 @@ ipu6_pkg_dir_configure_spc(struct ipu6_device *isp,
 	u32 pg_offset;
 
 	server_fw_addr = lower_32_bits(*(pkg_dir + (pkg_dir_idx + 1) * 2));
+	/*
+	 * The stub CPD blob shipped by tools/firmware/gen-cpd.py has
+	 * zeroed pkg_dir entries — enough to satisfy
+	 * ipu6_cpd_validate_cpd_file() but not to point at a real SPC
+	 * program. Walking the cell_program at the resulting wild
+	 * pointer would deref invalid memory. Skip the SPC-program
+	 * load when there's nothing to load; the QEMU device model
+	 * just absorbs the SPC writes that did fire and the syscom
+	 * boot handshake completes via the model's SYSCOM_STATE
+	 * shortcut.
+	 */
+	if (!server_fw_addr) {
+		dev_dbg(&isp->pdev->dev,
+			"skipping SPC program load: empty pkg_dir entry %d\n",
+			pkg_dir_idx);
+		return;
+	}
 	if (pkg_dir_idx == IPU6_CPD_PKG_DIR_ISYS_SERVER_IDX)
 		dma_addr = sg_dma_address(isp->isys->fw_sgt.sgl);
 	else

@@ -144,20 +144,6 @@ int ipu6_fw_isys_open(struct ipu6_isys *isys)
 	if (!isys->resetting)
 		lockdep_assert_held(&isys->mutex);
 
-#if IS_ENABLED(CONFIG_VIDEO_IPU4_VIRT_SENSOR)
-	/* The QEMU harness has no real firmware / SPC / syscom backing.
-	 * ipu6_configure_spc() walks pkg_dir entries that are zeroed in
-	 * the stub CPD blob, producing a wild pointer and a kernel panic
-	 * before STREAMON can return. Short-circuit the whole fw-open
-	 * path and fail STREAMON gracefully with -EOPNOTSUPP; actual
-	 * frame delivery comes from the QEMU model plus a virt-sensor
-	 * .s_stream() path that bypasses firmware entirely, landing in
-	 * subsequent M5c commits. */
-	dev_info(&adev->auxdev.dev,
-		 "virt-sensor: skipping firmware startup (M5c WIP)\n");
-	return -EOPNOTSUPP;
-#endif
-
 	ipu6_configure_spc(adev->isp, &ipdata->hw_variant,
 			   IPU6_CPD_PKG_DIR_ISYS_SERVER_IDX, isys->pdata->base,
 			   adev->pkg_dir, adev->pkg_dir_dma_addr);
