@@ -299,6 +299,20 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define BTRS_ISR_IS_IRQ                  (1u << 0)
 #define ISYS_UNISPART_IRQ_SW             (1u << 30)
 
+/* CSI2 port-N event bit in UNISPART_IRQ_STATUS. Driver dispatches to
+ * `ipu6_isys_csi2_isr(&isys->csi2[N])` when bit `IPU4_ISYS_UNISPART_IRQ_CSI2(N)`
+ * (kernel/ipu4/ipu4-platform-regs.h:33-37) is set in the masked status.
+ * Step-5b fires CSI2 port-0 along with the SW-IRQ on every PIN_DATA_READY
+ * delivery so the driver's ISR also reads CSI2_PART_IRQ_STATUS, exercising
+ * the per-port SOF/EOF event path silicon takes per frame. */
+#define ISYS_UNISPART_IRQ_CSI2_PORT0     (1u << 3)
+
+/* CSI2 PART IRQ status bits (kernel/ipu4/ipu4-platform-isys-csi2-reg.h:42).
+ * FS_VC(n) = 1 << (n*4); FE_VC(n) = 2 << (n*4). VC0 SOF is bit 0; that's
+ * what the model sets to advertise a frame-start to the driver's
+ * `ipu6_isys_csi2_isr`. */
+#define CSI2_PART_IRQ_FS_VC0             (1u << 0)
+
 /* Syscom queue layout (kernel/ipu4/ipu6-fw-com.c:101 + ipu6-fw-isys.h):
  *   reg 0..5  management slots (PKG_DIR, SYSCOM_CONFIG, …, VTL0)
  *   reg 6+    pairs of (wr_reg, rd_reg) per queue, in input-then-output order
@@ -871,6 +885,20 @@ static void ipu4_deliver_frame(Ipu4State *s, uint8_t stream,
                       frame_buff_set_iova);
         return;
     }
+
+    /* Step-5b IRQ event cycling: silicon's CSI2 RX hardware fires a
+     * SOF event on every frame-start, which the driver's ISR
+     * dispatches to `ipu6_isys_csi2_isr` (ipu6-isys.c:391-398).
+     * Mirror that per delivered frame: set the CSI2 PART_IRQ_STATUS
+     * FS_VC0 bit and the matching UNISPART_IRQ_STATUS port-0 bit so
+     * the driver's loop in `ipu4_isys_isr` reads PART_IRQ_STATUS,
+     * does W1C on PART_IRQ_CLEAR, and dispatches the SOF event in
+     * the same IRQ cycle that drains the firmware response queue.
+     * The per-frame cadence is sufficient — the streamon-smoke test
+     * delivers a single frame, so a periodic QEMUTimer would only
+     * add lifecycle complexity for the same observable behaviour. */
+    s->csi2p0_part_status |= CSI2_PART_IRQ_FS_VC0;
+    s->is_unispart_irq_status |= ISYS_UNISPART_IRQ_CSI2_PORT0;
 
     /* FRAME_SOF first so the driver's atomic_fetch_inc on
      * stream->sequence (ipu6-isys-csi2.c:725) takes effect before
