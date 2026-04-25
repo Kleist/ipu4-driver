@@ -27,6 +27,7 @@
 #include "qapi/error.h"
 
 #include "ipu4-fw-isys.h"
+#include "ipu4-mmu.h"
 
 #define TYPE_IPU4 "ipu4"
 OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
@@ -206,25 +207,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define SPC_STATUS_START                 (1u << 1)
 #define SPC_STATUS_READY                 (1u << 5)
 
-/* ISYS / PSYS MMU windows. postprocess_trace.py breaks each side into
- * sub-regions (isys0/isys1; psys0/psys1/psys2), but the driver treats
- * each side as a single page-table programming window, so we back them
- * with one flat array per side:
- *
- *   ISYS MMU   BAR+0x1e0000..0x1e04ff   (isys0 + isys1)
- *   PSYS MMU   BAR+0x4b0000..0x4b09ff   (psys0 + psys1 + psys2)
- *
- * data/trace.txt writes 208 entries into the ISYS side and 200 into
- * the PSYS side, all during FW bringup — page directory + L1/L2
- * entries + invalidate bits — and does not read any of them back in
- * this capture. Minimum viable handling: latch writes, return latched
- * value on reads. Real streaming (M5b) will need pci_dma_rw() off the
- * PDE writes; that's a later PR.
- */
-#define IS_MMU_BASE                      0x1e0000
-#define IS_MMU_SIZE                      0x500
-#define PS_MMU_BASE                      0x4b0000
-#define PS_MMU_SIZE                      0xa00
+/* ISYS / PSYS MMU windows + IOVA walker live in ipu4-mmu.{c,h}. */
 
 /* PWR_STATE FSM bits (kernel/ipu4/ipu4-platform-buttress-regs.h:11-22).
  * The driver polls PWR_STATE for ISYS/PSYS power transitions and a
@@ -254,24 +237,6 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define BTRS_PWR_STATE_IS_RDY             (0xau << 20)
 #define BTRS_PWR_STATE_PS_PWR_UP          (0xfu << 24)
 #define BTRS_FREQ_CTL_START               (1u << 31)
-
-/* IPU4 ISYS MMU sub-block 0 lives at BAR + ISYS_OFFSET (0x100000) +
- * IOMMU0_OFFSET (0xe0000) = 0x1e0000 (kernel/ipu4/ipu4-platform-regs.h).
- * The L1 page-table physical pfn is programmed at sub-block + 0x004
- * (REG_L1_PHYS in kernel/ipu4/ipu6-mmu.c:51). All sub-blocks within a
- * side mirror the same L1 root, so latching the first write is enough
- * to walk the table from QEMU.
- *
- * Step-2 firmware responder uses this latch to translate the IPU IOVA
- * stored in the syscom config (DMEM[1]) and the queue descriptor table
- * into host physical addresses for `pci_dma_read` / `pci_dma_write`.
- */
-#define IS_MMU_SUB0_REG_L1_PHYS          (IS_MMU_BASE + 0x004)
-#define ISP_PADDR_SHIFT                  12
-#define ISP_PAGE_MASK                    0xfffu
-#define ISP_L1PT_SHIFT                   22
-#define ISP_L2PT_SHIFT                   12
-#define ISP_L2PT_MASK                    0x3ffu
 
 /* IPU4 SP→host syscom delivery uses the buttress IS-side IRQ
  * (BTRS_REG_ISR_STATUS bit 0) to wake `ipu6_buttress_isr`, which
@@ -349,15 +314,9 @@ struct Ipu4State {
     uint32_t is_spc_status_ctrl;
     uint32_t ps_spc_status_ctrl;
 
-    /* ISYS / PSYS MMU page-table programming windows. */
-    uint32_t is_mmu[IS_MMU_SIZE / 4];
-    uint32_t ps_mmu[PS_MMU_SIZE / 4];
-
-    /* ISYS MMU L1 page-table base pfn (latched from BAR+0x1e0004,
-     * REG_L1_PHYS in kernel/ipu4/ipu6-mmu.c). Step-2 firmware
-     * responder uses this to walk IOVA → host phys for syscom DMA.
-     */
-    uint32_t is_mmu_l1_pfn;
+    /* ISYS / PSYS MMU page-table programming windows + ISYS MMU L1
+     * page-table base pfn used by the IOVA walker. */
+    Ipu4MmuRegs mmu;
 
     /* IPU IOVA of the syscom config struct, latched from a DMEM[1]
      * (SYSCOM_CONFIG_REG) write. Subsequent send-queue activity
@@ -386,145 +345,18 @@ struct Ipu4State {
     uint32_t is_send_wr_seen[IPU4_MAX_MSG_STREAMS];
 };
 
-/* Walk the IPU MMU page tables to translate an IPU IOVA into a host
- * physical address suitable for `pci_dma_read` / `pci_dma_write`. The
- * format mirrors the in-driver walker (kernel/ipu4/ipu6-mmu.c):
- *
- *   IOVA[31:22] = l1_idx, IOVA[21:12] = l2_idx, IOVA[11:0] = offset
- *   l1_pt_phys     = is_mmu_l1_pfn << 12
- *   l2_pt_pfn      = *(u32 *)(l1_pt_phys + l1_idx*4)   (27-bit pfn)
- *   target_pfn     = *(u32 *)((l2_pt_pfn << 12) + l2_idx*4)
- *   target_phys    = (target_pfn << 12) + offset
- *
- * Returns false (and leaves *out_phys untouched) if the MMU base
- * hasn't been programmed yet or any walked entry is the all-zero
- * "dummy" pteval — that means the driver hasn't actually mapped this
- * IOVA, and any access would have faulted on real silicon.
- */
-static bool ipu4_iova_to_phys(Ipu4State *s, uint32_t iova, hwaddr *out_phys)
-{
-    uint32_t l1_idx = (iova >> ISP_L1PT_SHIFT) & 0x3ff;
-    uint32_t l2_idx = (iova >> ISP_L2PT_SHIFT) & ISP_L2PT_MASK;
-    uint32_t offset = iova & ISP_PAGE_MASK;
-    hwaddr l1_pt_phys, l2_pt_phys;
-    uint32_t l2_pt_pfn = 0, target_pfn = 0;
-    MemTxResult res;
-
-    if (s->is_mmu_l1_pfn == 0) {
-        qemu_log_mask(LOG_UNIMP,
-                      "ipu4: iova_to_phys(0x%x): L1_PHYS not programmed\n",
-                      iova);
-        return false;
-    }
-
-    l1_pt_phys = (hwaddr)s->is_mmu_l1_pfn << ISP_PADDR_SHIFT;
-    res = pci_dma_read(&s->parent_obj, l1_pt_phys + (hwaddr)l1_idx * 4,
-                       &l2_pt_pfn, 4);
-    if (res != MEMTX_OK || l2_pt_pfn == 0) {
-        qemu_log_mask(LOG_UNIMP,
-                      "ipu4: iova_to_phys(0x%x): L1 walk failed "
-                      "(res=%d pfn=0x%x)\n", iova, res, l2_pt_pfn);
-        return false;
-    }
-
-    l2_pt_phys = (hwaddr)l2_pt_pfn << ISP_PADDR_SHIFT;
-    res = pci_dma_read(&s->parent_obj, l2_pt_phys + (hwaddr)l2_idx * 4,
-                       &target_pfn, 4);
-    if (res != MEMTX_OK || target_pfn == 0) {
-        qemu_log_mask(LOG_UNIMP,
-                      "ipu4: iova_to_phys(0x%x): L2 walk failed "
-                      "(res=%d pfn=0x%x)\n", iova, res, target_pfn);
-        return false;
-    }
-
-    *out_phys = ((hwaddr)target_pfn << ISP_PADDR_SHIFT) + offset;
-    return true;
-}
-
-/* Read `len` bytes from the guest-side memory backing IOVA `iova`. */
-static bool ipu4_dma_read_iova(Ipu4State *s, uint32_t iova, void *buf,
-                               size_t len)
-{
-    hwaddr phys;
-
-    if (!ipu4_iova_to_phys(s, iova, &phys)) {
-        return false;
-    }
-    return pci_dma_read(&s->parent_obj, phys, buf, len) == MEMTX_OK;
-}
-
-static bool ipu4_dma_write_iova(Ipu4State *s, uint32_t iova, const void *buf,
-                                size_t len)
-{
-    hwaddr phys;
-
-    if (!ipu4_iova_to_phys(s, iova, &phys)) {
-        return false;
-    }
-    return pci_dma_write(&s->parent_obj, phys, buf, len) == MEMTX_OK;
-}
-
-/* Step-4 deterministic frame pattern: write `total` bytes starting at
- * `base_iova`, where byte[k] = (k + seq) & 0xff. The IOVA range may
- * span many 4K pages backed by physically discontiguous host pages
- * (vb2_dma_sg memops in kernel/ipu4/ipu6-isys-queue.c:1029), so walk
- * page-by-page and translate each IOVA chunk through the IPU MMU.
- *
- * `total` is bounded by `IPU4_FRAME_PATTERN_BYTES` rather than the
- * full vb2 buffer size because we don't have the buffer length in
- * the STREAM_CAPTURE token (only out_buf_id + addr). The Step-4
- * test (tools/tests/streamon.c) only verifies offsets up to 65535
- * so 64 KB is sufficient. Walking until the IPU MMU walk fails
- * would be slightly more general but risks writing past the end of
- * a smaller buffer — bounded chunk is conservative.
- */
+/* IOVA walker + DMA helpers live in ipu4-mmu.{c,h}. The Step-4 frame
+ * pattern bound is local to the syscom frame-delivery path here. */
 #define IPU4_FRAME_PATTERN_BYTES (64 * 1024)
-#define IPU4_PAGE_SIZE_BYTES     4096
-
-static void ipu4_dma_write_iova_pattern(Ipu4State *s, uint32_t base_iova,
-                                        size_t total, uint8_t seq)
-{
-    uint8_t buf[IPU4_PAGE_SIZE_BYTES];
-    size_t off = 0;
-
-    while (off < total) {
-        uint32_t iova = base_iova + (uint32_t)off;
-        uint32_t page_off = iova & (IPU4_PAGE_SIZE_BYTES - 1);
-        size_t chunk = MIN(total - off,
-                           IPU4_PAGE_SIZE_BYTES - (size_t)page_off);
-        hwaddr phys;
-        size_t i;
-
-        if (!ipu4_iova_to_phys(s, iova, &phys)) {
-            qemu_log_mask(LOG_UNIMP,
-                          "ipu4: frame-pattern write stopped at "
-                          "off=%zu (iova=0x%x): page unmapped — "
-                          "buffer ends or IPU MMU not programmed\n",
-                          off, iova);
-            return;
-        }
-        for (i = 0; i < chunk; i++) {
-            buf[i] = (uint8_t)((off + i + seq) & 0xff);
-        }
-        if (pci_dma_write(&s->parent_obj, phys, buf, chunk) != MEMTX_OK) {
-            qemu_log_mask(LOG_UNIMP,
-                          "ipu4: pci_dma_write failed at "
-                          "iova=0x%x phys=0x%" HWADDR_PRIx "\n",
-                          iova, phys);
-            return;
-        }
-        off += chunk;
-    }
-}
 
 /* Read the `i`-th queue descriptor from the IOVA-addressed queue array
  * pointed to by `array_iova`. */
 static bool ipu4_load_queue_desc(Ipu4State *s, uint32_t array_iova,
                                  unsigned int i, Ipu4FwSysQueue *out)
 {
-    return ipu4_dma_read_iova(s,
-                              array_iova + i * sizeof(Ipu4FwSysQueue),
-                              out, sizeof(*out));
+    return ipu4_mmu_dma_read_iova(&s->mmu, &s->parent_obj,
+                                  array_iova + i * sizeof(Ipu4FwSysQueue),
+                                  out, sizeof(*out));
 }
 
 /* Lazy lookup of the msg-send queue descriptor for stream `stream`. Returns
@@ -545,7 +377,8 @@ static Ipu4FwSysQueue *ipu4_get_send_queue(Ipu4State *s, unsigned int stream)
     if (s->syscom_config_iova == 0) {
         return NULL;
     }
-    if (!ipu4_dma_read_iova(s, s->syscom_config_iova, &cfg, sizeof(cfg))) {
+    if (!ipu4_mmu_dma_read_iova(&s->mmu, &s->parent_obj,
+                                s->syscom_config_iova, &cfg, sizeof(cfg))) {
         return NULL;
     }
 
@@ -572,7 +405,8 @@ static Ipu4FwSysQueue *ipu4_get_recv_queue(Ipu4State *s)
     if (s->syscom_config_iova == 0) {
         return NULL;
     }
-    if (!ipu4_dma_read_iova(s, s->syscom_config_iova, &cfg, sizeof(cfg))) {
+    if (!ipu4_mmu_dma_read_iova(&s->mmu, &s->parent_obj,
+                                s->syscom_config_iova, &cfg, sizeof(cfg))) {
         return NULL;
     }
     /* output_queue[1] is the msg-recv slot; output_queue[0] is proxy. */
@@ -626,9 +460,9 @@ static void ipu4_post_response_full(Ipu4State *s,
     /* DMA the response into the slot. If the IOVA can't be walked
      * (MMU not programmed), bail out — the driver will time out, but
      * better that than corrupting an unrelated guest page. */
-    if (!ipu4_dma_write_iova(s,
-                             rq->vied_address + wr * rq->token_size,
-                             resp, sizeof(*resp))) {
+    if (!ipu4_mmu_dma_write_iova(&s->mmu, &s->parent_obj,
+                                 rq->vied_address + wr * rq->token_size,
+                                 resp, sizeof(*resp))) {
         qemu_log_mask(LOG_UNIMP,
                       "ipu4: failed to DMA response to recv slot wr=%u "
                       "iova=0x%x — IPU MMU mapping missing?\n",
@@ -718,7 +552,8 @@ static void ipu4_deliver_frame(Ipu4State *s, uint8_t stream,
     Ipu4FwOutputPin pins[IPU4_MAX_OPINS];
     unsigned int i;
 
-    if (!ipu4_dma_read_iova(s, frame_buff_set_iova, pins, sizeof(pins))) {
+    if (!ipu4_mmu_dma_read_iova(&s->mmu, &s->parent_obj,
+                                frame_buff_set_iova, pins, sizeof(pins))) {
         qemu_log_mask(LOG_UNIMP,
                       "ipu4: failed to DMA-read frame_buff_set at "
                       "iova=0x%x — driver will not see frames\n",
@@ -741,8 +576,9 @@ static void ipu4_deliver_frame(Ipu4State *s, uint8_t stream,
         if (pins[i].addr == 0) {
             continue;
         }
-        ipu4_dma_write_iova_pattern(s, pins[i].addr,
-                                    IPU4_FRAME_PATTERN_BYTES, 0);
+        ipu4_mmu_dma_write_iova_pattern(&s->mmu, &s->parent_obj,
+                                        pins[i].addr,
+                                        IPU4_FRAME_PATTERN_BYTES, 0);
         ipu4_post_pin_data_ready(s, stream, (uint8_t)i,
                                  pins[i].addr, pins[i].out_buf_id);
     }
@@ -782,9 +618,9 @@ static void ipu4_handle_send_bump(Ipu4State *s, unsigned int stream,
         Ipu4FwSendToken token;
 
         if (q->token_size < sizeof(token) ||
-            !ipu4_dma_read_iova(s,
-                                q->vied_address + slot * q->token_size,
-                                &token, sizeof(token))) {
+            !ipu4_mmu_dma_read_iova(&s->mmu, &s->parent_obj,
+                                    q->vied_address + slot * q->token_size,
+                                    &token, sizeof(token))) {
             qemu_log_mask(LOG_UNIMP,
                           "ipu4: cannot read send token (stream=%u "
                           "slot=%u vied=0x%x token_size=%u) — driver "
@@ -1026,25 +862,7 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
             }
             break;
         }
-        if (addr >= IS_MMU_BASE && addr < IS_MMU_BASE + IS_MMU_SIZE) {
-            /* data/trace.txt does 208 writes into this window during
-             * FW bringup and zero reads. If the driver reads here,
-             * our "write-only latch" assumption breaks — a real DMA
-             * path would need pci_dma_rw() off the stored PDEs and
-             * returning the raw latched value could hide that. */
-            qemu_log_mask(LOG_UNIMP,
-                          "ipu4: ISYS MMU read +0x%06" HWADDR_PRIx
-                          " — model's write-only-latch assumption "
-                          "broken; DMA backing is unmodelled.\n", addr);
-            val = s->is_mmu[(addr - IS_MMU_BASE) / 4];
-            break;
-        }
-        if (addr >= PS_MMU_BASE && addr < PS_MMU_BASE + PS_MMU_SIZE) {
-            qemu_log_mask(LOG_UNIMP,
-                          "ipu4: PSYS MMU read +0x%06" HWADDR_PRIx
-                          " — model's write-only-latch assumption "
-                          "broken; DMA backing is unmodelled.\n", addr);
-            val = s->ps_mmu[(addr - PS_MMU_BASE) / 4];
+        if (ipu4_mmu_mmio_read(&s->mmu, addr, &val)) {
             break;
         }
         if (addr >= CSI2_PORTS_1_5_RANGE_BEGIN &&
@@ -1264,19 +1082,7 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
             }
             break;
         }
-        if (addr >= IS_MMU_BASE && addr < IS_MMU_BASE + IS_MMU_SIZE) {
-            if (addr == IS_MMU_SUB0_REG_L1_PHYS) {
-                /* Latch the L1 PT base pfn so the syscom DMA helpers
-                 * can walk IOVAs. Both ISYS MMU sub-blocks mirror the
-                 * same L1 root, so capturing sub-block 0 is sufficient
-                 * (kernel/ipu4/ipu6-mmu.c:546-563). */
-                s->is_mmu_l1_pfn = val;
-            }
-            s->is_mmu[(addr - IS_MMU_BASE) / 4] = val;
-            break;
-        }
-        if (addr >= PS_MMU_BASE && addr < PS_MMU_BASE + PS_MMU_SIZE) {
-            s->ps_mmu[(addr - PS_MMU_BASE) / 4] = val;
+        if (ipu4_mmu_mmio_write(&s->mmu, addr, val)) {
             break;
         }
         if (addr >= CSI2_PORTS_1_5_RANGE_BEGIN &&
@@ -1388,11 +1194,9 @@ static void ipu4_reset(DeviceState *dev)
     s->csi2p0_s2m_edge = s->csi2p0_s2m_mask = s->csi2p0_s2m_status = 0;
     s->csi2p0_s2m_enable = s->csi2p0_s2m_level = 0;
     memset(s->is_dmem, 0, sizeof(s->is_dmem));
-    memset(s->is_mmu, 0, sizeof(s->is_mmu));
-    memset(s->ps_mmu, 0, sizeof(s->ps_mmu));
+    ipu4_mmu_reset(&s->mmu);
     s->is_spc_status_ctrl = 0;
     s->ps_spc_status_ctrl = 0;
-    s->is_mmu_l1_pfn = 0;
     s->syscom_config_iova = 0;
     memset(s->is_send_q, 0, sizeof(s->is_send_q));
     memset(s->is_send_q_loaded, 0, sizeof(s->is_send_q_loaded));
@@ -1403,8 +1207,8 @@ static void ipu4_reset(DeviceState *dev)
 
 static const VMStateDescription vmstate_ipu4 = {
     .name = "ipu4",
-    .version_id = 9,
-    .minimum_version_id = 1,
+    .version_id = 10,
+    .minimum_version_id = 10,
     .fields = (const VMStateField[]) {
         VMSTATE_PCI_DEVICE(parent_obj, Ipu4State),
         VMSTATE_UINT32(btrs_ctrl, Ipu4State),
@@ -1451,11 +1255,9 @@ static const VMStateDescription vmstate_ipu4 = {
         VMSTATE_UINT32_V(csi2p0_s2m_enable, Ipu4State, 4),
         VMSTATE_UINT32_V(csi2p0_s2m_level, Ipu4State, 4),
         VMSTATE_UINT32_ARRAY_V(is_dmem, Ipu4State, IS_DMEM_SIZE / 4, 5),
-        VMSTATE_UINT32_ARRAY_V(is_mmu, Ipu4State, IS_MMU_SIZE / 4, 6),
-        VMSTATE_UINT32_ARRAY_V(ps_mmu, Ipu4State, PS_MMU_SIZE / 4, 6),
+        VMSTATE_STRUCT(mmu, Ipu4State, 0, vmstate_ipu4_mmu, Ipu4MmuRegs),
         VMSTATE_UINT32_V(is_spc_status_ctrl, Ipu4State, 7),
         VMSTATE_UINT32_V(ps_spc_status_ctrl, Ipu4State, 7),
-        VMSTATE_UINT32_V(is_mmu_l1_pfn, Ipu4State, 8),
         VMSTATE_UINT32_V(syscom_config_iova, Ipu4State, 8),
         VMSTATE_UINT32_ARRAY_V(is_send_wr_seen, Ipu4State,
                                IPU4_MAX_MSG_STREAMS, 8),
