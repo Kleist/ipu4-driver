@@ -1187,6 +1187,34 @@ int ipu6_isys_fw_get(struct ipu6_isys *isys)
 	if (ret < 0)
 		return ret;
 
+#if IS_ENABLED(CONFIG_VIDEO_IPU4_VIRT_SENSOR)
+	/*
+	 * Step-2 firmware-responder rollout regression: under the QEMU
+	 * harness the buttress power-FSM polls in ipu6_buttress_power()
+	 * never report "powered down" (the model's PWR_STATE is fixed
+	 * to all-ready), so the probe-time auto-suspend cycle on the
+	 * ISYS auxiliary device fails. The bus-level recovery skips
+	 * past isys_runtime_pm_resume()'s `isys->power = 1 +
+	 * isys_setup_hw()` block, leaving the ISR's
+	 * `if (!isys->power) return IRQ_NONE` short-circuit armed and
+	 * the firmware-completion IRQ silently dropped. STREAMON then
+	 * times out 500 ms in start_stream_firmware().
+	 *
+	 * Force the rest of the runtime-PM resume payload here when
+	 * power is still 0 by the time STREAMON wants the ISYS up.
+	 * On real silicon, the runtime-PM path runs cleanly and this
+	 * branch is a no-op.
+	 */
+	if (!isys->power) {
+		unsigned long flags;
+
+		spin_lock_irqsave(&isys->power_lock, flags);
+		isys->power = 1;
+		spin_unlock_irqrestore(&isys->power_lock, flags);
+		isys_setup_hw(isys);
+	}
+#endif
+
 	mutex_lock(&isys->mutex);
 	wait_for_not_resetting(isys, __func__);
 

@@ -241,6 +241,139 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
  */
 #define BTRS_PWR_STATE_PWR_RDY_ALL      0x0fa02003
 
+/* IPU4 ISYS MMU sub-block 0 lives at BAR + ISYS_OFFSET (0x100000) +
+ * IOMMU0_OFFSET (0xe0000) = 0x1e0000 (kernel/ipu4/ipu4-platform-regs.h).
+ * The L1 page-table physical pfn is programmed at sub-block + 0x004
+ * (REG_L1_PHYS in kernel/ipu4/ipu6-mmu.c:51). All sub-blocks within a
+ * side mirror the same L1 root, so latching the first write is enough
+ * to walk the table from QEMU.
+ *
+ * Step-2 firmware responder uses this latch to translate the IPU IOVA
+ * stored in the syscom config (DMEM[1]) and the queue descriptor table
+ * into host physical addresses for `pci_dma_read` / `pci_dma_write`.
+ */
+#define IS_MMU_SUB0_REG_L1_PHYS          (IS_MMU_BASE + 0x004)
+#define ISP_PADDR_SHIFT                  12
+#define ISP_PAGE_MASK                    0xfffu
+#define ISP_L1PT_SHIFT                   22
+#define ISP_L2PT_SHIFT                   12
+#define ISP_L2PT_MASK                    0x3ffu
+
+/* IPU4 SP→host syscom delivery uses the buttress IS-side IRQ
+ * (BTRS_REG_ISR_STATUS bit 0) to wake `ipu6_buttress_isr`, which
+ * dispatches to `ipu4_isys_isr` (ipu6-isys.c:375). That handler reads
+ * IS_UNISPART_IRQ_STATUS and matches BIT(30) to decide there's a FW
+ * software event to drain. Both bits must therefore be set before
+ * raising the MSI.
+ */
+#define BTRS_ISR_IS_IRQ                  (1u << 0)
+#define ISYS_UNISPART_IRQ_SW             (1u << 30)
+
+/* Syscom queue layout (kernel/ipu4/ipu6-fw-com.c:101 + ipu6-fw-isys.h):
+ *   reg 0..5  management slots (PKG_DIR, SYSCOM_CONFIG, …, VTL0)
+ *   reg 6+    pairs of (wr_reg, rd_reg) per queue, in input-then-output order
+ * IPU4 has 1 proxy + 1 dev + 8 msg input queues = queue indices 0..9.
+ * The msg-send queue for stream N is at index IPU4_BASE_MSG_SEND_QUEUES + N
+ * = 2 + N, occupying register pair (10+2N, 11+2N) — DMEM byte offsets
+ * (0x028 + 8N, 0x02c + 8N). The single msg-recv queue follows the input
+ * block at index 11 (1 proxy + 0 dev + 1 msg = output indices 0..1, with
+ * the msg-recv at output index 1). Mapped as input.10/11 = wr/rd of the
+ * 11th queue overall = absolute reg 28/29 (DMEM 0x070/0x074), matching
+ * the existing IS_DMEM_FW_COM_RECV_*_POS macros above.
+ */
+#define IPU4_BASE_MSG_SEND_QUEUES        2
+#define IPU4_BASE_MSG_RECV_QUEUE_INDEX   11   /* in the absolute queue table */
+#define IPU4_MAX_MSG_STREAMS             8
+#define SYSCOM_QPR_BASE_REG              6
+
+/* Per-stream send-token counts the model uses to decide which response
+ * to post without parsing the token itself. The driver's call sequence
+ * during STREAMON is fixed (kernel/ipu4/ipu6-isys-video.c:599):
+ *   1.  STREAM_OPEN                       — needs STREAM_OPEN_DONE
+ *   2.  STREAM_START / STREAM_START_AND_CAPTURE — both completions are
+ *       fed by stream_start_completion (ipu6-isys.c:1441-1448), so
+ *       STREAM_START_AND_CAPTURE_ACK works for both. The driver also
+ *       calls ipu6_put_fw_msg_buf(resp->buf_handle), which is a no-op
+ *       on buf_handle == 0 (ipu6-isys.c:1185-1192).
+ *   3+. STREAM_CAPTURE                    — fire-and-forget; not acked
+ *       in Step 2. Step 4 turns the third+ slot into PIN_DATA_READY.
+ * STREAMOFF (Step 3) will add STREAM_FLUSH_ACK / STREAM_CLOSE_ACK.
+ */
+enum {
+    SEND_COUNT_OPEN  = 1,
+    SEND_COUNT_START = 2,
+};
+
+/* IPU6 FW response struct sizes — verified against the IPU4 (non-IPU6)
+ * branch in kernel/ipu4/ipu6-fw-isys.h:746-758. Used to lay out the
+ * response token we DMA into the recv ring. `__attribute__((packed))`
+ * isn't strictly required by the driver but keeps the layout robust if
+ * QEMU is ever built with an unusual default alignment.
+ */
+typedef struct QEMU_PACKED Ipu4FwOutputPin {
+    uint64_t out_buf_id;
+    uint32_t addr;
+    uint32_t compress;
+} Ipu4FwOutputPin;
+
+typedef struct QEMU_PACKED Ipu4FwParamPin {
+    uint64_t param_buf_id;
+    uint32_t addr;
+    uint32_t _pad;
+} Ipu4FwParamPin;
+
+typedef struct QEMU_PACKED Ipu4FwErrorInfo {
+    uint32_t error;
+    uint32_t error_details;
+} Ipu4FwErrorInfo;
+
+typedef struct QEMU_PACKED Ipu4FwIsysRespInfo {
+    uint64_t buf_handle;
+    Ipu4FwOutputPin pin;
+    Ipu4FwParamPin process_group_light;
+    Ipu4FwErrorInfo error_info;
+    uint32_t timestamp[2];
+    uint8_t stream_handle;
+    uint8_t type;
+    uint8_t pin_id;
+    uint8_t acc_id;
+    uint8_t frame_counter;
+    uint8_t written_direct;
+    uint8_t _pad[2];   /* round to 64 bytes for token_size alignment */
+} Ipu4FwIsysRespInfo;
+
+QEMU_BUILD_BUG_ON(sizeof(Ipu4FwIsysRespInfo) != 64);
+
+/* Mirror of ipu6_fw_syscom_config (kernel/ipu4/ipu6-fw-com.c:61). The
+ * driver writes the IPU IOVA of an instance of this struct into
+ * DMEM[1] (SYSCOM_CONFIG_REG) before kicking cell_start; we walk the
+ * IPU MMU page tables to translate the IOVA, then read the struct.
+ */
+typedef struct QEMU_PACKED Ipu4FwSyscomConfig {
+    uint32_t firmware_address;
+    uint32_t num_input_queues;
+    uint32_t num_output_queues;
+    uint32_t input_queue;     /* IOVA of an array of Ipu4FwSysQueue */
+    uint32_t output_queue;    /* IOVA of an array of Ipu4FwSysQueue */
+    uint32_t specific_addr;
+    uint32_t specific_size;
+} Ipu4FwSyscomConfig;
+
+/* Mirror of ipu6_fw_sys_queue (kernel/ipu4/ipu6-fw-com.c:26). */
+typedef struct QEMU_PACKED Ipu4FwSysQueue {
+    uint64_t host_address;    /* kernel virtual; not used by the model */
+    uint32_t vied_address;    /* IPU IOVA of the queue's token storage */
+    uint32_t size;            /* tokens per queue + 1 */
+    uint32_t token_size;
+    uint32_t wr_reg;          /* DMEM register index */
+    uint32_t rd_reg;
+    uint32_t _align;
+} Ipu4FwSysQueue;
+
+/* Per-stream, per-direction state the model needs after the FW is up. */
+#define IPU4_NUM_INPUT_QUEUES  (1 + 1 + IPU4_MAX_MSG_STREAMS)   /* proxy + dev + msg */
+#define IPU4_NUM_OUTPUT_QUEUES (1 + 1)                          /* proxy + msg */
+
 struct Ipu4State {
     PCIDevice parent_obj;
     MemoryRegion bar0;
@@ -297,7 +430,316 @@ struct Ipu4State {
     /* ISYS / PSYS MMU page-table programming windows. */
     uint32_t is_mmu[IS_MMU_SIZE / 4];
     uint32_t ps_mmu[PS_MMU_SIZE / 4];
+
+    /* ISYS MMU L1 page-table base pfn (latched from BAR+0x1e0004,
+     * REG_L1_PHYS in kernel/ipu4/ipu6-mmu.c). Step-2 firmware
+     * responder uses this to walk IOVA → host phys for syscom DMA.
+     */
+    uint32_t is_mmu_l1_pfn;
+
+    /* IPU IOVA of the syscom config struct, latched from a DMEM[1]
+     * (SYSCOM_CONFIG_REG) write. Subsequent send-queue activity
+     * triggers a full read of the config + queue descriptors. */
+    uint32_t syscom_config_iova;
+
+    /* Cached msg-send queue descriptors per stream (loaded lazily on
+     * first send-cursor write so the cache picks up the descriptor
+     * after the driver finished initialising it). is_send_q_loaded
+     * stays false until both the config addr is known and a stream's
+     * descriptor was successfully read; loaded state is per-stream so
+     * a partial setup doesn't poison the others. */
+    Ipu4FwSysQueue is_send_q[IPU4_MAX_MSG_STREAMS];
+    bool is_send_q_loaded[IPU4_MAX_MSG_STREAMS];
+
+    /* Cached msg-recv queue descriptor (single output queue at index
+     * IPU4_BASE_MSG_RECV_QUEUE_INDEX of the absolute queue table). */
+    Ipu4FwSysQueue is_recv_q;
+    bool is_recv_q_loaded;
+
+    /* Last-seen wr cursor per msg-send queue, used to count how many
+     * tokens the driver pushed since the previous bump (the cursor is
+     * a free-running modular index). */
+    uint32_t is_send_wr_seen[IPU4_MAX_MSG_STREAMS];
+
+    /* How many tokens the driver has shipped on each msg-send queue
+     * since fwcom-open. Used to decide which response opcode to
+     * synthesise (1 = OPEN_DONE, 2 = START_AND_CAPTURE_ACK). */
+    uint32_t is_send_count[IPU4_MAX_MSG_STREAMS];
 };
+
+/* Walk the IPU MMU page tables to translate an IPU IOVA into a host
+ * physical address suitable for `pci_dma_read` / `pci_dma_write`. The
+ * format mirrors the in-driver walker (kernel/ipu4/ipu6-mmu.c):
+ *
+ *   IOVA[31:22] = l1_idx, IOVA[21:12] = l2_idx, IOVA[11:0] = offset
+ *   l1_pt_phys     = is_mmu_l1_pfn << 12
+ *   l2_pt_pfn      = *(u32 *)(l1_pt_phys + l1_idx*4)   (27-bit pfn)
+ *   target_pfn     = *(u32 *)((l2_pt_pfn << 12) + l2_idx*4)
+ *   target_phys    = (target_pfn << 12) + offset
+ *
+ * Returns false (and leaves *out_phys untouched) if the MMU base
+ * hasn't been programmed yet or any walked entry is the all-zero
+ * "dummy" pteval — that means the driver hasn't actually mapped this
+ * IOVA, and any access would have faulted on real silicon.
+ */
+static bool ipu4_iova_to_phys(Ipu4State *s, uint32_t iova, hwaddr *out_phys)
+{
+    uint32_t l1_idx = (iova >> ISP_L1PT_SHIFT) & 0x3ff;
+    uint32_t l2_idx = (iova >> ISP_L2PT_SHIFT) & ISP_L2PT_MASK;
+    uint32_t offset = iova & ISP_PAGE_MASK;
+    hwaddr l1_pt_phys, l2_pt_phys;
+    uint32_t l2_pt_pfn = 0, target_pfn = 0;
+    MemTxResult res;
+
+    if (s->is_mmu_l1_pfn == 0) {
+        qemu_log_mask(LOG_UNIMP,
+                      "ipu4: iova_to_phys(0x%x): L1_PHYS not programmed\n",
+                      iova);
+        return false;
+    }
+
+    l1_pt_phys = (hwaddr)s->is_mmu_l1_pfn << ISP_PADDR_SHIFT;
+    res = pci_dma_read(&s->parent_obj, l1_pt_phys + (hwaddr)l1_idx * 4,
+                       &l2_pt_pfn, 4);
+    if (res != MEMTX_OK || l2_pt_pfn == 0) {
+        qemu_log_mask(LOG_UNIMP,
+                      "ipu4: iova_to_phys(0x%x): L1 walk failed "
+                      "(res=%d pfn=0x%x)\n", iova, res, l2_pt_pfn);
+        return false;
+    }
+
+    l2_pt_phys = (hwaddr)l2_pt_pfn << ISP_PADDR_SHIFT;
+    res = pci_dma_read(&s->parent_obj, l2_pt_phys + (hwaddr)l2_idx * 4,
+                       &target_pfn, 4);
+    if (res != MEMTX_OK || target_pfn == 0) {
+        qemu_log_mask(LOG_UNIMP,
+                      "ipu4: iova_to_phys(0x%x): L2 walk failed "
+                      "(res=%d pfn=0x%x)\n", iova, res, target_pfn);
+        return false;
+    }
+
+    *out_phys = ((hwaddr)target_pfn << ISP_PADDR_SHIFT) + offset;
+    return true;
+}
+
+/* Read `len` bytes from the guest-side memory backing IOVA `iova`. */
+static bool ipu4_dma_read_iova(Ipu4State *s, uint32_t iova, void *buf,
+                               size_t len)
+{
+    hwaddr phys;
+
+    if (!ipu4_iova_to_phys(s, iova, &phys)) {
+        return false;
+    }
+    return pci_dma_read(&s->parent_obj, phys, buf, len) == MEMTX_OK;
+}
+
+static bool ipu4_dma_write_iova(Ipu4State *s, uint32_t iova, const void *buf,
+                                size_t len)
+{
+    hwaddr phys;
+
+    if (!ipu4_iova_to_phys(s, iova, &phys)) {
+        return false;
+    }
+    return pci_dma_write(&s->parent_obj, phys, buf, len) == MEMTX_OK;
+}
+
+/* Read the `i`-th queue descriptor from the IOVA-addressed queue array
+ * pointed to by `array_iova`. */
+static bool ipu4_load_queue_desc(Ipu4State *s, uint32_t array_iova,
+                                 unsigned int i, Ipu4FwSysQueue *out)
+{
+    return ipu4_dma_read_iova(s,
+                              array_iova + i * sizeof(Ipu4FwSysQueue),
+                              out, sizeof(*out));
+}
+
+/* Lazy lookup of the msg-send queue descriptor for stream `stream`. Returns
+ * a pointer into the cache, or NULL if the descriptor isn't loadable yet
+ * (no syscom config addr written, MMU not programmed, etc.).
+ */
+static Ipu4FwSysQueue *ipu4_get_send_queue(Ipu4State *s, unsigned int stream)
+{
+    Ipu4FwSyscomConfig cfg;
+    unsigned int q_index;
+
+    if (stream >= IPU4_MAX_MSG_STREAMS) {
+        return NULL;
+    }
+    if (s->is_send_q_loaded[stream]) {
+        return &s->is_send_q[stream];
+    }
+    if (s->syscom_config_iova == 0) {
+        return NULL;
+    }
+    if (!ipu4_dma_read_iova(s, s->syscom_config_iova, &cfg, sizeof(cfg))) {
+        return NULL;
+    }
+
+    q_index = IPU4_BASE_MSG_SEND_QUEUES + stream;
+    if (!ipu4_load_queue_desc(s, cfg.input_queue, q_index,
+                              &s->is_send_q[stream])) {
+        return NULL;
+    }
+    s->is_send_q_loaded[stream] = true;
+    s->is_send_wr_seen[stream] = 0;
+    return &s->is_send_q[stream];
+}
+
+/* Lazy lookup of the single msg-recv queue (output queue index 1 in the
+ * absolute table = output_queue array index 1).
+ */
+static Ipu4FwSysQueue *ipu4_get_recv_queue(Ipu4State *s)
+{
+    Ipu4FwSyscomConfig cfg;
+
+    if (s->is_recv_q_loaded) {
+        return &s->is_recv_q;
+    }
+    if (s->syscom_config_iova == 0) {
+        return NULL;
+    }
+    if (!ipu4_dma_read_iova(s, s->syscom_config_iova, &cfg, sizeof(cfg))) {
+        return NULL;
+    }
+    /* output_queue[1] is the msg-recv slot; output_queue[0] is proxy. */
+    if (!ipu4_load_queue_desc(s, cfg.output_queue, 1, &s->is_recv_q)) {
+        return NULL;
+    }
+    s->is_recv_q_loaded = true;
+    return &s->is_recv_q;
+}
+
+/* Post a response token on the msg-recv queue and raise the IS-side
+ * MSI so the driver's ISR drains it. The response is DMA-written into
+ * the recv-queue's host backing (translated through the IPU MMU), the
+ * recv WR cursor in DMEM is bumped, and both buttress + unispart IRQ
+ * status bits are set so `ipu6_buttress_isr` → `ipu4_isys_isr` →
+ * `isys_isr_one` traverses the same path silicon would.
+ */
+static void ipu4_post_response(Ipu4State *s, uint8_t resp_type,
+                               uint8_t stream_handle)
+{
+    Ipu4FwSysQueue *rq = ipu4_get_recv_queue(s);
+    Ipu4FwIsysRespInfo resp = { 0 };
+    uint32_t *recv_wr_slot;
+    uint32_t wr;
+
+    if (!rq || rq->size == 0 || rq->token_size < sizeof(resp)) {
+        qemu_log_mask(LOG_UNIMP,
+                      "ipu4: cannot post FW response type=%u stream=%u "
+                      "(recv queue not loaded or token_size too small)\n",
+                      resp_type, stream_handle);
+        return;
+    }
+
+    resp.type = resp_type;
+    resp.stream_handle = stream_handle;
+    /* buf_handle = 0 makes the driver's ipu6_put_fw_msg_buf a no-op
+     * (kernel/ipu4/ipu6-isys.c:1185-1192). Step 4 will populate it
+     * with the original send-token's buf_handle once we DMA-read the
+     * token to learn it; until then a small fw-msg-buf leak per
+     * STREAMON is acceptable for the smoke harness. */
+    resp.buf_handle = 0;
+
+    /* Locate the slot the recv-side wr cursor points at. The driver
+     * caches the wr/rd cursors in DMEM at q->wr_reg*4 / q->rd_reg*4.
+     */
+    if (rq->wr_reg >= IS_DMEM_SIZE / 4) {
+        qemu_log_mask(LOG_UNIMP,
+                      "ipu4: recv queue wr_reg=%u out of DMEM range\n",
+                      rq->wr_reg);
+        return;
+    }
+    recv_wr_slot = &s->is_dmem[rq->wr_reg];
+    wr = *recv_wr_slot;
+    if (wr >= rq->size) {
+        wr = 0;
+    }
+
+    /* DMA the response into the slot. If the IOVA can't be walked
+     * (MMU not programmed), bail out — the driver will time out, but
+     * better that than corrupting an unrelated guest page. */
+    if (!ipu4_dma_write_iova(s,
+                             rq->vied_address + wr * rq->token_size,
+                             &resp, sizeof(resp))) {
+        qemu_log_mask(LOG_UNIMP,
+                      "ipu4: failed to DMA response to recv slot wr=%u "
+                      "iova=0x%x — IPU MMU mapping missing?\n",
+                      wr, rq->vied_address);
+        return;
+    }
+
+    /* Advance the firmware-owned wr cursor. */
+    wr = (wr + 1) % rq->size;
+    *recv_wr_slot = wr;
+
+    /* Raise the IS-side IRQ. The buttress dispatch + ISYS unispart
+     * SW-IRQ bit are both required for ipu6_buttress_isr →
+     * ipu4_isys_isr → isys_isr_one to drain the response. msi_init()
+     * was called in realize() and pci_alloc_irq_vectors() runs at
+     * driver probe, so msi_enabled() is reliably true by the time
+     * the first response posts. */
+    s->is_unispart_irq_status |= ISYS_UNISPART_IRQ_SW;
+    s->isr_status |= BTRS_ISR_IS_IRQ;
+
+    if (msi_enabled(&s->parent_obj)) {
+        msi_notify(&s->parent_obj, 0);
+    }
+}
+
+/* Detect a driver-side bump of the wr cursor for msg-send queue `stream`
+ * and synthesise a response per the protocol's request/ack pairing.
+ */
+static void ipu4_handle_send_bump(Ipu4State *s, unsigned int stream,
+                                  uint32_t new_wr)
+{
+    Ipu4FwSysQueue *q = ipu4_get_send_queue(s, stream);
+    uint32_t prev = s->is_send_wr_seen[stream];
+    uint32_t pushed;
+
+    if (!q || q->size == 0) {
+        /* Without the descriptor we can't tell wrap from increment;
+         * still record the cursor so subsequent bumps are tracked
+         * once the descriptor lands. */
+        s->is_send_wr_seen[stream] = new_wr;
+        return;
+    }
+    if (new_wr == prev) {
+        return;
+    }
+    pushed = (new_wr + q->size - prev) % q->size;
+    s->is_send_wr_seen[stream] = new_wr;
+
+    while (pushed-- > 0) {
+        uint32_t count = ++s->is_send_count[stream];
+
+        switch (count) {
+        case SEND_COUNT_OPEN:
+            /* IPU6_FW_ISYS_RESP_TYPE_STREAM_OPEN_DONE = 0
+             * (kernel/ipu4/ipu6-fw-isys.h:110). */
+            ipu4_post_response(s, 0, (uint8_t)stream);
+            break;
+        case SEND_COUNT_START:
+            /* IPU6_FW_ISYS_RESP_TYPE_STREAM_START_AND_CAPTURE_ACK = 2
+             * (ipu6-fw-isys.h:112). The driver completes the same
+             * stream_start_completion for both _ACK variants, and
+             * its ipu6_put_fw_msg_buf(buf_handle=0) path is a no-op
+             * for STREAM_START, so this single response covers both
+             * STREAM_START and STREAM_START_AND_CAPTURE sends. */
+            ipu4_post_response(s, 2, (uint8_t)stream);
+            break;
+        default:
+            /* STREAM_CAPTURE / STREAM_FLUSH / STREAM_CLOSE land here.
+             * Step 3 will ack STREAM_FLUSH/CLOSE; Step 4 turns the
+             * STREAM_CAPTURE slot into a frame-data-ready response.
+             * For Step 2 this leaves the driver waiting for STREAMOFF
+             * (which times out cosmetically, see step note in plan). */
+            break;
+        }
+    }
+}
 
 static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
 {
@@ -372,7 +814,18 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
         val = s->is_unispart_irq_mask;
         break;
     case IS_UNISPART_IRQ_STATUS:
-        val = s->is_unispart_irq_status & s->is_unispart_irq_enable;
+        /* Real silicon's UNISPART_IRQ_STATUS is the raw set-bits
+         * register: bits accumulate via edge / level events, are
+         * cleared via W1C to IRQ_CLEAR, and are independent of the
+         * ENABLE mask (which gates whether the bit propagates to
+         * the buttress parent IRQ, not whether STATUS reads back
+         * the bit). The driver's `ipu4_isys_isr` reads STATUS and
+         * dispatches on bit 30 directly without re-AND-ing with
+         * ENABLE — so masking here would silently drop the SW IRQ
+         * we synthesise from the syscom command parser if the
+         * driver hasn't yet run isys_setup_hw() to program the
+         * ENABLE register. */
+        val = s->is_unispart_irq_status;
         break;
     case IS_UNISPART_IRQ_ENABLE:
         val = s->is_unispart_irq_enable;
@@ -625,6 +1078,8 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 
     default:
         if (addr >= IS_DMEM_BASE && addr < IS_DMEM_BASE + IS_DMEM_SIZE) {
+            uint32_t reg = (addr - IS_DMEM_BASE) / 4;
+
             if (addr == IS_DMEM_FW_COM_SEND_RD_POS) {
                 /* The read path echoes SEND_WR_POS here; the driver is
                  * only expected to *read* this slot. A write means our
@@ -636,10 +1091,54 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
                               PRIx64 " — model only echoes SEND_WR_POS "
                               "on reads; this write is lost.\n", val);
             }
-            s->is_dmem[(addr - IS_DMEM_BASE) / 4] = val;
+
+            /* DMEM[1] = SYSCOM_CONFIG_REG (kernel/ipu4/ipu6-fw-com.c:101).
+             * The driver writes the IPU IOVA of the syscom_config struct
+             * here right before kicking cell_start. We re-latch the
+             * cached queue descriptors on every write so a fresh
+             * ipu6_fw_com_open call (e.g. after silent reset) starts
+             * clean. */
+            if (reg == 1 /* SYSCOM_CONFIG_REG */) {
+                s->syscom_config_iova = val;
+                memset(s->is_send_q_loaded, 0, sizeof(s->is_send_q_loaded));
+                s->is_recv_q_loaded = false;
+                memset(s->is_send_count, 0, sizeof(s->is_send_count));
+                memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
+            }
+
+            /* DMEM[2] = SYSCOM_STATE_REG. Driver writes UNINIT before
+             * polling for READY. Treat it as the firmware-init reset
+             * marker for the syscom layer — same accounting reset as
+             * the SYSCOM_CONFIG path above so a re-open without a
+             * config rewrite still gets clean counters. */
+            if (reg == 2 /* SYSCOM_STATE_REG */ &&
+                val == SYSCOM_STATE_UNINIT) {
+                memset(s->is_send_count, 0, sizeof(s->is_send_count));
+                memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
+            }
+
+            s->is_dmem[reg] = val;
+
+            /* Detect a wr-cursor bump on any of the 8 msg-send queues
+             * and synthesise the matching FW response. The msg-send
+             * queues live at DMEM regs 10, 12, 14, … 24 (= absolute
+             * input queue indices 2..9, see comment above near
+             * IPU4_BASE_MSG_SEND_QUEUES). */
+            if (reg >= 10 && reg < 10 + IPU4_MAX_MSG_STREAMS * 2 &&
+                ((reg - 10) & 1) == 0) {
+                unsigned int stream = (reg - 10) / 2;
+                ipu4_handle_send_bump(s, stream, val);
+            }
             break;
         }
         if (addr >= IS_MMU_BASE && addr < IS_MMU_BASE + IS_MMU_SIZE) {
+            if (addr == IS_MMU_SUB0_REG_L1_PHYS) {
+                /* Latch the L1 PT base pfn so the syscom DMA helpers
+                 * can walk IOVAs. Both ISYS MMU sub-blocks mirror the
+                 * same L1 root, so capturing sub-block 0 is sufficient
+                 * (kernel/ipu4/ipu6-mmu.c:546-563). */
+                s->is_mmu_l1_pfn = val;
+            }
             s->is_mmu[(addr - IS_MMU_BASE) / 4] = val;
             break;
         }
@@ -758,11 +1257,19 @@ static void ipu4_reset(DeviceState *dev)
     memset(s->ps_mmu, 0, sizeof(s->ps_mmu));
     s->is_spc_status_ctrl = 0;
     s->ps_spc_status_ctrl = 0;
+    s->is_mmu_l1_pfn = 0;
+    s->syscom_config_iova = 0;
+    memset(s->is_send_q, 0, sizeof(s->is_send_q));
+    memset(s->is_send_q_loaded, 0, sizeof(s->is_send_q_loaded));
+    memset(&s->is_recv_q, 0, sizeof(s->is_recv_q));
+    s->is_recv_q_loaded = false;
+    memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
+    memset(s->is_send_count, 0, sizeof(s->is_send_count));
 }
 
 static const VMStateDescription vmstate_ipu4 = {
     .name = "ipu4",
-    .version_id = 7,
+    .version_id = 8,
     .minimum_version_id = 1,
     .fields = (const VMStateField[]) {
         VMSTATE_PCI_DEVICE(parent_obj, Ipu4State),
@@ -814,6 +1321,12 @@ static const VMStateDescription vmstate_ipu4 = {
         VMSTATE_UINT32_ARRAY_V(ps_mmu, Ipu4State, PS_MMU_SIZE / 4, 6),
         VMSTATE_UINT32_V(is_spc_status_ctrl, Ipu4State, 7),
         VMSTATE_UINT32_V(ps_spc_status_ctrl, Ipu4State, 7),
+        VMSTATE_UINT32_V(is_mmu_l1_pfn, Ipu4State, 8),
+        VMSTATE_UINT32_V(syscom_config_iova, Ipu4State, 8),
+        VMSTATE_UINT32_ARRAY_V(is_send_wr_seen, Ipu4State,
+                               IPU4_MAX_MSG_STREAMS, 8),
+        VMSTATE_UINT32_ARRAY_V(is_send_count, Ipu4State,
+                               IPU4_MAX_MSG_STREAMS, 8),
         VMSTATE_END_OF_LIST()
     }
 };
