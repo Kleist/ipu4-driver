@@ -93,67 +93,57 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define IS_UNISPART_SW_IRQ               (IS_UNISPART_BASE + 0x414)
 #define IS_UNISPART_SW_IRQ_MUX           (IS_UNISPART_BASE + 0x418)
 
-/* CSI2 port 0. Bases for ports 1..5 are in
- * kernel/ipu4/ipu4-platform-isys-csi2-reg.h:13-15 (0x65000, 0x66000,
- * 0x67000, 0x6C000, 0x6C800 — note ports 4/5 live at their own offsets).
- * Silicon touches only port 0 in data/trace.txt; we model it explicitly
- * and leave the other ports unimplemented until a trace covers them.
- * Per-port register offsets (from
- * kernel/ipu4/ipu4-platform-isys-csi2-reg.h:19-56):
+/* CSI2 ports. Each of the 6 ports has the same register layout
+ * (kernel/ipu4/ipu4-platform-isys-csi2-reg.h:19-56) but lives at an
+ * irregular base offset (kernel/ipu4/ipu4-platform-isys-csi2-reg.h:13-15):
+ *
+ *     port 0 — 0x64000   port 3 — 0x67000
+ *     port 1 — 0x65000   port 4 — 0x6c000
+ *     port 2 — 0x66000   port 5 — 0x6c800
+ *
+ * Per-port register offsets:
  *
  *   0x000  CSI_RX_ENABLE             R/W latched, bit 0 = enable.
  *   0x004  CSI_RX_NOF_ENABLED_LANES  R/W latched.
  *   0x008  CSI_RX_CONFIG             R/W latched; driver reads back.
- *   0x02c/0x030         DLY_CNT_{TERMEN,SETTLE}_CLANE   R/W latched.
- *   0x034/0x038         DLY_CNT_{TERMEN,SETTLE}_DLANE(0) R/W latched.
- *   0x400-0x414  CSI2PART IRQ trio (same W1C shape as unispart).
+ *   0x02c/0x030  DLY_CNT_{TERMEN,SETTLE}_CLANE   R/W latched.
+ *   0x034/0x038  DLY_CNT_{TERMEN,SETTLE}_DLANE(0) R/W latched.
+ *   0x400-0x414  CSI2PART IRQ trio (W1C status, latched edge/mask/enable).
  *   0x500-0x514  CSI RX IRQ trio.
  *   0x600-0x614  S2M IRQ trio.
  *
- * Same caveat as the unispart IRQ: `status` stays 0 because nothing
- * in the model raises CSI2 interrupts. That's a backing-device gap,
- * not a handler bug — compare.py will flag the corresponding STATUS
- * reads as value_mismatch until frame generation lands.
+ * Step-5b raises FS_VC0 in CSI2 PART_IRQ_STATUS for port 0 every time
+ * the model delivers a frame; ports 1..5 stay at 0 status (no backing
+ * frame source), which is how silicon's `data/trace.txt` looks for
+ * them too — it only exercises port 0.
  */
-#define CSI2P0_BASE                      0x64000
-#define CSI2P0_RX_ENABLE                 (CSI2P0_BASE + 0x000)
-#define CSI2P0_RX_NOF_LANES              (CSI2P0_BASE + 0x004)
-#define CSI2P0_RX_CONFIG                 (CSI2P0_BASE + 0x008)
-#define CSI2P0_DLY_TERMEN_C              (CSI2P0_BASE + 0x02c)
-#define CSI2P0_DLY_SETTLE_C              (CSI2P0_BASE + 0x030)
-#define CSI2P0_DLY_TERMEN_D0             (CSI2P0_BASE + 0x034)
-#define CSI2P0_DLY_SETTLE_D0             (CSI2P0_BASE + 0x038)
+#define CSI2_PORT_REG_RX_ENABLE                 0x000
+#define CSI2_PORT_REG_RX_NOF_LANES              0x004
+#define CSI2_PORT_REG_RX_CONFIG                 0x008
+#define CSI2_PORT_REG_DLY_TERMEN_C              0x02c
+#define CSI2_PORT_REG_DLY_SETTLE_C              0x030
+#define CSI2_PORT_REG_DLY_TERMEN_D0             0x034
+#define CSI2_PORT_REG_DLY_SETTLE_D0             0x038
+#define CSI2_PORT_REG_PART_IRQ_EDGE             0x400
+#define CSI2_PORT_REG_PART_IRQ_MASK             0x404
+#define CSI2_PORT_REG_PART_IRQ_STATUS           0x408
+#define CSI2_PORT_REG_PART_IRQ_CLEAR            0x40c
+#define CSI2_PORT_REG_PART_IRQ_ENABLE           0x410
+#define CSI2_PORT_REG_PART_IRQ_LEVEL_NOT_PULSE  0x414
+#define CSI2_PORT_REG_RX_IRQ_EDGE               0x500
+#define CSI2_PORT_REG_RX_IRQ_MASK               0x504
+#define CSI2_PORT_REG_RX_IRQ_STATUS             0x508
+#define CSI2_PORT_REG_RX_IRQ_CLEAR              0x50c
+#define CSI2_PORT_REG_RX_IRQ_ENABLE             0x510
+#define CSI2_PORT_REG_RX_IRQ_LEVEL_NOT_PULSE    0x514
+#define CSI2_PORT_REG_S2M_IRQ_EDGE              0x600
+#define CSI2_PORT_REG_S2M_IRQ_MASK              0x604
+#define CSI2_PORT_REG_S2M_IRQ_STATUS            0x608
+#define CSI2_PORT_REG_S2M_IRQ_CLEAR             0x60c
+#define CSI2_PORT_REG_S2M_IRQ_ENABLE            0x610
+#define CSI2_PORT_REG_S2M_IRQ_LEVEL_NOT_PULSE   0x614
 
-#define CSI2P0_PART_IRQ_EDGE             (CSI2P0_BASE + 0x400)
-#define CSI2P0_PART_IRQ_MASK             (CSI2P0_BASE + 0x404)
-#define CSI2P0_PART_IRQ_STATUS           (CSI2P0_BASE + 0x408)
-#define CSI2P0_PART_IRQ_CLEAR            (CSI2P0_BASE + 0x40c)
-#define CSI2P0_PART_IRQ_ENABLE           (CSI2P0_BASE + 0x410)
-#define CSI2P0_PART_IRQ_LEVEL_NOT_PULSE  (CSI2P0_BASE + 0x414)
-
-#define CSI2P0_RX_IRQ_EDGE               (CSI2P0_BASE + 0x500)
-#define CSI2P0_RX_IRQ_MASK               (CSI2P0_BASE + 0x504)
-#define CSI2P0_RX_IRQ_STATUS             (CSI2P0_BASE + 0x508)
-#define CSI2P0_RX_IRQ_CLEAR              (CSI2P0_BASE + 0x50c)
-#define CSI2P0_RX_IRQ_ENABLE             (CSI2P0_BASE + 0x510)
-#define CSI2P0_RX_IRQ_LEVEL_NOT_PULSE    (CSI2P0_BASE + 0x514)
-
-#define CSI2P0_S2M_IRQ_EDGE              (CSI2P0_BASE + 0x600)
-#define CSI2P0_S2M_IRQ_MASK              (CSI2P0_BASE + 0x604)
-#define CSI2P0_S2M_IRQ_STATUS            (CSI2P0_BASE + 0x608)
-#define CSI2P0_S2M_IRQ_CLEAR             (CSI2P0_BASE + 0x60c)
-#define CSI2P0_S2M_IRQ_ENABLE            (CSI2P0_BASE + 0x610)
-#define CSI2P0_S2M_IRQ_LEVEL_NOT_PULSE   (CSI2P0_BASE + 0x614)
-
-/* CSI2 ports 1..5 live at
- * 0x65000 (p1), 0x66000 (p2), 0x67000 (p3), 0x6c000 (p4), 0x6c800 (p5)
- * (kernel/ipu4/ipu4-platform-isys-csi2-reg.h:13-15). We don't model
- * them because data/trace.txt only exercises port 0; any access to
- * this range means a driver configuration we haven't captured and
- * the "port 0 only" assumption in the CSI2 block needs rework.
- */
-#define CSI2_PORTS_1_5_RANGE_BEGIN       0x65000
-#define CSI2_PORTS_1_5_RANGE_END         0x6d800
+#define IPU4_CSI2_NUM_PORTS                     6
 
 /* ISYS DMEM syscom ring-pointer block at BAR+0x108000 (from
  * postprocess_trace.py's NAMED_REGIONS; the driver derives offsets
@@ -446,6 +436,22 @@ QEMU_BUILD_BUG_ON(sizeof(Ipu4FwSendToken) != 16);
 #define IPU4_NUM_INPUT_QUEUES  (1 + 1 + IPU4_MAX_MSG_STREAMS)   /* proxy + dev + msg */
 #define IPU4_NUM_OUTPUT_QUEUES (1 + 1)                          /* proxy + msg */
 
+typedef struct Ipu4Csi2Port {
+    uint32_t rx_enable, rx_nof_lanes, rx_config;
+    uint32_t dly_termen_c, dly_settle_c, dly_termen_d0, dly_settle_d0;
+    uint32_t part_edge, part_mask, part_status, part_enable, part_level;
+    uint32_t rx_edge, rx_mask, rx_status, rx_enable_irq, rx_level;
+    uint32_t s2m_edge, s2m_mask, s2m_status, s2m_enable, s2m_level;
+} Ipu4Csi2Port;
+
+/* CSI2 port base offsets — irregular because ports 4 and 5 share a
+ * 0x1000 block (ports 0..3 are spaced 0x1000 apart, ports 4 and 5
+ * are spaced 0x800). Order matches IPU_CSI_PORT_NUM in
+ * kernel/ipu4/ipu6-isys-csi2.c. */
+static const hwaddr ipu4_csi2_port_base[IPU4_CSI2_NUM_PORTS] = {
+    0x64000, 0x65000, 0x66000, 0x67000, 0x6c000, 0x6c800,
+};
+
 struct Ipu4State {
     PCIDevice parent_obj;
     MemoryRegion bar0;
@@ -484,20 +490,11 @@ struct Ipu4State {
     uint32_t is_unispart_irq_level_not_pulse;
     uint32_t is_unispart_sw_irq_mux;
 
-    /* CSI2 port 0. */
-    uint32_t csi2p0_rx_enable;
-    uint32_t csi2p0_rx_nof_lanes;
-    uint32_t csi2p0_rx_config;
-    uint32_t csi2p0_dly_termen_c;
-    uint32_t csi2p0_dly_settle_c;
-    uint32_t csi2p0_dly_termen_d0;
-    uint32_t csi2p0_dly_settle_d0;
-    uint32_t csi2p0_part_edge, csi2p0_part_mask, csi2p0_part_status;
-    uint32_t csi2p0_part_enable, csi2p0_part_level;
-    uint32_t csi2p0_rx_edge, csi2p0_rx_mask, csi2p0_rx_status;
-    uint32_t csi2p0_rx_enable_irq, csi2p0_rx_level;
-    uint32_t csi2p0_s2m_edge, csi2p0_s2m_mask, csi2p0_s2m_status;
-    uint32_t csi2p0_s2m_enable, csi2p0_s2m_level;
+    /* CSI2 ports 0..5. Each port has identical register layout
+     * (Ipu4Csi2Port). Step 5 follow-up extends to all 6 ports —
+     * pre-this, only port 0 was modelled and ports 1..5 fell through
+     * to a LOG_UNIMP fallback. */
+    Ipu4Csi2Port csi2[IPU4_CSI2_NUM_PORTS];
 
     /* ISYS DMEM syscom window (0x108000..0x1080ff). */
     uint32_t is_dmem[IS_DMEM_SIZE / 4];
@@ -897,7 +894,7 @@ static void ipu4_deliver_frame(Ipu4State *s, uint8_t stream,
      * The per-frame cadence is sufficient — the streamon-smoke test
      * delivers a single frame, so a periodic QEMUTimer would only
      * add lifecycle complexity for the same observable behaviour. */
-    s->csi2p0_part_status |= CSI2_PART_IRQ_FS_VC0;
+    s->csi2[0].part_status |= CSI2_PART_IRQ_FS_VC0;
     s->is_unispart_irq_status |= ISYS_UNISPART_IRQ_CSI2_PORT0;
 
     /* FRAME_SOF first so the driver's atomic_fetch_inc on
@@ -1036,6 +1033,111 @@ static void ipu4_handle_send_bump(Ipu4State *s, unsigned int stream,
     }
 }
 
+/* Resolve a BAR-relative address into (port_index, register_offset)
+ * for the CSI2 region. Returns -1 if the address isn't within any
+ * port's 0x1000 / 0x800 window. */
+static int ipu4_csi2_resolve(hwaddr addr, hwaddr *out_offset)
+{
+    /* Ports 0..3 each cover a 0x1000 window; ports 4 and 5 split a
+     * 0x1000 window into two 0x800 halves. */
+    static const hwaddr port_size[IPU4_CSI2_NUM_PORTS] = {
+        0x1000, 0x1000, 0x1000, 0x1000, 0x800, 0x800,
+    };
+    unsigned int i;
+
+    for (i = 0; i < IPU4_CSI2_NUM_PORTS; i++) {
+        hwaddr base = ipu4_csi2_port_base[i];
+        if (addr >= base && addr < base + port_size[i]) {
+            *out_offset = addr - base;
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+/* Per-port read dispatch. Returns true if `reg_off` matched a known
+ * register; *val is set on success. Unknown offsets within a port's
+ * window fall through to the caller's LOG_UNIMP path. */
+static bool ipu4_csi2_port_read(Ipu4Csi2Port *p, hwaddr reg_off,
+                                uint64_t *val)
+{
+    switch (reg_off) {
+    case CSI2_PORT_REG_RX_ENABLE:                 *val = p->rx_enable; return true;
+    case CSI2_PORT_REG_RX_NOF_LANES:              *val = p->rx_nof_lanes; return true;
+    case CSI2_PORT_REG_RX_CONFIG:                 *val = p->rx_config; return true;
+    case CSI2_PORT_REG_DLY_TERMEN_C:              *val = p->dly_termen_c; return true;
+    case CSI2_PORT_REG_DLY_SETTLE_C:              *val = p->dly_settle_c; return true;
+    case CSI2_PORT_REG_DLY_TERMEN_D0:             *val = p->dly_termen_d0; return true;
+    case CSI2_PORT_REG_DLY_SETTLE_D0:             *val = p->dly_settle_d0; return true;
+
+    case CSI2_PORT_REG_PART_IRQ_EDGE:             *val = p->part_edge; return true;
+    case CSI2_PORT_REG_PART_IRQ_MASK:             *val = p->part_mask; return true;
+    case CSI2_PORT_REG_PART_IRQ_STATUS:
+        *val = p->part_status & p->part_enable;
+        return true;
+    case CSI2_PORT_REG_PART_IRQ_ENABLE:            *val = p->part_enable; return true;
+    case CSI2_PORT_REG_PART_IRQ_LEVEL_NOT_PULSE:   *val = p->part_level; return true;
+
+    case CSI2_PORT_REG_RX_IRQ_EDGE:                *val = p->rx_edge; return true;
+    case CSI2_PORT_REG_RX_IRQ_MASK:                *val = p->rx_mask; return true;
+    case CSI2_PORT_REG_RX_IRQ_STATUS:
+        *val = p->rx_status & p->rx_enable_irq;
+        return true;
+    case CSI2_PORT_REG_RX_IRQ_ENABLE:              *val = p->rx_enable_irq; return true;
+    case CSI2_PORT_REG_RX_IRQ_LEVEL_NOT_PULSE:     *val = p->rx_level; return true;
+
+    case CSI2_PORT_REG_S2M_IRQ_EDGE:               *val = p->s2m_edge; return true;
+    case CSI2_PORT_REG_S2M_IRQ_MASK:               *val = p->s2m_mask; return true;
+    case CSI2_PORT_REG_S2M_IRQ_STATUS:
+        *val = p->s2m_status & p->s2m_enable;
+        return true;
+    case CSI2_PORT_REG_S2M_IRQ_ENABLE:             *val = p->s2m_enable; return true;
+    case CSI2_PORT_REG_S2M_IRQ_LEVEL_NOT_PULSE:    *val = p->s2m_level; return true;
+    }
+    return false;
+}
+
+/* Per-port write dispatch. Returns true if reg_off matched a known
+ * register. Latches except for the W1C *_IRQ_CLEAR registers. */
+static bool ipu4_csi2_port_write(Ipu4Csi2Port *p, hwaddr reg_off,
+                                 uint64_t val)
+{
+    switch (reg_off) {
+    case CSI2_PORT_REG_RX_ENABLE:                 p->rx_enable = val; return true;
+    case CSI2_PORT_REG_RX_NOF_LANES:              p->rx_nof_lanes = val; return true;
+    case CSI2_PORT_REG_RX_CONFIG:                 p->rx_config = val; return true;
+    case CSI2_PORT_REG_DLY_TERMEN_C:              p->dly_termen_c = val; return true;
+    case CSI2_PORT_REG_DLY_SETTLE_C:              p->dly_settle_c = val; return true;
+    case CSI2_PORT_REG_DLY_TERMEN_D0:             p->dly_termen_d0 = val; return true;
+    case CSI2_PORT_REG_DLY_SETTLE_D0:             p->dly_settle_d0 = val; return true;
+
+    case CSI2_PORT_REG_PART_IRQ_EDGE:             p->part_edge = val; return true;
+    case CSI2_PORT_REG_PART_IRQ_MASK:             p->part_mask = val; return true;
+    case CSI2_PORT_REG_PART_IRQ_CLEAR:
+        p->part_status &= ~(uint32_t)val;
+        return true;
+    case CSI2_PORT_REG_PART_IRQ_ENABLE:           p->part_enable = val; return true;
+    case CSI2_PORT_REG_PART_IRQ_LEVEL_NOT_PULSE:  p->part_level = val; return true;
+
+    case CSI2_PORT_REG_RX_IRQ_EDGE:               p->rx_edge = val; return true;
+    case CSI2_PORT_REG_RX_IRQ_MASK:               p->rx_mask = val; return true;
+    case CSI2_PORT_REG_RX_IRQ_CLEAR:
+        p->rx_status &= ~(uint32_t)val;
+        return true;
+    case CSI2_PORT_REG_RX_IRQ_ENABLE:             p->rx_enable_irq = val; return true;
+    case CSI2_PORT_REG_RX_IRQ_LEVEL_NOT_PULSE:    p->rx_level = val; return true;
+
+    case CSI2_PORT_REG_S2M_IRQ_EDGE:              p->s2m_edge = val; return true;
+    case CSI2_PORT_REG_S2M_IRQ_MASK:              p->s2m_mask = val; return true;
+    case CSI2_PORT_REG_S2M_IRQ_CLEAR:
+        p->s2m_status &= ~(uint32_t)val;
+        return true;
+    case CSI2_PORT_REG_S2M_IRQ_ENABLE:            p->s2m_enable = val; return true;
+    case CSI2_PORT_REG_S2M_IRQ_LEVEL_NOT_PULSE:   p->s2m_level = val; return true;
+    }
+    return false;
+}
+
 static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
 {
     Ipu4State *s = IPU4(opaque);
@@ -1140,37 +1242,6 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
         val = s->is_unispart_sw_irq_mux;
         break;
 
-    case CSI2P0_RX_ENABLE:        val = s->csi2p0_rx_enable; break;
-    case CSI2P0_RX_NOF_LANES:     val = s->csi2p0_rx_nof_lanes; break;
-    case CSI2P0_RX_CONFIG:        val = s->csi2p0_rx_config; break;
-    case CSI2P0_DLY_TERMEN_C:     val = s->csi2p0_dly_termen_c; break;
-    case CSI2P0_DLY_SETTLE_C:     val = s->csi2p0_dly_settle_c; break;
-    case CSI2P0_DLY_TERMEN_D0:    val = s->csi2p0_dly_termen_d0; break;
-    case CSI2P0_DLY_SETTLE_D0:    val = s->csi2p0_dly_settle_d0; break;
-
-    case CSI2P0_PART_IRQ_EDGE:    val = s->csi2p0_part_edge; break;
-    case CSI2P0_PART_IRQ_MASK:    val = s->csi2p0_part_mask; break;
-    case CSI2P0_PART_IRQ_STATUS:
-        val = s->csi2p0_part_status & s->csi2p0_part_enable;
-        break;
-    case CSI2P0_PART_IRQ_ENABLE:  val = s->csi2p0_part_enable; break;
-    case CSI2P0_PART_IRQ_LEVEL_NOT_PULSE: val = s->csi2p0_part_level; break;
-
-    case CSI2P0_RX_IRQ_EDGE:      val = s->csi2p0_rx_edge; break;
-    case CSI2P0_RX_IRQ_MASK:      val = s->csi2p0_rx_mask; break;
-    case CSI2P0_RX_IRQ_STATUS:
-        val = s->csi2p0_rx_status & s->csi2p0_rx_enable_irq;
-        break;
-    case CSI2P0_RX_IRQ_ENABLE:    val = s->csi2p0_rx_enable_irq; break;
-    case CSI2P0_RX_IRQ_LEVEL_NOT_PULSE: val = s->csi2p0_rx_level; break;
-
-    case CSI2P0_S2M_IRQ_EDGE:     val = s->csi2p0_s2m_edge; break;
-    case CSI2P0_S2M_IRQ_MASK:     val = s->csi2p0_s2m_mask; break;
-    case CSI2P0_S2M_IRQ_STATUS:
-        val = s->csi2p0_s2m_status & s->csi2p0_s2m_enable;
-        break;
-    case CSI2P0_S2M_IRQ_ENABLE:   val = s->csi2p0_s2m_enable; break;
-    case CSI2P0_S2M_IRQ_LEVEL_NOT_PULSE: val = s->csi2p0_s2m_level; break;
 
     case IS_SPC_STATUS_CTRL:
         /* See the bit-map comment near the constant: force READY on,
@@ -1221,18 +1292,23 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
             val = s->ps_mmu[(addr - PS_MMU_BASE) / 4];
             break;
         }
-        if (addr >= CSI2_PORTS_1_5_RANGE_BEGIN &&
-            addr < CSI2_PORTS_1_5_RANGE_END) {
-            qemu_log_mask(LOG_UNIMP,
-                          "ipu4: CSI2 port>=1 read +0x%06" HWADDR_PRIx
-                          " — only port 0 is modelled; data/trace.txt "
-                          "only exercised port 0, so this means a new "
-                          "driver path hit an unmodelled port.\n", addr);
-        } else {
-            qemu_log_mask(LOG_UNIMP,
-                          "ipu4: read unimpl +0x%06" HWADDR_PRIx
-                          " size=%u\n", addr, size);
+        {
+            hwaddr csi2_off;
+            int csi2_port = ipu4_csi2_resolve(addr, &csi2_off);
+            if (csi2_port >= 0) {
+                if (ipu4_csi2_port_read(&s->csi2[csi2_port], csi2_off,
+                                        &val)) {
+                    break;
+                }
+                qemu_log_mask(LOG_UNIMP,
+                              "ipu4: CSI2 port %d read unimpl +0x%03"
+                              HWADDR_PRIx "\n", csi2_port, csi2_off);
+                return 0;
+            }
         }
+        qemu_log_mask(LOG_UNIMP,
+                      "ipu4: read unimpl +0x%06" HWADDR_PRIx
+                      " size=%u\n", addr, size);
         return 0;
     }
 
@@ -1377,37 +1453,6 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
         s->is_unispart_sw_irq_mux = val;
         break;
 
-    case CSI2P0_RX_ENABLE:        s->csi2p0_rx_enable = val; break;
-    case CSI2P0_RX_NOF_LANES:     s->csi2p0_rx_nof_lanes = val; break;
-    case CSI2P0_RX_CONFIG:        s->csi2p0_rx_config = val; break;
-    case CSI2P0_DLY_TERMEN_C:     s->csi2p0_dly_termen_c = val; break;
-    case CSI2P0_DLY_SETTLE_C:     s->csi2p0_dly_settle_c = val; break;
-    case CSI2P0_DLY_TERMEN_D0:    s->csi2p0_dly_termen_d0 = val; break;
-    case CSI2P0_DLY_SETTLE_D0:    s->csi2p0_dly_settle_d0 = val; break;
-
-    case CSI2P0_PART_IRQ_EDGE:    s->csi2p0_part_edge = val; break;
-    case CSI2P0_PART_IRQ_MASK:    s->csi2p0_part_mask = val; break;
-    case CSI2P0_PART_IRQ_CLEAR:
-        s->csi2p0_part_status &= ~(uint32_t)val;
-        break;
-    case CSI2P0_PART_IRQ_ENABLE:  s->csi2p0_part_enable = val; break;
-    case CSI2P0_PART_IRQ_LEVEL_NOT_PULSE: s->csi2p0_part_level = val; break;
-
-    case CSI2P0_RX_IRQ_EDGE:      s->csi2p0_rx_edge = val; break;
-    case CSI2P0_RX_IRQ_MASK:      s->csi2p0_rx_mask = val; break;
-    case CSI2P0_RX_IRQ_CLEAR:
-        s->csi2p0_rx_status &= ~(uint32_t)val;
-        break;
-    case CSI2P0_RX_IRQ_ENABLE:    s->csi2p0_rx_enable_irq = val; break;
-    case CSI2P0_RX_IRQ_LEVEL_NOT_PULSE: s->csi2p0_rx_level = val; break;
-
-    case CSI2P0_S2M_IRQ_EDGE:     s->csi2p0_s2m_edge = val; break;
-    case CSI2P0_S2M_IRQ_MASK:     s->csi2p0_s2m_mask = val; break;
-    case CSI2P0_S2M_IRQ_CLEAR:
-        s->csi2p0_s2m_status &= ~(uint32_t)val;
-        break;
-    case CSI2P0_S2M_IRQ_ENABLE:   s->csi2p0_s2m_enable = val; break;
-    case CSI2P0_S2M_IRQ_LEVEL_NOT_PULSE: s->csi2p0_s2m_level = val; break;
 
     case IS_SPC_STATUS_CTRL:
         s->is_spc_status_ctrl = val;
@@ -1484,20 +1529,25 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
             s->ps_mmu[(addr - PS_MMU_BASE) / 4] = val;
             break;
         }
-        if (addr >= CSI2_PORTS_1_5_RANGE_BEGIN &&
-            addr < CSI2_PORTS_1_5_RANGE_END) {
-            qemu_log_mask(LOG_UNIMP,
-                          "ipu4: CSI2 port>=1 write +0x%06" HWADDR_PRIx
-                          " val=0x%" PRIx64 " — only port 0 is modelled; "
-                          "data/trace.txt only exercised port 0, so this "
-                          "means a new driver path hit an unmodelled port.\n",
-                          addr, val);
-        } else {
-            qemu_log_mask(LOG_UNIMP,
-                          "ipu4: write unimpl +0x%06" HWADDR_PRIx
-                          " val=0x%" PRIx64 " size=%u\n",
-                          addr, val, size);
+        {
+            hwaddr csi2_off;
+            int csi2_port = ipu4_csi2_resolve(addr, &csi2_off);
+            if (csi2_port >= 0) {
+                if (ipu4_csi2_port_write(&s->csi2[csi2_port], csi2_off,
+                                         val)) {
+                    break;
+                }
+                qemu_log_mask(LOG_UNIMP,
+                              "ipu4: CSI2 port %d write unimpl +0x%03"
+                              HWADDR_PRIx " val=0x%" PRIx64 "\n",
+                              csi2_port, csi2_off, val);
+                break;
+            }
         }
+        qemu_log_mask(LOG_UNIMP,
+                      "ipu4: write unimpl +0x%06" HWADDR_PRIx
+                      " val=0x%" PRIx64 " size=%u\n",
+                      addr, val, size);
         break;
     }
 }
@@ -1581,19 +1631,7 @@ static void ipu4_reset(DeviceState *dev)
     s->is_unispart_irq_enable = 0;
     s->is_unispart_irq_level_not_pulse = 0;
     s->is_unispart_sw_irq_mux = 0;
-    s->csi2p0_rx_enable = 0;
-    s->csi2p0_rx_nof_lanes = 0;
-    s->csi2p0_rx_config = 0;
-    s->csi2p0_dly_termen_c = 0;
-    s->csi2p0_dly_settle_c = 0;
-    s->csi2p0_dly_termen_d0 = 0;
-    s->csi2p0_dly_settle_d0 = 0;
-    s->csi2p0_part_edge = s->csi2p0_part_mask = s->csi2p0_part_status = 0;
-    s->csi2p0_part_enable = s->csi2p0_part_level = 0;
-    s->csi2p0_rx_edge = s->csi2p0_rx_mask = s->csi2p0_rx_status = 0;
-    s->csi2p0_rx_enable_irq = s->csi2p0_rx_level = 0;
-    s->csi2p0_s2m_edge = s->csi2p0_s2m_mask = s->csi2p0_s2m_status = 0;
-    s->csi2p0_s2m_enable = s->csi2p0_s2m_level = 0;
+    memset(s->csi2, 0, sizeof(s->csi2));
     memset(s->is_dmem, 0, sizeof(s->is_dmem));
     memset(s->is_mmu, 0, sizeof(s->is_mmu));
     memset(s->ps_mmu, 0, sizeof(s->ps_mmu));
@@ -1608,9 +1646,40 @@ static void ipu4_reset(DeviceState *dev)
     memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
 }
 
+static const VMStateDescription vmstate_ipu4_csi2_port = {
+    .name = "ipu4-csi2-port",
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (const VMStateField[]) {
+        VMSTATE_UINT32(rx_enable, Ipu4Csi2Port),
+        VMSTATE_UINT32(rx_nof_lanes, Ipu4Csi2Port),
+        VMSTATE_UINT32(rx_config, Ipu4Csi2Port),
+        VMSTATE_UINT32(dly_termen_c, Ipu4Csi2Port),
+        VMSTATE_UINT32(dly_settle_c, Ipu4Csi2Port),
+        VMSTATE_UINT32(dly_termen_d0, Ipu4Csi2Port),
+        VMSTATE_UINT32(dly_settle_d0, Ipu4Csi2Port),
+        VMSTATE_UINT32(part_edge, Ipu4Csi2Port),
+        VMSTATE_UINT32(part_mask, Ipu4Csi2Port),
+        VMSTATE_UINT32(part_status, Ipu4Csi2Port),
+        VMSTATE_UINT32(part_enable, Ipu4Csi2Port),
+        VMSTATE_UINT32(part_level, Ipu4Csi2Port),
+        VMSTATE_UINT32(rx_edge, Ipu4Csi2Port),
+        VMSTATE_UINT32(rx_mask, Ipu4Csi2Port),
+        VMSTATE_UINT32(rx_status, Ipu4Csi2Port),
+        VMSTATE_UINT32(rx_enable_irq, Ipu4Csi2Port),
+        VMSTATE_UINT32(rx_level, Ipu4Csi2Port),
+        VMSTATE_UINT32(s2m_edge, Ipu4Csi2Port),
+        VMSTATE_UINT32(s2m_mask, Ipu4Csi2Port),
+        VMSTATE_UINT32(s2m_status, Ipu4Csi2Port),
+        VMSTATE_UINT32(s2m_enable, Ipu4Csi2Port),
+        VMSTATE_UINT32(s2m_level, Ipu4Csi2Port),
+        VMSTATE_END_OF_LIST()
+    }
+};
+
 static const VMStateDescription vmstate_ipu4 = {
     .name = "ipu4",
-    .version_id = 9,
+    .version_id = 10,
     .minimum_version_id = 1,
     .fields = (const VMStateField[]) {
         VMSTATE_PCI_DEVICE(parent_obj, Ipu4State),
@@ -1635,28 +1704,8 @@ static const VMStateDescription vmstate_ipu4 = {
         VMSTATE_UINT32_V(is_unispart_irq_enable, Ipu4State, 3),
         VMSTATE_UINT32_V(is_unispart_irq_level_not_pulse, Ipu4State, 3),
         VMSTATE_UINT32_V(is_unispart_sw_irq_mux, Ipu4State, 3),
-        VMSTATE_UINT32_V(csi2p0_rx_enable, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_rx_nof_lanes, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_rx_config, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_dly_termen_c, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_dly_settle_c, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_dly_termen_d0, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_dly_settle_d0, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_part_edge, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_part_mask, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_part_status, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_part_enable, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_part_level, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_rx_edge, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_rx_mask, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_rx_status, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_rx_enable_irq, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_rx_level, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_s2m_edge, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_s2m_mask, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_s2m_status, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_s2m_enable, Ipu4State, 4),
-        VMSTATE_UINT32_V(csi2p0_s2m_level, Ipu4State, 4),
+        VMSTATE_STRUCT_ARRAY(csi2, Ipu4State, IPU4_CSI2_NUM_PORTS, 10,
+                             vmstate_ipu4_csi2_port, Ipu4Csi2Port),
         VMSTATE_UINT32_ARRAY_V(is_dmem, Ipu4State, IS_DMEM_SIZE / 4, 5),
         VMSTATE_UINT32_ARRAY_V(is_mmu, Ipu4State, IS_MMU_SIZE / 4, 6),
         VMSTATE_UINT32_ARRAY_V(ps_mmu, Ipu4State, PS_MMU_SIZE / 4, 6),
