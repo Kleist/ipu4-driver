@@ -232,14 +232,34 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define PS_MMU_BASE                      0x4b0000
 #define PS_MMU_SIZE                      0xa00
 
-/* PWR_STATE target values the driver polls for. IPU4 uses:
- *   - bits 13:12  HH (TSC-sync) status: DONE = 2
- *   - bits 23:20  IS (ISYS) power FSM: IS_RDY = 0xa
- *   - bits 28:24  PS (PSYS) power FSM: PS_PWR_UP = 0xf
- * Reading PWR_STATE always returns all of them asserted so every
- * `readl_poll_timeout()` in the driver terminates on the first read.
+/* PWR_STATE FSM bits (kernel/ipu4/ipu4-platform-buttress-regs.h:11-22).
+ * The driver polls PWR_STATE for ISYS/PSYS power transitions and a
+ * one-time TSC-sync handshake. Step 5 models the per-power-island
+ * state machine so `bus_pm_runtime_suspend` actually succeeds —
+ * pre-Step-5 the model returned BTRS_PWR_STATE_PWR_RDY_ALL on every
+ * read, so power-down polls timed out and the auto-suspend recovery
+ * path stranded the auxiliary device with isys->power == 0.
+ *
+ *   bits [1:0]    PWR_RDY = 3       — buttress always ready
+ *   bits [13:12]  HH_DONE = 2       — TSC-sync done
+ *   bits [23:20]  IS_PWR_FSM
+ *                   IDLE   = 0      — IS not powered
+ *                   IS_RDY = 0xa    — IS powered up
+ *   bits [28:24]  PS_PWR_FSM
+ *                   IDLE      = 0
+ *                   PS_PWR_UP = 0xf
+ *
+ * The driver triggers transitions by writing IS_FREQ_CTL / PS_FREQ_CTL
+ * with BUTTRESS_FREQ_CTL_START (BIT(31)) set for power-on or zeroed
+ * for power-off (kernel/ipu4/ipu6-buttress.c:466-505). The model
+ * mirrors the START bit into a per-island powered flag and computes
+ * PWR_STATE on read.
  */
-#define BTRS_PWR_STATE_PWR_RDY_ALL      0x0fa02003
+#define BTRS_PWR_STATE_PWR_RDY            (3u << 0)
+#define BTRS_PWR_STATE_HH_DONE            (2u << 12)
+#define BTRS_PWR_STATE_IS_RDY             (0xau << 20)
+#define BTRS_PWR_STATE_PS_PWR_UP          (0xfu << 24)
+#define BTRS_FREQ_CTL_START               (1u << 31)
 
 /* IPU4 ISYS MMU sub-block 0 lives at BAR + ISYS_OFFSET (0x100000) +
  * IOMMU0_OFFSET (0xe0000) = 0x1e0000 (kernel/ipu4/ipu4-platform-regs.h).
@@ -411,6 +431,15 @@ struct Ipu4State {
     uint32_t fw_reset_ctl;
     uint32_t is_freq_ctl;
     uint32_t ps_freq_ctl;
+    /* Step-5 PWR_STATE FSM flags. Set to true when the driver writes
+     * IS_FREQ_CTL / PS_FREQ_CTL with BUTTRESS_FREQ_CTL_START (BIT(31)),
+     * cleared when it writes the same register without the bit (the
+     * power-down path zeros the entire register). PWR_STATE reads
+     * report bits[23:20] = IS_RDY when is_powered is true,
+     * bits[28:24] = PS_PWR_UP when ps_powered is true.
+     */
+    bool is_powered;
+    bool ps_powered;
     uint32_t fabric_cmd;
     uint32_t pwr_state;
     uint32_t isr_enable;
@@ -994,9 +1023,17 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
         val = s->fw_reset_ctl;
         break;
     case BTRS_REG_PWR_STATE:
-        /* Report "all power islands ready" on every read. The driver
-         * polls this for ISYS, PSYS, and TSC-sync readiness. */
-        val = BTRS_PWR_STATE_PWR_RDY_ALL;
+        /* Compose the PWR_STATE word from the per-island FSM flags
+         * (Step 5). PWR_RDY and HH_DONE are tied high — buttress
+         * itself and TSC-sync are always considered ready since we
+         * don't model their respective FSMs. */
+        val = BTRS_PWR_STATE_PWR_RDY | BTRS_PWR_STATE_HH_DONE;
+        if (s->is_powered) {
+            val |= BTRS_PWR_STATE_IS_RDY;
+        }
+        if (s->ps_powered) {
+            val |= BTRS_PWR_STATE_PS_PWR_UP;
+        }
         s->pwr_state = val;
         break;
     case BTRS_REG_ISR_STATUS:
@@ -1180,14 +1217,20 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
         s->fw_reset_ctl = val;
         break;
     case BTRS_REG_IS_FREQ_CTL:
-        /* Driver writes a clock divisor (low byte) plus the ICCMAX
-         * level (bit 31 set when active). Latched only — there's no
-         * actual clock to scale in the model, and the driver doesn't
-         * read this back to validate. */
+        /* Driver writes the BUTTRESS_FREQ_CTL_START bit (BIT(31))
+         * along with the divisor / QoS-floor / ICCMAX fields to
+         * power up an island, or zero to power it down
+         * (kernel/ipu4/ipu6-buttress.c:466-505). Mirror the START
+         * bit into is_powered so PWR_STATE reads track the driver's
+         * intent — without this, ipu6_buttress_power(off) times out
+         * polling for IS_PWR_FSM == IDLE and the auto-suspend
+         * recovery strands isys->power == 0. */
         s->is_freq_ctl = val;
+        s->is_powered = (val & BTRS_FREQ_CTL_START) != 0;
         break;
     case BTRS_REG_PS_FREQ_CTL:
         s->ps_freq_ctl = val;
+        s->ps_powered = (val & BTRS_FREQ_CTL_START) != 0;
         break;
     case BTRS_REG_FABRIC_CMD:
         /* Single-shot fabric command write (data/trace.txt shows one
@@ -1439,6 +1482,8 @@ static void ipu4_reset(DeviceState *dev)
     s->fw_reset_ctl = 0;
     s->is_freq_ctl = 0;
     s->ps_freq_ctl = 0;
+    s->is_powered = false;
+    s->ps_powered = false;
     s->fabric_cmd = 0;
     s->pwr_state = 0;
     s->isr_enable = 0;
@@ -1494,7 +1539,7 @@ static void ipu4_reset(DeviceState *dev)
 
 static const VMStateDescription vmstate_ipu4 = {
     .name = "ipu4",
-    .version_id = 8,
+    .version_id = 9,
     .minimum_version_id = 1,
     .fields = (const VMStateField[]) {
         VMSTATE_PCI_DEVICE(parent_obj, Ipu4State),
@@ -1550,6 +1595,8 @@ static const VMStateDescription vmstate_ipu4 = {
         VMSTATE_UINT32_V(syscom_config_iova, Ipu4State, 8),
         VMSTATE_UINT32_ARRAY_V(is_send_wr_seen, Ipu4State,
                                IPU4_MAX_MSG_STREAMS, 8),
+        VMSTATE_BOOL_V(is_powered, Ipu4State, 9),
+        VMSTATE_BOOL_V(ps_powered, Ipu4State, 9),
         VMSTATE_END_OF_LIST()
     }
 };
