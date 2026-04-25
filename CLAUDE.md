@@ -42,6 +42,15 @@ tools/tests/e2e.sh          # Tier 2: boot VM, STREAMON, frame-hash check (needs
 tools/rebase.sh             # rebase tools/linux/ onto linux-6.12.y and re-run tiers
 ```
 
+Full-VM test loop (the same set CI's `vm-smoke` runs — fast on warm caches, ~5 min, dramatically shorter feedback than push-and-wait CI):
+
+```bash
+tools/bootstrap.sh && tools/build-qemu.sh && tools/build-kernel.sh && tools/rootfs/build.sh
+IPU4_ACCEL=tcg tools/tests/streamon-smoke.sh    # boot VM, walk v4l2 capture API end-to-end
+IPU4_ACCEL=tcg tools/tests/mmiotrace.sh          # rerun under mmiotrace, capture qemu.trace
+tools/tests/compare-mmio.sh                       # diff against silicon's data/trace.txt
+```
+
 `tools/build.sh` uses `KBUILD_MODPOST_WARN=1`: undefined-symbol errors are downgraded to warnings because vmlinux is not built here. Those symbols resolve at `insmod` time inside the guest VM.
 
 The bootstrap script is idempotent. Re-run after pulling to re-apply patches from `tools/{linux,qemu}-patches/`. Override the upstream URLs/tags via env vars `IPU4_LINUX_URL`, `IPU4_LINUX_TAG`, `IPU4_QEMU_URL`, `IPU4_QEMU_TAG`.
@@ -50,15 +59,26 @@ The bootstrap script is idempotent. Re-run after pulling to re-apply patches fro
 
 - `.github/workflows/pr.yml` — bootstrap + build + kunit on every PR.
 - `.github/workflows/main.yml` — same, on push to `main`/`master`. Coverage and e2e jobs are staged but not yet wired.
+- `.github/workflows/vm-smoke.yml` — full-VM boot + probe-smoke + streamon-smoke + mmiotrace + `compare-mmio` divergence report on every PR. Failure artifacts (`vm-smoke-failure-*`) include the serial logs; the coverage report (`mmio-trace-coverage-vm-smoke-*`) is published unconditionally.
 - `.github/workflows/rebase.yml` — weekly cron that rebases `tools/linux/` onto `linux-6.12.y`.
+
+## QEMU device-model workflow
+
+The QEMU IPU4 device model (`tools/qemu-patches/hw/misc/ipu4.c`) is the part of the harness most likely to need changes. A few project-specific things that aren't obvious:
+
+- **The mmiotrace coverage report drives the worklist.** `tools/tests/out/compare-mmio/report.txt` (also published as `mmio-trace-coverage-vm-smoke-*` in CI) classifies silicon-vs-QEMU divergence into `unimplemented` (silicon touches an address we don't handle) and `value_mismatch` (we handle it but values differ). Each model change targets a specific row; after merge the row should drop or reclassify. `tools/notes/registers.md` is the source of truth for what every implemented handler does — add a row when you add a handler.
+- **`fprintf(stderr, …)` is the only QEMU debug output that survives CI.** `tools/run-vm.sh` runs QEMU without `-d unimp`, so `qemu_log_mask(LOG_UNIMP, …)` calls go to `/dev/null`. To make a diagnostic visible in the failure-artifact serial log, use `fprintf(stderr, …)`. Convert to `qemu_log_mask(LOG_UNIMP, …)` once a behaviour is stable; PRs shouldn't merge with `fprintf` left behind.
+- **Driver-provided "DMA addresses" are IPU IOVAs, not host-physical.** To `pci_dma_read` / `pci_dma_write` against them, walk the IPU MMU page tables: L1 PT pfn latched from `BAR+0x1e0004` (sub-block 0 of the ISYS MMU window), 22-bit L1 idx, 10-bit L2 idx, 12-bit page offset; both PT levels store 27-bit pfns. The walker is `ipu4_iova_to_phys()` in `tools/qemu-patches/hw/misc/ipu4.c`. Multi-page accesses must walk per-page (`vb2_dma_sg_memops` makes buffers physically discontiguous).
+- **Multi-PR rollout discipline against `qemu-kunit-setup`.** Each milestone is a single squashed commit against `origin/qemu-kunit-setup`. After a parent PR merges, rebase the next branch onto the new merged tip — the merge SHA differs from the local pre-merge SHA — with `git rebase --onto origin/qemu-kunit-setup <old-base>` and force-push. Each step must (a) leave the workflow it touches green in vm-smoke, and (b) shrink the divergence report visibly, so a regression at any step is local and undo-able.
+- **VMState versioning is loose pre-release.** The `qemu-kunit-setup` branch isn't tagged. Bumping `version_id` and removing fields is fine in development; back-compat shims aren't needed until a release branch lands.
 
 ## Known in-progress work
 
 See `STATUS.md` for milestone state. Key "not done yet" items that affect what tests actually run:
 
 - `drivers/media/pci/intel/Kconfig` is not yet patched to expose `CONFIG_VIDEO_IPU4`, so `tools/tests/kunit.sh` prints `kunit: skipping` and exits 0 rather than failing. CI is green on purpose until that wiring lands.
-- `tools/rootfs/build.sh` is a stub — `tools/tests/e2e.sh` and `tools/run-vm.sh` can't run end-to-end until it produces `bzImage` + `rootfs.cpio.gz`.
-- QEMU's `hw/misc/ipu4.c` register behavior is labeled `guess` in `tools/notes/registers.md` — no real hardware captures exist yet.
+- `tools/tests/e2e.sh` is still a tier-2 placeholder — the live test path is `tools/tests/streamon-smoke.sh` (gated by `IPU4_STREAM_REQUIRED`, default `STREAM:pattern_ok` end-to-end) plus `tools/tests/mmiotrace.sh` and `tools/tests/compare-mmio.sh`.
+- `tools/notes/registers.md` rows are no longer mostly `guess` — most behaviour is `inferred` against silicon's `data/trace.txt`. The remaining `value_mismatch` rows (PWR_STATE FSM transitional values, TSC clock skew, SPC_STATUS_CTRL silicon-specific bits, ring-cursor counts) are intrinsic divergence, not missing handlers.
 
 ## Legacy hardware trace scripts
 
