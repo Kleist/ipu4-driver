@@ -4,8 +4,10 @@
 # comment. Prints a summary of (file, key, old, new) so the calling
 # workflow can paste it into the auto-PR's body.
 #
-# Files touched (current scope):
-#   - .github/workflows/ci.yml   (build+kunit matrix; 6.12 + 6.18)
+# Files touched:
+#   - .github/workflows/ci.yml             (build+kunit matrix; 6.12 + 6.18)
+#   - .github/workflows/vm-smoke.yml       (PR caller; 6.12 only)
+#   - .github/workflows/vm-smoke-weekly.yml (Sunday cron; 6.18 only)
 #
 # Resolution rules:
 #   - 6.12  — highest v6.12(.X) release tag on git.kernel.org stable mirror.
@@ -52,6 +54,8 @@ done
 declare -a TARGETS=(
 	"$WORKFLOWS/ci.yml 6.12"
 	"$WORKFLOWS/ci.yml 6.18"
+	"$WORKFLOWS/vm-smoke.yml 6.12"
+	"$WORKFLOWS/vm-smoke-weekly.yml 6.18"
 )
 
 for tgt in "${TARGETS[@]}"; do
