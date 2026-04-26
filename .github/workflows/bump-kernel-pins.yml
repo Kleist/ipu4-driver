@@ -12,10 +12,12 @@ on:
 # actually changed something, so an unchanged week is a free no-op.
 #
 # Caveat: PRs opened with the default GITHUB_TOKEN do NOT trigger
-# downstream workflows (GitHub's anti-loop guard), so the bump PR's
-# ci.yml matrix won't run automatically. Either close-and-reopen the
-# bot PR to fire CI, or define a BUMP_PAT secret with `repo` +
-# `workflow` scope and pass it as `token:` below.
+# downstream workflows (GitHub's anti-loop guard). To make the bump
+# PR's ci.yml matrix fire automatically, set a BUMP_PAT repo secret
+# (fine-grained PAT on this repo only, with Contents + Pull requests
+# + Workflows write); the step below picks it up. With BUMP_PAT
+# unset, peter-evans falls back to GITHUB_TOKEN and the bump PR has
+# to be close-and-reopened by hand to wake CI.
 
 permissions:
   contents: write
@@ -43,6 +45,11 @@ jobs:
       - name: Open / refresh PR if anything changed
         uses: peter-evans/create-pull-request@v6
         with:
+          # BUMP_PAT (fine-grained PAT, Contents+PRs+Workflows write
+          # on this repo) makes the bump PR auto-trigger ci.yml /
+          # vm-smoke. Falls back to GITHUB_TOKEN if the secret is not
+          # configured — the PR still opens, just doesn't fire CI.
+          token: ${{ secrets.BUMP_PAT || github.token }}
           branch: bot/bump-kernel-pins
           base: main
           title: "ci: bump kernel pins"
@@ -56,7 +63,8 @@ jobs:
             ${{ steps.rewrite.outputs.summary }}
             ```
 
-            If the matrix below is empty / stale, close and reopen
-            this PR to retrigger the `ci` workflow (PRs opened with
-            `GITHUB_TOKEN` do not trigger CI by default — see
-            `bump-kernel-pins.yml` for the token swap).
+            If the checks below are empty / stale, the BUMP_PAT
+            secret isn't configured (or this PR was opened by a
+            previous run before BUMP_PAT was set). Close and reopen
+            this PR to wake CI manually, or wire BUMP_PAT — see
+            `bump-kernel-pins.yml`.
