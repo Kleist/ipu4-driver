@@ -15,6 +15,14 @@ on:
         description: Short human label used in step output (e.g. "6.12", "6.18").
         required: true
         type: string
+      cache-linux:
+        description: >-
+          Restore the tools/linux build cache. Set false when linux-ref is a
+          moving branch (e.g. linux-6.12.y) so the rebase leg builds against
+          the actual branch tip instead of a previously-cached point release.
+        required: false
+        type: boolean
+        default: true
 
 # Runs the full boot pipeline (bootstrap → build QEMU → build kernel →
 # build initramfs → boot VM) and asserts the emulated IPU4 device
@@ -67,7 +75,10 @@ jobs:
 
       # The Linux cache is namespaced by display-name so the 6.12 PR
       # caller and the 6.18 weekly caller don't trample each other.
+      # Skipped for callers tracking a moving branch (rebase leg) — a
+      # cache hit there would mask point-release drift.
       - name: Cache forked Linux build
+        if: ${{ inputs.cache-linux }}
         uses: actions/cache@v4
         with:
           path: tools/linux
