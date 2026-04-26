@@ -1,4 +1,7 @@
 # Intel IPU4 Kernel Driver
+
+Project state at a glance: <https://kleist.github.io/ipu4-driver/> — code coverage, MMIO divergence, register coverage, milestones, and latest CI status, refreshed on every push to `main` and after each `vm-smoke` run.
+
 This repository contains an out of tree Linux kernel driver for IPU4. It is based on the upstream IPU6 driver which was upstreamed in 6.10. To make future synchronization and upstreaming possible, the code is kept as close as possible to the latest synchronized upstream IPU6 driver.
 
 It is the intention over time to follow upstream kernel development, and submit this driver upstream as well, but there is no timeline for when this will happen.

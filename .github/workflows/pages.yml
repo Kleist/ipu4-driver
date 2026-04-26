@@ -1,0 +1,155 @@
+name: pages
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+  workflow_run:
+    workflows: ["vm-smoke"]
+    types: [completed]
+  schedule:
+    # Daily refresh at 06:00 UTC, after the upstream-watch cron at 04:00.
+    # Picks up new last_seen state and the latest workflow conclusions
+    # without waiting for the next push.
+    - cron: '0 6 * * *'
+
+# Standard pattern for deploy-pages: never run two deploys at once,
+# but don't cancel in-flight ones (we want every refresh to land).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write       # deploy
+  id-token: write    # OIDC for actions/deploy-pages
+  actions: read      # gh run download for vm-smoke artifacts
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      artifact_path: ${{ steps.layout.outputs.path }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install python dependencies
+        run: pip3 install --user jinja2
+
+      - name: Carry forward history.json from the live site
+        # The dashboard's only persistent state is data/history.json.
+        # actions/deploy-pages is stateless, so we fetch the previously
+        # published copy from the live Pages URL before regenerating.
+        # First-time deploys (404) fall back to an empty history.
+        run: |
+          set -e
+          mkdir -p site/data
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          REPO="${GITHUB_REPOSITORY##*/}"
+          OWNER_LC="$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')"
+          URL="https://${OWNER_LC}.github.io/${REPO}/data/history.json"
+          echo "fetching prior history from $URL"
+          if curl -fsSL --max-time 30 "$URL" -o site/data/history.json; then
+            echo "carried forward $(jq '.points|length' site/data/history.json) point(s)"
+          else
+            echo "no prior history (first deploy or fetch failed); starting fresh"
+            rm -f site/data/history.json
+          fi
+
+      - name: Download latest vm-smoke artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          # Find the most recent successful vm-smoke run on the default
+          # branch. Both artifacts may not exist on older runs; ignore
+          # individual download errors so a partial set still renders.
+          RUN_ID="$(gh run list \
+              --workflow=vm-smoke \
+              --branch=${{ github.event.repository.default_branch || 'main' }} \
+              --status=success \
+              --limit=1 \
+              --json databaseId \
+              --jq '.[0].databaseId' || true)"
+          if [[ -n "$RUN_ID" && "$RUN_ID" != "null" ]]; then
+            echo "VM_SMOKE_RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
+            mkdir -p tools/coverage tools/tests/out
+            gh run download "$RUN_ID" \
+              --name "coverage-html-$RUN_ID" \
+              --dir tools/coverage/_artifact || true
+            gh run download "$RUN_ID" \
+              --name "mmio-trace-coverage-vm-smoke-$RUN_ID" \
+              --dir tools/tests/out/_artifact || true
+            # Coverage artifact layout (after collect.sh's emit-summary
+            # change):
+            #   <root>/html/index.html ...
+            #   <root>/summary.json
+            # Older artifacts (path: tools/coverage/html alone) put the
+            # html tree at the artifact root; handle both shapes.
+            if [[ -d tools/coverage/_artifact ]]; then
+              rm -rf tools/coverage/html tools/coverage/summary.json
+              if [[ -d tools/coverage/_artifact/html ]]; then
+                mv tools/coverage/_artifact/html tools/coverage/html
+                [[ -f tools/coverage/_artifact/summary.json ]] && \
+                  mv tools/coverage/_artifact/summary.json tools/coverage/summary.json
+              elif [[ -f tools/coverage/_artifact/index.html ]]; then
+                mv tools/coverage/_artifact tools/coverage/html
+              fi
+              rm -rf tools/coverage/_artifact
+            fi
+            if [[ -d tools/tests/out/_artifact ]]; then
+              # Artifact contents: compare-mmio/ + mmiotrace/ at root.
+              cp -r tools/tests/out/_artifact/. tools/tests/out/ 2>/dev/null || true
+              rm -rf tools/tests/out/_artifact
+            fi
+          else
+            echo "no successful vm-smoke run yet; rendering with placeholders"
+          fi
+
+      - name: Regenerate upstream-diff summary
+        run: |
+          set -e
+          # diff.sh just needs the Linux source tree at the pinned tag
+          # to git-diff against — clone shallow directly rather than
+          # running the full bootstrap (which also clones QEMU).
+          # Failure is non-fatal: the dashboard renders without the
+          # upstream-diff section if this step is skipped.
+          LINUX_TAG="${IPU4_LINUX_TAG:-v6.12}"
+          LINUX_URL="${IPU4_LINUX_URL:-https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git}"
+          if [[ ! -d tools/linux/.git ]]; then
+            git clone --depth 1 --branch "$LINUX_TAG" "$LINUX_URL" tools/linux \
+              || { echo "linux clone failed; skipping diff" >&2; exit 0; }
+          fi
+          ./tools/upstream/diff.sh || echo "diff.sh failed; rendering without it" >&2
+
+      - name: Build dashboard
+        id: layout
+        env:
+          OUT_DIR: ${{ github.workspace }}/site
+          REPO_SLUG: ${{ github.repository }}
+          VM_SMOKE_RUN_ID: ${{ env.VM_SMOKE_RUN_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./tools/dashboard/build.sh
+          echo "path=${OUT_DIR}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

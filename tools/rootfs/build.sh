@@ -83,6 +83,20 @@ for vb2 in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg; do
 	fi
 done
 
+# v4l2 core helpers that some 6.12.y point releases split out of the
+# previously built-in videodev module. On v6.12.0 the symbols are
+# inlined and these .ko files don't exist, making the loop a no-op;
+# on a tip where v4l2-async is a separate module, intel-ipu4 fails
+# insmod with "Unknown symbol __v4l2_async_register_subdev" unless
+# the module is staged here and loaded before intel-ipu4.
+V4L2_DIR="$LINUX_DIR/drivers/media/v4l2-core"
+for v4l in v4l2-async; do
+	ko="$V4L2_DIR/$v4l.ko"
+	if [[ -f "$ko" ]]; then
+		echo "file /lib/modules/$v4l.ko  $ko 0644 0 0" >> "$LIST"
+	fi
+done
+
 # Driver modules (if build.sh has run).
 if compgen -G "$DRV_DIR/*.ko" > /dev/null; then
 	for ko in "$DRV_DIR"/*.ko; do

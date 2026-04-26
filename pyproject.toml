@@ -2,7 +2,8 @@
 # the repo and is deliberately minimal: no build system, no packaging
 # metadata. The driver is a kernel module built via Make; this file only
 # configures how ./tools/tests/pytest.sh invokes pytest for the internal
-# Python tools (postprocess_trace.py, tools/trace/compare.py).
+# Python tools (postprocess_trace.py, tools/trace/compare.py, the
+# dashboard parsers).
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -13,6 +14,8 @@ branch = true
 source = [
     "postprocess_trace",
     "compare",
+    "parse_registers",
+    "parse_status",
 ]
 
 [tool.coverage.report]
