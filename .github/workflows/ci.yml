@@ -1,0 +1,41 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+# Build + kunit fan-out across the kernels we support. Each leg is
+# pinned to a specific tag so per-PR CI is deterministic — kernel.org
+# pushing a new point release does not silently change what a
+# contributor's PR builds against. The pins move via
+# .github/workflows/bump-kernel-pins.yml, which runs weekly and opens
+# a PR with the new values; that PR's checks then exercise the new
+# kernel before the bump can land.
+#
+# Each `ref:` line below is matched by the bumper script via the
+# trailing `# bump-pin:<key>` comment — keep the comment intact and
+# the bumper will keep that pin current.
+#
+# fail-fast: false so one bad kernel doesn't mask the other. The 6.18
+# leg is expected red until the matching compat shims land in
+# kernel/ipu4/ipu4-compat.h.
+
+jobs:
+  build-and-kunit:
+    name: build-and-kunit (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "6.12"
+            url:  https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+            ref:  v6.12  # bump-pin:6.12
+          - name: "6.18"
+            url:  https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+            ref:  v6.18  # bump-pin:6.18
+    uses: ./.github/workflows/build-and-kunit.yml
+    with:
+      linux-url:    ${{ matrix.url }}
+      linux-ref:    ${{ matrix.ref }}
+      display-name: ${{ matrix.name }}
