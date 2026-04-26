@@ -5,39 +5,27 @@ on:
     - cron: '0 6 * * 1'
   workflow_dispatch:
 
-# Weekly drift detector. Re-bootstraps against linux-6.12.y HEAD
-# (moving branch, not pinned v6.12 tag) so a new stable point release
-# gets exercised automatically. Runs every smoke tier we have today:
-# KUnit, VM lspci, probe progression, streaming client.
+# Weekly drift detector. Re-runs the same build + KUnit + full-VM
+# tiers as per-PR CI, but pointed at the moving linux-6.12.y branch
+# tip instead of the pinned v6.12 tag, so a new stable point release
+# gets exercised before the bumper proposes the pin move. Both legs
+# go via the reusable workflows that PR CI already calls.
+#
+# cache-linux: false on the vm-smoke leg so we don't restore a stale
+# linux-6.12.y snapshot from a previous week's run.
 
 jobs:
-  weekly-6-12:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+  build-and-kunit:
+    uses: ./.github/workflows/build-and-kunit.yml
+    with:
+      linux-url:    https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+      linux-ref:    linux-6.12.y
+      display-name: "6.12-tip"
 
-      - name: Setup harness (apt + QEMU build deps)
-        uses: ./.github/actions/setup-harness
-        with:
-          extra-packages: >-
-            ninja-build pkg-config libglib2.0-dev libpixman-1-dev
-            meson python3-venv busybox-static cpio gzip
-
-      - name: Run rebase + smoke tiers against linux-6.12.y HEAD
-        run: ./tools/rebase.sh
-        env:
-          IPU4_ACCEL: tcg
-
-      - name: Upload serial logs + artifacts on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rebase-failure-${{ github.run_id }}
-          if-no-files-found: ignore
-          path: |
-            tools/tests/out/*.serial
-            tools/rootfs/out/rootfs.cpio.gz
-            tools/linux/.config
+  vm-smoke:
+    uses: ./.github/workflows/vm-smoke-reusable.yml
+    with:
+      linux-url:    https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+      linux-ref:    linux-6.12.y
+      display-name: "6.12-tip"
+      cache-linux:  false

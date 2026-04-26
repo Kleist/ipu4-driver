@@ -84,13 +84,27 @@ def _parse_upstream_diff(summary_md: Path) -> dict | None:
     }
 
 
+# Workflows whose status is uninteresting on the front dashboard:
+# - reusable workflows (workflow_call only) just mirror their caller's conclusion.
+# - pages is what builds this dashboard, so a red row here is self-referential.
+# - bump-kernel-pins / upstream-watch are PR-opener bots, not driver-quality gates.
+_DASHBOARD_WORKFLOW_DENYLIST = frozenset({
+    "build-and-kunit (reusable)",
+    "vm-smoke (reusable)",
+    "pages",
+    "bump-kernel-pins",
+    "upstream-watch",
+})
+
+
 def _gh_workflows(repo: str) -> list[dict]:
     """Best-effort: query GitHub for the latest run of every workflow.
 
     Returns an empty list if `gh` is unavailable or unauthenticated —
     the dashboard renders an "no runs found" placeholder in that case.
     Each workflow shows the most recent run regardless of conclusion;
-    failed runs are visually distinguished in the template.
+    failed runs are visually distinguished in the template. Workflows
+    in _DASHBOARD_WORKFLOW_DENYLIST are dropped before rendering.
     """
     if not _have("gh"):
         return []
@@ -99,8 +113,8 @@ def _gh_workflows(repo: str) -> list[dict]:
     ) or []
     out = []
     for wf in workflows:
-        # Skip disabled / state==active filter — surface everything that
-        # currently has at least one run.
+        if wf["name"] in _DASHBOARD_WORKFLOW_DENYLIST:
+            continue
         runs = _gh_json([
             "api",
             f"repos/{repo}/actions/workflows/{wf['id']}/runs?per_page=1",
