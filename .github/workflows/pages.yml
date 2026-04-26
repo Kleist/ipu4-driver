@@ -64,6 +64,7 @@ jobs:
       - name: Download latest vm-smoke artifacts
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_FULL: ${{ github.repository }}
         run: |
           set -e
           # Find the most recent successful vm-smoke run on the default
@@ -79,12 +80,29 @@ jobs:
           if [[ -n "$RUN_ID" && "$RUN_ID" != "null" ]]; then
             echo "VM_SMOKE_RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
             mkdir -p tools/coverage tools/tests/out
-            gh run download "$RUN_ID" \
-              --name "coverage-html-$RUN_ID" \
-              --dir tools/coverage/_artifact || true
-            gh run download "$RUN_ID" \
-              --name "mmio-trace-coverage-vm-smoke-$RUN_ID" \
-              --dir tools/tests/out/_artifact || true
+            # vm-smoke-reusable.yml namespaces uploads with the caller's
+            # display-name (e.g. coverage-html-6.12-<run_id>), so look up
+            # the actual artifact names instead of guessing the suffix.
+            ARTIFACTS_JSON="$(gh api \
+                "repos/$REPO_FULL/actions/runs/$RUN_ID/artifacts?per_page=100")"
+            COV_NAME="$(jq -r \
+                '.artifacts[] | select(.name | startswith("coverage-html-")) | .name' \
+                <<<"$ARTIFACTS_JSON" | head -1)"
+            MMIO_NAME="$(jq -r \
+                '.artifacts[] | select(.name | startswith("mmio-trace-coverage-vm-smoke-")) | .name' \
+                <<<"$ARTIFACTS_JSON" | head -1)"
+            echo "coverage artifact: ${COV_NAME:-<none>}"
+            echo "mmio artifact:     ${MMIO_NAME:-<none>}"
+            if [[ -n "$COV_NAME" ]]; then
+              gh run download "$RUN_ID" \
+                --name "$COV_NAME" \
+                --dir tools/coverage/_artifact || true
+            fi
+            if [[ -n "$MMIO_NAME" ]]; then
+              gh run download "$RUN_ID" \
+                --name "$MMIO_NAME" \
+                --dir tools/tests/out/_artifact || true
+            fi
             # Coverage artifact layout (after collect.sh's emit-summary
             # change):
             #   <root>/html/index.html ...
