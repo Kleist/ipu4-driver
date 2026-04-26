@@ -17,5 +17,5 @@ jobs:
     uses: ./.github/workflows/vm-smoke-reusable.yml
     with:
       linux-url:    https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
-      linux-ref:    v6.18  # bump-pin:6.18
+      linux-ref:    v6.18.3  # bump-pin:6.18
       display-name: "6.18"
