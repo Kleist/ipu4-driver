@@ -665,7 +665,7 @@ void update_watermark_setting(struct ipu6_isys *isys)
 	}
 
 	enable_iwake(isys, true);
-	calc_fill_time_us = max_sram_size / isys_pb_datarate_mbs;
+	calc_fill_time_us = div64_u64(max_sram_size, isys_pb_datarate_mbs);
 
 	if (isys->pdata->ipdata->enhanced_iwake) {
 		ltr = isys->pdata->ipdata->ltr;
@@ -1182,11 +1182,11 @@ void ipu6_cleanup_fw_msg_bufs(struct ipu6_isys *isys)
 	spin_unlock_irqrestore(&isys->listlock, flags);
 }
 
-void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, u64 data)
+void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, uintptr_t data)
 {
 	struct isys_fw_msgs *msg;
 	unsigned long flags;
-	u64 *ptr = (u64 *)data;
+	void *ptr = (void *)data;
 
 	if (!ptr)
 		return;
@@ -1248,7 +1248,6 @@ static int isys_probe(struct auxiliary_device *auxdev,
 	INIT_LIST_HEAD(&isys->framebuflist);
 	INIT_LIST_HEAD(&isys->framebuflist_fw);
 
-	isys->line_align = IPU6_ISYS_2600_MEM_LINE_ALIGN;
 	isys->icache_prefetch = 0;
 
 	dev_set_drvdata(&auxdev->dev, isys);
@@ -1454,12 +1453,11 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_PIN_DATA_READY:
 		if (resp->pin_id < IPU6_ISYS_OUTPUT_PINS &&
-		    stream->output_pins[resp->pin_id].pin_ready)
-			stream->output_pins[resp->pin_id].pin_ready(stream,
-								    resp);
+		    stream->output_pins_queue[resp->pin_id])
+			ipu6_isys_queue_buf_ready(stream, resp);
 		else
 			dev_warn(&adev->auxdev.dev,
-				 "%d:No data pin ready handler for pin id %d\n",
+				 "%d:No queue for pin id %d\n",
 				 resp->stream_handle, resp->pin_id);
 		if (csi2)
 			ipu4_isys_csi2_error(csi2);

@@ -639,13 +639,13 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 
 	ret = ipu6_isys_setup_video(av, &source_entity, &nr_queues);
 	if (ret < 0) {
-		dev_err(dev, "failed to setup video\n");
+		dev_dbg(dev, "failed to setup video\n");
 		goto out_return_buffers;
 	}
 
 	ret = ipu6_isys_link_fmt_validate(aq);
 	if (ret) {
-		dev_err(dev,
+		dev_dbg(dev,
 			"%s: link format validation failed (%d)\n",
 			av->vdev.name, ret);
 		goto out_pipeline_stop;
@@ -847,10 +847,8 @@ static void stop_streaming(struct vb2_queue *q)
 }
 
 static unsigned int
-get_sof_sequence_by_timestamp(struct ipu6_isys_stream *stream,
-			      struct ipu6_fw_isys_resp_info_abi *info)
+get_sof_sequence_by_timestamp(struct ipu6_isys_stream *stream, u64 time)
 {
-	u64 time = (u64)info->timestamp[1] << 32 | info->timestamp[0];
 	struct ipu6_isys *isys = stream->isys;
 	struct device *dev = &isys->adev->auxdev.dev;
 	unsigned int i;
@@ -876,8 +874,7 @@ get_sof_sequence_by_timestamp(struct ipu6_isys_stream *stream,
 	return 0;
 }
 
-static u64 get_sof_ns_delta(struct ipu6_isys_video *av,
-			    struct ipu6_fw_isys_resp_info_abi *info)
+static u64 get_sof_ns_delta(struct ipu6_isys_video *av, u64 timestamp)
 {
 	struct ipu6_bus_device *adev = av->isys->adev;
 	struct ipu6_device *isp = adev->isp;
@@ -887,13 +884,13 @@ static u64 get_sof_ns_delta(struct ipu6_isys_video *av,
 	if (!tsc_now)
 		return 0;
 
-	delta = tsc_now - ((u64)info->timestamp[1] << 32 | info->timestamp[0]);
+	delta = tsc_now - timestamp;
 
 	return ipu6_buttress_tsc_ticks_to_ns(delta, isp);
 }
 
-void ipu6_isys_buf_calc_sequence_time(struct ipu6_isys_buffer *ib,
-				      struct ipu6_fw_isys_resp_info_abi *info)
+static void
+ipu6_isys_buf_calc_sequence_time(struct ipu6_isys_buffer *ib, u64 time)
 {
 	struct vb2_buffer *vb = ipu6_isys_buffer_to_vb2_buffer(ib);
 	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
@@ -904,8 +901,8 @@ void ipu6_isys_buf_calc_sequence_time(struct ipu6_isys_buffer *ib,
 	u64 ns;
 	u32 sequence;
 
-	ns = ktime_get_ns() - get_sof_ns_delta(av, info);
-	sequence = get_sof_sequence_by_timestamp(stream, info);
+	ns = ktime_get_ns() - get_sof_ns_delta(av, time);
+	sequence = get_sof_sequence_by_timestamp(stream, time);
 
 	vbuf->vb2_buf.timestamp = ns;
 	vbuf->sequence = sequence;
@@ -916,7 +913,7 @@ void ipu6_isys_buf_calc_sequence_time(struct ipu6_isys_buffer *ib,
 		vbuf->vb2_buf.timestamp);
 }
 
-void ipu6_isys_queue_buf_done(struct ipu6_isys_buffer *ib)
+static void ipu6_isys_queue_buf_done(struct ipu6_isys_buffer *ib)
 {
 	struct vb2_buffer *vb = ipu6_isys_buffer_to_vb2_buffer(ib);
 
@@ -932,10 +929,11 @@ void ipu6_isys_queue_buf_done(struct ipu6_isys_buffer *ib)
 	}
 }
 
-void ipu6_isys_queue_buf_ready(struct ipu6_isys_stream *stream,
-			       struct ipu6_fw_isys_resp_info_abi *info)
+static void
+ipu6_stream_buf_ready(struct ipu6_isys_stream *stream, u8 pin_id, u32 pin_addr,
+		      u64 time, bool error_check)
 {
-	struct ipu6_isys_queue *aq = stream->output_pins[info->pin_id].aq;
+	struct ipu6_isys_queue *aq = stream->output_pins_queue[pin_id];
 	struct ipu6_isys *isys = stream->isys;
 	struct device *dev = &isys->adev->auxdev.dev;
 	struct ipu6_isys_buffer *ib;
@@ -943,9 +941,6 @@ void ipu6_isys_queue_buf_ready(struct ipu6_isys_stream *stream,
 	unsigned long flags;
 	bool first = true;
 	struct vb2_v4l2_buffer *buf;
-
-	dev_dbg(dev, "buffer: %s: received buffer %8.8x\n",
-		ipu6_isys_queue_to_video(aq)->vdev.name, info->pin.addr);
 
 	spin_lock_irqsave(&aq->lock, flags);
 	if (list_empty(&aq->active)) {
@@ -964,7 +959,7 @@ void ipu6_isys_queue_buf_ready(struct ipu6_isys_stream *stream,
 		ivb = vb2_buffer_to_ipu6_isys_video_buffer(vvb);
 		addr = ivb->dma_addr;
 
-		if (info->pin.addr != addr) {
+		if (pin_addr != addr) {
 			if (first)
 				dev_err(dev, "Unexpected buffer address %pad\n",
 					&addr);
@@ -972,8 +967,7 @@ void ipu6_isys_queue_buf_ready(struct ipu6_isys_stream *stream,
 			continue;
 		}
 
-		if (info->error_info.error ==
-		    IPU6_FW_ISYS_ERROR_HW_REPORTED_STR2MMIO) {
+		if (error_check) {
 			/*
 			 * Check for error message:
 			 * 'IPU6_FW_ISYS_ERROR_HW_REPORTED_STR2MMIO'
@@ -988,22 +982,29 @@ void ipu6_isys_queue_buf_ready(struct ipu6_isys_stream *stream,
 		list_del(&ib->head);
 		spin_unlock_irqrestore(&aq->lock, flags);
 
-		ipu6_isys_buf_calc_sequence_time(ib, info);
+		ipu6_isys_buf_calc_sequence_time(ib, time);
 
 		ipu6_isys_queue_buf_done(ib);
 
 		return;
 	}
 
-	dev_err(dev, "Failed to find a matching video buffer");
+	dev_err(dev, "Failed to find a matching video buffer\n");
 
 	spin_unlock_irqrestore(&aq->lock, flags);
 }
 
+void ipu6_isys_queue_buf_ready(struct ipu6_isys_stream *stream,
+			       struct ipu6_fw_isys_resp_info_abi *info)
+{
+	u64 time = (u64)info->timestamp[1] << 32 | info->timestamp[0];
+	bool err = info->error_info.error == IPU6_FW_ISYS_ERROR_HW_REPORTED_STR2MMIO;
+
+	ipu6_stream_buf_ready(stream, info->pin_id, info->pin.addr, time, err);
+}
+
 static const struct vb2_ops ipu6_isys_queue_ops = {
 	.queue_setup = ipu6_isys_queue_setup,
-	.wait_prepare = vb2_ops_wait_prepare,
-	.wait_finish = vb2_ops_wait_finish,
 	.buf_init = ipu6_isys_buf_init,
 	.buf_prepare = ipu6_isys_buf_prepare,
 	.buf_cleanup = ipu6_isys_buf_cleanup,
@@ -1037,7 +1038,6 @@ int ipu6_isys_queue_init(struct ipu6_isys_queue *aq)
 	if (ret)
 		return ret;
 
-	aq->dev = &adev->auxdev.dev;
 	aq->vbq.dev = &adev->isp->pdev->dev;
 	spin_lock_init(&aq->lock);
 	INIT_LIST_HEAD(&aq->active);

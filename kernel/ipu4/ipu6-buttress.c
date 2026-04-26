@@ -219,19 +219,16 @@ static void ipu6_buttress_ipc_recv(struct ipu6_device *isp,
 }
 
 static int ipu6_buttress_ipc_send_bulk(struct ipu6_device *isp,
-				       enum ipu6_buttress_ipc_domain ipc_domain,
 				       struct ipu6_ipc_buttress_bulk_msg *msgs,
 				       u32 size)
 {
 	unsigned long tx_timeout_jiffies, rx_timeout_jiffies;
 	unsigned int i, retry = BUTTRESS_IPC_CMD_SEND_RETRY;
 	struct ipu6_buttress *b = &isp->buttress;
-	struct ipu6_buttress_ipc *ipc;
+	struct ipu6_buttress_ipc *ipc = &b->cse;
 	u32 val;
 	int ret;
 	int tout;
-
-	ipc = ipc_domain == IPU6_BUTTRESS_IPC_CSE ? &b->cse : &b->ish;
 
 	mutex_lock(&b->ipc_mutex);
 
@@ -310,7 +307,6 @@ out:
 
 static int
 ipu6_buttress_ipc_send(struct ipu6_device *isp,
-		       enum ipu6_buttress_ipc_domain ipc_domain,
 		       u32 ipc_msg, u32 size, bool require_resp,
 		       u32 expected_resp)
 {
@@ -321,7 +317,7 @@ ipu6_buttress_ipc_send(struct ipu6_device *isp,
 		.expected_resp = expected_resp,
 	};
 
-	return ipu6_buttress_ipc_send_bulk(isp, ipc_domain, &msg, 1);
+	return ipu6_buttress_ipc_send_bulk(isp, &msg, 1);
 }
 
 static irqreturn_t ipu6_buttress_call_isr(struct ipu6_bus_device *adev)
@@ -389,23 +385,10 @@ irqreturn_t ipu6_buttress_isr(int irq, void *isp_ptr)
 			complete(&b->cse.recv_complete);
 		}
 
-		if (irq_status & BUTTRESS_ISR_IPC_FROM_ISH_IS_WAITING) {
-			dev_dbg(&isp->pdev->dev,
-				"BUTTRESS_ISR_IPC_FROM_ISH_IS_WAITING\n");
-			ipu6_buttress_ipc_recv(isp, &b->ish, &b->ish.recv_data);
-			complete(&b->ish.recv_complete);
-		}
-
 		if (irq_status & BUTTRESS_ISR_IPC_EXEC_DONE_BY_CSE) {
 			dev_dbg(&isp->pdev->dev,
 				"BUTTRESS_ISR_IPC_EXEC_DONE_BY_CSE\n");
 			complete(&b->cse.send_complete);
-		}
-
-		if (irq_status & BUTTRESS_ISR_IPC_EXEC_DONE_BY_ISH) {
-			dev_dbg(&isp->pdev->dev,
-				"BUTTRESS_ISR_IPC_EXEC_DONE_BY_CSE\n");
-			complete(&b->ish.send_complete);
 		}
 
 		if (irq_status & BUTTRESS_ISR_SAI_VIOLATION &&
@@ -464,8 +447,7 @@ irqreturn_t ipu6_buttress_isr_threaded(int irq, void *isp_ptr)
 }
 
 int ipu6_buttress_power(struct device *dev,
-			const struct ipu6_buttress_ctrl *ctrl,
-			bool on)
+			const struct ipu6_buttress_ctrl *ctrl, bool on)
 {
 	struct ipu6_device *isp = to_ipu6_bus_device(dev)->isp;
 	u32 pwr_sts, val;
@@ -571,7 +553,7 @@ int ipu6_buttress_map_fw_image(struct ipu6_bus_device *sys,
 	if (!is_vmalloc && !virt_addr_valid(fw->data))
 		return -EDOM;
 
-	n_pages = PHYS_PFN(PAGE_ALIGN(fw->size));
+	n_pages = PFN_UP(fw->size);
 
 	pages = kmalloc_array(n_pages, sizeof(*pages), GFP_KERNEL);
 	if (!pages)
@@ -674,7 +656,7 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 	 */
 	dev_info(&isp->pdev->dev, "Sending BOOT_LOAD to CSE\n");
 
-	ret = ipu6_buttress_ipc_send(isp, IPU6_BUTTRESS_IPC_CSE,
+	ret = ipu6_buttress_ipc_send(isp,
 				     BUTTRESS_IU2CSEDATA0_IPC_BOOT_LOAD,
 				     1, true,
 				     BUTTRESS_CSE2IUDATA0_IPC_BOOT_LOAD_DONE);
@@ -716,7 +698,7 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 	 * IU2CSEDB.IU2CSECMD and set IU2CSEDB.IU2CSEBUSY as
 	 */
 	dev_info(&isp->pdev->dev, "Sending AUTHENTICATE_RUN to CSE\n");
-	ret = ipu6_buttress_ipc_send(isp, IPU6_BUTTRESS_IPC_CSE,
+	ret = ipu6_buttress_ipc_send(isp,
 				     BUTTRESS_IU2CSEDATA0_IPC_AUTH_RUN,
 				     1, true,
 				     BUTTRESS_CSE2IUDATA0_IPC_AUTH_RUN_DONE);
@@ -860,9 +842,7 @@ int ipu6_buttress_init(struct ipu6_device *isp)
 	mutex_init(&b->auth_mutex);
 	mutex_init(&b->cons_mutex);
 	mutex_init(&b->ipc_mutex);
-	init_completion(&b->ish.send_complete);
 	init_completion(&b->cse.send_complete);
-	init_completion(&b->ish.recv_complete);
 	init_completion(&b->cse.recv_complete);
 
 	b->cse.nack = BUTTRESS_CSE2IUDATA0_IPC_NACK;
@@ -874,14 +854,12 @@ int ipu6_buttress_init(struct ipu6_device *isp)
 	b->cse.data0_in = BUTTRESS_REG_CSE2IUDATA0;
 	b->cse.data0_out = BUTTRESS_REG_IU2CSEDATA0;
 
-	/* no ISH on IPU6 */
-	memset(&b->ish, 0, sizeof(b->ish));
 
 	isp->secure_mode = ipu6_buttress_get_secure_mode(isp);
-	dev_info(&isp->pdev->dev, "IPU6 in %s mode touch 0x%x mask 0x%x\n",
-		 isp->secure_mode ? "secure" : "non-secure",
-		 readl(isp->base + BUTTRESS_REG_SECURITY_TOUCH),
-		 readl(isp->base + BUTTRESS_REG_CAMERA_MASK));
+	dev_dbg(&isp->pdev->dev, "IPU6 in %s mode touch 0x%x mask 0x%x\n",
+		isp->secure_mode ? "secure" : "non-secure",
+		readl(isp->base + BUTTRESS_REG_SECURITY_TOUCH),
+		readl(isp->base + BUTTRESS_REG_CAMERA_MASK));
 
 	b->wdt_cached_value = readl(isp->base + BUTTRESS_REG_WDT);
 	writel(BUTTRESS_IRQS, isp->base + BUTTRESS_REG_ISR_CLEAR);

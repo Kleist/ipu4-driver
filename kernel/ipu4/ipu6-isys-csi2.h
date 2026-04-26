@@ -14,7 +14,6 @@ struct v4l2_mbus_frame_desc_entry;
 
 struct ipu6_isys_video;
 struct ipu6_isys;
-struct ipu6_isys_csi2_pdata;
 struct ipu6_isys_stream;
 
 #ifdef IPU6
@@ -45,7 +44,6 @@ struct ipu6_isys_stream;
 
 struct ipu6_isys_csi2 {
 	struct ipu6_isys_subdev asd;
-	struct ipu6_isys_csi2_pdata *pdata;
 	struct ipu6_isys *isys;
 
 	void __iomem *base;

@@ -15,8 +15,6 @@
 struct firmware;
 struct pci_dev;
 
-#define IPU6_BUS_NAME	IPU6_NAME "-bus"
-
 struct ipu6_buttress_ctrl;
 
 struct ipu6_bus_device {
@@ -28,7 +26,6 @@ struct ipu6_bus_device {
 	struct ipu6_mmu *mmu;
 	struct ipu6_device *isp;
 	const struct ipu6_buttress_ctrl *ctrl;
-	u64 dma_mask;
 	const struct firmware *fw;
 	struct sg_table fw_sgt;
 	u64 *pkg_dir;

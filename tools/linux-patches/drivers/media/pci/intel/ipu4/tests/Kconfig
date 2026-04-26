@@ -5,6 +5,6 @@ config VIDEO_INTEL_IPU4_KUNIT_TESTS
 	default KUNIT_ALL_TESTS
 	help
 	  Small, fast unit tests for pure-logic code paths in the IPU4
-	  driver: format-table lookup, Bayer ordering, MMU page-size
-	  selection. Expected run time is under one second under
-	  qemu-kvm via tools/testing/kunit/kunit.py.
+	  driver: format-table lookup and Bayer ordering. Expected run
+	  time is under one second under qemu-kvm via
+	  tools/testing/kunit/kunit.py.
