@@ -22,6 +22,13 @@ Do not restructure or "clean up" IPU6 code. Do not rename `ipu6_*` symbols. Keep
 
 `kernel/ipu4/ipu4-compat.h` holds `LINUX_VERSION_CODE`-gated shims for 6.6 / 6.10 / 6.11 kernel API changes. Add new shims here rather than `#ifdef`-ing callers.
 
+## Upstream sync tooling
+
+Two helpers under `tools/upstream/`, both relying on the same file mapping (`drivers/media/pci/intel/ipu6/<f>` ↔ `kernel/ipu4/<f>`, IPU4-only files in `IPU4_LOCAL_ONLY` skipped):
+
+- `tools/upstream/diff.sh` — regenerates `tools/notes/upstream-diff/{summary.md,per-file/<f>.diff}` showing the current divergence between `kernel/ipu4/` and upstream IPU6 at the pinned tag. Read this when picking the next divergence chunk to remove. Output is gitignored — re-run on demand. Honours `IPU4_LINUX_TAG` for one-off comparisons against a different upstream pin.
+- `tools/upstream/watch.sh` — driven by `.github/workflows/upstream-watch.yml` (daily 04:00 UTC). Detects new IPU6 commits on `linux-6.12.y` (stable) and Linus `master` (deduped against 6.12.y by patch-id), tries `git am` of each onto `kernel/ipu4/`, and opens a PR on `claude/upstream-watch/<date>` listing applied / conflict / n-a commits. State is kept in `tools/notes/upstream-watch-state.json` and rolls forward in the last commit on the bot branch. Run locally with `IPU4_UPSTREAM_WATCH_DRY_RUN=1` to inspect the would-be PR without pushing.
+
 ## Common commands
 
 Out-of-tree build against an external kernel tree:
@@ -61,6 +68,7 @@ The bootstrap script is idempotent. Re-run after pulling to re-apply patches fro
 - `.github/workflows/main.yml` — same, on push to `main`/`master`. Coverage and e2e jobs are staged but not yet wired.
 - `.github/workflows/vm-smoke.yml` — full-VM boot + probe-smoke + streamon-smoke + mmiotrace + `compare-mmio` divergence report on every PR. Failure artifacts (`vm-smoke-failure-*`) include the serial logs; the coverage report (`mmio-trace-coverage-vm-smoke-*`) is published unconditionally.
 - `.github/workflows/rebase.yml` — weekly cron that rebases `tools/linux/` onto `linux-6.12.y`.
+- `.github/workflows/upstream-watch.yml` — daily cron that surfaces new upstream IPU6 commits as cherry-pick PRs (see "Upstream sync tooling" above).
 
 ## QEMU device-model workflow
 

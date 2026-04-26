@@ -29,6 +29,10 @@ IPU4 support was hacked onto the IPU6 driver to work with 6.6 by @Kleist. See ht
 
 It was recently updated to work as an out-of-tree module on 6.6 and 6.12 (and possibly working on some intermediate versions).
 
+## Upstream sync tooling
+* [tools/upstream/diff.sh](tools/upstream/diff.sh): regenerate `tools/notes/upstream-diff/summary.md`, a file-by-file divergence report against upstream `drivers/media/pci/intel/ipu6/` at the pinned tag — input for incrementally retiring `#ifdef IPU6` hunks.
+* [tools/upstream/watch.sh](tools/upstream/watch.sh): runs daily in CI (`.github/workflows/upstream-watch.yml`) — detects new upstream IPU6 commits on `linux-6.12.y` and `master`, tries cherry-picks, opens a triage PR.
+
 ## Scripts
 The scripts added will not work out of the box, but should be seen as a source of inspiration for how one could work with porting this to other devices, or e.g. add IPU4P support.
 

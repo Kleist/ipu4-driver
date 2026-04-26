@@ -1,0 +1,50 @@
+name: upstream-watch
+on:
+  schedule:
+    # Daily 04:00 UTC — runs hours before Monday's 06:00 rebase.yml so the two
+    # never race on the tools/linux/ clone in CI cache.
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+# Detects new IPU6 commits on linux-6.12.y and Linus master, attempts cherry-
+# picks onto kernel/ipu4/, and opens a PR enumerating applied / conflicting /
+# n-a commits. State rolls forward in tools/notes/upstream-watch-state.json
+# as the last commit on the bot branch.
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq git
+
+      - name: Configure committer identity
+        run: |
+          git config user.name  "ipu4-upstream-watch[bot]"
+          git config user.email "ipu4-upstream-watch[bot]@users.noreply.github.com"
+
+      - name: Run watcher
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./tools/upstream/watch.sh
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-watch-failure-${{ github.run_id }}
+          if-no-files-found: ignore
+          path: |
+            tools/upstream/out/
