@@ -283,9 +283,9 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define BTRS_ISR_IS_IRQ                  (1u << 0)
 #define ISYS_UNISPART_IRQ_SW             (1u << 30)
 
-/* FW protocol opcodes, response/queue/token struct shapes and
- * IPU4_BASE_MSG_*/IPU4_MAX_MSG_STREAMS/SYSCOM_QPR_BASE_REG constants
- * live in ipu4-fw-isys.h. */
+/* FW protocol opcodes, response/queue/token struct shapes and the
+ * IPU4_BASE_MSG_SEND_QUEUES / IPU4_MAX_MSG_STREAMS / SYSCOM_QPR_BASE_REG
+ * constants live in ipu4-fw-isys.h. */
 
 struct Ipu4State {
     PCIDevice parent_obj;
