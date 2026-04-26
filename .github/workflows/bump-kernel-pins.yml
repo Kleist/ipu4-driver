@@ -1,0 +1,62 @@
+name: bump-kernel-pins
+on:
+  schedule:
+    # Mondays 06:00 UTC, same slot as the rebase cron.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+# Resolves the latest stable point release for each of the 6.12 and
+# 6.18 tracks, then opens a PR rewriting the matching
+# `# bump-pin:<key>` lines in .github/workflows/ci.yml.
+# peter-evans/create-pull-request only opens a PR if the rewrite
+# actually changed something, so an unchanged week is a free no-op.
+#
+# Caveat: PRs opened with the default GITHUB_TOKEN do NOT trigger
+# downstream workflows (GitHub's anti-loop guard), so the bump PR's
+# ci.yml matrix won't run automatically. Either close-and-reopen the
+# bot PR to fire CI, or define a BUMP_PAT secret with `repo` +
+# `workflow` scope and pass it as `token:` below.
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Resolve and rewrite pins
+        id: rewrite
+        run: |
+          ./tools/bump-kernel-pins.sh | tee /tmp/bump.summary
+          {
+            echo "summary<<EOF"
+            cat /tmp/bump.summary
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open / refresh PR if anything changed
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: bot/bump-kernel-pins
+          base: main
+          title: "ci: bump kernel pins"
+          commit-message: "ci: bump kernel pins"
+          delete-branch: true
+          body: |
+            Auto-generated weekly bump of `.github/workflows/ci.yml`'s
+            kernel CI pins.
+
+            ```
+            ${{ steps.rewrite.outputs.summary }}
+            ```
+
+            If the matrix below is empty / stale, close and reopen
+            this PR to retrigger the `ci` workflow (PRs opened with
+            `GITHUB_TOKEN` do not trigger CI by default — see
+            `bump-kernel-pins.yml` for the token swap).

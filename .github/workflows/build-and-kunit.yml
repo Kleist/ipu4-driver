@@ -7,15 +7,12 @@ on:
         description: Git URL of the Linux tree to clone.
         required: true
         type: string
-      linux-tag:
-        description: |
-          Tag or branch to clone. The sentinel "__latest_release__"
-          resolves to the highest vN.M(.P) release tag advertised by
-          the remote (rc tags excluded).
+      linux-ref:
+        description: Tag or branch to clone. Forwarded to bootstrap.sh as IPU4_LINUX_TAG.
         required: true
         type: string
       display-name:
-        description: Short human label used in step output (e.g. "6.12", "master").
+        description: Short human label used in step output (e.g. "6.12").
         required: true
         type: string
 
@@ -33,34 +30,14 @@ jobs:
         with:
           install-pip: "true"
 
-      - name: Resolve kernel tag (${{ inputs.display-name }})
-        id: resolve
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag="${{ inputs.linux-tag }}"
-          if [[ "$tag" == "__latest_release__" ]]; then
-            tag="$(git ls-remote --tags --refs --sort=-v:refname \
-                    "${{ inputs.linux-url }}" 'v[0-9]*' \
-                  | sed -E 's@^.*refs/tags/@@' \
-                  | grep -E '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' \
-                  | head -n1)"
-            if [[ -z "$tag" ]]; then
-              echo "::error::Could not resolve __latest_release__ from ${{ inputs.linux-url }}"
-              exit 1
-            fi
-            echo "Resolved __latest_release__ -> $tag"
-          fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-
       - name: Python unit tests + coverage
         run: ./tools/tests/pytest.sh
 
-      - name: Bootstrap harness (linux=${{ steps.resolve.outputs.tag }})
+      - name: Bootstrap harness (linux=${{ inputs.linux-ref }})
         run: ./tools/bootstrap.sh
         env:
           IPU4_LINUX_URL: ${{ inputs.linux-url }}
-          IPU4_LINUX_TAG: ${{ steps.resolve.outputs.tag }}
+          IPU4_LINUX_TAG: ${{ inputs.linux-ref }}
 
       - name: Build driver
         run: ./tools/build.sh

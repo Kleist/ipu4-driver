@@ -79,8 +79,10 @@ The bootstrap script is idempotent. Re-run after pulling to re-apply patches fro
 
 ## CI
 
-- `.github/workflows/pr.yml` — bootstrap + build + kunit on every PR.
-- `.github/workflows/main.yml` — same, on push to `main`/`master`. Coverage and e2e jobs are staged but not yet wired.
+- `.github/workflows/ci.yml` — bootstrap + build + kunit on every PR and on push to `main`/`master`. Matrix-fans across `6.12` and `6.18`; each leg is **pinned to a specific tag** (look for the `# bump-pin:<key>` markers) so per-PR CI is deterministic. Calls the reusable `build-and-kunit.yml` once per leg with `fail-fast: false`. The 6.18 leg is expected red until the corresponding compat shims land in `kernel/ipu4/ipu4-compat.h`.
+- `.github/workflows/build-and-kunit.yml` — reusable workflow (`workflow_call`) that owns the actual checkout → setup-harness → pytest → bootstrap → build → kunit pipeline. Inputs: `linux-url`, `linux-ref`, `display-name`.
+- `.github/workflows/bump-kernel-pins.yml` — Monday 06:00 UTC cron that resolves the latest stable point release for each of the 6.12 and 6.18 tracks, rewrites the `# bump-pin:<key>` lines in `ci.yml`, and opens a PR via `peter-evans/create-pull-request` when anything changed. The script that does the actual rewrite is `tools/bump-kernel-pins.sh`. Note: bot-opened PRs don't fire CI under the default `GITHUB_TOKEN`; set a `BUMP_PAT` secret to lift that, or close-and-reopen the PR by hand.
+- `.github/actions/setup-harness/action.yml` — composite action shared by every workflow. Owns the apt-package list and the optional pytest pip install (`install-pip: "true"`).
 - `.github/workflows/vm-smoke.yml` — full-VM boot + probe-smoke + streamon-smoke + mmiotrace + `compare-mmio` divergence report on every PR. Failure artifacts (`vm-smoke-failure-*`) include the serial logs; the coverage report (`mmio-trace-coverage-vm-smoke-*`) is published unconditionally.
 - `.github/workflows/rebase.yml` — weekly cron that rebases `tools/linux/` onto `linux-6.12.y`.
 - `.github/workflows/upstream-watch.yml` — daily cron that surfaces new upstream IPU6 commits as cherry-pick PRs (see "Upstream sync tooling" above).
