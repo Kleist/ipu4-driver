@@ -4,6 +4,10 @@
 # comment. Prints a summary of (file, key, old, new) so the calling
 # workflow can paste it into the auto-PR's body.
 #
+# Usage:
+#   tools/bump-kernel-pins.sh                # rewrite every key
+#   tools/bump-kernel-pins.sh --key 6.12     # rewrite only the 6.12 lines
+#
 # Files touched:
 #   - .github/workflows/ci.yml             (build+kunit matrix; 6.12 + 6.18 + 7.0)
 #   - .github/workflows/vm-smoke.yml       (PR caller; 6.12 only)
@@ -28,6 +32,38 @@ WORKFLOWS="$ROOT/.github/workflows"
 
 STABLE_URL="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
 
+ALL_KEYS=(6.12 6.18 7.0)
+
+# --key <key> filter restricts both resolution and rewriting to a
+# single track, so the workflow can fan out a PR-per-key matrix.
+ONLY_KEY=""
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--key)
+			ONLY_KEY="${2:-}"
+			shift 2
+			;;
+		*)
+			echo "::error::unknown argument: $1" >&2
+			exit 2
+			;;
+	esac
+done
+
+if [[ -n "$ONLY_KEY" ]]; then
+	found=0
+	for k in "${ALL_KEYS[@]}"; do
+		[[ "$k" == "$ONLY_KEY" ]] && found=1
+	done
+	if [[ $found -eq 0 ]]; then
+		echo "::error::--key must be one of: ${ALL_KEYS[*]}" >&2
+		exit 2
+	fi
+	KEYS=("$ONLY_KEY")
+else
+	KEYS=("${ALL_KEYS[@]}")
+fi
+
 # Highest non-rc tag matching <pattern> on the stable mirror.
 # Args: $1 = pattern (e.g. 'v6.12*'), $2 = anchor regex (e.g. '^v6\.12(\.[0-9]+)?$').
 latest_stable_tag() {
@@ -40,11 +76,12 @@ latest_stable_tag() {
 
 # bump-pin:<key>  =>  resolved value
 declare -A NEW
-NEW[6.12]="$(latest_stable_tag 'v6.12*' '^v6\.12(\.[0-9]+)?$')"
-NEW[6.18]="$(latest_stable_tag 'v6.18*' '^v6\.18(\.[0-9]+)?$')"
-NEW[7.0]="$(latest_stable_tag 'v7.0*' '^v7\.0(\.[0-9]+)?$')"
+for key in "${KEYS[@]}"; do
+	track_re="${key//./\\.}"
+	NEW[$key]="$(latest_stable_tag "v${key}*" "^v${track_re}(\\.[0-9]+)?\$")"
+done
 
-for key in 6.12 6.18 7.0; do
+for key in "${KEYS[@]}"; do
 	if [[ -z "${NEW[$key]}" ]]; then
 		echo "::error::could not resolve bump-pin:$key" >&2
 		exit 1
@@ -52,7 +89,8 @@ for key in 6.12 6.18 7.0; do
 done
 
 # (file, key) targets to update. A file may carry only a subset of
-# the keys; missing keys produce a warning, not a failure.
+# the keys; missing keys produce a warning, not a failure. Targets
+# whose key isn't in $KEYS are filtered out below.
 declare -a TARGETS=(
 	"$WORKFLOWS/ci.yml 6.12"
 	"$WORKFLOWS/ci.yml 6.18"
@@ -65,6 +103,12 @@ declare -a TARGETS=(
 for tgt in "${TARGETS[@]}"; do
 	file="${tgt% *}"
 	key="${tgt##* }"
+	# Skip targets whose key isn't in scope for this run.
+	in_scope=0
+	for k in "${KEYS[@]}"; do
+		[[ "$k" == "$key" ]] && in_scope=1
+	done
+	[[ $in_scope -eq 1 ]] || continue
 	new="${NEW[$key]}"
 	key_re="${key//./\\.}"
 	# `(linux-)?ref:` matches both the matrix-entry form and the
