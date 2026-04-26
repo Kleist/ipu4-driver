@@ -1,0 +1,159 @@
+name: vm-smoke (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      linux-url:
+        description: Git URL of the Linux tree to clone.
+        required: true
+        type: string
+      linux-ref:
+        description: Tag or branch to clone. Forwarded to bootstrap.sh as IPU4_LINUX_TAG.
+        required: true
+        type: string
+      display-name:
+        description: Short human label used in step output (e.g. "6.12", "6.18").
+        required: true
+        type: string
+
+# Runs the full boot pipeline (bootstrap → build QEMU → build kernel →
+# build initramfs → boot VM) and asserts the emulated IPU4 device
+# enumerates (M2) and the driver's probe path reaches at least
+# `probe:fw_valid` (M4).
+#
+# Cold: ~12 min on the free runner. Warm (both caches hit): ~2 min —
+# the QEMU source is re-cloned but ninja detects nothing changed;
+# the kernel source is re-cloned and bootstrap re-seeds driver sources
+# with cmp-before-cp so mtimes survive and make rebuilds nothing.
+
+jobs:
+  vm-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup harness (apt + QEMU build deps)
+        uses: ./.github/actions/setup-harness
+        with:
+          extra-packages: >-
+            ninja-build pkg-config libglib2.0-dev libpixman-1-dev
+            meson python3-venv busybox-static cpio gzip
+
+      # Cache keys are hashed over the inputs that can change the
+      # corresponding build output. On cache hit, bootstrap re-clones
+      # the source trees (cheap; cmp-before-cp preserves mtimes) and
+      # the ninja / make invocations are near no-ops.
+
+      # restore-keys gives us partial-cache-hit behaviour: even when
+      # the exact-match key changes (every PR touches at least one
+      # driver .c / build script / patch file), actions/cache picks
+      # the most recent entry starting with the prefix and restores
+      # the whole tree. Combined with bootstrap.sh's cmp-before-cp,
+      # unchanged files keep their mtimes and kbuild / ninja only
+      # rebuild the objects whose inputs actually changed.
+
+      # QEMU is pinned to v9.1.0 regardless of the kernel ref, so
+      # the QEMU cache is shared across callers.
+      - name: Cache forked QEMU build
+        uses: actions/cache@v4
+        with:
+          path: tools/qemu
+          key: qemu-${{ hashFiles('tools/qemu-patches/**/*', 'tools/bootstrap.sh', 'tools/build-qemu.sh') }}
+          restore-keys: |
+            qemu-
+
+      # The Linux cache is namespaced by display-name so the 6.12 PR
+      # caller and the 6.18 weekly caller don't trample each other.
+      - name: Cache forked Linux build
+        uses: actions/cache@v4
+        with:
+          path: tools/linux
+          key: linux-${{ inputs.display-name }}-${{ hashFiles('kernel/ipu4/**/*', 'tools/linux-patches/**/*', 'tools/bootstrap.sh', 'tools/build.sh', 'tools/build-kernel.sh') }}
+          restore-keys: |
+            linux-${{ inputs.display-name }}-
+
+      - name: Bootstrap harness (linux=${{ inputs.linux-ref }})
+        run: ./tools/bootstrap.sh
+        env:
+          IPU4_LINUX_URL: ${{ inputs.linux-url }}
+          IPU4_LINUX_TAG: ${{ inputs.linux-ref }}
+
+      - name: Build QEMU (ipu4 device)
+        run: ./tools/build-qemu.sh
+
+      - name: Build kernel + driver
+        run: ./tools/build-kernel.sh
+
+      - name: Build initramfs
+        run: ./tools/rootfs/build.sh
+
+      - name: Boot VM, verify IPU4 device enumerates
+        run: ./tools/tests/vm-smoke.sh
+        env:
+          IPU4_ACCEL: tcg
+
+      - name: Boot VM, verify driver probe progresses past fw_valid
+        run: ./tools/tests/probe-smoke.sh
+        env:
+          IPU4_ACCEL: tcg
+
+      - name: Boot VM, walk v4l2 capture API
+        run: ./tools/tests/streamon-smoke.sh
+        env:
+          IPU4_ACCEL: tcg
+
+      - name: Capture QEMU MMIO trace
+        # Strict: a capture regression blocks merge. This is the QEMU
+        # side that makes the coverage report's value-mismatch
+        # classification meaningful (without it, only the
+        # silicon-only unimplemented list can fire).
+        run: ./tools/tests/mmiotrace.sh
+        env:
+          IPU4_ACCEL: tcg
+
+      - name: Full MMIO trace coverage report (silicon vs QEMU)
+        # Always run so the diff is published even when the capture
+        # above failed. compare-mmio.sh distinguishes harness faults
+        # (missing inputs / empty outputs → exit 1, blocks merge)
+        # from divergence-only (expected until the model catches up
+        # → exit 0, report still produced as the artifact).
+        if: always()
+        run: ./tools/tests/compare-mmio.sh
+
+      - name: Upload MMIO trace coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmio-trace-coverage-vm-smoke-${{ inputs.display-name }}-${{ github.run_id }}
+          path: |
+            tools/tests/out/compare-mmio/
+            tools/tests/out/mmiotrace/
+          if-no-files-found: ignore
+
+      - name: Build coverage report from streamon-smoke gcov harvest
+        run: ./tools/coverage/collect.sh
+
+      - name: Upload coverage HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html-${{ inputs.display-name }}-${{ github.run_id }}
+          path: |
+            tools/coverage/html
+            tools/coverage/summary.json
+          if-no-files-found: warn
+
+      - name: Upload serial logs + artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-smoke-failure-${{ inputs.display-name }}-${{ github.run_id }}
+          if-no-files-found: ignore
+          path: |
+            tools/tests/out/*.serial
+            tools/tests/out/gcov.tar
+            tools/rootfs/out/rootfs.cpio.gz
+            tools/linux/arch/x86/boot/bzImage
+            tools/linux/.config
