@@ -59,12 +59,14 @@ tools/
 .github/
   actions/setup-harness/action.yml   shared apt + pip install (canonical prereq list)
   workflows/
-    build-and-kunit.yml  reusable: apt setup + bootstrap + build + kunit
-    pr.yml               PR gate (calls build-and-kunit.yml)
-    main.yml             same on push to main/master
-    vm-smoke.yml         full VM: probe-smoke + streamon-smoke + mmiotrace + compare-mmio
-    rebase.yml           weekly rebase onto linux-6.12.y
-    upstream-watch.yml   daily IPU6-cherry-pick triage cron
+    build-and-kunit.yml      reusable: apt setup + bootstrap + build + kunit
+    vm-smoke-reusable.yml    reusable: full VM (probe-smoke + streamon-smoke + mmiotrace + compare-mmio)
+    ci.yml                   PR/push gate: 6.12 + 6.18 matrix into build-and-kunit.yml
+    vm-smoke.yml             PR/push thin caller: 6.12 leg into vm-smoke-reusable.yml
+    vm-smoke-weekly.yml      Sunday cron: 6.18 leg into vm-smoke-reusable.yml
+    rebase.yml               weekly Monday cron against linux-6.12.y branch tip
+    bump-kernel-pins.yml     weekly Monday cron: open auto-PR rewriting bump-pin lines
+    upstream-watch.yml       daily IPU6-cherry-pick triage cron
 data/trace.txt           silicon's mmiotrace capture; baseline for compare-mmio
 ```
 
@@ -337,9 +339,34 @@ data/trace.txt           silicon's mmiotrace capture; baseline for compare-mmio
   `.s_stream` hook that produces deterministic frames, and the
   yavta SHA-256 e2e test in `tools/tests/e2e.sh`.
 
-- **M6/M7/M8 — rebase cadence + 6.18/mainline:** cron workflow in
-  place; 6.18 and mainline jobs not yet added — they wait on M5 being
-  green on 6.12.
+- **M6 — rebase cadence:** done. `.github/workflows/rebase.yml`
+  thin-calls `build-and-kunit.yml` and `vm-smoke-reusable.yml` with
+  `linux-ref: linux-6.12.y` and `cache-linux: false` so the leg
+  always re-fetches the branch tip. The Monday cron exercises whatever
+  point release has landed; the bumper PR follows behind to land the
+  pin move.
+
+- **M7 — 6.18 leg:** done. Build + KUnit run on `v6.18.3` alongside
+  `v6.12` on every PR via `.github/workflows/ci.yml`'s two-leg matrix
+  (PR #50). `vm-smoke-weekly.yml` runs the full VM tier against the
+  same 6.18 pin every Sunday (PR #59 split vm-smoke into a 6.12-on-PR
+  thin caller plus a 6.18-weekly thin caller). Both legs reach
+  `STREAM:pattern_ok`. Driver-side fix needed: `ipu4-compat.h` had to
+  be included in `kernel/ipu4/virt-sensor.c` and the format kunit
+  test so `MODULE_IMPORT_NS(INTEL_IPU6)` / `EXPORT_SYMBOL_NS_GPL(...,
+  INTEL_IPU6)` pick up the post-6.13 string-literal namespace shim
+  (PR #57). Initial pin was `v6.18`; bumped to `v6.18.3` to dodge an
+  upstream `DMA_BIT_MASK` macro precedence regression that crashed
+  `ipu6_mmu_iova_to_phys()` mid-`STREAMON` (fixed in stable Jan 2026,
+  PR #62 carries the bump and a vm-smoke cache-key fix so future
+  bumps actually re-clone).
+
+- **M8 — mainline leg:** pending. `build-and-kunit.yml` previously
+  carried a `__latest_release__` resolver but PR #50 dropped it
+  (callers pass literal refs now). When we want a leg tracking
+  `master` or "latest stable", add a third matrix entry to `ci.yml`
+  pointing at the chosen ref; the bumper would need a parallel
+  `# bump-pin:master` rule (or no bumper if it's a moving branch).
 
 ## Running the harness
 
