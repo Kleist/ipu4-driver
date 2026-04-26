@@ -14,39 +14,52 @@ on:
     # without waiting for the next push.
     - cron: '0 6 * * *'
 
-# Single concurrent build to avoid two runs racing on the gh-pages
-# branch's history.json. Newer runs cancel older ones.
+# Standard pattern for deploy-pages: never run two deploys at once,
+# but don't cancel in-flight ones (we want every refresh to land).
 concurrency:
   group: pages
   cancel-in-progress: false
 
 permissions:
-  contents: write   # push to gh-pages
-  actions: read     # gh run list / gh run download for vm-smoke artifacts
+  contents: read
+  pages: write       # deploy
+  id-token: write    # OIDC for actions/deploy-pages
+  actions: read      # gh run download for vm-smoke artifacts
 
 jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      artifact_path: ${{ steps.layout.outputs.path }}
     steps:
-      - name: Checkout main
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Checkout gh-pages into site/ (creates orphan if missing)
-        run: |
-          set -e
-          git fetch origin gh-pages 2>/dev/null || true
-          if git rev-parse --verify origin/gh-pages >/dev/null 2>&1; then
-            git worktree add -B gh-pages site origin/gh-pages
-          else
-            # First-time bring-up: empty orphan branch.
-            git worktree add --orphan -b gh-pages site
-          fi
-
       - name: Install python dependencies
         run: pip3 install --user jinja2
+
+      - name: Carry forward history.json from the live site
+        # The dashboard's only persistent state is data/history.json.
+        # actions/deploy-pages is stateless, so we fetch the previously
+        # published copy from the live Pages URL before regenerating.
+        # First-time deploys (404) fall back to an empty history.
+        run: |
+          set -e
+          mkdir -p site/data
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          REPO="${GITHUB_REPOSITORY##*/}"
+          OWNER_LC="$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')"
+          URL="https://${OWNER_LC}.github.io/${REPO}/data/history.json"
+          echo "fetching prior history from $URL"
+          if curl -fsSL --max-time 30 "$URL" -o site/data/history.json; then
+            echo "carried forward $(jq '.points|length' site/data/history.json) point(s)"
+          else
+            echo "no prior history (first deploy or fetch failed); starting fresh"
+            rm -f site/data/history.json
+          fi
 
       - name: Download latest vm-smoke artifacts
         env:
@@ -54,8 +67,8 @@ jobs:
         run: |
           set -e
           # Find the most recent successful vm-smoke run on the default
-          # branch. Both artifacts may not exist (older runs predate
-          # coverage-html / mmio-trace-coverage uploads); ignore errors.
+          # branch. Both artifacts may not exist on older runs; ignore
+          # individual download errors so a partial set still renders.
           RUN_ID="$(gh run list \
               --workflow=vm-smoke \
               --branch=${{ github.event.repository.default_branch || 'main' }} \
@@ -65,17 +78,17 @@ jobs:
               --jq '.[0].databaseId' || true)"
           if [[ -n "$RUN_ID" && "$RUN_ID" != "null" ]]; then
             echo "VM_SMOKE_RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
-            mkdir -p tools/coverage tools/tests/out/compare-mmio
+            mkdir -p tools/coverage tools/tests/out
             gh run download "$RUN_ID" \
               --name "coverage-html-$RUN_ID" \
               --dir tools/coverage/_artifact || true
             gh run download "$RUN_ID" \
               --name "mmio-trace-coverage-vm-smoke-$RUN_ID" \
               --dir tools/tests/out/_artifact || true
-            # Coverage artifact layout:
-            #   <root>/html/index.html
-            #   <root>/summary.json   (only present after collect.sh's
-            #                          emit-summary change; tolerate absence)
+            # Coverage artifact layout (after collect.sh's emit-summary
+            # change):
+            #   <root>/html/index.html ...
+            #   <root>/summary.json
             # Older artifacts (path: tools/coverage/html alone) put the
             # html tree at the artifact root; handle both shapes.
             if [[ -d tools/coverage/_artifact ]]; then
@@ -115,23 +128,28 @@ jobs:
           ./tools/upstream/diff.sh || echo "diff.sh failed; rendering without it" >&2
 
       - name: Build dashboard
+        id: layout
         env:
           OUT_DIR: ${{ github.workspace }}/site
           REPO_SLUG: ${{ github.repository }}
           VM_SMOKE_RUN_ID: ${{ env.VM_SMOKE_RUN_ID }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./tools/dashboard/build.sh
-
-      - name: Commit + push to gh-pages
         run: |
-          set -e
-          cd site
-          git add -A
-          if git diff --cached --quiet; then
-            echo "nothing to commit"
-            exit 0
-          fi
-          git -c user.name="github-actions[bot]" \
-              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-              commit -m "dashboard: refresh ($GITHUB_SHA)"
-          git push origin HEAD:gh-pages
+          ./tools/dashboard/build.sh
+          echo "path=${OUT_DIR}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
