@@ -2,34 +2,16 @@ name: pr
 on:
   pull_request:
 
+# Thin caller: every kernel matrix leg lives in build-and-kunit.yml.
+# This file pins the PR check to v6.12 (current tested kernel). The
+# wider matrix (6.18 / latest release / master) lands in a follow-on
+# ci.yml; until then PR signal is the same single-kernel check it has
+# always been.
+
 jobs:
   build-and-kunit:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Setup harness (apt + pip)
-        uses: ./.github/actions/setup-harness
-        with:
-          install-pip: "true"
-
-      - name: Python unit tests + coverage
-        run: ./tools/tests/pytest.sh
-
-      - name: Bootstrap harness
-        run: ./tools/bootstrap.sh
-
-      - name: Build driver
-        run: ./tools/build.sh
-
-      - name: Run KUnit
-        run: ./tools/tests/kunit.sh
-
-      # MMIO trace coverage is produced by the vm-smoke workflow,
-      # which has the full QEMU+kernel build chain. Running
-      # compare-mmio.sh here would just fail for lack of a qemu.trace
-      # — the silicon-only fallback was removed deliberately so the
-      # pipeline must emit a real diff or error loudly.
+    uses: ./.github/workflows/build-and-kunit.yml
+    with:
+      linux-url:    https://github.com/torvalds/linux.git
+      linux-tag:    v6.12
+      display-name: "6.12"

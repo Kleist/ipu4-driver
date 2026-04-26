@@ -4,39 +4,14 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
-# Milestones landed so far: M0 (in-tree migration scaffolding) and M1 (KUnit
-# sources). The QEMU device model, rootfs, e2e streaming, and coverage
-# report jobs are staged in tools/ but not yet wired for a green run; they
-# are added back here as the corresponding milestones land (see STATUS.md).
+# Thin caller: same body as pr.yml, just a different trigger. Both
+# delegate to build-and-kunit.yml. The wider kernel matrix lands in
+# the follow-on ci.yml.
 
 jobs:
-  full:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Setup harness (apt + pip)
-        uses: ./.github/actions/setup-harness
-        with:
-          install-pip: "true"
-
-      - name: Python unit tests + coverage
-        run: ./tools/tests/pytest.sh
-
-      - name: Bootstrap harness
-        run: ./tools/bootstrap.sh
-
-      - name: Build driver
-        run: ./tools/build.sh
-
-      - name: KUnit
-        run: ./tools/tests/kunit.sh
-
-      # MMIO trace coverage is produced by the vm-smoke workflow,
-      # which has the full QEMU+kernel build chain. Running
-      # compare-mmio.sh here would just fail for lack of a qemu.trace
-      # — the silicon-only fallback was removed deliberately so the
-      # pipeline must emit a real diff or error loudly.
+  build-and-kunit:
+    uses: ./.github/workflows/build-and-kunit.yml
+    with:
+      linux-url:    https://github.com/torvalds/linux.git
+      linux-tag:    v6.12
+      display-name: "6.12"
