@@ -61,7 +61,6 @@ In-tree build via the QEMU harness (preferred for local iteration):
 tools/bootstrap.sh          # clones tools/linux/ @ v6.12 and tools/qemu/ @ v9.1.0, seeds patches + driver
 tools/build.sh              # configures kconfig and builds intel-ipu4.ko in tools/linux/
 tools/tests/kunit.sh        # Tier 1: KUnit suites (ipu4_format, ipu4_bayer) under qemu-kvm via kunit.py
-tools/rebase.sh             # rebase tools/linux/ onto linux-6.12.y and re-run tiers
 ```
 
 Full-VM test loop (the same set CI's `vm-smoke` runs — fast on warm caches, ~5 min, dramatically shorter feedback than push-and-wait CI):
@@ -86,7 +85,7 @@ The bootstrap script is idempotent. Re-run after pulling to re-apply patches fro
 - `.github/workflows/vm-smoke.yml` — full-VM boot + probe-smoke + streamon-smoke + mmiotrace + `compare-mmio` divergence report on every PR and on push to `main`/`master`. Pinned to the **6.12 leg only** (the same `bump-pin:6.12` ref as `ci.yml`); 6.18 runs weekly via `vm-smoke-weekly.yml`. A thin `workflow_call` caller — the body lives in `vm-smoke-reusable.yml`.
 - `.github/workflows/vm-smoke-weekly.yml` — Sundays 07:00 UTC + `workflow_dispatch`. Single-job thin caller pinned to 6.18 (the same `bump-pin:6.18` ref as `ci.yml`).
 - `.github/workflows/vm-smoke-reusable.yml` — reusable workflow (`workflow_call`) shared by `vm-smoke.yml` and `vm-smoke-weekly.yml`. Inputs: `linux-url`, `linux-ref`, `display-name`. The Linux build cache is namespaced by `display-name` so the 6.12 and 6.18 callers don't trample each other; the QEMU cache (independent of the kernel ref) is shared. Failure artifacts (`vm-smoke-failure-<display-name>-*`) include the serial logs; the coverage report (`mmio-trace-coverage-vm-smoke-<display-name>-*`) is published unconditionally.
-- `.github/workflows/rebase.yml` — weekly cron that rebases `tools/linux/` onto `linux-6.12.y`.
+- `.github/workflows/rebase.yml` — weekly cron that re-runs the per-PR build-and-kunit + vm-smoke reusable workflows against the moving `linux-6.12.y` branch tip (instead of the pinned `v6.12` tag) so a new stable point release gets exercised before the bumper proposes the pin move.
 - `.github/workflows/upstream-watch.yml` — daily cron that surfaces new upstream IPU6 commits as cherry-pick PRs (see "Upstream sync tooling" above).
 
 ## QEMU device-model workflow

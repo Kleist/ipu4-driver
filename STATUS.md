@@ -18,7 +18,6 @@ tools/
   build-qemu.sh          build qemu-system-x86_64 with the IPU4 device wired in
   build-kernel.sh        build bzImage + modules from the same .config as build.sh
   run-vm.sh              boot test VM with the emulated IPU4 device
-  rebase.sh              weekly rebase onto linux-6.12.y, run tiered tests
   tests/
     kunit.sh             Tier 1: ipu4_format + ipu4_bayer KUnit suites via kunit.py
     streamon-smoke.sh    Tier 2 (live): full v4l2 capture API walk to STREAM:pattern_ok
@@ -188,14 +187,13 @@ data/trace.txt           silicon's mmiotrace capture; baseline for compare-mmio
   differently). `IPU4_STREAM_REQUIRED` remains `STREAM:qbuf`.
 
 - **M6 — weekly rebase cron:** done. `.github/workflows/rebase.yml`
-  runs every Monday 06:00 UTC (and on `workflow_dispatch`).
-  `tools/rebase.sh` wipes `tools/linux/`, re-bootstraps pointing at
-  `linux-6.12.y` on the stable-tree mirror (a moving branch, not
-  the pinned `v6.12` tag), rebuilds, and runs the full smoke tier
-  we have today — `kunit.sh`, `vm-smoke.sh`, `probe-smoke.sh`,
-  `streamon-smoke.sh`. The defunct `e2e.sh` reference is dropped
-  until M5c provides real frame delivery. On failure, the
-  workflow uploads serial logs and `.config` as artifacts.
+  runs every Monday 06:00 UTC (and on `workflow_dispatch`). It
+  thin-calls the reusable `build-and-kunit.yml` and
+  `vm-smoke-reusable.yml` workflows with `linux-ref:
+  linux-6.12.y` (a moving branch, not the pinned `v6.12` tag) and
+  `cache-linux: false` so the rebase leg always re-fetches the
+  branch tip, exercising whatever new stable point release has
+  landed before the bumper proposes the pin move.
 
 - **M5c-4 — gcov harvest + lcov HTML:** done. `init.streamon`
   rounds each `.gcda` in `/sys/kernel/debug/gcov/` through `cat`
