@@ -27,6 +27,13 @@ done
 APPEND="console=ttyS0 earlyprintk=serial,ttyS0 panic=-1 oops=panic nokaslr"
 APPEND+=" loglevel=7 rdinit=/init"
 APPEND+=" intel_ipu4.dyndbg=+p intel_ipu4_isys.dyndbg=+p"
+# Boot-time tuning. mitigations=off skips the Spectre/Meltdown/MDS/etc.
+# init paths (~hundreds of ms on cold boot) — irrelevant in a single-
+# tenant test VM. tsc=reliable skips the TSC stability watchdog and
+# pins clocksource selection so we don't waste boot time calibrating
+# against PIT/HPET. Neither flag affects debug ability: dmesg, ftrace,
+# mmiotrace, dyndbg, and oops/KASAN backtraces are all unaffected.
+APPEND+=" mitigations=off tsc=reliable"
 if [[ "${IPU4_MMIOTRACE:-0}" == 1 ]]; then
 	# Pre-size the ftrace ring buffer so a full probe-capture fits
 	# without wrapping. The mmiotrace tracer itself is enabled by the
