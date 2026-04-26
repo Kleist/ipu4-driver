@@ -115,6 +115,7 @@ if [[ -f "$QEMU_HW_MESON" ]] && ! grep -q "# ipu4 device model sources" "$QEMU_H
 system_ss.add(when: 'CONFIG_IPU4', if_true: files(
   'ipu4.c',
   'ipu4-mmu.c',
+  'ipu4-buttress.c',
 ))
 EOF
 fi
