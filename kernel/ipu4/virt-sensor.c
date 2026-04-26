@@ -30,6 +30,7 @@
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-subdev.h>
 
+#include "ipu4-compat.h"
 #include "virt-sensor.h"
 
 #define VIRT_SENSOR_WIDTH		800
