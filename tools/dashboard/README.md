@@ -4,10 +4,30 @@ Renders a single-page GitHub Pages site with the project's "current
 state": code coverage, MMIO divergence, register coverage, upstream
 divergence + watcher state, latest CI runs, and STATUS.md milestones.
 
-Deployed by `.github/workflows/pages.yml` on every push to `main` and
-on every successful `vm-smoke` completion (so the coverage / mmio
-sections refresh as soon as the artifacts they consume become
-available). The site source is the `gh-pages` branch.
+Deployed by `.github/workflows/pages.yml` via `actions/deploy-pages`
+on every push to `main`, every successful `vm-smoke` completion, and
+a daily 06:00 UTC cron.
+
+## How history works
+
+`actions/deploy-pages` is stateless — there's no persistent branch.
+The dashboard's only piece of carried-forward state is
+`data/history.json`, and the workflow re-reads it from the previously
+published Pages URL (`https://<owner>.github.io/<repo>/data/history.json`)
+before each rebuild. First-time deploys (404) start with an empty
+history.
+
+`build.sh` reads `$OUT_DIR/data/history.json` (if present), appends a
+new datapoint with the current SHA / coverage % / MMIO divergence
+counts, and writes it back into the new artifact. Multiple triggers
+on the same SHA (push + vm-smoke completion + cron) refresh the same
+point rather than appending duplicates. History is capped at 365
+points (one year of daily refreshes plus per-push events).
+
+## One-time Pages setup
+
+In repo Settings → Pages, set **Source: GitHub Actions**. No `gh-pages`
+branch is involved.
 
 ## Inputs
 
@@ -40,19 +60,6 @@ xdg-open /tmp/site/index.html
 
 The script tolerates missing inputs so a checkout without a recent
 `vm-smoke` run still produces a viewable page.
-
-## How history works
-
-`build.sh` reads `$OUT_DIR/data/history.json` (if present), appends a
-new datapoint with the current SHA / coverage % / MMIO divergence
-counts, and writes it back. The pages workflow checks out the
-`gh-pages` branch into `site/` before running `build.sh`, so each
-deployment carries forward the prior history. Multiple triggers on the
-same SHA (push + vm-smoke completion + cron) refresh the same point
-rather than appending duplicates.
-
-History is capped at 365 points (one year of daily refreshes plus
-per-push events).
 
 ## File map
 
