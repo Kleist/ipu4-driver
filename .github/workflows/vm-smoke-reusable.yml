@@ -73,8 +73,12 @@ jobs:
           restore-keys: |
             qemu-
 
-      # The Linux cache is namespaced by display-name so the 6.12 PR
-      # caller and the 6.18 weekly caller don't trample each other.
+      # The Linux cache is namespaced by display-name AND linux-ref so
+      # the 6.12 PR caller and the 6.18 weekly caller don't trample each
+      # other, and so a pin bump (e.g. v6.18 → v6.18.3) busts the cache.
+      # bootstrap.sh's clone_if_missing returns early on an existing
+      # tools/linux/ regardless of the requested tag, so a cache restore
+      # under the prior ref would silently leave us on the old kernel.
       # Skipped for callers tracking a moving branch (rebase leg) — a
       # cache hit there would mask point-release drift.
       - name: Cache forked Linux build
@@ -82,9 +86,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: tools/linux
-          key: linux-${{ inputs.display-name }}-${{ hashFiles('kernel/ipu4/**/*', 'tools/linux-patches/**/*', 'tools/bootstrap.sh', 'tools/build.sh', 'tools/build-kernel.sh') }}
+          key: linux-${{ inputs.display-name }}-${{ inputs.linux-ref }}-${{ hashFiles('kernel/ipu4/**/*', 'tools/linux-patches/**/*', 'tools/bootstrap.sh', 'tools/build.sh', 'tools/build-kernel.sh') }}
           restore-keys: |
-            linux-${{ inputs.display-name }}-
+            linux-${{ inputs.display-name }}-${{ inputs.linux-ref }}-
 
       - name: Bootstrap harness (linux=${{ inputs.linux-ref }})
         run: ./tools/bootstrap.sh
