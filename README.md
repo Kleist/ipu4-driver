@@ -29,6 +29,27 @@ IPU4 support was hacked onto the IPU6 driver to work with 6.6 by @Kleist. See ht
 
 It was recently updated to work as an out-of-tree module on 6.6 and 6.12 (and possibly working on some intermediate versions).
 
+## Development & test harness
+
+A QEMU-based dev/test harness lives under `tools/`. It clones Linux at `v6.12` and QEMU at `v9.1.0`, seeds the driver into an in-tree path, and provides KUnit + full-VM smoke tests that run entirely in software.
+
+* [CLAUDE.md](CLAUDE.md) — the entry point: prerequisite apt packages, build/test commands, the upstream-IPU6 discipline, and the QEMU device-model workflow. Read this first when picking up the repo.
+* [STATUS.md](STATUS.md) — milestone state, layout, and the canonical "Running the harness" recipe.
+
+Quickstart on a fresh Ubuntu 24.04 / Debian box:
+
+```bash
+sudo apt-get install -y \
+  build-essential bc bison flex libelf-dev libssl-dev kmod \
+  python3 python3-pip lcov qemu-system-x86 \
+  ninja-build pkg-config libglib2.0-dev libpixman-1-dev \
+  meson python3-venv busybox-static cpio gzip
+tools/bootstrap.sh
+tools/build.sh && tools/tests/kunit.sh
+tools/build-qemu.sh && tools/build-kernel.sh && tools/rootfs/build.sh
+IPU4_ACCEL=tcg tools/tests/streamon-smoke.sh    # full v4l2 capture-API walk
+```
+
 ## Upstream sync tooling
 * [tools/upstream/diff.sh](tools/upstream/diff.sh): regenerate `tools/notes/upstream-diff/summary.md`, a file-by-file divergence report against upstream `drivers/media/pci/intel/ipu6/` at the pinned tag — input for incrementally retiring `#ifdef IPU6` hunks.
 * [tools/upstream/watch.sh](tools/upstream/watch.sh): runs daily in CI (`.github/workflows/upstream-watch.yml`) — detects new upstream IPU6 commits on `linux-6.12.y` and `master`, tries cherry-picks, opens a triage PR.
