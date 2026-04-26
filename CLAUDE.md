@@ -22,6 +22,22 @@ Do not restructure or "clean up" IPU6 code. Do not rename `ipu6_*` symbols. Keep
 
 `kernel/ipu4/ipu4-compat.h` holds `LINUX_VERSION_CODE`-gated shims for 6.6 / 6.10 / 6.11 kernel API changes. Add new shims here rather than `#ifdef`-ing callers.
 
+## Local prerequisites
+
+Everything CI needs to build the harness lives in `.github/actions/setup-harness/action.yml`. To get the same setup on a fresh machine (Ubuntu 24.04 / Debian-equivalent):
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  build-essential bc bison flex libelf-dev libssl-dev kmod \
+  python3 python3-pip lcov qemu-system-x86 \
+  ninja-build pkg-config libglib2.0-dev libpixman-1-dev \
+  meson python3-venv busybox-static cpio gzip
+pip3 install --user pytest pytest-cov   # optional, only for tools/tests/pytest.sh
+```
+
+The first list matches the `build-and-kunit` workflow; the second is the `vm-smoke` extras (QEMU build deps + initramfs builder). `qemu-system-x86` is the stock QEMU binary used by the kernel's `tools/testing/kunit/kunit.py`; the full-VM tests run against our own IPU4-patched QEMU built by `tools/build-qemu.sh`. After this list, every command in this file (and in `STATUS.md`) just works.
+
 ## Upstream sync tooling
 
 Two helpers under `tools/upstream/`, both relying on the same file mapping (`drivers/media/pci/intel/ipu6/<f>` ↔ `kernel/ipu4/<f>`, IPU4-only files in `IPU4_LOCAL_ONLY` skipped):
@@ -44,8 +60,7 @@ In-tree build via the QEMU harness (preferred for local iteration):
 ```bash
 tools/bootstrap.sh          # clones tools/linux/ @ v6.12 and tools/qemu/ @ v9.1.0, seeds patches + driver
 tools/build.sh              # configures kconfig and builds intel-ipu4.ko in tools/linux/
-tools/tests/kunit.sh        # Tier 1: KUnit suites (ipu4_mmu, ipu4_format, ipu4_bayer) under qemu-kvm
-tools/tests/e2e.sh          # Tier 2: boot VM, STREAMON, frame-hash check (needs tools/rootfs/build.sh — not yet implemented)
+tools/tests/kunit.sh        # Tier 1: KUnit suites (ipu4_format, ipu4_bayer) under qemu-kvm via kunit.py
 tools/rebase.sh             # rebase tools/linux/ onto linux-6.12.y and re-run tiers
 ```
 
@@ -82,10 +97,10 @@ The QEMU IPU4 device model (`tools/qemu-patches/hw/misc/ipu4.c`) is the part of 
 
 ## Known in-progress work
 
-See `STATUS.md` for milestone state. Key "not done yet" items that affect what tests actually run:
+See `STATUS.md` for milestone state. Key things to know about what tests actually run:
 
-- `drivers/media/pci/intel/Kconfig` is not yet patched to expose `CONFIG_VIDEO_IPU4`, so `tools/tests/kunit.sh` prints `kunit: skipping` and exits 0 rather than failing. CI is green on purpose until that wiring lands.
-- `tools/tests/e2e.sh` is still a tier-2 placeholder — the live test path is `tools/tests/streamon-smoke.sh` (gated by `IPU4_STREAM_REQUIRED`, default `STREAM:pattern_ok` end-to-end) plus `tools/tests/mmiotrace.sh` and `tools/tests/compare-mmio.sh`.
+- `tools/tests/kunit.sh` runs `ipu4_format` and `ipu4_bayer` KUnit suites via the kernel's `tools/testing/kunit/kunit.py` (no separate VM boot needed; kunit.py runs them under qemu-kvm). The parent `drivers/media/pci/intel/Kconfig` is patched idempotently by `tools/bootstrap.sh`, so `CONFIG_VIDEO_INTEL_IPU4=y` is wired.
+- `tools/tests/e2e.sh` is a tier-2 placeholder — the live full-VM path is `tools/tests/streamon-smoke.sh` (gated by `IPU4_STREAM_REQUIRED`, default `STREAM:pattern_ok` end-to-end) plus `tools/tests/mmiotrace.sh` and `tools/tests/compare-mmio.sh`.
 - `tools/notes/registers.md` rows are no longer mostly `guess` — most behaviour is `inferred` against silicon's `data/trace.txt`. The remaining `value_mismatch` rows (PWR_STATE FSM transitional values, TSC clock skew, SPC_STATUS_CTRL silicon-specific bits, ring-cursor counts) are intrinsic divergence, not missing handlers.
 
 ## Legacy hardware trace scripts

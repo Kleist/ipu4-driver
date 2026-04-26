@@ -1,42 +1,72 @@
 # IPU4 dev/test harness — status
 
-This file tracks the state of the QEMU-based dev/test environment described
-in `/root/.claude/plans/i-want-a-setup-sunny-moler.md`.
+This file tracks the state of the QEMU-based dev/test environment for the
+IPU4 driver: an in-tree fork of Linux at `v6.12` plus a fork of QEMU at
+`v9.1.0` carrying our `hw/misc/ipu4.c` device model, joined by a tiered
+test stack that runs entirely in software (no real silicon required).
+
+For the project's overall posture (out-of-tree driver, upstream-IPU6
+discipline, prerequisites for a fresh checkout) see `CLAUDE.md`. For the
+ongoing upstream-tracking workflow see `tools/upstream/`.
 
 ## Layout
 
 ```
 tools/
   bootstrap.sh           fork Linux + QEMU, apply patches, seed driver sources
-  build.sh               build the driver in-tree in tools/linux/
+  build.sh               build the driver as an external module in tools/linux/
+  build-qemu.sh          build qemu-system-x86_64 with the IPU4 device wired in
+  build-kernel.sh        build bzImage + modules from the same .config as build.sh
   run-vm.sh              boot test VM with the emulated IPU4 device
   rebase.sh              weekly rebase onto linux-6.12.y, run tiered tests
   tests/
-    kunit.sh             Tier 1: KUnit suites under qemu-kvm (~500 ms)
-    e2e.sh               Tier 2: VM + STREAMON + 5 frames (~10 s)
-    guest-streamon.sh    runs inside the guest: insmod, yavta, harvest gcov
-    frames.sha256        expected dequeued-buffer hashes (populated at M4)
-  coverage/
-    collect.sh           gcov tar -> lcov --extract -> genhtml
+    kunit.sh             Tier 1: ipu4_format + ipu4_bayer KUnit suites via kunit.py
+    streamon-smoke.sh    Tier 2 (live): full v4l2 capture API walk to STREAM:pattern_ok
+    mmiotrace.sh         re-run streamon-smoke under mmiotrace, capture qemu.trace
+    compare-mmio.sh      diff captured trace against silicon's data/trace.txt
+    probe-smoke.sh       progress-graded probe smoke (driver loads, devices appear)
+    vm-smoke.sh          boot VM, assert 0x8086:0x5a88 enumerates
+    pytest.sh            pytest + 90% coverage gate for the trace tools
+    e2e.sh               Tier 2 placeholder (pending SHA frame check)
+    streamon.c           static v4l2 client embedded as /bin/streamon in the rootfs
+  rootfs/
+    build.sh             busybox + IPU4 module initramfs via gen_init_cpio
+    init.{vm-smoke,probe-ok,streamon,streamon-mmiotrace,mmiotrace}
+                         per-test guest /init scripts
+  firmware/
+    gen-cpd.py           synthesise the minimal CPD blob for ipu6_cpd_validate
   trace/
-    diff.py              diff two mmiotrace captures across fuzz iterations
+    compare.py           silicon-vs-QEMU mmiotrace diff
+  coverage/
+    collect.sh           gcov tarball -> lcov --extract -> genhtml
+  upstream/
+    diff.sh              regenerate tools/notes/upstream-diff/ divergence report
+    watch.sh             cron-driven new-IPU6-commit detector + cherry-pick triage PR
+    render-pr-body.sh    formats the watcher's NDJSON output into a PR body
+    _lib.sh              shared file mapping + IPU4_LOCAL_ONLY skip list
   notes/
-    registers.md         register-behavior log for hw/misc/ipu4.c
-  linux-patches/         files mirrored into tools/linux/ on bootstrap
+    registers.md         source of truth for every implemented hw/misc/ipu4.c handler
+    upstream-divergence.md  static audit of kernel/ipu4/ vs upstream IPU6
+    ifdef-ipu6-audit.md  per-site classification of every #ifdef IPU6 hunk
+    upstream-watch-state.json  rolling state for tools/upstream/watch.sh
+  linux-patches/         files mirrored into tools/linux/ by bootstrap.sh
     drivers/media/pci/intel/ipu4/
       Kconfig Makefile     in-tree Kconfig + Makefile for the driver
       tests/
         Kconfig Makefile .kunitconfig
-        ipu4_format_kunit.c  ipu4_bayer_kunit.c  ipu4_mmu_kunit.c
-  qemu-patches/          files mirrored into tools/qemu/ on bootstrap
+        ipu4_format_kunit.c  ipu4_bayer_kunit.c
+  qemu-patches/          files mirrored into tools/qemu/ by bootstrap.sh
     hw/misc/ipu4.c
-  rootfs/
-    build.sh             initramfs builder (not yet implemented)
-.github/workflows/
-  pr.yml                 KUnit + build (PR gate)
-  main.yml               reserved: e2e + coverage when they land
-  vm-smoke.yml           boot VM + assert 0x8086:0x5a88 (M2)
-  rebase.yml             weekly rebase cron
+.github/
+  actions/setup-harness/action.yml   shared apt + pip install (canonical prereq list)
+  workflows/
+    build-and-kunit.yml  reusable: apt setup + bootstrap + build + kunit
+    pr.yml               PR gate (calls build-and-kunit.yml)
+    main.yml             same on push to main/master
+    vm-smoke.yml         full VM: probe-smoke + streamon-smoke + mmiotrace + compare-mmio
+    rebase.yml           weekly rebase onto linux-6.12.y
+    upstream-watch.yml   daily IPU6-cherry-pick triage cron
+data/trace.txt           silicon's mmiotrace capture; baseline for compare-mmio
 ```
 
 ## Milestone state
@@ -53,12 +83,13 @@ tools/
   upstreaming pass. The `kernel/ipu4/` tree remains the source of
   truth in this repo until M2 is green.
 
-- **M1 — KUnit tier:** done. `ipu4_format_kunit.c`,
-  `ipu4_bayer_kunit.c`, `ipu4_mmu_kunit.c` build and run as KUnit
-  modules under `qemu-system-x86_64`. 12 tests pass in ~1.2 s of test
-  execution (the surrounding kernel build dominates wall time).
-  `ipu6_mmu_pgsize()` was un-staticed and declared in `ipu6-mmu.h` so
-  the test can reference it. `ipu4_ring_kunit.c` and
+- **M1 — KUnit tier:** done. `ipu4_format_kunit.c` and
+  `ipu4_bayer_kunit.c` build and run as KUnit modules under
+  `qemu-system-x86_64` via the kernel's `tools/testing/kunit/kunit.py`.
+  The `ipu4_mmu_kunit.c` suite was retired when upstream's MMU
+  map/unmap optimisation (Linux v6.12-era backport) inlined
+  `ipu6_mmu_pgsize()` into the lower `l2_*` helpers, removing the
+  symbol the test was wired to. `ipu4_ring_kunit.c` and
   `ipu4_queue_kunit.c` are still skipped because those call paths go
   through `readl`/`writel` and list helpers; adding them means
   introducing small MMIO fakes.
@@ -194,8 +225,8 @@ tools/
   mapping shows up immediately.
 
   `streamon-smoke.sh` default `IPU4_STREAM_REQUIRED` raised to
-  `STREAM:pattern_ok`. First DQBUF now reports
-  `STREAM:pattern_ok seq=0 bytes=1948032`.
+  `STREAM:pattern_ok`. First DQBUF reports
+  `STREAM:pattern_ok seq=0 bytes=1945600`.
 
   Not yet: frame-rate pacing (buffers still complete synchronously
   from `buf_queue`), multi-frame sequence verification (the test
@@ -314,20 +345,31 @@ tools/
 
 ## Running the harness
 
+Prereqs: install the apt + pip packages listed in `CLAUDE.md` ("Local
+prerequisites"). They match the canonical set in
+`.github/actions/setup-harness/action.yml`.
+
 ```bash
-tools/bootstrap.sh            # one-time: forks Linux + QEMU, seeds patches
-tools/build.sh                # build intel-ipu4.ko (driver-only, fast)
-tools/tests/kunit.sh          # tier 1, ~1 s of test execution
-tools/build-qemu.sh           # build qemu-system-x86_64 with ipu4 device
+tools/bootstrap.sh            # one-time: clones Linux@v6.12 + QEMU@v9.1.0, seeds patches + driver
+tools/build.sh                # build intel-ipu4{,-isys}.ko + ambu-ipu-bridge.ko (fast)
+tools/tests/kunit.sh          # Tier 1: ipu4_format + ipu4_bayer KUnit suites (~1 s)
+tools/build-qemu.sh           # build qemu-system-x86_64 with the ipu4 device
 tools/build-kernel.sh         # full guest kernel + modules (for VM runs)
 tools/rootfs/build.sh         # busybox initramfs via gen_init_cpio
-tools/tests/vm-smoke.sh       # M2: boot VM, assert 0x8086:0x5a88 enumerates
-tools/tests/e2e.sh            # tier 2, boots VM and streams (M4 target)
-tools/coverage/collect.sh     # HTML report in tools/coverage/html/
+
+# Tier 2 (live): boots the VM end-to-end. ~1 min on warm caches.
+IPU4_ACCEL=tcg tools/tests/streamon-smoke.sh    # walk v4l2 capture API to STREAM:pattern_ok
+IPU4_ACCEL=tcg tools/tests/mmiotrace.sh         # rerun under mmiotrace, capture qemu.trace
+tools/tests/compare-mmio.sh                     # diff against silicon's data/trace.txt
+
+# Optional:
+tools/coverage/collect.sh     # HTML report in tools/coverage/html/ (after streamon-smoke)
+tools/upstream/diff.sh        # regenerate tools/notes/upstream-diff/ vs upstream IPU6
 ```
 
-The forked Linux and QEMU URLs are configurable via `IPU4_LINUX_URL` and
-`IPU4_QEMU_URL`; see `tools/bootstrap.sh` for all environment hooks.
+The forked Linux and QEMU URLs/tags are configurable via `IPU4_LINUX_URL`,
+`IPU4_LINUX_TAG`, `IPU4_QEMU_URL`, `IPU4_QEMU_TAG`; see `tools/bootstrap.sh`
+for all environment hooks.
 
 ## What is intentionally not done here
 
