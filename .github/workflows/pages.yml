@@ -1,0 +1,137 @@
+name: pages
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+  workflow_run:
+    workflows: ["vm-smoke"]
+    types: [completed]
+  schedule:
+    # Daily refresh at 06:00 UTC, after the upstream-watch cron at 04:00.
+    # Picks up new last_seen state and the latest workflow conclusions
+    # without waiting for the next push.
+    - cron: '0 6 * * *'
+
+# Single concurrent build to avoid two runs racing on the gh-pages
+# branch's history.json. Newer runs cancel older ones.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # push to gh-pages
+  actions: read     # gh run list / gh run download for vm-smoke artifacts
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout gh-pages into site/ (creates orphan if missing)
+        run: |
+          set -e
+          git fetch origin gh-pages 2>/dev/null || true
+          if git rev-parse --verify origin/gh-pages >/dev/null 2>&1; then
+            git worktree add -B gh-pages site origin/gh-pages
+          else
+            # First-time bring-up: empty orphan branch.
+            git worktree add --orphan -b gh-pages site
+          fi
+
+      - name: Install python dependencies
+        run: pip3 install --user jinja2
+
+      - name: Download latest vm-smoke artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          # Find the most recent successful vm-smoke run on the default
+          # branch. Both artifacts may not exist (older runs predate
+          # coverage-html / mmio-trace-coverage uploads); ignore errors.
+          RUN_ID="$(gh run list \
+              --workflow=vm-smoke \
+              --branch=${{ github.event.repository.default_branch || 'main' }} \
+              --status=success \
+              --limit=1 \
+              --json databaseId \
+              --jq '.[0].databaseId' || true)"
+          if [[ -n "$RUN_ID" && "$RUN_ID" != "null" ]]; then
+            echo "VM_SMOKE_RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
+            mkdir -p tools/coverage tools/tests/out/compare-mmio
+            gh run download "$RUN_ID" \
+              --name "coverage-html-$RUN_ID" \
+              --dir tools/coverage/_artifact || true
+            gh run download "$RUN_ID" \
+              --name "mmio-trace-coverage-vm-smoke-$RUN_ID" \
+              --dir tools/tests/out/_artifact || true
+            # Coverage artifact layout:
+            #   <root>/html/index.html
+            #   <root>/summary.json   (only present after collect.sh's
+            #                          emit-summary change; tolerate absence)
+            # Older artifacts (path: tools/coverage/html alone) put the
+            # html tree at the artifact root; handle both shapes.
+            if [[ -d tools/coverage/_artifact ]]; then
+              rm -rf tools/coverage/html tools/coverage/summary.json
+              if [[ -d tools/coverage/_artifact/html ]]; then
+                mv tools/coverage/_artifact/html tools/coverage/html
+                [[ -f tools/coverage/_artifact/summary.json ]] && \
+                  mv tools/coverage/_artifact/summary.json tools/coverage/summary.json
+              elif [[ -f tools/coverage/_artifact/index.html ]]; then
+                mv tools/coverage/_artifact tools/coverage/html
+              fi
+              rm -rf tools/coverage/_artifact
+            fi
+            if [[ -d tools/tests/out/_artifact ]]; then
+              # Artifact contents: compare-mmio/ + mmiotrace/ at root.
+              cp -r tools/tests/out/_artifact/. tools/tests/out/ 2>/dev/null || true
+              rm -rf tools/tests/out/_artifact
+            fi
+          else
+            echo "no successful vm-smoke run yet; rendering with placeholders"
+          fi
+
+      - name: Regenerate upstream-diff summary
+        run: |
+          set -e
+          # diff.sh just needs the Linux source tree at the pinned tag
+          # to git-diff against — clone shallow directly rather than
+          # running the full bootstrap (which also clones QEMU).
+          # Failure is non-fatal: the dashboard renders without the
+          # upstream-diff section if this step is skipped.
+          LINUX_TAG="${IPU4_LINUX_TAG:-v6.12}"
+          LINUX_URL="${IPU4_LINUX_URL:-https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git}"
+          if [[ ! -d tools/linux/.git ]]; then
+            git clone --depth 1 --branch "$LINUX_TAG" "$LINUX_URL" tools/linux \
+              || { echo "linux clone failed; skipping diff" >&2; exit 0; }
+          fi
+          ./tools/upstream/diff.sh || echo "diff.sh failed; rendering without it" >&2
+
+      - name: Build dashboard
+        env:
+          OUT_DIR: ${{ github.workspace }}/site
+          REPO_SLUG: ${{ github.repository }}
+          VM_SMOKE_RUN_ID: ${{ env.VM_SMOKE_RUN_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./tools/dashboard/build.sh
+
+      - name: Commit + push to gh-pages
+        run: |
+          set -e
+          cd site
+          git add -A
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "dashboard: refresh ($GITHUB_SHA)"
+          git push origin HEAD:gh-pages

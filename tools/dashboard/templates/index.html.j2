@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IPU4 driver — current state</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<header class="hero">
+  <h1>IPU4 driver — current state</h1>
+  <p class="tagline">Out-of-tree IPU6-derived driver + QEMU dev/test harness. Pinned to Linux <code>v6.12</code>.</p>
+  <p class="meta">
+    Last updated <time datetime="{{ generated_at }}">{{ generated_at }}</time>
+    {% if commit_sha %} · commit <a href="https://github.com/{{ repo }}/commit/{{ commit_sha }}"><code>{{ commit_sha[:7] }}</code></a>{% endif %}
+    · <a href="https://github.com/{{ repo }}">repository</a>
+  </p>
+</header>
+
+<section class="card">
+  <h2>CI status</h2>
+  {% if ci.workflows %}
+  <div class="ci-grid">
+    {% for wf in ci.workflows %}
+    <a class="ci-tile state-{{ wf.conclusion or 'unknown' }}" href="{{ wf.url }}">
+      <div class="ci-name">{{ wf.name }}</div>
+      <div class="ci-conclusion">{{ wf.conclusion or 'pending' }}</div>
+      <div class="ci-meta">{{ wf.relative or '' }}{% if wf.duration %} · {{ wf.duration }}{% endif %}</div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">No workflow runs found.</p>
+  {% endif %}
+  {% if streamon_marker %}
+  <p class="streamon-marker">Latest streamon-smoke marker: <code>{{ streamon_marker }}</code></p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Code coverage</h2>
+  {% if coverage.summary %}
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-label">lines</div>
+      <div class="kpi-value">{{ coverage.summary.lines.pct | pct }}</div>
+      <div class="kpi-sub">{{ coverage.summary.lines.hit }} / {{ coverage.summary.lines.total }}</div>
+    </div>
+    <div class="kpi"><div class="kpi-label">functions</div>
+      <div class="kpi-value">{{ coverage.summary.functions.pct | pct }}</div>
+      <div class="kpi-sub">{{ coverage.summary.functions.hit }} / {{ coverage.summary.functions.total }}</div>
+    </div>
+    {% if coverage.summary.branches %}
+    <div class="kpi"><div class="kpi-label">branches</div>
+      <div class="kpi-value">{{ coverage.summary.branches.pct | pct }}</div>
+      <div class="kpi-sub">{{ coverage.summary.branches.hit }} / {{ coverage.summary.branches.total }}</div>
+    </div>
+    {% endif %}
+  </div>
+  <p><a href="coverage/index.html">Browse the full lcov report →</a></p>
+  {% else %}
+  <p class="empty">No coverage data yet — first <code>vm-smoke</code> run that completes <code>STREAM:pattern_ok</code> will populate this.</p>
+  {% endif %}
+  <canvas id="coverage-trend" height="80"></canvas>
+</section>
+
+<section class="card">
+  <h2>MMIO divergence (silicon vs QEMU)</h2>
+  {% if mmio.report %}
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-label">unimplemented</div>
+      <div class="kpi-value">{{ mmio.report.unimplemented | length }}</div>
+      <div class="kpi-sub">silicon-touched, QEMU silent</div>
+    </div>
+    <div class="kpi"><div class="kpi-label">value mismatch</div>
+      <div class="kpi-value">{{ mmio.report.value_mismatches | length }}</div>
+      <div class="kpi-sub">read divergence</div>
+    </div>
+    <div class="kpi"><div class="kpi-label">extra in QEMU</div>
+      <div class="kpi-value">{{ mmio.report.extra_in_qemu | length }}</div>
+      <div class="kpi-sub">benign / informational</div>
+    </div>
+  </div>
+  <p>
+    silicon: {{ mmio.report.silicon_total }} accesses ·
+    qemu: {{ mmio.report.qemu_total }} accesses ·
+    <a href="mmio/report.txt">full report.txt →</a>
+  </p>
+  {% else %}
+  <p class="empty">No MMIO trace report yet — first <code>vm-smoke</code> with successful <code>mmiotrace.sh</code> populates this.</p>
+  {% endif %}
+  <canvas id="mmio-trend" height="80"></canvas>
+</section>
+
+<section class="card">
+  <h2>Register coverage ({{ registers.total }} handlers in <code>hw/misc/ipu4.c</code>)</h2>
+  <div class="kpi-row">
+    {% for level in ['doc', 'inferred', 'guess'] %}
+    <div class="kpi conf-{{ level }}"><div class="kpi-label">{{ level }}</div>
+      <div class="kpi-value">{{ registers.counts[level] }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <details>
+    <summary>Show register table</summary>
+    <table class="reg-table">
+      <thead><tr><th>Offset</th><th>Block</th><th>Driver caller</th><th>Confidence</th></tr></thead>
+      <tbody>
+      {% for r in registers.rows %}
+      <tr class="conf-{{ r.confidence }}">
+        <td><code>{{ r.offset }}</code></td>
+        <td>{{ r.block }}</td>
+        <td>{{ r.caller | replace('`','') }}</td>
+        <td>{{ r.confidence }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+</section>
+
+<section class="card">
+  <h2>Upstream divergence (kernel/ipu4 vs IPU6)</h2>
+  {% if upstream.diff %}
+  <p>
+    Upstream pin: <code>{{ upstream.diff.upstream_pin }}</code> ·
+    {{ upstream.diff.files_differ }} files differ ·
+    {{ upstream.diff.hunks }} hunks ·
+    +{{ upstream.diff.plus }} / −{{ upstream.diff.minus }} lines
+  </p>
+  {% else %}
+  <p class="empty">Diff not regenerated — run <code>tools/upstream/diff.sh</code>.</p>
+  {% endif %}
+  <h3>Upstream-watch state</h3>
+  <ul class="watch-state">
+    {% for branch, ref in upstream.watch.last_seen.items() %}
+    <li><code>{{ branch }}</code> last seen at <code>{{ ref }}</code></li>
+    {% endfor %}
+  </ul>
+  <p class="meta">{{ upstream.watch.processed_patch_ids|length }} patch-ids deduped to date</p>
+</section>
+
+<section class="card">
+  <h2>Milestones</h2>
+  <ol class="milestones">
+    {% for m in milestones.milestones %}
+    <li class="state-{{ m.state }}">
+      <span class="ms-id">{{ m.id }}</span>
+      <span class="ms-title">{{ m.title }}</span>
+      <span class="ms-state">{{ m.state | replace('_',' ') }}</span>
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+
+<footer>
+  Generated by <code>tools/dashboard/build.sh</code>. Sources: <code>STATUS.md</code>, <code>tools/notes/registers.md</code>, <code>tools/notes/upstream-watch-state.json</code>, <code>tools/coverage/summary.json</code>, <code>tools/tests/out/compare-mmio/report.json</code>, GitHub Actions API.
+</footer>
+
+<script id="history-data" type="application/json">{{ history | json_dump | safe }}</script>
+<script>
+(function () {
+  const raw = document.getElementById('history-data').textContent;
+  const history = JSON.parse(raw);
+  const points = (history && history.points) || [];
+  if (!points.length) return;
+  const labels = points.map(p => p.ts.slice(0, 10));
+
+  const lineCfg = (canvasId, datasets) => {
+    const el = document.getElementById(canvasId);
+    if (!el) return;
+    new Chart(el, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' } },
+        scales: { y: { beginAtZero: false } },
+      },
+    });
+  };
+
+  lineCfg('coverage-trend', [
+    { label: 'lines %', data: points.map(p => (p.coverage || {}).lines_pct ?? null), borderColor: '#5ec27e', tension: 0.2 },
+    { label: 'functions %', data: points.map(p => (p.coverage || {}).functions_pct ?? null), borderColor: '#74a9ff', tension: 0.2 },
+  ]);
+  lineCfg('mmio-trend', [
+    { label: 'unimplemented', data: points.map(p => (p.mmio || {}).unimplemented ?? null), borderColor: '#e08e6e', tension: 0.2 },
+    { label: 'value mismatch', data: points.map(p => (p.mmio || {}).value_mismatch ?? null), borderColor: '#d8c46a', tension: 0.2 },
+  ]);
+})();
+</script>
+</body>
+</html>

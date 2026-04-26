@@ -74,4 +74,24 @@ mkdir -p "$OUT"
 genhtml --quiet --output-directory "$OUT" "$INFO"
 
 echo ">>> coverage report at $OUT/index.html"
-lcov --summary "$INFO"
+
+# Capture lcov --summary so the dashboard can pick up a stable
+# JSON contract instead of scraping genhtml output. Lines look like:
+#   lines.......: 33.1% (123 of 456 lines)
+#   functions...: 40.7% (12 of 30 functions)
+#   branches....: 18.7% (45 of 240 branches)
+SUMMARY_TXT="$WORK/summary.txt"
+lcov --summary "$INFO" 2>&1 | tee "$SUMMARY_TXT"
+SUMMARY_JSON="$(dirname "$OUT")/summary.json"
+python3 - "$SUMMARY_TXT" "$SUMMARY_JSON" <<'PY'
+import json, re, sys
+text = open(sys.argv[1]).read()
+out = {}
+for kind in ("lines", "functions", "branches"):
+    m = re.search(rf"^\s*{kind}[.\s]*:\s*([\d.]+)%\s*\((\d+)\s+of\s+(\d+)", text, re.M)
+    if m:
+        out[kind] = {"pct": float(m.group(1)), "hit": int(m.group(2)), "total": int(m.group(3))}
+with open(sys.argv[2], "w") as f:
+    json.dump(out, f, indent=2)
+PY
+echo ">>> coverage summary at $SUMMARY_JSON"

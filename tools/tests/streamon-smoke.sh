@@ -54,6 +54,12 @@ for s in "${steps[@]}"; do
 done
 echo "streamon-smoke: reached=$reached"
 
+# Persist the last STREAM:* marker line for downstream consumers
+# (the dashboard reads this instead of grepping a multi-MB serial log).
+if [[ -n "$reached" ]]; then
+	grep -F "$reached" "$LOG" | tail -1 > "$OUT/streamon.summary" || true
+fi
+
 failline=$(grep -m1 '^STREAM:fail' "$LOG" || true)
 [[ -n "$failline" ]] && echo "streamon-smoke: $failline"
 
