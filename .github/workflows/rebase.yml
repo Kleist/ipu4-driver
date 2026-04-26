@@ -19,15 +19,12 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Install build deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential bc bison flex libelf-dev libssl-dev \
-            ninja-build pkg-config libglib2.0-dev libpixman-1-dev \
-            meson python3-venv \
-            busybox-static qemu-system-x86 \
-            cpio gzip
+      - name: Setup harness (apt + QEMU build deps)
+        uses: ./.github/actions/setup-harness
+        with:
+          extra-packages: >-
+            ninja-build pkg-config libglib2.0-dev libpixman-1-dev
+            meson python3-venv busybox-static cpio gzip
 
       - name: Run rebase + smoke tiers against linux-6.12.y HEAD
         run: ./tools/rebase.sh
