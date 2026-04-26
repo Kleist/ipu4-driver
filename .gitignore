@@ -14,6 +14,8 @@ tools/qemu/
 tools/rootfs/out/
 tools/tests/out/
 tools/coverage/html/
+tools/upstream/out/
+tools/notes/upstream-diff/
 kernel/ipu4/*.o
 kernel/ipu4/*.cmd
 kernel/ipu4/*.o.d
