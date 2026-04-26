@@ -125,7 +125,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-html-${{ github.run_id }}
-          path: tools/coverage/html
+          path: |
+            tools/coverage/html
+            tools/coverage/summary.json
           if-no-files-found: warn
 
       - name: Upload serial logs + artifacts on failure
