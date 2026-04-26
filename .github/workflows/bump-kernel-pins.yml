@@ -6,9 +6,10 @@ on:
     - cron: "30 5 * * 1"
   workflow_dispatch:
 
-# Resolves the latest stable point release for each of the 6.12 and
-# 6.18 tracks, then opens a PR rewriting the matching
-# `# bump-pin:<key>` lines in .github/workflows/ci.yml.
+# Resolves the latest stable point release for each of the 6.12,
+# 6.18, and 7.0 tracks, then opens a PR rewriting the matching
+# `# bump-pin:<key>` lines in .github/workflows/ci.yml,
+# vm-smoke.yml, and vm-smoke-weekly.yml.
 # peter-evans/create-pull-request only opens a PR if the rewrite
 # actually changed something, so an unchanged week is a free no-op.
 #

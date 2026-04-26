@@ -5,13 +5,14 @@
 # workflow can paste it into the auto-PR's body.
 #
 # Files touched:
-#   - .github/workflows/ci.yml             (build+kunit matrix; 6.12 + 6.18)
+#   - .github/workflows/ci.yml             (build+kunit matrix; 6.12 + 6.18 + 7.0)
 #   - .github/workflows/vm-smoke.yml       (PR caller; 6.12 only)
-#   - .github/workflows/vm-smoke-weekly.yml (Sunday cron; 6.18 only)
+#   - .github/workflows/vm-smoke-weekly.yml (Sunday cron; 6.18 + 7.0 matrix)
 #
 # Resolution rules:
 #   - 6.12  — highest v6.12(.X) release tag on git.kernel.org stable mirror.
 #   - 6.18  — same with v6.18(.X).
+#   - 7.0   — same with v7.0(.X).
 #
 # Lines we touch look like one of:
 #     ref:  <value>  # bump-pin:<key>          (matrix entry)
@@ -41,8 +42,9 @@ latest_stable_tag() {
 declare -A NEW
 NEW[6.12]="$(latest_stable_tag 'v6.12*' '^v6\.12(\.[0-9]+)?$')"
 NEW[6.18]="$(latest_stable_tag 'v6.18*' '^v6\.18(\.[0-9]+)?$')"
+NEW[7.0]="$(latest_stable_tag 'v7.0*' '^v7\.0(\.[0-9]+)?$')"
 
-for key in 6.12 6.18; do
+for key in 6.12 6.18 7.0; do
 	if [[ -z "${NEW[$key]}" ]]; then
 		echo "::error::could not resolve bump-pin:$key" >&2
 		exit 1
@@ -54,8 +56,10 @@ done
 declare -a TARGETS=(
 	"$WORKFLOWS/ci.yml 6.12"
 	"$WORKFLOWS/ci.yml 6.18"
+	"$WORKFLOWS/ci.yml 7.0"
 	"$WORKFLOWS/vm-smoke.yml 6.12"
 	"$WORKFLOWS/vm-smoke-weekly.yml 6.18"
+	"$WORKFLOWS/vm-smoke-weekly.yml 7.0"
 )
 
 for tgt in "${TARGETS[@]}"; do

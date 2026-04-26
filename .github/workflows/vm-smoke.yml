@@ -6,10 +6,10 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
-# 6.12-only PR/push signal. The 6.18 leg runs weekly via
+# 6.12-only PR/push signal. The 6.18 and 7.0 legs run weekly via
 # vm-smoke-weekly.yml. The 6.12 ref is kept in sync with ci.yml's
 # 6.12 pin via the bump-pin comment below — the weekly bumper
-# rewrites both files.
+# rewrites all three files.
 
 jobs:
   vm-smoke:
