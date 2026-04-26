@@ -6,10 +6,14 @@ on:
     - cron: "30 5 * * 1"
   workflow_dispatch:
 
-# Resolves the latest stable point release for each of the 6.12,
-# 6.18, and 7.0 tracks, then opens a PR rewriting the matching
-# `# bump-pin:<key>` lines in .github/workflows/ci.yml,
-# vm-smoke.yml, and vm-smoke-weekly.yml.
+# One PR per kernel track (6.12, 6.18, 7.0). Each leg resolves the
+# latest stable point release for its track, rewrites only its own
+# entry in .github/kernel-pins.json (which ci.yml, vm-smoke.yml, and
+# vm-smoke-weekly.yml all read at workflow start), and opens an
+# independent PR against its own bot branch. Keeping the tracks split
+# means a single track's bump can land while the others wait on review
+# or red CI, instead of a combined PR being held up by any one side.
+#
 # peter-evans/create-pull-request only opens a PR if the rewrite
 # actually changed something, so an unchanged week is a free no-op.
 #
@@ -27,17 +31,22 @@ permissions:
 
 jobs:
   bump:
+    name: bump (${{ matrix.key }})
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        key: ["6.12", "6.18", "7.0"]
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Resolve and rewrite pins
+      - name: Resolve and rewrite ${{ matrix.key }} pin
         id: rewrite
         run: |
-          ./tools/bump-kernel-pins.sh | tee /tmp/bump.summary
+          ./tools/bump-kernel-pins.sh --key '${{ matrix.key }}' | tee /tmp/bump.summary
           {
             echo "summary<<EOF"
             cat /tmp/bump.summary
@@ -52,14 +61,16 @@ jobs:
           # vm-smoke. Falls back to GITHUB_TOKEN if the secret is not
           # configured — the PR still opens, just doesn't fire CI.
           token: ${{ secrets.BUMP_PAT || github.token }}
-          branch: bot/bump-kernel-pins
+          branch: bot/bump-kernel-pins-${{ matrix.key }}
           base: main
-          title: "ci: bump kernel pins"
-          commit-message: "ci: bump kernel pins"
+          title: "ci: bump kernel ${{ matrix.key }} pin"
+          commit-message: "ci: bump kernel ${{ matrix.key }} pin"
           delete-branch: true
           body: |
-            Auto-generated weekly bump of `.github/workflows/ci.yml`'s
-            kernel CI pins.
+            Auto-generated weekly bump of the `${{ matrix.key }}`
+            kernel CI pin in `.github/kernel-pins.json` (the single
+            source of truth that `ci.yml`, `vm-smoke.yml`, and
+            `vm-smoke-weekly.yml` all read at workflow start).
 
             ```
             ${{ steps.rewrite.outputs.summary }}
