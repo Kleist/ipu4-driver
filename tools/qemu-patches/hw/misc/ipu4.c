@@ -29,6 +29,7 @@
 #include "ipu4-mmu.h"
 #include "ipu4-buttress.h"
 #include "ipu4-csi2.h"
+#include "ipu4-isys.h"
 
 #define TYPE_IPU4 "ipu4"
 OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
@@ -40,95 +41,20 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 /* Buttress block (BTRS_*, IPC echo, PWR_STATE, TSC, FW reset/source,
  * ISR W1C) lives in ipu4-buttress.{c,h}. */
 
-/* ISYS unispart IRQ block. The driver derives the address as
- * ISYS_BASE (0x100000) + UNISPART_OFFSET (0x7c000) = 0x17c000 from
- * BAR0 (kernel/ipu4/ipu4-platform-regs.h:49 + ISYS base), and the
- * silicon trace confirms it. Same W1C / enable / level-select shape
- * as the buttress ISR trio:
- *
- *   STATUS         read returns `status & enable`
- *   CLEAR          write-1-to-clear bits of `status`
- *   EDGE/MASK/ENABLE/LEVEL_NOT_PULSE/SW_IRQ_MUX  latched R/W
- *   SW_IRQ         trigger register; the driver writes 0 on silicon
- *                  so the model treats it as a no-op for now.
- *
- * `status` stays zero under QEMU because we don't model the ISYS
- * hardware that normally raises these interrupts (frame generator,
- * CSI2 port events, …). That's a legitimate value_mismatch under
- * compare.py — STATUS reads 0 here, silicon cycles 0/0x40000000 as
- * real IRQs fire — but it's intrinsic to the lack of a backing
- * device, not a handler bug.
- */
-#define IS_UNISPART_BASE                 0x17c000
-#define IS_UNISPART_IRQ_EDGE             (IS_UNISPART_BASE + 0x000)
-#define IS_UNISPART_IRQ_MASK             (IS_UNISPART_BASE + 0x004)
-#define IS_UNISPART_IRQ_STATUS           (IS_UNISPART_BASE + 0x008)
-#define IS_UNISPART_IRQ_CLEAR            (IS_UNISPART_BASE + 0x00c)
-#define IS_UNISPART_IRQ_ENABLE           (IS_UNISPART_BASE + 0x010)
-#define IS_UNISPART_IRQ_LEVEL_NOT_PULSE  (IS_UNISPART_BASE + 0x014)
-#define IS_UNISPART_SW_IRQ               (IS_UNISPART_BASE + 0x414)
-#define IS_UNISPART_SW_IRQ_MUX           (IS_UNISPART_BASE + 0x418)
+/* ISYS unispart IRQ block, ISYS/PSYS SPC status-ctrl latches, and
+ * the ISYS DMEM syscom window live in ipu4-isys.{c,h}. */
 
 /* CSI2 port 0 + the unmodelled-port log range live in ipu4-csi2.{c,h}. */
 
-/* ISYS DMEM syscom ring-pointer block at BAR+0x108000 (from
- * postprocess_trace.py's NAMED_REGIONS; the driver derives offsets
- * via FW_COM_WR_REG / FW_COM_RD_REG in kernel/ipu4/ipu6-fw-com.h).
- * The first 0x100 bytes are firmware-parameter + ring-pointer slots
- * the driver writes during FW bringup and polls during streaming.
- * We back the whole window with a flat array:
- *
- *   0x008 SYSCOM_STATE     latched
- *   0x028 SEND_WR_POS      latched
- *   0x02c SEND_RD_POS      echoes SEND_WR so the driver sees
- *                          "firmware consumed everything"
- *   0x070 RECV_WR_POS      stays at whatever driver last wrote
- *                          (0 initially). Silicon sees real firmware
- *                          updates; the model doesn't, so compare.py
- *                          will flag this as a value_mismatch until
- *                          firmware simulation lands.
- *   0x074 RECV_RD_POS      latched (driver-written ack cursor)
- *   others (0x00-0x7f)     firmware parameter slots; no readback,
- *                          plain latching is enough.
- */
-#define IS_DMEM_BASE                     0x108000
-#define IS_DMEM_SIZE                     0x100
-#define IS_DMEM_SYSCOM_STATE             (IS_DMEM_BASE + 0x008)
-#define IS_DMEM_FW_COM_SEND_WR_POS       (IS_DMEM_BASE + 0x028)
-#define IS_DMEM_FW_COM_SEND_RD_POS       (IS_DMEM_BASE + 0x02c)
-#define IS_DMEM_FW_COM_RECV_WR_POS       (IS_DMEM_BASE + 0x070)
-#define IS_DMEM_FW_COM_RECV_RD_POS       (IS_DMEM_BASE + 0x074)
-
 /* SYSCOM_STATE values + protocol queue layout live in ipu4-fw-isys.h. */
-
-/* SPC status/control register lives at offset 0 of each SPC region.
- * IPU4 maps ISYS SPC at BAR+0x100000 and PSYS SPC at BAR+0x400000
- * (kernel/ipu4/ipu4-platform-regs.h:26-27 + ipu4-platform-regs.h's
- * ISYS/PSYS_BASE). Bit map (kernel/ipu4/ipu6-platform-regs.h:81-87):
- *   BIT(1)  START
- *   BIT(3)  RUN
- *   BIT(5)  READY
- *   BIT(12) ICACHE_INVALIDATE
- *   BIT(13) ICACHE_PREFETCH
- * `query_sp()` waits for `(val & (READY | START)) == READY` — i.e.
- * READY set, START cleared. To make that test pass on the first
- * read the model latches whatever the driver writes but always
- * folds in READY and folds out START on read.
- */
-#define IS_SPC_STATUS_CTRL               0x100000
-#define PS_SPC_STATUS_CTRL               0x400000
-#define SPC_STATUS_START                 (1u << 1)
-#define SPC_STATUS_READY                 (1u << 5)
 
 /* ISYS / PSYS MMU windows + IOVA walker live in ipu4-mmu.{c,h}. */
 
-/* IPU4 SP→host syscom delivery uses the buttress IS-side IRQ
- * (BTRS_REG_ISR_STATUS bit 0, raised via ipu4_buttress_signal_is_irq)
- * to wake `ipu6_buttress_isr`, which dispatches to `ipu4_isys_isr`
- * (ipu6-isys.c:375). That handler reads IS_UNISPART_IRQ_STATUS and
- * matches BIT(30) to decide there's a FW software event to drain;
- * both bits must therefore be set before raising the MSI. */
-#define ISYS_UNISPART_IRQ_SW             (1u << 30)
+/* IPU4 SP→host syscom delivery raises both the buttress IS-side IRQ
+ * (via ipu4_buttress_signal_is_irq) and the ISYS unispart SW IRQ bit
+ * (via ipu4_isys_signal_sw_irq) before the MSI fires. The driver's
+ * ipu4_isys_isr matches the unispart bit to decide there's a FW
+ * software event to drain (ipu6-isys.c:375). */
 
 /* FW protocol opcodes, response/queue/token struct shapes and the
  * IPU4_BASE_MSG_SEND_QUEUES / IPU4_MAX_MSG_STREAMS / SYSCOM_QPR_BASE_REG
@@ -141,25 +67,11 @@ struct Ipu4State {
     /* Buttress block (BTRS_*, IPC echo, PWR_STATE, TSC, ISR). */
     Ipu4Buttress buttress;
 
-    /* ISYS unispart IRQ block. */
-    uint32_t is_unispart_irq_edge;
-    uint32_t is_unispart_irq_mask;
-    uint32_t is_unispart_irq_status;
-    uint32_t is_unispart_irq_enable;
-    uint32_t is_unispart_irq_level_not_pulse;
-    uint32_t is_unispart_sw_irq_mux;
+    /* ISYS subsystem (unispart IRQ, ISYS+PSYS SPC, DMEM syscom window). */
+    Ipu4Isys isys;
 
     /* CSI2 receiver block (port 0 + unmodelled-port log range). */
     Ipu4Csi2 csi2;
-
-    /* ISYS DMEM syscom window (0x108000..0x1080ff). */
-    uint32_t is_dmem[IS_DMEM_SIZE / 4];
-
-    /* ISYS / PSYS SPC status-control latches. Reads return the
-     * latched value with READY forced on / START forced off so
-     * `query_sp()` succeeds on the first poll. */
-    uint32_t is_spc_status_ctrl;
-    uint32_t ps_spc_status_ctrl;
 
     /* ISYS / PSYS MMU page-table programming windows + ISYS MMU L1
      * page-table base pfn used by the IOVA walker. */
@@ -298,7 +210,7 @@ static void ipu4_post_response_full(Ipu4State *s,
                       rq->wr_reg);
         return;
     }
-    recv_wr_slot = &s->is_dmem[rq->wr_reg];
+    recv_wr_slot = &s->isys.dmem[rq->wr_reg];
     wr = *recv_wr_slot;
     if (wr >= rq->size) {
         wr = 0;
@@ -327,7 +239,7 @@ static void ipu4_post_response_full(Ipu4State *s,
      * was called in realize() and pci_alloc_irq_vectors() runs at
      * driver probe, so msi_enabled() is reliably true by the time
      * the first response posts. */
-    s->is_unispart_irq_status |= ISYS_UNISPART_IRQ_SW;
+    ipu4_isys_signal_sw_irq(&s->isys);
     ipu4_buttress_signal_is_irq(&s->buttress);
 
     if (msi_enabled(&s->parent_obj)) {
@@ -553,79 +465,20 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
     if (ipu4_buttress_mmio_read(&s->buttress, addr, &val)) {
         return val;
     }
-
-    switch (addr) {
-    case IS_UNISPART_IRQ_EDGE:
-        val = s->is_unispart_irq_edge;
-        break;
-    case IS_UNISPART_IRQ_MASK:
-        val = s->is_unispart_irq_mask;
-        break;
-    case IS_UNISPART_IRQ_STATUS:
-        /* Real silicon's UNISPART_IRQ_STATUS is the raw set-bits
-         * register: bits accumulate via edge / level events, are
-         * cleared via W1C to IRQ_CLEAR, and are independent of the
-         * ENABLE mask (which gates whether the bit propagates to
-         * the buttress parent IRQ, not whether STATUS reads back
-         * the bit). The driver's `ipu4_isys_isr` reads STATUS and
-         * dispatches on bit 30 directly without re-AND-ing with
-         * ENABLE — so masking here would silently drop the SW IRQ
-         * we synthesise from the syscom command parser if the
-         * driver hasn't yet run isys_setup_hw() to program the
-         * ENABLE register. */
-        val = s->is_unispart_irq_status;
-        break;
-    case IS_UNISPART_IRQ_ENABLE:
-        val = s->is_unispart_irq_enable;
-        break;
-    case IS_UNISPART_IRQ_LEVEL_NOT_PULSE:
-        val = s->is_unispart_irq_level_not_pulse;
-        break;
-    case IS_UNISPART_SW_IRQ_MUX:
-        val = s->is_unispart_sw_irq_mux;
-        break;
-
-    case IS_SPC_STATUS_CTRL:
-        /* See the bit-map comment near the constant: force READY on,
-         * START off so query_sp() reads "SPC is idle and ready"
-         * regardless of what the driver kicked into the latch. */
-        val = (s->is_spc_status_ctrl & ~SPC_STATUS_START) | SPC_STATUS_READY;
-        break;
-    case PS_SPC_STATUS_CTRL:
-        val = (s->ps_spc_status_ctrl & ~SPC_STATUS_START) | SPC_STATUS_READY;
-        break;
-
-    default:
-        if (addr >= IS_DMEM_BASE && addr < IS_DMEM_BASE + IS_DMEM_SIZE) {
-            /* SEND_RD_POS echoes SEND_WR_POS so the driver sees
-             * "firmware has caught up" and doesn't block on the ring
-             * filling. SYSCOM_STATE always returns READY so
-             * ipu6_fw_com_ready()'s 500ms poll terminates on the
-             * first read — the firmware-handshake shortcut documented
-             * in the Step 1 plan. All other slots return their
-             * latched value. */
-            if (addr == IS_DMEM_FW_COM_SEND_RD_POS) {
-                val = s->is_dmem[(IS_DMEM_FW_COM_SEND_WR_POS - IS_DMEM_BASE) / 4];
-            } else if (addr == IS_DMEM_SYSCOM_STATE) {
-                val = SYSCOM_STATE_READY;
-            } else {
-                val = s->is_dmem[(addr - IS_DMEM_BASE) / 4];
-            }
-            break;
-        }
-        if (ipu4_mmu_mmio_read(&s->mmu, addr, &val)) {
-            break;
-        }
-        if (ipu4_csi2_mmio_read(&s->csi2, addr, &val)) {
-            break;
-        }
-        qemu_log_mask(LOG_UNIMP,
-                      "ipu4: read unimpl +0x%06" HWADDR_PRIx
-                      " size=%u\n", addr, size);
-        return 0;
+    if (ipu4_isys_mmio_read(&s->isys, addr, &val)) {
+        return val;
+    }
+    if (ipu4_mmu_mmio_read(&s->mmu, addr, &val)) {
+        return val;
+    }
+    if (ipu4_csi2_mmio_read(&s->csi2, addr, &val)) {
+        return val;
     }
 
-    return val;
+    qemu_log_mask(LOG_UNIMP,
+                  "ipu4: read unimpl +0x%06" HWADDR_PRIx
+                  " size=%u\n", addr, size);
+    return 0;
 }
 
 static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
@@ -636,115 +489,72 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
     if (ipu4_buttress_mmio_write(&s->buttress, addr, val)) {
         return;
     }
+    if (addr >= IS_DMEM_BASE && addr < IS_DMEM_BASE + IS_DMEM_SIZE) {
+        uint32_t reg = (addr - IS_DMEM_BASE) / 4;
 
-    switch (addr) {
-    case IS_UNISPART_IRQ_EDGE:
-        s->is_unispart_irq_edge = val;
-        break;
-    case IS_UNISPART_IRQ_MASK:
-        s->is_unispart_irq_mask = val;
-        break;
-    case IS_UNISPART_IRQ_CLEAR:
-        /* Write-1-to-clear. */
-        s->is_unispart_irq_status &= ~(uint32_t)val;
-        break;
-    case IS_UNISPART_IRQ_ENABLE:
-        s->is_unispart_irq_enable = val;
-        break;
-    case IS_UNISPART_IRQ_LEVEL_NOT_PULSE:
-        s->is_unispart_irq_level_not_pulse = val;
-        break;
-    case IS_UNISPART_SW_IRQ:
-        /* Silicon writes 0 here on every path (51 accesses, all 0x0).
-         * On real hardware this is presumably a trigger that raises
-         * the bits in SW_IRQ_MUX into IRQ_STATUS, but with value 0
-         * nothing changes. Absorb the write without modelling the
-         * mux routing until a driver path actually sets bits here. */
-        if (val != 0) {
+        if (addr == IS_DMEM_FW_COM_SEND_RD_POS) {
+            /* The read path echoes SEND_WR_POS here; the driver is
+             * only expected to *read* this slot. A write means our
+             * "firmware-owned cursor, driver never writes"
+             * assumption is wrong — the echo logic would then hide
+             * the driver's intended value. */
             qemu_log_mask(LOG_UNIMP,
-                          "ipu4: unispart SW_IRQ written non-zero "
-                          "val=0x%" PRIx64 " — model's zero-only-absorb "
-                          "assumption broken; SW_IRQ_MUX routing is "
-                          "unmodelled. See tools/notes/registers.md "
-                          "(0x17c414).\n", val);
+                          "ipu4: driver wrote SEND_RD_POS val=0x%"
+                          PRIx64 " — model only echoes SEND_WR_POS "
+                          "on reads; this write is lost.\n", val);
         }
-        break;
-    case IS_UNISPART_SW_IRQ_MUX:
-        s->is_unispart_sw_irq_mux = val;
-        break;
 
-    case IS_SPC_STATUS_CTRL:
-        s->is_spc_status_ctrl = val;
-        break;
-    case PS_SPC_STATUS_CTRL:
-        s->ps_spc_status_ctrl = val;
-        break;
-
-    default:
-        if (addr >= IS_DMEM_BASE && addr < IS_DMEM_BASE + IS_DMEM_SIZE) {
-            uint32_t reg = (addr - IS_DMEM_BASE) / 4;
-
-            if (addr == IS_DMEM_FW_COM_SEND_RD_POS) {
-                /* The read path echoes SEND_WR_POS here; the driver is
-                 * only expected to *read* this slot. A write means our
-                 * "firmware-owned cursor, driver never writes"
-                 * assumption is wrong — the echo logic would then hide
-                 * the driver's intended value. */
-                qemu_log_mask(LOG_UNIMP,
-                              "ipu4: driver wrote SEND_RD_POS val=0x%"
-                              PRIx64 " — model only echoes SEND_WR_POS "
-                              "on reads; this write is lost.\n", val);
-            }
-
-            /* DMEM[1] = SYSCOM_CONFIG_REG (kernel/ipu4/ipu6-fw-com.c:101).
-             * The driver writes the IPU IOVA of the syscom_config struct
-             * here right before kicking cell_start. We re-latch the
-             * cached queue descriptors on every write so a fresh
-             * ipu6_fw_com_open call (e.g. after silent reset) starts
-             * clean. */
-            if (reg == 1 /* SYSCOM_CONFIG_REG */) {
-                s->syscom_config_iova = val;
-                memset(s->is_send_q_loaded, 0, sizeof(s->is_send_q_loaded));
-                s->is_recv_q_loaded = false;
-                memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
-            }
-
-            /* DMEM[2] = SYSCOM_STATE_REG. Driver writes UNINIT before
-             * polling for READY. Treat it as the firmware-init reset
-             * marker for the syscom layer — clear the wr-cursor cache
-             * so a re-open without a config rewrite still tracks the
-             * fresh ring correctly. */
-            if (reg == 2 /* SYSCOM_STATE_REG */ &&
-                val == SYSCOM_STATE_UNINIT) {
-                memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
-            }
-
-            s->is_dmem[reg] = val;
-
-            /* Detect a wr-cursor bump on any of the 8 msg-send queues
-             * and synthesise the matching FW response. The msg-send
-             * queues live at DMEM regs 10, 12, 14, … 24 (= absolute
-             * input queue indices 2..9, see comment above near
-             * IPU4_BASE_MSG_SEND_QUEUES). */
-            if (reg >= 10 && reg < 10 + IPU4_MAX_MSG_STREAMS * 2 &&
-                ((reg - 10) & 1) == 0) {
-                unsigned int stream = (reg - 10) / 2;
-                ipu4_handle_send_bump(s, stream, val);
-            }
-            break;
+        /* DMEM[1] = SYSCOM_CONFIG_REG (kernel/ipu4/ipu6-fw-com.c:101).
+         * The driver writes the IPU IOVA of the syscom_config struct
+         * here right before kicking cell_start. We re-latch the
+         * cached queue descriptors on every write so a fresh
+         * ipu6_fw_com_open call (e.g. after silent reset) starts
+         * clean. */
+        if (reg == 1 /* SYSCOM_CONFIG_REG */) {
+            s->syscom_config_iova = val;
+            memset(s->is_send_q_loaded, 0, sizeof(s->is_send_q_loaded));
+            s->is_recv_q_loaded = false;
+            memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
         }
-        if (ipu4_mmu_mmio_write(&s->mmu, addr, val)) {
-            break;
+
+        /* DMEM[2] = SYSCOM_STATE_REG. Driver writes UNINIT before
+         * polling for READY. Treat it as the firmware-init reset
+         * marker for the syscom layer — clear the wr-cursor cache
+         * so a re-open without a config rewrite still tracks the
+         * fresh ring correctly. */
+        if (reg == 2 /* SYSCOM_STATE_REG */ &&
+            val == SYSCOM_STATE_UNINIT) {
+            memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
         }
-        if (ipu4_csi2_mmio_write(&s->csi2, addr, val)) {
-            break;
+
+        s->isys.dmem[reg] = val;
+
+        /* Detect a wr-cursor bump on any of the 8 msg-send queues
+         * and synthesise the matching FW response. The msg-send
+         * queues live at DMEM regs 10, 12, 14, … 24 (= absolute
+         * input queue indices 2..9, see comment above near
+         * IPU4_BASE_MSG_SEND_QUEUES). */
+        if (reg >= 10 && reg < 10 + IPU4_MAX_MSG_STREAMS * 2 &&
+            ((reg - 10) & 1) == 0) {
+            unsigned int stream = (reg - 10) / 2;
+            ipu4_handle_send_bump(s, stream, val);
         }
-        qemu_log_mask(LOG_UNIMP,
-                      "ipu4: write unimpl +0x%06" HWADDR_PRIx
-                      " val=0x%" PRIx64 " size=%u\n",
-                      addr, val, size);
-        break;
+        return;
     }
+    if (ipu4_isys_mmio_write(&s->isys, addr, val)) {
+        return;
+    }
+    if (ipu4_mmu_mmio_write(&s->mmu, addr, val)) {
+        return;
+    }
+    if (ipu4_csi2_mmio_write(&s->csi2, addr, val)) {
+        return;
+    }
+
+    qemu_log_mask(LOG_UNIMP,
+                  "ipu4: write unimpl +0x%06" HWADDR_PRIx
+                  " val=0x%" PRIx64 " size=%u\n",
+                  addr, val, size);
 }
 
 static const MemoryRegionOps ipu4_mmio_ops = {
@@ -789,17 +599,9 @@ static void ipu4_reset(DeviceState *dev)
     Ipu4State *s = IPU4(dev);
 
     ipu4_buttress_reset(&s->buttress);
-    s->is_unispart_irq_edge = 0;
-    s->is_unispart_irq_mask = 0;
-    s->is_unispart_irq_status = 0;
-    s->is_unispart_irq_enable = 0;
-    s->is_unispart_irq_level_not_pulse = 0;
-    s->is_unispart_sw_irq_mux = 0;
+    ipu4_isys_reset(&s->isys);
     ipu4_csi2_reset(&s->csi2);
-    memset(s->is_dmem, 0, sizeof(s->is_dmem));
     ipu4_mmu_reset(&s->mmu);
-    s->is_spc_status_ctrl = 0;
-    s->ps_spc_status_ctrl = 0;
     s->syscom_config_iova = 0;
     memset(s->is_send_q, 0, sizeof(s->is_send_q));
     memset(s->is_send_q_loaded, 0, sizeof(s->is_send_q_loaded));
@@ -810,23 +612,15 @@ static void ipu4_reset(DeviceState *dev)
 
 static const VMStateDescription vmstate_ipu4 = {
     .name = "ipu4",
-    .version_id = 12,
-    .minimum_version_id = 12,
+    .version_id = 13,
+    .minimum_version_id = 13,
     .fields = (const VMStateField[]) {
         VMSTATE_PCI_DEVICE(parent_obj, Ipu4State),
         VMSTATE_STRUCT(buttress, Ipu4State, 0, vmstate_ipu4_buttress,
                        Ipu4Buttress),
-        VMSTATE_UINT32_V(is_unispart_irq_edge, Ipu4State, 3),
-        VMSTATE_UINT32_V(is_unispart_irq_mask, Ipu4State, 3),
-        VMSTATE_UINT32_V(is_unispart_irq_status, Ipu4State, 3),
-        VMSTATE_UINT32_V(is_unispart_irq_enable, Ipu4State, 3),
-        VMSTATE_UINT32_V(is_unispart_irq_level_not_pulse, Ipu4State, 3),
-        VMSTATE_UINT32_V(is_unispart_sw_irq_mux, Ipu4State, 3),
+        VMSTATE_STRUCT(isys, Ipu4State, 0, vmstate_ipu4_isys, Ipu4Isys),
         VMSTATE_STRUCT(csi2, Ipu4State, 0, vmstate_ipu4_csi2, Ipu4Csi2),
-        VMSTATE_UINT32_ARRAY_V(is_dmem, Ipu4State, IS_DMEM_SIZE / 4, 5),
         VMSTATE_STRUCT(mmu, Ipu4State, 0, vmstate_ipu4_mmu, Ipu4MmuRegs),
-        VMSTATE_UINT32_V(is_spc_status_ctrl, Ipu4State, 7),
-        VMSTATE_UINT32_V(ps_spc_status_ctrl, Ipu4State, 7),
         VMSTATE_UINT32_V(syscom_config_iova, Ipu4State, 8),
         VMSTATE_UINT32_ARRAY_V(is_send_wr_seen, Ipu4State,
                                IPU4_MAX_MSG_STREAMS, 8),
