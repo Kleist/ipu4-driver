@@ -47,7 +47,13 @@ if ! git -C "$LINUX_DIR" remote get-url stable >/dev/null 2>&1; then
 		https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
 fi
 echo ">>> fetching origin/master and stable/linux-6.12.y"
-git -C "$LINUX_DIR" fetch origin master --quiet
+# `bootstrap.sh` clones origin with a tag-only refspec
+# (`+refs/tags/v6.12:refs/tags/v6.12`), so a plain `git fetch origin master`
+# lands in FETCH_HEAD only — `refs/remotes/origin/master` is never created
+# and the rev-parse below fails with "unknown revision". Spell the
+# destination explicitly. The stable remote was added with the default
+# refspec, so its plain fetch is fine.
+git -C "$LINUX_DIR" fetch origin master:refs/remotes/origin/master --quiet
 git -C "$LINUX_DIR" fetch stable linux-6.12.y --quiet
 
 # --- read state ---------------------------------------------------------------
