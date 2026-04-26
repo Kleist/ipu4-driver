@@ -1,8 +1,9 @@
 name: bump-kernel-pins
 on:
   schedule:
-    # Mondays 06:00 UTC, same slot as the rebase cron.
-    - cron: "0 6 * * 1"
+    # Mondays 05:30 UTC. 30 minutes ahead of the rebase cron so the
+    # two don't pile onto the runner queue at the same minute.
+    - cron: "30 5 * * 1"
   workflow_dispatch:
 
 # Resolves the latest stable point release for each of the 6.12 and
