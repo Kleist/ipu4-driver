@@ -64,7 +64,6 @@ tools/
     ci.yml                   PR/push gate: 6.12 + 6.18 matrix into build-and-kunit.yml
     vm-smoke.yml             PR/push thin caller: 6.12 leg into vm-smoke-reusable.yml
     vm-smoke-weekly.yml      Sunday cron: 6.18 leg into vm-smoke-reusable.yml
-    rebase.yml               weekly Monday cron against linux-6.12.y branch tip
     bump-kernel-pins.yml     weekly Monday cron: open auto-PR rewriting bump-pin lines
     upstream-watch.yml       daily IPU6-cherry-pick triage cron
 data/trace.txt           silicon's mmiotrace capture; baseline for compare-mmio
@@ -187,15 +186,6 @@ data/trace.txt           silicon's mmiotrace capture; baseline for compare-mmio
   link needs enabling via a different mechanism, or whether the
   Capture entity's `link_validate` needs to accept dynamic links
   differently). `IPU4_STREAM_REQUIRED` remains `STREAM:qbuf`.
-
-- **M6 — weekly rebase cron:** done. `.github/workflows/rebase.yml`
-  runs every Monday 06:00 UTC (and on `workflow_dispatch`). It
-  thin-calls the reusable `build-and-kunit.yml` and
-  `vm-smoke-reusable.yml` workflows with `linux-ref:
-  linux-6.12.y` (a moving branch, not the pinned `v6.12` tag) and
-  `cache-linux: false` so the rebase leg always re-fetches the
-  branch tip, exercising whatever new stable point release has
-  landed before the bumper proposes the pin move.
 
 - **M5c-4 — gcov harvest + lcov HTML:** done. `init.streamon`
   rounds each `.gcda` in `/sys/kernel/debug/gcov/` through `cat`
@@ -338,13 +328,6 @@ data/trace.txt           silicon's mmiotrace capture; baseline for compare-mmio
   doorbell, a QEMUTimer-driven frame generator, the virt-sensor
   `.s_stream` hook that produces deterministic frames, and the
   yavta SHA-256 e2e test in `tools/tests/e2e.sh`.
-
-- **M6 — rebase cadence:** done. `.github/workflows/rebase.yml`
-  thin-calls `build-and-kunit.yml` and `vm-smoke-reusable.yml` with
-  `linux-ref: linux-6.12.y` and `cache-linux: false` so the leg
-  always re-fetches the branch tip. The Monday cron exercises whatever
-  point release has landed; the bumper PR follows behind to land the
-  pin move.
 
 - **M7 — 6.18 leg:** done. Build + KUnit run on `v6.18.3` alongside
   `v6.12` on every PR via `.github/workflows/ci.yml`'s two-leg matrix

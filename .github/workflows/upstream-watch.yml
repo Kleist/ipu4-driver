@@ -1,8 +1,7 @@
 name: upstream-watch
 on:
   schedule:
-    # Daily 04:00 UTC — runs hours before Monday's 06:00 rebase.yml so the two
-    # never race on the tools/linux/ clone in CI cache.
+    # Daily 04:00 UTC.
     - cron: '0 4 * * *'
   workflow_dispatch:
 
