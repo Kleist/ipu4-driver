@@ -118,6 +118,7 @@ system_ss.add(when: 'CONFIG_IPU4', if_true: files(
   'ipu4-buttress.c',
   'ipu4-irq-trio.c',
   'ipu4-csi2.c',
+  'ipu4-isys.c',
 ))
 EOF
 fi
