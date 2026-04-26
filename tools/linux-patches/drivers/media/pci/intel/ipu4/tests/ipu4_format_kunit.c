@@ -12,6 +12,7 @@
 #include <linux/videodev2.h>
 #include <media/v4l2-mediabus.h>
 
+#include "ipu4-compat.h"
 #include "ipu6-isys-video.h"
 
 extern const struct ipu6_isys_pixelformat ipu6_isys_pfmts[];
