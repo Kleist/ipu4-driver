@@ -25,13 +25,8 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Setup harness (apt + pip)
+      - name: Setup harness (apt)
         uses: ./.github/actions/setup-harness
-        with:
-          install-pip: "true"
-
-      - name: Python unit tests + coverage
-        run: ./tools/tests/pytest.sh
 
       - name: Bootstrap harness (linux=${{ inputs.linux-ref }})
         run: ./tools/bootstrap.sh
@@ -45,8 +40,11 @@ jobs:
       - name: Run KUnit
         run: ./tools/tests/kunit.sh
 
-      # MMIO trace coverage is produced by the vm-smoke workflow,
-      # which has the full QEMU+kernel build chain. Running
-      # compare-mmio.sh here would just fail for lack of a qemu.trace
-      # — the silicon-only fallback was removed deliberately so the
-      # pipeline must emit a real diff or error loudly.
+      # Python trace-tool tests don't depend on the kernel ref and run
+      # once in a dedicated `pytest` job from ci.yml — not here, where
+      # they would re-run on every matrix leg. MMIO trace coverage is
+      # produced by the vm-smoke workflow, which has the full
+      # QEMU+kernel build chain. Running compare-mmio.sh here would
+      # just fail for lack of a qemu.trace — the silicon-only fallback
+      # was removed deliberately so the pipeline must emit a real diff
+      # or error loudly.

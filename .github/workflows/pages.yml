@@ -9,10 +9,11 @@ on:
     workflows: ["vm-smoke"]
     types: [completed]
   schedule:
-    # Daily refresh at 06:00 UTC, after the upstream-watch cron at 04:00.
-    # Picks up new last_seen state and the latest workflow conclusions
-    # without waiting for the next push.
-    - cron: '0 6 * * *'
+    # Daily refresh at 06:30 UTC. After upstream-watch (04:00 daily)
+    # and after the Monday rebase (06:00 Mon) so the dashboard picks
+    # up their conclusions on the same refresh and the three crons
+    # don't pile onto the runner queue at the same minute.
+    - cron: '30 6 * * *'
 
 # Standard pattern for deploy-pages: never run two deploys at once,
 # but don't cancel in-flight ones (we want every refresh to land).
@@ -110,6 +111,18 @@ jobs:
           else
             echo "no successful vm-smoke run yet; rendering with placeholders"
           fi
+
+      # Read-only restore of whatever tools/linux/ the most recent
+      # 6.12 vm-smoke run built. Saves the ~30s shallow clone on warm
+      # days; on a cache miss the next step's `git clone` still
+      # populates the tree from scratch.
+      - name: Restore tools/linux cache from vm-smoke (6.12)
+        uses: actions/cache/restore@v4
+        with:
+          path: tools/linux
+          key: pages-linux-restore-noop
+          restore-keys: |
+            linux-6.12-
 
       - name: Regenerate upstream-diff summary
         run: |
