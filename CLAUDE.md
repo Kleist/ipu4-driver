@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-Out-of-tree Linux kernel driver for Intel IPU4, forked from the upstream IPU6 driver (`drivers/media/pci/intel/ipu6/`, upstreamed in 6.10). Tested against stable kernels 6.6.111 and 6.12.47. The driver does not work on any public hardware as-is — `ambu_ipu_bridge_*` calls must be replaced before the device probes.
+Out-of-tree Linux kernel driver for Intel IPU4, forked from the upstream IPU6 driver (`drivers/media/pci/intel/ipu6/`, upstreamed in 6.10). Tested against stable kernels 6.6.111, 6.12.47, and 7.0.1 (the latest stable as of April 2026). The driver does not work on any public hardware as-is — `ambu_ipu_bridge_*` calls must be replaced before the device probes.
 
 There are two parallel layouts for the driver right now (see STATUS.md for the migration plan):
 
@@ -20,7 +20,7 @@ Backports from upstream should be performed with `git cherry-pick -x` and fixing
 
 Do not restructure or "clean up" IPU6 code. Do not rename `ipu6_*` symbols. Keep diffs minimal and localized.
 
-`kernel/ipu4/ipu4-compat.h` holds `LINUX_VERSION_CODE`-gated shims for 6.6 / 6.10 / 6.11 kernel API changes. Add new shims here rather than `#ifdef`-ing callers.
+`kernel/ipu4/ipu4-compat.h` holds `LINUX_VERSION_CODE`-gated shims for 6.6 / 6.10 / 6.11 / 6.14 / 6.18 kernel API changes. The cascade is upper-bound-open, so kernels newer than the highest shim (currently 6.18) ride on the no-shim path — 7.0.1 falls through cleanly. Add new shims here rather than `#ifdef`-ing callers.
 
 ## Local prerequisites
 
@@ -78,12 +78,12 @@ The bootstrap script is idempotent. Re-run after pulling to re-apply patches fro
 
 ## CI
 
-- `.github/workflows/ci.yml` — bootstrap + build + kunit on every PR and on push to `main`/`master`. Matrix-fans across `6.12` and `6.18`; each leg is **pinned to a specific tag** (look for the `# bump-pin:<key>` markers) so per-PR CI is deterministic. Calls the reusable `build-and-kunit.yml` once per leg with `fail-fast: false`. The 6.18 leg is expected red until the corresponding compat shims land in `kernel/ipu4/ipu4-compat.h`.
+- `.github/workflows/ci.yml` — bootstrap + build + kunit on every PR and on push to `main`/`master`. Matrix-fans across `6.12`, `6.18`, and `7.0`; each leg is **pinned to a specific tag** (look for the `# bump-pin:<key>` markers) so per-PR CI is deterministic. Calls the reusable `build-and-kunit.yml` once per leg with `fail-fast: false`. The 6.18 leg is expected red until the corresponding compat shims land in `kernel/ipu4/ipu4-compat.h`; 7.0 builds clean on the existing shim cascade.
 - `.github/workflows/build-and-kunit.yml` — reusable workflow (`workflow_call`) that owns the actual checkout → setup-harness → pytest → bootstrap → build → kunit pipeline. Inputs: `linux-url`, `linux-ref`, `display-name`.
-- `.github/workflows/bump-kernel-pins.yml` — Monday 05:30 UTC cron that resolves the latest stable point release for each of the 6.12 and 6.18 tracks, rewrites the `# bump-pin:<key>` lines in `ci.yml`, `vm-smoke.yml`, and `vm-smoke-weekly.yml`, and opens a PR via `peter-evans/create-pull-request` when anything changed. The script that does the actual rewrite is `tools/bump-kernel-pins.sh`. Note: bot-opened PRs don't fire CI under the default `GITHUB_TOKEN`; set a `BUMP_PAT` secret to lift that, or close-and-reopen the PR by hand.
+- `.github/workflows/bump-kernel-pins.yml` — Monday 05:30 UTC cron that resolves the latest stable point release for each of the 6.12, 6.18, and 7.0 tracks, rewrites the `# bump-pin:<key>` lines in `ci.yml`, `vm-smoke.yml`, and `vm-smoke-weekly.yml`, and opens a PR via `peter-evans/create-pull-request` when anything changed. The script that does the actual rewrite is `tools/bump-kernel-pins.sh`. Note: bot-opened PRs don't fire CI under the default `GITHUB_TOKEN`; set a `BUMP_PAT` secret to lift that, or close-and-reopen the PR by hand.
 - `.github/actions/setup-harness/action.yml` — composite action shared by every workflow. Owns the apt-package list and the optional pytest pip install (`install-pip: "true"`).
-- `.github/workflows/vm-smoke.yml` — full-VM boot + probe-smoke + streamon-smoke + mmiotrace + `compare-mmio` divergence report on every PR and on push to `main`/`master`. Pinned to the **6.12 leg only** (the same `bump-pin:6.12` ref as `ci.yml`); 6.18 runs weekly via `vm-smoke-weekly.yml`. A thin `workflow_call` caller — the body lives in `vm-smoke-reusable.yml`.
-- `.github/workflows/vm-smoke-weekly.yml` — Sundays 07:00 UTC + `workflow_dispatch`. Single-job thin caller pinned to 6.18 (the same `bump-pin:6.18` ref as `ci.yml`).
+- `.github/workflows/vm-smoke.yml` — full-VM boot + probe-smoke + streamon-smoke + mmiotrace + `compare-mmio` divergence report on every PR and on push to `main`/`master`. Pinned to the **6.12 leg only** (the same `bump-pin:6.12` ref as `ci.yml`); 6.18 and 7.0 run weekly via `vm-smoke-weekly.yml`. A thin `workflow_call` caller — the body lives in `vm-smoke-reusable.yml`.
+- `.github/workflows/vm-smoke-weekly.yml` — Sundays 07:00 UTC + `workflow_dispatch`. Matrix caller covering the 6.18 and 7.0 legs (same `bump-pin:<key>` refs as `ci.yml`).
 - `.github/workflows/vm-smoke-reusable.yml` — reusable workflow (`workflow_call`) shared by `vm-smoke.yml` and `vm-smoke-weekly.yml`. Inputs: `linux-url`, `linux-ref`, `display-name`. The Linux build cache is namespaced by `display-name` so the 6.12 and 6.18 callers don't trample each other; the QEMU cache (independent of the kernel ref) is shared. Failure artifacts (`vm-smoke-failure-<display-name>-*`) include the serial logs; the coverage report (`mmio-trace-coverage-vm-smoke-<display-name>-*`) is published unconditionally.
 - `.github/workflows/upstream-watch.yml` — daily cron that surfaces new upstream IPU6 commits as cherry-pick PRs (see "Upstream sync tooling" above).
 

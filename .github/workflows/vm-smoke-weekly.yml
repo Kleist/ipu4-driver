@@ -7,15 +7,23 @@ on:
     - cron: "0 7 * * 0"
   workflow_dispatch:
 
-# 6.18 vm-smoke runs once a week, separately from the per-PR 6.12
-# vm-smoke (in vm-smoke.yml). The 6.18 ref is kept in sync with
-# ci.yml's 6.18 pin via the bump-pin comment below — the weekly
-# bumper rewrites both files.
+# Weekly vm-smoke for kernels not on the per-PR canary track. The 6.12
+# leg runs on every PR via vm-smoke.yml; the 6.18 + 7.0 legs run here.
+# Each leg's ref is kept in sync with the matching ci.yml pin via the
+# bump-pin comment below — the weekly bumper rewrites both files.
 
 jobs:
   vm-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "6.18"
+            ref:  v6.18.3  # bump-pin:6.18
+          - name: "7.0"
+            ref:  v7.0.1  # bump-pin:7.0
     uses: ./.github/workflows/vm-smoke-reusable.yml
     with:
       linux-url:    https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
-      linux-ref:    v6.18.3  # bump-pin:6.18
-      display-name: "6.18"
+      linux-ref:    ${{ matrix.ref }}
+      display-name: ${{ matrix.name }}
