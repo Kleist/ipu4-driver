@@ -6,13 +6,19 @@ on:
     - cron: "30 5 * * 1"
   workflow_dispatch:
 
-# One PR per kernel track (6.12, 6.18, 7.0). Each leg resolves the
-# latest stable point release for its track, rewrites only its own
-# entry in .github/kernel-pins.json (which ci.yml, vm-smoke.yml, and
-# vm-smoke-weekly.yml all read at workflow start), and opens an
-# independent PR against its own bot branch. Keeping the tracks split
-# means a single track's bump can land while the others wait on review
-# or red CI, instead of a combined PR being held up by any one side.
+# One PR per kernel track. Tracks are discovered from
+# .github/kernel-pins/<key>.json — a `pins` setup job globs that
+# directory and emits the keys list, which the `bump` matrix then
+# fans across. Adding a track is a one-file PR (drop a new
+# <key>.json under .github/kernel-pins/); no edit here needed.
+#
+# Each leg resolves the latest stable point release for its track,
+# rewrites only its own kernel-pins/<key>.json, and opens an
+# independent PR against its own bot branch. Splitting the tracks
+# means a single track's bump can land while the others wait on
+# review or red CI, instead of a combined PR being held up by any
+# one side. One file per track also means parallel bot PRs touching
+# different tracks never conflict on each other on rebase.
 #
 # peter-evans/create-pull-request only opens a PR if the rewrite
 # actually changed something, so an unchanged week is a free no-op.
@@ -30,14 +36,37 @@ permissions:
   pull-requests: write
 
 jobs:
+  pins:
+    name: enumerate kernel tracks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      keys: ${{ steps.read.outputs.keys }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: .github/kernel-pins/
+          sparse-checkout-cone-mode: false
+      - id: read
+        run: |
+          set -e
+          KEYS=$(
+            for f in .github/kernel-pins/*.json; do
+              basename "$f" .json
+            done | jq -Rcs 'split("\n") | map(select(. != ""))'
+          )
+          echo "keys=$KEYS" >> "$GITHUB_OUTPUT"
+
   bump:
     name: bump (${{ matrix.key }})
+    needs: pins
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        key: ["6.12", "6.18", "7.0"]
+        key: ${{ fromJSON(needs.pins.outputs.keys) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -68,9 +97,10 @@ jobs:
           delete-branch: true
           body: |
             Auto-generated weekly bump of the `${{ matrix.key }}`
-            kernel CI pin in `.github/kernel-pins.json` (the single
-            source of truth that `ci.yml`, `vm-smoke.yml`, and
-            `vm-smoke-weekly.yml` all read at workflow start).
+            kernel CI pin in `.github/kernel-pins/${{ matrix.key }}.json`
+            (one file per track; ci.yml, vm-smoke.yml, and
+            vm-smoke-weekly.yml all read those files at workflow
+            start).
 
             ```
             ${{ steps.rewrite.outputs.summary }}

@@ -1,9 +1,0 @@
-{
-  "_comment": "Single source of truth for the kernel CI pins. Read by ci.yml, vm-smoke.yml, and vm-smoke-weekly.yml via a small setup job that emits each value as a step output. The bump-kernel-pins.yml cron rewrites this file (one PR per track) — see tools/bump-kernel-pins.sh.",
-  "linux-url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git",
-  "tracks": {
-    "6.12": "v6.12.84",
-    "6.18": "v6.18.3",
-    "7.0": "v7.0.1"
-  }
-}

@@ -1,25 +1,41 @@
 #!/usr/bin/env bash
 # Resolve the latest stable point release for each kernel CI track
-# and rewrite the matching value in .github/kernel-pins.json.
-# .github/workflows/{ci,vm-smoke,vm-smoke-weekly}.yml all read that
-# file at workflow start, so this script no longer needs to touch
+# and rewrite the matching .ref value in .github/kernel-pins/<key>.json.
+# .github/workflows/{ci,vm-smoke,vm-smoke-weekly}.yml all read those
+# files at workflow start, so this script no longer needs to touch
 # any workflow YAML.
 #
 # Usage:
 #   tools/bump-kernel-pins.sh                # update every track
 #   tools/bump-kernel-pins.sh --key 6.12     # update only the 6.12 track
 #
-# Resolution rules:
-#   - 6.12  — highest v6.12(.X) release tag on git.kernel.org stable mirror.
-#   - 6.18  — same with v6.18(.X).
-#   - 7.0   — same with v7.0(.X).
+# Tracks are discovered from the directory: every <key>.json in
+# .github/kernel-pins/ is a track. Adding a track is a one-file PR.
+# Each file carries `{"url": ..., "ref": ...}`; the resolution rule
+# is "highest v<key>(.X) tag at .url", so a track with a non-stable
+# URL would just need a matching tag pattern.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
-PINS="$ROOT/.github/kernel-pins.json"
+PIN_DIR="$ROOT/.github/kernel-pins"
 
-ALL_KEYS=(6.12 6.18 7.0)
+if [[ ! -d "$PIN_DIR" ]]; then
+	echo "::error::missing $PIN_DIR" >&2
+	exit 1
+fi
+
+# Track keys come from the filenames so adding a track is purely
+# a file add — no script edit, no workflow edit.
+ALL_KEYS=()
+for f in "$PIN_DIR"/*.json; do
+	[[ -f "$f" ]] || continue
+	ALL_KEYS+=("$(basename "$f" .json)")
+done
+if [[ ${#ALL_KEYS[@]} -eq 0 ]]; then
+	echo "::error::no <key>.json files in $PIN_DIR" >&2
+	exit 1
+fi
 
 # --key <key> filter restricts both resolution and rewriting to a
 # single track, so the workflow can fan out a PR-per-key matrix.
@@ -51,41 +67,37 @@ else
 	KEYS=("${ALL_KEYS[@]}")
 fi
 
-if [[ ! -f "$PINS" ]]; then
-	echo "::error::missing $PINS" >&2
-	exit 1
-fi
-
-# Highest non-rc tag matching <pattern> on the stable mirror.
-# Args: $1 = pattern (e.g. 'v6.12*'), $2 = anchor regex (e.g. '^v6\.12(\.[0-9]+)?$').
-STABLE_URL="$(jq -r '."linux-url"' "$PINS")"
+# Highest non-rc tag matching <pattern> at <url>.
+# Args: $1 = url, $2 = pattern (e.g. 'v6.12*'), $3 = anchor (e.g. '^v6\.12(\.[0-9]+)?$').
 latest_stable_tag() {
-	local pattern="$1" anchor="$2"
-	git ls-remote --tags --refs --sort=-v:refname "$STABLE_URL" "$pattern" \
+	local url="$1" pattern="$2" anchor="$3"
+	git ls-remote --tags --refs --sort=-v:refname "$url" "$pattern" \
 	  | sed -E 's@^.*refs/tags/@@' \
 	  | grep -E "$anchor" \
 	  | head -n1
 }
 
-rel="${PINS#$ROOT/}"
 for key in "${KEYS[@]}"; do
+	pin="$PIN_DIR/${key}.json"
+	rel="${pin#$ROOT/}"
+	url="$(jq -r '.url' "$pin")"
 	track_re="${key//./\\.}"
-	new="$(latest_stable_tag "v${key}*" "^v${track_re}(\\.[0-9]+)?\$")"
+	new="$(latest_stable_tag "$url" "v${key}*" "^v${track_re}(\\.[0-9]+)?\$")"
 	if [[ -z "$new" ]]; then
 		echo "::error::could not resolve track $key" >&2
 		exit 1
 	fi
-	old="$(jq -r --arg k "$key" '.tracks[$k] // ""' "$PINS")"
+	old="$(jq -r '.ref // ""' "$pin")"
 	if [[ -z "$old" ]]; then
-		echo "::warning::no .tracks[\"$key\"] in $rel (skipping)" >&2
+		echo "::warning::no .ref in $rel (skipping)" >&2
 		continue
 	fi
 	if [[ "$old" == "$new" ]]; then
-		printf '%-30s %-7s %s (unchanged)\n' "$rel" "$key" "$old"
+		printf '%-40s %-7s %s (unchanged)\n' "$rel" "$key" "$old"
 		continue
 	fi
 	tmp="$(mktemp)"
-	jq --arg k "$key" --arg v "$new" '.tracks[$k] = $v' "$PINS" > "$tmp"
-	mv "$tmp" "$PINS"
-	printf '%-30s %-7s %s -> %s\n' "$rel" "$key" "$old" "$new"
+	jq --arg v "$new" '.ref = $v' "$pin" > "$tmp"
+	mv "$tmp" "$pin"
+	printf '%-40s %-7s %s -> %s\n' "$rel" "$key" "$old" "$new"
 done
