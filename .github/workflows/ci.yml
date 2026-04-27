@@ -19,6 +19,13 @@ on:
 # across with `fail-fast: false` (so one bad kernel doesn't mask
 # the other).
 #
+# Special case for the bumper: when the PR is on a
+# `bot/bump-kernel-pins-<key>` branch, the matrix is filtered to a
+# single leg for <key>. The other tracks' refs didn't change on a
+# track-specific bump PR, so re-running them is wasted runner time;
+# their last green main result is still the relevant signal. The
+# vm-smoke check applies the same routing (vm-smoke.yml).
+#
 # Pins move via .github/workflows/bump-kernel-pins.yml, which runs
 # weekly and opens one PR per track with the new value; that PR's
 # checks then exercise the new kernel before the bump can land. The
@@ -58,11 +65,31 @@ jobs:
           sparse-checkout-cone-mode: false
       - id: read
         name: Read .github/kernel-pins/
+        env:
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           set -e
+          # On a bumper PR (bot/bump-kernel-pins-<key>), restrict the
+          # matrix to that single track. Other tracks' refs didn't
+          # change on the bump PR, so their last green main result
+          # is still the signal. github.head_ref is empty on push
+          # and workflow_dispatch — those fall through to the full
+          # matrix.
+          ONLY_KEY=""
+          case "$HEAD_REF" in
+            bot/bump-kernel-pins-*) ONLY_KEY="${HEAD_REF#bot/bump-kernel-pins-}" ;;
+          esac
+          if [[ -n "$ONLY_KEY" && ! -f ".github/kernel-pins/${ONLY_KEY}.json" ]]; then
+            echo "::error::no .github/kernel-pins/${ONLY_KEY}.json (head_ref=$HEAD_REF)" >&2
+            exit 1
+          fi
           INCLUDE=$(
             for f in .github/kernel-pins/*.json; do
-              jq --arg name "$(basename "$f" .json)" \
+              name="$(basename "$f" .json)"
+              if [[ -n "$ONLY_KEY" && "$name" != "$ONLY_KEY" ]]; then
+                continue
+              fi
+              jq --arg name "$name" \
                  '{name: $name, ref: .ref, url: .url}' "$f"
             done | jq -sc 'sort_by(.name)'
           )
