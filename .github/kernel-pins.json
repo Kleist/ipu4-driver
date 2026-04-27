@@ -3,7 +3,7 @@
   "linux-url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git",
   "tracks": {
     "6.12": "v6.12",
-    "6.18": "v6.18.3",
+    "6.18": "v6.18.24",
     "7.0": "v7.0.1"
   }
 }
