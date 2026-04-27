@@ -6,10 +6,19 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
-# 6.12-only PR/push signal. The 6.18 and 7.0 legs run weekly via
-# vm-smoke-weekly.yml. All three legs read the kernel ref from
-# .github/kernel-pins.json (the same source ci.yml uses), so a pin
-# bump only has to touch one file.
+# Per-PR canary: 6.12 by default. Other tracks (6.18, 7.0) run
+# weekly via vm-smoke-weekly.yml.
+#
+# Special case for the bumper: when the PR is on a
+# `bot/bump-kernel-pins-<key>` branch (opened by
+# bump-kernel-pins.yml, one PR per track), route vm-smoke to the
+# bumped track so the check actually exercises the kernel ref the PR
+# is changing — instead of rerunning 6.12, which is unchanged on
+# anything-but-a-6.12 bump and thus zero signal.
+#
+# Hand-edits to .github/kernel-pins.json on a non-bot branch keep the
+# 6.12 leg; trigger vm-smoke-weekly.yml via workflow_dispatch to
+# validate a hand-bumped non-6.12 track before merging.
 
 jobs:
   pins:
@@ -19,6 +28,7 @@ jobs:
     outputs:
       url: ${{ steps.read.outputs.url }}
       ref: ${{ steps.read.outputs.ref }}
+      display: ${{ steps.read.outputs.display }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -26,11 +36,27 @@ jobs:
           sparse-checkout: .github/kernel-pins.json
           sparse-checkout-cone-mode: false
       - id: read
+        env:
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           set -e
+          # Default per-PR canary track. github.head_ref is the
+          # source branch on pull_request events and empty on
+          # push / workflow_dispatch — so non-PR runs fall through
+          # to 6.12.
+          KEY="6.12"
+          case "$HEAD_REF" in
+            bot/bump-kernel-pins-*) KEY="${HEAD_REF#bot/bump-kernel-pins-}" ;;
+          esac
+          REF="$(jq -r --arg k "$KEY" '.tracks[$k] // ""' .github/kernel-pins.json)"
+          if [[ -z "$REF" ]]; then
+            echo "::error::no .tracks[\"$KEY\"] in .github/kernel-pins.json (head_ref=$HEAD_REF)" >&2
+            exit 1
+          fi
           {
             echo "url=$(jq -r '."linux-url"' .github/kernel-pins.json)"
-            echo "ref=$(jq -r '.tracks["6.12"]' .github/kernel-pins.json)"
+            echo "ref=$REF"
+            echo "display=$KEY"
           } >> "$GITHUB_OUTPUT"
 
   vm-smoke:
@@ -39,4 +65,4 @@ jobs:
     with:
       linux-url:    ${{ needs.pins.outputs.url }}
       linux-ref:    ${{ needs.pins.outputs.ref }}
-      display-name: "6.12"
+      display-name: ${{ needs.pins.outputs.display }}
