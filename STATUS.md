@@ -323,11 +323,40 @@ data/trace.txt           silicon's mmiotrace capture; baseline for compare-mmio
   are advertised consistently for streams-API validation.
   `IPU4_STREAM_REQUIRED` stays at `STREAM:qbuf`.
 
-- **M5c — frame delivery + e2e:** after media-link enable lands.
-  MMU page-table walks in `hw/misc/ipu4.c`, syscom ring state +
-  doorbell, a QEMUTimer-driven frame generator, the virt-sensor
-  `.s_stream` hook that produces deterministic frames, and the
-  yavta SHA-256 e2e test in `tools/tests/e2e.sh`.
+- **M5c — frame delivery + e2e:** done. The four sub-milestones above
+  cover what landed: MMU page-table walks in
+  `tools/qemu-patches/hw/misc/ipu4.c` (`ipu4_iova_to_phys()` walks the
+  L1/L2 PTs latched from `BAR+0x1e0004`), syscom ring + doorbell command
+  parser handling `STREAM_OPEN` through `STREAM_START_AND_CAPTURE` /
+  `STREAM_CAPTURE` with responses DMA-written into the msg-recv queue,
+  the virt-sensor `.s_stream` path (`start_streaming_virt` /
+  `buf_queue_virt` in `kernel/ipu4/ipu6-isys-queue.c`, M5c-2), the
+  deterministic `byte[k] = (k + seq) & 0xff` frame pattern + verifier
+  (M5c-3), and gcov harvest + lcov HTML (M5c-4). Commits `5aa49e0`
+  ("Step 4 — frame delivery via PIN_DATA_READY") and `c970596` (CSI2
+  port-0 SOF IRQ alongside PIN_DATA_READY) tie it together — on each
+  capture command the QEMU model DMA-writes the pattern into every
+  non-zero `output_pins[i].addr` and posts `FRAME_SOF` +
+  `PIN_DATA_READY`, and the driver's `ipu6_isys_queue_buf_ready()`
+  matches by IOVA and completes the vb2 buffer. `streamon-smoke.sh`
+  reaches `STREAM:pattern_ok` on both the 6.12 and 6.18 legs;
+  `vm-smoke.yml` publishes the lcov HTML at 33.1% lines / 40.7%
+  functions of the IPU4 driver per run.
+
+  Not in this milestone (refinements, each can land independently):
+  - **yavta SHA-256 e2e test.** `tools/tests/e2e.sh` is still a
+    41-line placeholder grepping `^E2E: PASS$`, and
+    `tools/tests/frames.sha256` holds only its "populated by M4 once
+    the virt-sensor frame pattern is locked" comment. Wiring yavta
+    plus populated hashes lifts the test from sample-offset checks
+    to whole-buffer SHA verification.
+  - **Multi-frame + full-buffer pattern check.** `tools/tests/streamon.c`
+    reads one DQBUF and verifies the pattern at eight sample offsets
+    (0, 1, 127, 128, 255, 256, 4095, 65535). Per-frame DMA regressions
+    past byte 65535 or after the first buffer don't show up.
+  - **Frame-rate pacing.** `STREAM_CAPTURE` completes synchronously
+    from the doorbell write; no QEMUTimer emulates sensor cadence,
+    so the driver's async-completion paths aren't exercised yet.
 
 - **M7 — 6.18 leg:** done. Build + KUnit run on `v6.18.3` alongside
   `v6.12` on every PR via `.github/workflows/ci.yml`'s two-leg matrix
