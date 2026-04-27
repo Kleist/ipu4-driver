@@ -13,7 +13,7 @@ mount -t devtmpfs none /dev 2>/dev/null || true
 
 mount -t 9p -o trans=virtio tests /mnt/tests 2>/dev/null || true
 
-for m in v4l2-async \
+for m in v4l2-async v4l2-fwnode \
 	videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
 	ambu-ipu-bridge intel-ipu4; do
 	ko=/lib/modules/$m.ko
