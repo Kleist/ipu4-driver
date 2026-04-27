@@ -7,14 +7,36 @@ on:
   workflow_dispatch:
 
 # 6.12-only PR/push signal. The 6.18 and 7.0 legs run weekly via
-# vm-smoke-weekly.yml. The 6.12 ref is kept in sync with ci.yml's
-# 6.12 pin via the bump-pin comment below — the weekly bumper
-# rewrites all three files.
+# vm-smoke-weekly.yml. All three legs read the kernel ref from
+# .github/kernel-pins.json (the same source ci.yml uses), so a pin
+# bump only has to touch one file.
 
 jobs:
+  pins:
+    name: load kernel pins
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      url: ${{ steps.read.outputs.url }}
+      ref: ${{ steps.read.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: .github/kernel-pins.json
+          sparse-checkout-cone-mode: false
+      - id: read
+        run: |
+          set -e
+          {
+            echo "url=$(jq -r '."linux-url"' .github/kernel-pins.json)"
+            echo "ref=$(jq -r '.tracks["6.12"]' .github/kernel-pins.json)"
+          } >> "$GITHUB_OUTPUT"
+
   vm-smoke:
+    needs: pins
     uses: ./.github/workflows/vm-smoke-reusable.yml
     with:
-      linux-url:    https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
-      linux-ref:    v6.12  # bump-pin:6.12
+      linux-url:    ${{ needs.pins.outputs.url }}
+      linux-ref:    ${{ needs.pins.outputs.ref }}
       display-name: "6.12"
