@@ -8,17 +8,18 @@ on:
 # Build + kunit fan-out across the kernels we support. Each leg is
 # pinned to a specific tag so per-PR CI is deterministic — kernel.org
 # pushing a new point release does not silently change what a
-# contributor's PR builds against. The pins move via
-# .github/workflows/bump-kernel-pins.yml, which runs weekly and opens
-# a PR with the new values; that PR's checks then exercise the new
-# kernel before the bump can land.
+# contributor's PR builds against.
 #
-# Each `ref:` line below is matched by the bumper script via the
-# trailing `# bump-pin:<key>` comment — keep the comment intact and
-# the bumper will keep that pin current.
+# The pins themselves live in .github/kernel-pins.json (single source
+# of truth, shared with vm-smoke.yml and vm-smoke-weekly.yml). The
+# `pins` job below reads that file and emits a matrix-shaped output
+# that build-and-kunit then fans across with `fail-fast: false` (so
+# one bad kernel doesn't mask the other).
 #
-# fail-fast: false so one bad kernel doesn't mask the other. The 6.18
-# leg is expected red until the matching compat shims land in
+# Pins move via .github/workflows/bump-kernel-pins.yml, which runs
+# weekly and opens one PR per track with the new value; that PR's
+# checks then exercise the new kernel before the bump can land. The
+# 6.18 leg is expected red until the matching compat shims land in
 # kernel/ipu4/ipu4-compat.h. The 7.0 leg builds clean against the
 # existing shim cascade (the 6.14+ namespace literal branch covers it).
 
@@ -40,21 +41,34 @@ jobs:
       - name: Python unit tests + coverage
         run: ./tools/tests/pytest.sh
 
+  pins:
+    name: load kernel pins
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      matrix: ${{ steps.read.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: .github/kernel-pins.json
+          sparse-checkout-cone-mode: false
+      - id: read
+        name: Read .github/kernel-pins.json
+        run: |
+          set -e
+          URL=$(jq -r '."linux-url"' .github/kernel-pins.json)
+          MATRIX=$(jq -c --arg url "$URL" \
+            '{include: [.tracks | to_entries[] | {name: .key, ref: .value, url: $url}]}' \
+            .github/kernel-pins.json)
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
   build-and-kunit:
     name: build-and-kunit (${{ matrix.name }})
+    needs: pins
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: "6.12"
-            url:  https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
-            ref:  v6.12  # bump-pin:6.12
-          - name: "6.18"
-            url:  https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
-            ref:  v6.18.3  # bump-pin:6.18
-          - name: "7.0"
-            url:  https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
-            ref:  v7.0.1  # bump-pin:7.0
+      matrix: ${{ fromJSON(needs.pins.outputs.matrix) }}
     uses: ./.github/workflows/build-and-kunit.yml
     with:
       linux-url:    ${{ matrix.url }}

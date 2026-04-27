@@ -86,11 +86,14 @@ done
 # v4l2 core helpers that some 6.12.y point releases split out of the
 # previously built-in videodev module. On v6.12.0 the symbols are
 # inlined and these .ko files don't exist, making the loop a no-op;
-# on a tip where v4l2-async is a separate module, intel-ipu4 fails
-# insmod with "Unknown symbol __v4l2_async_register_subdev" unless
-# the module is staged here and loaded before intel-ipu4.
+# on a tip where v4l2-async / v4l2-fwnode are separate modules,
+# intel-ipu4-isys fails insmod with "Unknown symbol
+# __v4l2_async_register_subdev" / "Unknown symbol
+# v4l2_fwnode_endpoint_parse" unless the modules are staged here and
+# loaded before intel-ipu4-isys. v4l2-fwnode depends on v4l2-async, so
+# the load order in init.* matters.
 V4L2_DIR="$LINUX_DIR/drivers/media/v4l2-core"
-for v4l in v4l2-async; do
+for v4l in v4l2-async v4l2-fwnode; do
 	ko="$V4L2_DIR/$v4l.ko"
 	if [[ -f "$ko" ]]; then
 		echo "file /lib/modules/$v4l.ko  $ko 0644 0 0" >> "$LIST"
