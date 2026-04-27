@@ -2,28 +2,47 @@ name: vm-smoke-weekly
 
 on:
   schedule:
-    # Sundays 07:00 UTC. The Monday 06:00 bumper cron lands a fresh
+    # Sundays 07:00 UTC. The Monday 05:30 bumper cron lands a fresh
     # weekly result before considering whether to bump pins.
     - cron: "0 7 * * 0"
   workflow_dispatch:
 
 # Weekly vm-smoke for kernels not on the per-PR canary track. The 6.12
-# leg runs on every PR via vm-smoke.yml; the 6.18 + 7.0 legs run here.
-# Each leg's ref is kept in sync with the matching ci.yml pin via the
-# bump-pin comment below — the weekly bumper rewrites both files.
+# leg runs on every PR via vm-smoke.yml; every other track in
+# .github/kernel-pins.json (today: 6.18 + 7.0) runs here. The `pins`
+# setup job reads that file and emits a matrix-shaped output covering
+# all non-6.12 tracks; vm-smoke then fans across with fail-fast: false
+# so one bad kernel doesn't mask the other.
 
 jobs:
+  pins:
+    name: load kernel pins
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      matrix: ${{ steps.read.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: .github/kernel-pins.json
+          sparse-checkout-cone-mode: false
+      - id: read
+        run: |
+          set -e
+          URL=$(jq -r '."linux-url"' .github/kernel-pins.json)
+          MATRIX=$(jq -c --arg url "$URL" \
+            '{include: [.tracks | to_entries[] | select(.key != "6.12") | {name: .key, ref: .value, url: $url}]}' \
+            .github/kernel-pins.json)
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
   vm-smoke:
+    needs: pins
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: "6.18"
-            ref:  v6.18.3  # bump-pin:6.18
-          - name: "7.0"
-            ref:  v7.0.1  # bump-pin:7.0
+      matrix: ${{ fromJSON(needs.pins.outputs.matrix) }}
     uses: ./.github/workflows/vm-smoke-reusable.yml
     with:
-      linux-url:    https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+      linux-url:    ${{ matrix.url }}
       linux-ref:    ${{ matrix.ref }}
       display-name: ${{ matrix.name }}
