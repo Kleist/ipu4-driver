@@ -7,7 +7,9 @@ on:
   workflow_dispatch:
 
 # Per-PR canary: 6.12 by default. Other tracks (6.18, 7.0) run
-# weekly via vm-smoke-weekly.yml.
+# weekly via vm-smoke-weekly.yml. Each track's pin lives in its own
+# file under .github/kernel-pins/ so parallel bumper PRs don't
+# conflict on each other.
 #
 # Special case for the bumper: when the PR is on a
 # `bot/bump-kernel-pins-<key>` branch (opened by
@@ -16,7 +18,7 @@ on:
 # is changing — instead of rerunning 6.12, which is unchanged on
 # anything-but-a-6.12 bump and thus zero signal.
 #
-# Hand-edits to .github/kernel-pins.json on a non-bot branch keep the
+# Hand-edits to .github/kernel-pins/ on a non-bot branch keep the
 # 6.12 leg; trigger vm-smoke-weekly.yml via workflow_dispatch to
 # validate a hand-bumped non-6.12 track before merging.
 
@@ -33,7 +35,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
-          sparse-checkout: .github/kernel-pins.json
+          sparse-checkout: .github/kernel-pins/
           sparse-checkout-cone-mode: false
       - id: read
         env:
@@ -48,14 +50,14 @@ jobs:
           case "$HEAD_REF" in
             bot/bump-kernel-pins-*) KEY="${HEAD_REF#bot/bump-kernel-pins-}" ;;
           esac
-          REF="$(jq -r --arg k "$KEY" '.tracks[$k] // ""' .github/kernel-pins.json)"
-          if [[ -z "$REF" ]]; then
-            echo "::error::no .tracks[\"$KEY\"] in .github/kernel-pins.json (head_ref=$HEAD_REF)" >&2
+          PIN=".github/kernel-pins/${KEY}.json"
+          if [[ ! -f "$PIN" ]]; then
+            echo "::error::no $PIN (head_ref=$HEAD_REF)" >&2
             exit 1
           fi
           {
-            echo "url=$(jq -r '."linux-url"' .github/kernel-pins.json)"
-            echo "ref=$REF"
+            echo "url=$(jq -r '.url' "$PIN")"
+            echo "ref=$(jq -r '.ref' "$PIN")"
             echo "display=$KEY"
           } >> "$GITHUB_OUTPUT"
 

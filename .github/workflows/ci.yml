@@ -10,11 +10,14 @@ on:
 # pushing a new point release does not silently change what a
 # contributor's PR builds against.
 #
-# The pins themselves live in .github/kernel-pins.json (single source
-# of truth, shared with vm-smoke.yml and vm-smoke-weekly.yml). The
-# `pins` job below reads that file and emits a matrix-shaped output
-# that build-and-kunit then fans across with `fail-fast: false` (so
-# one bad kernel doesn't mask the other).
+# The pins themselves live in .github/kernel-pins/ (one file per
+# track: 6.12.json, 6.18.json, 7.0.json — single source of truth,
+# shared with vm-smoke.yml and vm-smoke-weekly.yml). One file per
+# track means parallel bumper PRs touching different tracks don't
+# conflict on each other. The `pins` job below globs that directory
+# and emits a matrix-shaped output that build-and-kunit then fans
+# across with `fail-fast: false` (so one bad kernel doesn't mask
+# the other).
 #
 # Pins move via .github/workflows/bump-kernel-pins.yml, which runs
 # weekly and opens one PR per track with the new value; that PR's
@@ -51,16 +54,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
-          sparse-checkout: .github/kernel-pins.json
+          sparse-checkout: .github/kernel-pins/
           sparse-checkout-cone-mode: false
       - id: read
-        name: Read .github/kernel-pins.json
+        name: Read .github/kernel-pins/
         run: |
           set -e
-          URL=$(jq -r '."linux-url"' .github/kernel-pins.json)
-          MATRIX=$(jq -c --arg url "$URL" \
-            '{include: [.tracks | to_entries[] | {name: .key, ref: .value, url: $url}]}' \
-            .github/kernel-pins.json)
+          INCLUDE=$(
+            for f in .github/kernel-pins/*.json; do
+              jq --arg name "$(basename "$f" .json)" \
+                 '{name: $name, ref: .ref, url: .url}' "$f"
+            done | jq -sc 'sort_by(.name)'
+          )
+          MATRIX=$(jq -nc --argjson inc "$INCLUDE" '{include: $inc}')
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
 
   build-and-kunit:
