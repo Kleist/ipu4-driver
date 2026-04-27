@@ -19,7 +19,7 @@ jobs:
       matrix:
         include:
           - name: "6.18"
-            ref:  v6.18.3  # bump-pin:6.18
+            ref:  v6.18.24  # bump-pin:6.18
           - name: "7.0"
             ref:  v7.0.1  # bump-pin:7.0
     uses: ./.github/workflows/vm-smoke-reusable.yml
