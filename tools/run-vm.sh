@@ -51,6 +51,15 @@ if [[ -z "$ACCEL" ]]; then
 	fi
 fi
 
+# `-device ipu4` lives only in the patched qemu (tools/qemu-patches/).
+# Stock qemu rejects it. Allow callers that don't exercise the IPU4
+# device model (e.g. the kunit gcov harvest in tools/tests/kunit.sh)
+# to opt out so they can run under the system qemu.
+DEVICE_ARGS=(-device ipu4)
+if [[ "${IPU4_NO_DEVICE:-0}" == "1" ]]; then
+	DEVICE_ARGS=()
+fi
+
 exec "$QEMU_BIN" \
 	-M q35,accel="$ACCEL" \
 	-cpu max \
@@ -61,5 +70,5 @@ exec "$QEMU_BIN" \
 	-initrd "$INITRD" \
 	-append "$APPEND" \
 	-virtfs "local,path=$SHARE_DIR,mount_tag=tests,security_model=none" \
-	-device ipu4 \
+	"${DEVICE_ARGS[@]}" \
 	-serial mon:stdio

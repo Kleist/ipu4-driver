@@ -40,6 +40,23 @@ jobs:
       - name: Run KUnit
         run: ./tools/tests/kunit.sh
 
+      # KUnit gcov harvest: tools/tests/kunit.sh boots the kunit kernel
+      # a second time under tools/run-vm.sh with init.kunit-cov to tar
+      # /sys/kernel/debug/gcov/. The vm-smoke workflow downloads this
+      # artifact and merges it with its streamon-smoke gcov tar via
+      # tools/coverage/collect.sh --kunit-tar. Per-leg name so the 6.12
+      # / 6.18 / 7.0 vm-smoke callers each pick up the matching kunit
+      # data; vm-smoke today only runs on the 6.12 leg, but emitting
+      # one artifact per leg keeps the future-weekly path working.
+      - name: Upload KUnit gcov artifact
+        if: hashFiles('tools/tests/out/kunit-gcov.tar') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: kunit-gcov-${{ inputs.display-name }}
+          path: tools/tests/out/kunit-gcov.tar
+          retention-days: 14
+          if-no-files-found: ignore
+
       # Python trace-tool tests don't depend on the kernel ref and run
       # once in a dedicated `pytest` job from ci.yml — not here, where
       # they would re-run on every matrix leg. MMIO trace coverage is

@@ -14,3 +14,10 @@ CONFIG_VIDEOBUF2_V4L2=y
 # CONFIG_VIDEO_INTEL_IPU6 is not set
 CONFIG_VIDEO_INTEL_IPU4=y
 CONFIG_VIDEO_INTEL_IPU4_KUNIT_TESTS=y
+# Gcov is harvested by tools/tests/kunit.sh's second-boot phase: the
+# kunit kernel exposes /sys/kernel/debug/gcov/, init.kunit-cov tars it
+# onto the 9p share, and tools/coverage/collect.sh merges the result
+# with the streamon-smoke .info before genhtml.
+CONFIG_DEBUG_FS=y
+CONFIG_GCOV_KERNEL=y
+CONFIG_GCOV_PROFILE_ALL=y
