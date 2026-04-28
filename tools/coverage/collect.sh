@@ -116,6 +116,14 @@ lcov --quiet \
 	--extract "$INFO" '*/drivers/media/pci/intel/ipu4/*' \
 	--output-file "$INFO"
 
+# Drop the kunit test sources themselves: they only ship in the kunit
+# kernel and are test code, not driver code. Without this they would
+# show up at ~100% covered (suite line bodies are run during the kunit
+# boot) and inflate the headline number.
+lcov --quiet \
+	--remove "$INFO" '*/drivers/media/pci/intel/ipu4/tests/*' \
+	--output-file "$INFO"
+
 rm -rf "$OUT"
 mkdir -p "$OUT"
 genhtml --quiet --output-directory "$OUT" "$INFO"
