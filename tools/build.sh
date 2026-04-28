@@ -53,7 +53,14 @@ else
 		--disable VIDEO_INTEL_IPU6 \
 		--module VIDEO_INTEL_IPU4 \
 		--enable  VIDEO_IPU4_VIRT_SENSOR \
-		--module VIDEO_INTEL_IPU4_KUNIT_TESTS
+		--disable VIDEO_INTEL_IPU4_KUNIT_TESTS
+	# KUnit tests are built only in the kunit kernel built by kunit.py
+	# (.kunitconfig has CONFIG_VIDEO_INTEL_IPU4_KUNIT_TESTS=y, with the
+	# driver also =y, so internal symbols resolve at link time). In the
+	# streamon-smoke kernel built here the driver is =m, and the new
+	# suites (ipu4_format_helpers_kunit, ipu4_video_accessors_kunit)
+	# reference non-exported helpers — building them as separate
+	# modules would fail modpost.
 
 	# Trim the defconfig to what the QEMU test VM actually exercises.
 	# tools/run-vm.sh boots with -nographic -no-reboot, no -drive, no
