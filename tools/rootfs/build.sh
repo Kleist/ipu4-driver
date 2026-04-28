@@ -29,7 +29,11 @@ if [[ -z "$BUSYBOX" ]]; then
 	exit 1
 fi
 
-GEN="$LINUX_DIR/usr/gen_init_cpio"
+# Default to the streamon-smoke build's gen_init_cpio; honour an
+# explicit override (kunit.sh passes the kunit build's copy when only
+# .kunit/ has been built, e.g. on the build-and-kunit CI leg that
+# doesn't run build-kernel.sh).
+GEN="${IPU4_GEN_INIT_CPIO:-$LINUX_DIR/usr/gen_init_cpio}"
 if [[ ! -x "$GEN" ]]; then
 	echo "missing $GEN; run tools/build-kernel.sh first" >&2
 	exit 2

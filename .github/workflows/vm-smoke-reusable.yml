@@ -96,6 +96,21 @@ jobs:
           IPU4_LINUX_URL: ${{ inputs.linux-url }}
           IPU4_LINUX_TAG: ${{ inputs.linux-ref }}
 
+      # Run KUnit first so its second-boot gcov harvest can run before
+      # build-kernel.sh seeds the streamon build tree. kunit.sh starts
+      # with `make mrproper` and then builds under tools/linux/.kunit/,
+      # so the streamon build tree it later produces under tools/linux/
+      # is independent. tools/coverage/collect.sh sums both .info
+      # files and lcov merges them by filename. Coverage-only step:
+      # the actual KUnit pass/fail is gated by build-and-kunit.yml on
+      # every PR; here a kunit failure is logged but doesn't fail the
+      # vm-smoke job.
+      - name: Run KUnit + harvest gcov for coverage merge
+        continue-on-error: true
+        env:
+          IPU4_KUNIT_NO_MRPROPER: "1"
+        run: ./tools/tests/kunit.sh
+
       - name: Build QEMU (ipu4 device)
         run: ./tools/build-qemu.sh
 
@@ -148,8 +163,14 @@ jobs:
             tools/tests/out/mmiotrace/
           if-no-files-found: ignore
 
-      - name: Build coverage report from streamon-smoke gcov harvest
-        run: ./tools/coverage/collect.sh
+      - name: Build coverage report from streamon-smoke + KUnit gcov harvest
+        run: |
+          if [ -s tools/tests/out/kunit-gcov.tar ]; then
+            ./tools/coverage/collect.sh \
+              --kunit-tar tools/tests/out/kunit-gcov.tar
+          else
+            ./tools/coverage/collect.sh
+          fi
 
       - name: Upload coverage HTML
         uses: actions/upload-artifact@v4

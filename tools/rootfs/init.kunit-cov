@@ -1,0 +1,50 @@
+#!/bin/sh
+# KUnit-coverage init: the kunit kernel runs all kunit_test_suite()
+# late_initcalls during boot before this init runs. By the time we land
+# here, /sys/kernel/debug/kunit/ holds the per-suite TAP results and
+# /sys/kernel/debug/gcov/ holds the .gcda counters from those runs.
+#
+# Print the TAP results so the host-side log is still useful as a
+# secondary cross-check on top of kunit.py's own output, then harvest
+# /sys/kernel/debug/gcov/ onto the 9p share so the host can run lcov.
+
+PATH=/bin:/sbin
+export PATH
+
+mount -t proc     none /proc
+mount -t sysfs    none /sys
+mount -t debugfs none /sys/kernel/debug 2>/dev/null || true
+mount -t devtmpfs none /dev 2>/dev/null || true
+
+mount -t 9p -o trans=virtio tests /mnt/tests 2>/dev/null || true
+
+if [ -d /sys/kernel/debug/kunit ]; then
+	for results in /sys/kernel/debug/kunit/*/results; do
+		[ -r "$results" ] || continue
+		echo "KUNIT:results $results"
+		cat "$results"
+	done
+fi
+echo "KUNIT:done"
+
+# Same harvest pattern as init.streamon: debugfs .gcda files report
+# size=0 to stat() so a direct `tar` under-captures them. Round-trip
+# through `cat` into a regular-file scratch tree, then tar that.
+if [ -d /sys/kernel/debug/gcov ] && [ -d /mnt/tests ]; then
+	mkdir -p /tmp/gcov
+	cd /sys/kernel/debug/gcov
+	find . -name '*.gcda' | while read -r gcda; do
+		mkdir -p "/tmp/gcov/$(dirname "$gcda")"
+		cat "$gcda" > "/tmp/gcov/$gcda"
+	done
+	cd /
+	if tar -cf /mnt/tests/kunit-gcov.tar -C /tmp/gcov . 2>/dev/null; then
+		echo "GCOV:harvested $(find /tmp/gcov -name '*.gcda' | wc -l) gcda, $(wc -c < /mnt/tests/kunit-gcov.tar) bytes"
+	else
+		echo "GCOV:fail step=tar errno=$?"
+	fi
+else
+	echo "GCOV:skipped (no /sys/kernel/debug/gcov or /mnt/tests)"
+fi
+
+poweroff -f
