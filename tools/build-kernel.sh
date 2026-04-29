@@ -13,11 +13,12 @@ if [[ ! -d "$LINUX_DIR" ]]; then
 	exit 1
 fi
 
-# Re-run tools/build.sh's config step if no .config exists yet. Its
-# config block is authoritative; we don't duplicate it.
-if [[ ! -f "$LINUX_DIR/.config" ]]; then
-	"$HERE/build.sh"
-fi
+# Always run build.sh's config block — it's the canonical source for
+# every kconfig option this kernel needs. Skipping on cached .config
+# means a partial restore-keys cache hit (which has a *prior* .config)
+# would mask config-affecting changes to build.sh. IPU4_BUILD_CONFIG_ONLY=1
+# tells build.sh to do only the kconfig pass, not the driver M= build.
+IPU4_BUILD_CONFIG_ONLY=1 "$HERE/build.sh"
 
 cd "$LINUX_DIR"
 JOBS="$(nproc)"

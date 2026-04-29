@@ -17,7 +17,15 @@ CONFIG="${IPU4_KCONFIG:-$ROOT/tools/rootfs/kernel.config}"
 if [[ -f "$CONFIG" ]]; then
 	cp "$CONFIG" .config
 else
-	make defconfig
+	# Only synthesise a fresh .config from defconfig when none exists.
+	# On a cache-restored tree we already have one — running defconfig
+	# would reset symbols the scripts/config block below depends on
+	# being already-set, and would invalidate ~every cached .o. The
+	# scripts/config + olddefconfig pass that follows is idempotent
+	# and reapplies the canonical settings on top of either path.
+	if [[ ! -f .config ]]; then
+		make defconfig
+	fi
 	# MEDIA_SUPPORT must be =y (not =m) so MEDIA_CONTROLLER — a bool that
 	# depends on it — can itself be =y. Without MEDIA_CONTROLLER the
 	# driver cannot see struct v4l2_subdev::entity (ipu6-isys.c:114) or
@@ -210,6 +218,15 @@ else
 		--disable AUDIT
 fi
 make olddefconfig
+
+# Allow callers (e.g. tools/build-kernel.sh) to use this script purely
+# for its canonical config block, skipping the driver M= build below.
+# Without this, build-kernel.sh would skip build.sh whenever a cached
+# .config existed and a config-affecting change to this script wouldn't
+# take effect on cache-hit CI runs.
+if [[ "${IPU4_BUILD_CONFIG_ONLY:-0}" == "1" ]]; then
+	exit 0
+fi
 
 JOBS="$(nproc)"
 make -j"$JOBS" modules_prepare
