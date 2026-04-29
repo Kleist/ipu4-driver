@@ -119,8 +119,12 @@ lcov --quiet \
 # Drop the kunit test sources themselves: they only ship in the kunit
 # kernel and are test code, not driver code. Without this they would
 # show up at ~100% covered (suite line bodies are run during the kunit
-# boot) and inflate the headline number.
+# boot) and inflate the headline number. --ignore-errors unused makes
+# the pattern best-effort: when collect.sh runs without a kunit tar
+# the streamon kernel doesn't build tests/, and lcov 2.x would
+# otherwise hard-fail on the unmatched pattern.
 lcov --quiet \
+	--ignore-errors unused \
 	--remove "$INFO" '*/drivers/media/pci/intel/ipu4/tests/*' \
 	--output-file "$INFO"
 
