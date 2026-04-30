@@ -17,7 +17,10 @@ CONFIG_VIDEO_INTEL_IPU4_KUNIT_TESTS=y
 # Gcov is harvested by tools/tests/kunit.sh's second-boot phase: the
 # kunit kernel exposes /sys/kernel/debug/gcov/, init.kunit-cov tars it
 # onto the 9p share, and tools/coverage/collect.sh merges the result
-# with the streamon-smoke .info before genhtml.
+# with the streamon-smoke .info before genhtml. The IPU4 driver opts
+# in to gcov via `GCOV_PROFILE := y` in its Makefile (see
+# tools/linux-patches/.../ipu4/Makefile), so GCOV_KERNEL alone is
+# enough — GCOV_PROFILE_ALL would instrument the entire kunit kernel
+# (slower build, can break early-boot noinstr code) for no benefit.
 CONFIG_DEBUG_FS=y
 CONFIG_GCOV_KERNEL=y
-CONFIG_GCOV_PROFILE_ALL=y
