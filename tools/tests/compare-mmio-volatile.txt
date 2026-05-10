@@ -24,3 +24,4 @@ isys dmem|0x070      # FW_COM_RECV_WR_POS ring cursor
 isys dmem|0x074      # FW_COM_RECV_RD_POS ring cursor
 csi2 port0|0x408     # PART_IRQ_STATUS transient
 csi2 port0|0x508     # RX_IRQ_STATUS transient
+isys0 mmu|0x004      # L1 PT pfn — kernel-allocated, varies per run

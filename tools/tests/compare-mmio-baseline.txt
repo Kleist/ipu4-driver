@@ -43,7 +43,7 @@ qemu accesses:    <volatile>
     qemu:    <volatile>
   isys0 mmu       0x004
     silicon: 0x12199
-    qemu:    0x427f
+    qemu:    <volatile>
 
 == addresses only in qemu (8) ==
   buttress        0x084                                    1    0
