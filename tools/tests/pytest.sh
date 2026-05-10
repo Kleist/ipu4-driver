@@ -22,6 +22,7 @@ fi
 exec pytest tests/ \
 	--cov=postprocess_trace \
 	--cov=compare \
+	--cov=normalize_report \
 	--cov=parse_registers \
 	--cov=parse_status \
 	--cov-report=term-missing \
