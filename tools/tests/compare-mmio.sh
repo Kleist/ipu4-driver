@@ -20,10 +20,17 @@
 #   report.txt     — human-readable diff (also tee'd to stdout).
 #   report.json    — same diff in machine-readable form.
 #
-# Exit code: 0 if streams agree, 1 if there are unimplemented addresses
-# or read-value mismatches. The CI step invokes this with `|| true` so
-# a non-empty divergence report doesn't fail the build — but missing
-# inputs must still fail here because that's a harness regression.
+# Baseline gate: when tools/tests/compare-mmio-baseline.txt exists, the
+# fresh report.txt is diffed against it and any drift fails the script.
+# That's the regression brake for refactor work — silicon and QEMU are
+# both meant to evolve, but only via deliberate baseline refreshes
+# (see tools/tests/refresh-mmio-baseline.sh). Set
+# IPU4_NO_BASELINE_CHECK=1 to opt out (used by the refresh script
+# itself and by anyone wanting the legacy report-only behaviour).
+#
+# Exit code: 0 if streams agree AND baseline matches; 1 on any
+# divergence vs baseline OR on a harness fault (missing inputs, empty
+# postprocess output, unexpected compare.py exit code).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -76,13 +83,40 @@ compare_rc=${PIPESTATUS[0]}
 set -e
 
 # compare.py returns 0 when streams agree and 1 when there are
-# unimplemented addresses or value mismatches. Divergence is expected
-# until the model catches up; we do NOT want that to fail CI because
-# the report published as an artifact is the whole point. Harness
-# faults (missing inputs, empty outputs) funnelled through fail()
-# already exited 1 above; only reach here when the diff ran cleanly.
+# unimplemented addresses or value mismatches. Either is fine here —
+# the gate below is "did the report change since the committed
+# baseline?", not "is the report empty?". Only an unexpected exit code
+# is a harness fault.
 case "$compare_rc" in
-	0) echo "compare-mmio: clean (streams agree)" ;;
-	1) echo "compare-mmio: divergence reported (expected until model catches up)" ;;
+	0|1) ;;
 	*) fail "compare.py exited with unexpected code $compare_rc" ;;
 esac
+
+BASELINE="$ROOT/tools/tests/compare-mmio-baseline.txt"
+if [[ "${IPU4_NO_BASELINE_CHECK:-0}" == "1" ]]; then
+	echo "compare-mmio: baseline check skipped (IPU4_NO_BASELINE_CHECK=1)"
+	exit 0
+fi
+if [[ ! -f "$BASELINE" ]]; then
+	echo "compare-mmio: no baseline at $BASELINE — skipping gate."
+	echo "  Run tools/tests/refresh-mmio-baseline.sh on a clean main to"
+	echo "  generate one. Until then, regressions are not detected."
+	exit 0
+fi
+
+DIFF_OUT="$OUT/baseline.diff"
+if diff -u "$BASELINE" "$OUT/report.txt" > "$DIFF_OUT"; then
+	rm -f "$DIFF_OUT"
+	echo "compare-mmio: baseline matches"
+	exit 0
+fi
+
+echo "::error title=compare-mmio baseline drift::report.txt differs from $BASELINE"
+echo "compare-mmio: BASELINE DRIFT — see $DIFF_OUT"
+echo "  If this drift is intentional (model catching up, or a deliberate"
+echo "  driver MMIO change), refresh via:"
+echo "    tools/tests/refresh-mmio-baseline.sh"
+echo "  and commit tools/tests/compare-mmio-baseline.txt."
+echo "----- diff (first 80 lines) -----"
+head -n 80 "$DIFF_OUT"
+exit 1

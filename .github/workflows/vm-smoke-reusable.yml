@@ -146,10 +146,15 @@ jobs:
 
       - name: Full MMIO trace coverage report (silicon vs QEMU)
         # Always run so the diff is published even when the capture
-        # above failed. compare-mmio.sh distinguishes harness faults
-        # (missing inputs / empty outputs → exit 1, blocks merge)
-        # from divergence-only (expected until the model catches up
-        # → exit 0, report still produced as the artifact).
+        # above failed. compare-mmio.sh fails the job on:
+        #   (a) harness faults (missing inputs / empty outputs);
+        #   (b) drift vs the committed
+        #       tools/tests/compare-mmio-baseline.txt — the regression
+        #       brake for refactor work, refreshed deliberately via
+        #       tools/tests/refresh-mmio-baseline.sh.
+        # When no baseline file exists yet (initial bootstrap), the
+        # step warns and passes; download the report.txt artifact
+        # below to seed the baseline.
         if: always()
         run: ./tools/tests/compare-mmio.sh
 
