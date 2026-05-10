@@ -28,9 +28,12 @@ fi
 echo "refresh-mmio-baseline: running compare-mmio.sh in no-baseline mode"
 IPU4_NO_BASELINE_CHECK=1 "$HERE/compare-mmio.sh"
 
-REPORT="$ROOT/tools/tests/out/compare-mmio/report.txt"
+# compare-mmio.sh writes both the raw report.txt and the volatile-redacted
+# report.normalized.txt; the gate diffs the latter, so the baseline must
+# be the latter too.
+REPORT="$ROOT/tools/tests/out/compare-mmio/report.normalized.txt"
 if [[ ! -s "$REPORT" ]]; then
-	echo "refresh-mmio-baseline: report missing or empty at $REPORT" >&2
+	echo "refresh-mmio-baseline: normalized report missing or empty at $REPORT" >&2
 	exit 1
 fi
 

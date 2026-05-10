@@ -1,0 +1,26 @@
+# Volatile-by-construction registers in the QEMU IPU4 model. The
+# compare-mmio gate redacts the `qemu:` value list for each entry below
+# (and the `qemu accesses:` total) before diffing the report against the
+# committed baseline. Address-set membership and bucket classification
+# are still strictly gated — only the per-row value listing is redacted.
+#
+# CLAUDE.md flags this set as "intrinsic divergence, not missing
+# handlers": TSC counters track wall time, FW_COM ring positions depend
+# on streamon-smoke pacing, the PWR_STATE FSM transitional samples
+# depend on poll timing, etc. Strict text-equal gating against these
+# would fire on every run.
+#
+# Format: <region>|<offset>, one per line, # comments allowed.
+# Drop a line when the corresponding model behaviour is made
+# deterministic — that tightens the gate by exactly that row.
+
+buttress|0x05c       # PWR_STATE FSM transitionals
+buttress|0x164       # TSC_LO (wall-time)
+buttress|0x168       # TSC_HI (wall-time)
+isys spc|0x000       # SPC_STATUS_CTRL silicon-specific bits
+isys dmem|0x028      # FW_COM_SEND_WR_POS ring cursor
+isys dmem|0x02c      # FW_COM_SEND_RD_POS ring cursor
+isys dmem|0x070      # FW_COM_RECV_WR_POS ring cursor
+isys dmem|0x074      # FW_COM_RECV_RD_POS ring cursor
+csi2 port0|0x408     # PART_IRQ_STATUS transient
+csi2 port0|0x508     # RX_IRQ_STATUS transient

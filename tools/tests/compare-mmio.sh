@@ -21,10 +21,12 @@
 #   report.json    — same diff in machine-readable form.
 #
 # Baseline gate: when tools/tests/compare-mmio-baseline.txt exists, the
-# fresh report.txt is diffed against it and any drift fails the script.
-# That's the regression brake for refactor work — silicon and QEMU are
-# both meant to evolve, but only via deliberate baseline refreshes
-# (see tools/tests/refresh-mmio-baseline.sh). Set
+# fresh report.txt is normalized (per tools/tests/compare-mmio-volatile.txt,
+# which redacts intrinsically-jittery rows like TSC and FW_COM ring
+# cursors) and diffed against the committed baseline; any drift fails
+# the script. That's the regression brake for refactor work — silicon
+# and QEMU are both meant to evolve, but only via deliberate baseline
+# refreshes (see tools/tests/refresh-mmio-baseline.sh). Set
 # IPU4_NO_BASELINE_CHECK=1 to opt out (used by the refresh script
 # itself and by anyone wanting the legacy report-only behaviour).
 #
@@ -92,6 +94,16 @@ case "$compare_rc" in
 	*) fail "compare.py exited with unexpected code $compare_rc" ;;
 esac
 
+# Redact intrinsically-volatile rows (TSC, FW_COM ring cursors,
+# PWR_STATE FSM transitionals, …) before diffing. The committed
+# baseline is also stored in this normalized form, so the on-disk file
+# declaratively shows which fields are accepted-as-volatile.
+VOLATILE="$ROOT/tools/tests/compare-mmio-volatile.txt"
+python3 "$ROOT/tools/trace/normalize_report.py" \
+	--volatile "$VOLATILE" \
+	--in "$OUT/report.txt" \
+	--out "$OUT/report.normalized.txt"
+
 BASELINE="$ROOT/tools/tests/compare-mmio-baseline.txt"
 if [[ "${IPU4_NO_BASELINE_CHECK:-0}" == "1" ]]; then
 	echo "compare-mmio: baseline check skipped (IPU4_NO_BASELINE_CHECK=1)"
@@ -105,7 +117,7 @@ if [[ ! -f "$BASELINE" ]]; then
 fi
 
 DIFF_OUT="$OUT/baseline.diff"
-if diff -u "$BASELINE" "$OUT/report.txt" > "$DIFF_OUT"; then
+if diff -u "$BASELINE" "$OUT/report.normalized.txt" > "$DIFF_OUT"; then
 	rm -f "$DIFF_OUT"
 	echo "compare-mmio: baseline matches"
 	exit 0

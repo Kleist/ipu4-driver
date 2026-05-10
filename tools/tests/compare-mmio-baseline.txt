@@ -1,5 +1,5 @@
 silicon accesses: 1088
-qemu accesses:    651
+qemu accesses:    <volatile>
 
 == unimplemented addresses (0) ==
   (none)
@@ -7,40 +7,40 @@ qemu accesses:    651
 == read-value mismatches (13) ==
   buttress        0x05c  PWR_STATE
     silicon: 0x72443 0xa71433 0xa72433 0x1a72433 ... (+1 more)
-    qemu:    0x2003 0xa02003 0xfa02003
+    qemu:    <volatile>
   buttress        0x164  TSC_LO
     silicon: 0xb3c1a58d 0xb3cb58bc 0xb3d517c6 0xb3ded54b ... (+1 more)
-    qemu:    0xb27c0c0e 0xb30832fe
+    qemu:    <volatile>
   buttress        0x168  TSC_HI
     silicon: 0x4
-    qemu:    0x0
+    qemu:    <volatile>
   buttress        0x30c  CSE2IUCSR
     silicon: 0x0 0x1 0x2 0x3
     qemu:    0x0 0x2
   isys spc        0x000  SPC_STATUS_CTRL
     silicon: 0xa0 0xa8
-    qemu:    0x20 0x1020 0x1028
+    qemu:    <volatile>
   isys dmem       0x028  FW_COM_SEND_WR_POS
     silicon: 0x0 0x1 0x2 0x3 ... (+4 more)
-    qemu:    0x0 0x1 0x2 0x3 ... (+1 more)
+    qemu:    <volatile>
   isys dmem       0x02c  FW_COM_SEND_RD_POS
     silicon: 0x0 0x1 0x2 0x3 ... (+3 more)
-    qemu:    0x0 0x1 0x2 0x3 ... (+1 more)
+    qemu:    <volatile>
   isys dmem       0x070  FW_COM_RECV_WR_POS
     silicon: 0x1 0x2 0x3 0x4 ... (+18 more)
-    qemu:    0x1 0x4 0x6 0x7 ... (+1 more)
+    qemu:    <volatile>
   isys dmem       0x074  FW_COM_RECV_RD_POS
     silicon: 0x0 0x1 0x2 0x3 ... (+25 more)
-    qemu:    0x0 0x1 0x2 0x3 ... (+5 more)
+    qemu:    <volatile>
   csi2 port0      0x008  RX_CONFIG
     silicon: 0x0 0x3
     qemu:    0x0
   csi2 port0      0x408  PART_IRQ_STATUS
     silicon: 0x1 0x2
-    qemu:    0x0
+    qemu:    <volatile>
   csi2 port0      0x508  RX_IRQ_STATUS
     silicon: 0x0 0x4000
-    qemu:    0x0
+    qemu:    <volatile>
   isys0 mmu       0x004
     silicon: 0x12199
     qemu:    0x427f
