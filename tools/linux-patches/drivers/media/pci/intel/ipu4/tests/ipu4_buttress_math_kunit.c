@@ -1,19 +1,31 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * KUnit tests for ipu6_buttress_tsc_ticks_to_ns().
+ * KUnit tests for IPU4 buttress arithmetic and the IPU4-specific
+ * buttress control descriptors.
  *
- * The function multiplies by 10000 and divides by 192 (the IPU4 TSC
- * runs at 19.2 MHz; the comment in ipu6-buttress.c spells out the
- * derivation). It ignores its `isp` argument so we pass NULL. Pin the
- * arithmetic at one-tick, one-period, a near-overflow value, and
- * truncation.
+ * Two scopes here:
+ *  - ipu6_buttress_tsc_ticks_to_ns(): multiplies by 10000 and divides
+ *    by 192 (IPU4 TSC runs at 19.2 MHz; derivation in ipu6-buttress.c).
+ *    Pinned at one-tick, one-period, near-overflow, and truncation.
+ *  - ipu4_isys_buttress_ctrl / ipu4_psys_buttress_ctrl: every field
+ *    pinned against the IPU4 platform constants. The struct uses
+ *    designated initializers, so what these cases catch is value
+ *    drift — a constant changing in the header, a dropped
+ *    initializer leaving a field zero-initialised, or an IS/PS
+ *    copy-paste collision. Struct-layout reorders are compiler
+ *    no-ops and aren't gated here. The IPU4/IPU6 unification refactor
+ *    will revive #ifdef IPU6 dead branches and rename `ipu4_*`
+ *    symbols; any binding change has to fail here, not slip into
+ *    vm-smoke.
  */
 
 #include <kunit/test.h>
 #include <linux/types.h>
 
+#include "ipu4-platform-buttress-regs.h"
 #include "ipu6.h"
 #include "ipu6-buttress.h"
+#include "ipu6-platform-buttress-regs.h"
 
 static void test_zero_ticks_is_zero_ns(struct kunit *test)
 {
@@ -58,6 +70,62 @@ static void test_no_overflow_at_192e9_ticks(struct kunit *test)
 			10000000000000ull);
 }
 
+static void test_ipu4_isys_buttress_ctrl_fields(struct kunit *test)
+{
+	KUNIT_EXPECT_EQ(test, ipu4_isys_buttress_ctrl.ratio,
+			(unsigned int)IPU4_IS_FREQ_CTL_DIVISOR);
+	KUNIT_EXPECT_EQ(test, ipu4_isys_buttress_ctrl.qos_floor, 0u);
+	KUNIT_EXPECT_EQ(test, ipu4_isys_buttress_ctrl.freq_ctl,
+			(u32)IPU6_BUTTRESS_REG_IS_FREQ_CTL);
+	KUNIT_EXPECT_EQ(test, ipu4_isys_buttress_ctrl.pwr_sts_shift,
+			(u32)IPU4_BUTTRESS_PWR_STATE_IS_PWR_FSM_SHIFT);
+	KUNIT_EXPECT_EQ(test, ipu4_isys_buttress_ctrl.pwr_sts_mask,
+			(u32)IPU4_BUTTRESS_PWR_STATE_IS_PWR_FSM_MASK);
+	KUNIT_EXPECT_EQ(test, ipu4_isys_buttress_ctrl.pwr_sts_on,
+			(u32)IPU4_BUTTRESS_PWR_STATE_IS_PWR_FSM_IS_RDY);
+	KUNIT_EXPECT_EQ(test, ipu4_isys_buttress_ctrl.pwr_sts_off,
+			(u32)IPU4_BUTTRESS_PWR_STATE_IS_PWR_FSM_IDLE);
+}
+
+static void test_ipu4_psys_buttress_ctrl_fields(struct kunit *test)
+{
+	KUNIT_EXPECT_EQ(test, ipu4_psys_buttress_ctrl.ratio,
+			(unsigned int)IPU4_PS_FREQ_CTL_DEFAULT_RATIO);
+	/* qos_floor and ratio share the same default on PS — that's
+	 * deliberate (silicon ships with no QoS headroom). Pin it so a
+	 * "looks redundant, fix it" cleanup during the refactor fails
+	 * here instead of silently changing thermal behaviour.
+	 */
+	KUNIT_EXPECT_EQ(test, ipu4_psys_buttress_ctrl.qos_floor,
+			(unsigned int)IPU4_PS_FREQ_CTL_DEFAULT_RATIO);
+	KUNIT_EXPECT_EQ(test, ipu4_psys_buttress_ctrl.freq_ctl,
+			(u32)IPU6_BUTTRESS_REG_PS_FREQ_CTL);
+	KUNIT_EXPECT_EQ(test, ipu4_psys_buttress_ctrl.pwr_sts_shift,
+			(u32)IPU4_BUTTRESS_PWR_STATE_PS_PWR_FSM_SHIFT);
+	KUNIT_EXPECT_EQ(test, ipu4_psys_buttress_ctrl.pwr_sts_mask,
+			(u32)IPU4_BUTTRESS_PWR_STATE_PS_PWR_FSM_MASK);
+	KUNIT_EXPECT_EQ(test, ipu4_psys_buttress_ctrl.pwr_sts_on,
+			(u32)IPU4_BUTTRESS_PWR_STATE_PS_PWR_FSM_PS_PWR_UP);
+	KUNIT_EXPECT_EQ(test, ipu4_psys_buttress_ctrl.pwr_sts_off,
+			(u32)IPU4_BUTTRESS_PWR_STATE_PS_PWR_FSM_IDLE);
+}
+
+static void test_ipu4_isys_vs_psys_distinct(struct kunit *test)
+{
+	/* The IS and PS descriptors are deliberately distinct: different
+	 * frequency-control registers and non-overlapping PWR_STATE FSM
+	 * bit ranges. A copy-paste during ifdef removal that fuses them
+	 * would silently merge two independent power domains.
+	 */
+	KUNIT_EXPECT_NE(test, ipu4_isys_buttress_ctrl.freq_ctl,
+			ipu4_psys_buttress_ctrl.freq_ctl);
+	KUNIT_EXPECT_NE(test, ipu4_isys_buttress_ctrl.pwr_sts_shift,
+			ipu4_psys_buttress_ctrl.pwr_sts_shift);
+	KUNIT_EXPECT_EQ(test,
+			ipu4_isys_buttress_ctrl.pwr_sts_mask &
+			ipu4_psys_buttress_ctrl.pwr_sts_mask, 0u);
+}
+
 static struct kunit_case ipu4_buttress_math_cases[] = {
 	KUNIT_CASE(test_zero_ticks_is_zero_ns),
 	KUNIT_CASE(test_one_tick_is_52_ns_truncated),
@@ -65,6 +133,9 @@ static struct kunit_case ipu4_buttress_math_cases[] = {
 	KUNIT_CASE(test_truncation_below_one_period),
 	KUNIT_CASE(test_one_million_ticks),
 	KUNIT_CASE(test_no_overflow_at_192e9_ticks),
+	KUNIT_CASE(test_ipu4_isys_buttress_ctrl_fields),
+	KUNIT_CASE(test_ipu4_psys_buttress_ctrl_fields),
+	KUNIT_CASE(test_ipu4_isys_vs_psys_distinct),
 	{}
 };
 

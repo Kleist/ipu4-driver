@@ -393,7 +393,13 @@ static const struct ipu6_buttress_ctrl ipu6_psys_buttress_ctrl = {
 	.pwr_sts_off = IPU6_BUTTRESS_PWR_STATE_DN_DONE,
 };
 
-static const struct ipu6_buttress_ctrl ipu4_isys_buttress_ctrl = {
+/* Non-static: declared extern in ipu6.h so ipu4_buttress_math_kunit
+ * can pin every field against the IPU4 platform constants. The struct
+ * uses designated initializers, so what the kunit catches is value
+ * drift in the bindings — not struct-layout reorders, which are
+ * compiler no-ops.
+ */
+const struct ipu6_buttress_ctrl ipu4_isys_buttress_ctrl = {
 	.ratio = IPU4_IS_FREQ_CTL_DIVISOR,
 	.qos_floor = 0,
 	.freq_ctl = IPU6_BUTTRESS_REG_IS_FREQ_CTL,
@@ -403,7 +409,7 @@ static const struct ipu6_buttress_ctrl ipu4_isys_buttress_ctrl = {
 	.pwr_sts_off = IPU4_BUTTRESS_PWR_STATE_IS_PWR_FSM_IDLE,
 };
 
-static const struct ipu6_buttress_ctrl ipu4_psys_buttress_ctrl = {
+const struct ipu6_buttress_ctrl ipu4_psys_buttress_ctrl = {
 	.ratio = IPU4_PS_FREQ_CTL_DEFAULT_RATIO,
 	.qos_floor = IPU4_PS_FREQ_CTL_DEFAULT_RATIO,
 	.freq_ctl = IPU6_BUTTRESS_REG_PS_FREQ_CTL,
