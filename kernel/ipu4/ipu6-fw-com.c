@@ -7,6 +7,7 @@
 #include "ipu6-bus.h"
 #include "ipu6-dma.h"
 #include "ipu6-fw-com.h"
+#include "ipu6-fw-com-priv.h"
 
 /*
  * FWCOM layer is a shared resource between FW and driver. It consist
@@ -20,18 +21,13 @@
  * interrupt triggered message handling. CPU doesn't need to poll indexes.
  * wr_reg / rd_reg are offsets to those dmem location. They are not
  * the indexes itself.
+ *
+ * struct ipu6_fw_sys_queue and struct ipu6_fw_com_context, plus the
+ * FW_COM_{WR,RD}_REG offsets, live in ipu6-fw-com-priv.h so the
+ * ipu4_fw_com_kunit suite can field-test the ring functions below
+ * without standing up the full DMA backend that ipu6_fw_com_prepare()
+ * requires.
  */
-
-/* Shared structure between driver and FW - do not modify */
-struct ipu6_fw_sys_queue {
-	u64 host_address;
-	u32 vied_address;
-	u32 size;
-	u32 token_size;
-	u32 wr_reg;	/* reg number in subsystem's regmem */
-	u32 rd_reg;
-	u32 _align;
-} __packed;
 
 struct ipu6_fw_sys_queue_res {
 	u64 host_address;
@@ -72,28 +68,6 @@ struct ipu6_fw_syscom_config {
 	u32 specific_addr;
 	u32 specific_size;
 };
-
-struct ipu6_fw_com_context {
-	struct ipu6_bus_device *adev;
-	void __iomem *dmem_addr;
-	int (*cell_ready)(struct ipu6_bus_device *adev);
-	void (*cell_start)(struct ipu6_bus_device *adev);
-
-	void *dma_buffer;
-	dma_addr_t dma_addr;
-	unsigned int dma_size;
-
-	struct ipu6_fw_sys_queue *input_queue;	/* array of host to SP queues */
-	struct ipu6_fw_sys_queue *output_queue;	/* array of SP to host */
-
-	u32 config_vied_addr;
-
-	unsigned int buttress_boot_offset;
-	void __iomem *base_addr;
-};
-
-#define FW_COM_WR_REG 0
-#define FW_COM_RD_REG 4
 
 #define REGMEM_OFFSET 0
 #define TUNIT_MAGIC_PATTERN 0x5a5a5a5a
