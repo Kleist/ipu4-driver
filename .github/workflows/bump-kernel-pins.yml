@@ -76,6 +76,8 @@ jobs:
         id: rewrite
         run: |
           ./tools/bump-kernel-pins.sh --key '${{ matrix.key }}' | tee /tmp/bump.summary
+          new_ref="$(jq -r '.ref' .github/kernel-pins/${{ matrix.key }}.json)"
+          echo "new_ref=$new_ref" >> "$GITHUB_OUTPUT"
           {
             echo "summary<<EOF"
             cat /tmp/bump.summary
@@ -92,8 +94,8 @@ jobs:
           token: ${{ secrets.BUMP_PAT || github.token }}
           branch: bot/bump-kernel-pins-${{ matrix.key }}
           base: main
-          title: "ci: bump kernel ${{ matrix.key }} pin"
-          commit-message: "ci: bump kernel ${{ matrix.key }} pin"
+          title: "ci: bump kernel ${{ matrix.key }} pin to ${{ steps.rewrite.outputs.new_ref }}"
+          commit-message: "ci: bump kernel ${{ matrix.key }} pin to ${{ steps.rewrite.outputs.new_ref }}"
           delete-branch: true
           body: |
             Auto-generated weekly bump of the `${{ matrix.key }}`
