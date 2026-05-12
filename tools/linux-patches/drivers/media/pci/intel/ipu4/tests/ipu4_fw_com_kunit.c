@@ -57,13 +57,21 @@ static void fwcom_setup(struct fwcom_test_ctx *t, bool output, u32 wr, u32 rd)
 		t->ctx.input_queue = &t->q;
 }
 
-static void test_send_get_empty_returns_null(struct kunit *test)
+static void test_send_get_when_empty_returns_first_slot(struct kunit *test)
 {
+	/* wr=0, rd=0, size=8: queue is empty of data, which on the
+	 * send side means "all slots writable". packets = size-1 = 7,
+	 * and the producer is handed slot wr=0. send_get_token returns
+	 * NULL only when the queue is FULL (no free slot), not when
+	 * it's empty.
+	 */
 	struct fwcom_test_ctx t;
+	void *got;
 
 	fwcom_setup(&t, /*output=*/false, /*wr=*/0, /*rd=*/0);
+	got = ipu6_send_get_token(&t.ctx, 0);
 
-	KUNIT_EXPECT_PTR_EQ(test, ipu6_send_get_token(&t.ctx, 0), NULL);
+	KUNIT_EXPECT_PTR_EQ(test, got, t.queue_buf + 0 * Q_TOKEN_SIZE);
 }
 
 static void test_send_get_some_available_returns_wr_slot(struct kunit *test)
@@ -179,7 +187,7 @@ static void test_recv_put_wraps_rd_at_size(struct kunit *test)
 }
 
 static struct kunit_case ipu4_fw_com_cases[] = {
-	KUNIT_CASE(test_send_get_empty_returns_null),
+	KUNIT_CASE(test_send_get_when_empty_returns_first_slot),
 	KUNIT_CASE(test_send_get_some_available_returns_wr_slot),
 	KUNIT_CASE(test_send_get_full_returns_null),
 	KUNIT_CASE(test_send_put_advances_wr_in_dmem),
