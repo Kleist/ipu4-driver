@@ -23,6 +23,7 @@
 #include <linux/string.h>
 #include <linux/types.h>
 
+#include "ipu4-compat.h"
 #include "ipu6-fw-com.h"
 #include "ipu6-fw-com-priv.h"
 
