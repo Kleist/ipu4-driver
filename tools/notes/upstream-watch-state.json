@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "last_seen": {
-    "linux-6.12.y": "INIT_AT_FIRST_RUN",
-    "master": "INIT_AT_FIRST_RUN"
+    "linux-6.12.y": "c4ffbe29c40ed851601bce640d5ead48eaaae08d",
+    "master": "8fde5d1d47f69db6082dfa34500c27f8485389a5"
   },
   "processed_patch_ids": []
 }
