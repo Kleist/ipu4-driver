@@ -25,6 +25,12 @@ static __maybe_unused s64 ambu_v4l2_get_link_freq(struct media_pad *src_pad, uns
 #define INTEL_IPU6 "INTEL_IPU6"
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
+// Before 6.14 this was X86_MATCH_VFM_STEPPINGS(), taking a stepping mask
+#define X86_MATCH_VFM_STEPS(vfm, min_step, max_step, data) \
+	X86_MATCH_VFM_STEPPINGS(vfm, GENMASK(max_step, min_step), data)
+#endif // 6.14
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
 // https://github.com/torvalds/linux/commit/dbbe7eaf0e4795bf003ac06872aaf52b6b6b1310
 
