@@ -478,6 +478,7 @@ ipu6_isys_init(struct pci_dev *pdev, struct device *parent,
 #endif
 	struct device *dev = &pdev->dev;
 	struct ipu6_bus_device *isys_adev;
+	struct ipu6_buttress_ctrl *devm_ctrl;
 	struct ipu6_isys_pdata *pdata;
 	int ret;
 
@@ -510,6 +511,10 @@ ipu6_isys_init(struct pci_dev *pdev, struct device *parent,
 	}
 #endif
 
+	devm_ctrl = devm_kmemdup(dev, ctrl, sizeof(*ctrl), GFP_KERNEL);
+	if (!devm_ctrl)
+		return ERR_PTR(-ENOMEM);
+
 	pdata = kzalloc(sizeof(*pdata), GFP_KERNEL);
 	if (!pdata)
 		return ERR_PTR(-ENOMEM);
@@ -517,7 +522,7 @@ ipu6_isys_init(struct pci_dev *pdev, struct device *parent,
 	pdata->base = base;
 	pdata->ipdata = ipdata;
 
-	isys_adev = ipu6_bus_initialize_device(pdev, parent, pdata, ctrl,
+	isys_adev = ipu6_bus_initialize_device(pdev, parent, pdata, devm_ctrl,
 					       IPU6_ISYS_NAME);
 	if (IS_ERR(isys_adev)) {
 		kfree(pdata);
@@ -549,9 +554,15 @@ ipu6_psys_init(struct pci_dev *pdev, struct device *parent,
 	       const struct ipu6_buttress_ctrl *ctrl, void __iomem *base,
 	       const struct ipu6_psys_internal_pdata *ipdata)
 {
+	struct device *dev = &pdev->dev;
 	struct ipu6_bus_device *psys_adev;
+	struct ipu6_buttress_ctrl *devm_ctrl;
 	struct ipu6_psys_pdata *pdata;
 	int ret;
+
+	devm_ctrl = devm_kmemdup(dev, ctrl, sizeof(*ctrl), GFP_KERNEL);
+	if (!devm_ctrl)
+		return ERR_PTR(-ENOMEM);
 
 	pdata = kzalloc(sizeof(*pdata), GFP_KERNEL);
 	if (!pdata)
@@ -560,7 +571,7 @@ ipu6_psys_init(struct pci_dev *pdev, struct device *parent,
 	pdata->base = base;
 	pdata->ipdata = ipdata;
 
-	psys_adev = ipu6_bus_initialize_device(pdev, parent, pdata, ctrl,
+	psys_adev = ipu6_bus_initialize_device(pdev, parent, pdata, devm_ctrl,
 					       IPU6_PSYS_NAME);
 	if (IS_ERR(psys_adev)) {
 		kfree(pdata);
@@ -630,7 +641,7 @@ static void ipu6_configure_vc_mechanism(struct ipu6_device *isp)
 
 static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
-	const struct ipu6_buttress_ctrl *isys_ctrl = NULL, *psys_ctrl = NULL;
+	const struct ipu6_buttress_ctrl *isys_ctrl, *psys_ctrl;
 	struct device *dev = &pdev->dev;
 	void __iomem *isys_base = NULL;
 	void __iomem *psys_base = NULL;
@@ -644,6 +655,8 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	isp->cpd_metadata_cmpnt_size = sizeof(struct ipu6_cpd_metadata_cmpnt);
 	isp->buttress.regs = &ipu6_buttress_regs;
+	isys_ctrl = &ipu6_isys_buttress_ctrl;
+	psys_ctrl = &ipu6_psys_buttress_ctrl;
 
 	switch (id->device) {
 	case PCI_DEVICE_ID_INTEL_IPU6:
@@ -677,11 +690,15 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		isp->cpd_metadata_cmpnt_size =
 			sizeof(struct ipu6se_cpd_metadata_cmpnt);
 		isp->buttress.regs = &ipu4_buttress_regs;
+		isys_ctrl = &ipu4_isys_buttress_ctrl;
+		psys_ctrl = &ipu4_psys_buttress_ctrl;
 		break;
 	case PCI_DEVICE_ID_INTEL_IPU7:
 		isp->hw_ver = IPU_VERSION_7;
 		isp->cpd_fw_name = IPU7_FIRMWARE_NAME;
 		isp->buttress.regs = &ipu7_buttress_regs;
+		isys_ctrl = &ipu7_isys_buttress_ctrl;
+		psys_ctrl = &ipu7_psys_buttress_ctrl;
 		break;
 	default:
 		return dev_err_probe(dev, -ENODEV,
@@ -752,17 +769,12 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		goto out_ipu6_bus_del_devices;
 	}
 
-	isys_ctrl = IS_IPU4(isp) ?
-			&ipu4_isys_buttress_ctrl : &ipu6_isys_buttress_ctrl;
-	isp->isys = ipu6_isys_init(pdev, &pdev->dev, isys_ctrl, isys_base,
+	isp->isys = ipu6_isys_init(pdev, dev, isys_ctrl, isys_base,
 				   &isys_ipdata);
 	if (IS_ERR(isp->isys)) {
 		ret = PTR_ERR(isp->isys);
 		goto out_ipu6_bus_del_devices;
 	}
-
-	psys_ctrl = IS_IPU4(isp) ?
-			&ipu4_psys_buttress_ctrl : &ipu6_psys_buttress_ctrl;
 
 	isp->psys = ipu6_psys_init(pdev, &isp->isys->auxdev.dev, psys_ctrl,
 				   psys_base, &psys_ipdata);
