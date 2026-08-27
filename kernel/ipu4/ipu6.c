@@ -419,6 +419,54 @@ const struct ipu6_buttress_ctrl ipu4_psys_buttress_ctrl = {
 	.pwr_sts_off = IPU4_BUTTRESS_PWR_STATE_PS_PWR_FSM_IDLE,
 };
 
+static const struct ipu6_buttress_registers ipu6_buttress_regs = {
+	/* Registers */
+	.irq_status	= BUTTRESS_REG_ISR_STATUS,
+	.irq_clear	= BUTTRESS_REG_ISR_CLEAR,
+	.irq_enable	= BUTTRESS_REG_ISR_ENABLE,
+	.pwr_status	= BUTTRESS_REG_PWR_STATE,
+	.security_ctl	= BUTTRESS_REG_SECURITY_CTL,
+	.fw_reset_ctl	= BUTTRESS_REG_FW_RESET_CTL,
+	.fabric_cmd	= BUTTRESS_REG_FABRIC_CMD,
+	.tsw_ctl	= BUTTRESS_REG_TSW_CTL,
+	.tsc_lo		= BUTTRESS_REG_TSC_LO,
+	.wdt		= BUTTRESS_REG_WDT,
+	.btrs_ctrl	= BUTTRESS_REG_BTRS_CTRL,
+
+	/* Bitmasks */
+	.irq_is		= BUTTRESS_ISR_IS_IRQ,
+	.irq_ps		= BUTTRESS_ISR_PS_IRQ,
+	.irq_all	= BUTTRESS_IRQS,
+	.irq_events	= BUTTRESS_EVENT,
+	.irq_cse_ipc	= BUTTRESS_ISR_IPC_FROM_CSE_IS_WAITING,
+	.irq_exec_done	= BUTTRESS_ISR_IPC_EXEC_DONE_BY_CSE,
+	.irq_sai	= BUTTRESS_ISR_SAI_VIOLATION,
+};
+
+static const struct ipu6_buttress_registers ipu4_buttress_regs = {
+	/* Registers */
+	.irq_status	= BUTTRESS_REG_ISR_ENABLED_STATUS,
+	.irq_clear	= BUTTRESS_REG_ISR_CLEAR,
+	.irq_enable	= BUTTRESS_REG_ISR_ENABLE,
+	.pwr_status	= BUTTRESS_REG_PWR_STATE,
+	.security_ctl	= BUTTRESS_REG_SECURITY_CTL,
+	.fw_reset_ctl	= BUTTRESS_REG_FW_RESET_CTL,
+	.fabric_cmd	= BUTTRESS_REG_FABRIC_CMD,
+	.tsw_ctl	= BUTTRESS_REG_TSW_CTL,
+	.tsc_lo		= BUTTRESS_REG_TSC_LO,
+	.wdt		= BUTTRESS_REG_WDT,
+	.btrs_ctrl	= BUTTRESS_REG_BTRS_CTRL,
+
+	/* Bitmasks */
+	.irq_is		= BUTTRESS_ISR_IS_IRQ,
+	.irq_ps		= BUTTRESS_ISR_PS_IRQ,
+	.irq_all	= BUTTRESS_IRQS,
+	.irq_events	= BUTTRESS_EVENT,
+	.irq_cse_ipc	= BUTTRESS_ISR_IPC_FROM_CSE_IS_WAITING,
+	.irq_exec_done	= BUTTRESS_ISR_IPC_EXEC_DONE_BY_CSE,
+	.irq_sai	= BUTTRESS_ISR_SAI_VIOLATION,
+};
+
 static void
 ipu6_pkg_dir_configure_spc(struct ipu6_device *isp,
 			   const struct ipu6_hw_variants *hw_variant,
@@ -781,34 +829,31 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	pci_set_master(pdev);
 
 	isp->cpd_metadata_cmpnt_size = sizeof(struct ipu6_cpd_metadata_cmpnt);
+	isp->buttress.regs = &ipu6_buttress_regs;
+
 	switch (id->device) {
 	case PCI_DEVICE_ID_INTEL_IPU6:
 		isp->hw_ver = IPU_VERSION_6;
 		isp->cpd_fw_name = IPU6_FIRMWARE_NAME;
-		isp->buttress.reg_irq_sts = BUTTRESS_REG_ISR_STATUS;
 		break;
 	case PCI_DEVICE_ID_INTEL_IPU6SE:
 		isp->hw_ver = IPU_VERSION_6SE;
 		isp->cpd_fw_name = IPU6SE_FIRMWARE_NAME;
 		isp->cpd_metadata_cmpnt_size =
 			sizeof(struct ipu6se_cpd_metadata_cmpnt);
-		isp->buttress.reg_irq_sts = BUTTRESS_REG_ISR_STATUS;
 		break;
 	case PCI_DEVICE_ID_INTEL_IPU6EP_ADLP:
 	case PCI_DEVICE_ID_INTEL_IPU6EP_RPLP:
 		isp->hw_ver = IPU_VERSION_6EP;
 		isp->cpd_fw_name = IPU6EP_FIRMWARE_NAME;
-		isp->buttress.reg_irq_sts = BUTTRESS_REG_ISR_STATUS;
 		break;
 	case PCI_DEVICE_ID_INTEL_IPU6EP_ADLN:
 		isp->hw_ver = IPU_VERSION_6EP;
 		isp->cpd_fw_name = IPU6EPADLN_FIRMWARE_NAME;
-		isp->buttress.reg_irq_sts = BUTTRESS_REG_ISR_STATUS;
 		break;
 	case PCI_DEVICE_ID_INTEL_IPU6EP_MTL:
 		isp->hw_ver = IPU_VERSION_6EP_MTL;
 		isp->cpd_fw_name = IPU6EPMTL_FIRMWARE_NAME;
-		isp->buttress.reg_irq_sts = BUTTRESS_REG_ISR_STATUS;
 		break;
 	case PCI_DEVICE_ID_INTEL_IPU4:
 		isp->hw_ver = IPU_VERSION_4;
@@ -817,7 +862,7 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		// (smaller hash size)
 		isp->cpd_metadata_cmpnt_size =
 			sizeof(struct ipu6se_cpd_metadata_cmpnt);
-		isp->buttress.reg_irq_sts = BUTTRESS_REG_ISR_ENABLED_STATUS;
+		isp->buttress.regs = &ipu4_buttress_regs;
 		break;
 	default:
 		return dev_err_probe(dev, -ENODEV,
