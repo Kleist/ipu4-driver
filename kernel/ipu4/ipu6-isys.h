@@ -138,6 +138,7 @@ struct ipu6_isys {
 	int streams_ref_count[IPU4_ISYS_MAX_STREAMS];
 	void *fwctx;
 	u32 phy_termcal_val;
+	u32 phy_rext_cal;
 	bool need_reset;
 
 	// Ambu HACK - true when resetting, protected by isys->mutex
