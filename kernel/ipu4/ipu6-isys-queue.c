@@ -322,8 +322,10 @@ static int buffer_list_get(struct ipu6_isys_stream *stream,
 static int ipu6_isys_stream_start(struct ipu6_isys_video *av,
 				  struct ipu6_isys_buffer_list *bl, bool error)
 {
+	struct ipu6_bus_device *adev = av->isys->adev;
+	const struct ipu6_fw_isys_ops *fw_ops = adev->auxdrv_data->fw_ops;
 	struct ipu6_isys_stream *stream = av->stream;
-	struct device *dev = &stream->isys->adev->auxdev.dev;
+	struct device *dev = &adev->auxdev.dev;
 	struct ipu6_isys_buffer_list __bl;
 	int ret;
 
@@ -348,14 +350,13 @@ static int ipu6_isys_stream_start(struct ipu6_isys_video *av,
 		if (!msg)
 			return -ENOMEM;
 
-		ipu6_fw_isys_prepare_buf_set(msg, stream, bl);
-		ipu6_fw_isys_dump_frame_buff_set(dev, msg,
-						 stream->nr_output_pins);
+		fw_ops->prepare_buf_set(msg, stream, bl);
+		fw_ops->dump_frame_buf_set(dev, msg, stream->nr_output_pins);
 		ipu6_isys_buffer_list_queue(bl, IPU6_ISYS_BUFFER_LIST_FL_ACTIVE,
 					    0);
 
-		ret = ipu6_fw_isys_stream_capture(stream->isys,
-						  stream->stream_handle, msg);
+		ret = fw_ops->stream_capture(stream->isys,
+					     stream->stream_handle, msg);
 	} while (!WARN_ON(ret));
 
 	return 0;
@@ -377,11 +378,13 @@ static void buf_queue(struct vb2_buffer *vb)
 {
 	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(vb->vb2_queue);
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
+	struct ipu6_bus_device *adev = av->isys->adev;
+	const struct ipu6_fw_isys_ops *fw_ops = adev->auxdrv_data->fw_ops;
 	struct vb2_v4l2_buffer *vvb = to_vb2_v4l2_buffer(vb);
 	struct ipu6_isys_video_buffer *ivb =
 		vb2_buffer_to_ipu6_isys_video_buffer(vvb);
 	struct ipu6_isys_buffer *ib = &ivb->ib;
-	struct device *dev = &av->isys->adev->auxdev.dev;
+	struct device *dev = &adev->auxdev.dev;
 	struct media_pipeline *media_pipe =
 		media_entity_pipeline(&av->vdev.entity);
 	struct ipu6_isys_stream *stream = av->stream;
@@ -430,8 +433,8 @@ static void buf_queue(struct vb2_buffer *vb)
 		goto out;
 	}
 
-	ipu6_fw_isys_prepare_buf_set(msg, stream, &bl);
-	ipu6_fw_isys_dump_frame_buff_set(dev, msg, stream->nr_output_pins);
+	fw_ops->prepare_buf_set(msg, stream, &bl);
+	fw_ops->dump_frame_buf_set(dev, msg, stream->nr_output_pins);
 
 	if (!stream->streaming) {
 		ret = ipu6_isys_stream_start(av, &bl, true);
@@ -448,8 +451,7 @@ static void buf_queue(struct vb2_buffer *vb)
 	 */
 	ipu6_isys_buffer_list_queue(&bl, IPU6_ISYS_BUFFER_LIST_FL_ACTIVE, 0);
 
-	ret = ipu6_fw_isys_stream_capture(stream->isys, stream->stream_handle,
-					  msg);
+	ret = fw_ops->stream_capture(stream->isys, stream->stream_handle, msg);
 	if (ret < 0)
 		dev_err(dev, "send stream capture failed\n");
 
@@ -695,7 +697,7 @@ static int restart_stream(struct ipu6_isys_video *av)
 		goto err_unlock;
 	}
 
-	ret = ipu6_fw_isys_close(isys);
+	ret = isys->adev->auxdrv_data->fw_ops->close(isys);
 	if (ret) {
 		dev_err(dev, "%s: fw close failed: %d", av->vdev.name, ret);
 		goto err_unlock;
