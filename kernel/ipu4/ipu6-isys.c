@@ -913,14 +913,15 @@ static int isys_runtime_pm_resume(struct device *dev)
 	isys->power = 1;
 	spin_unlock_irqrestore(&isys->power_lock, flags);
 
-	if (IS_IPU7(isp))
+	if (IS_IPU7(isp)) {
 		ipu7_isys_setup_hw(isys);
-	else
+	} else {
 		ipu6_isys_setup_hw(isys);
-
 #ifdef IPU6
-	set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_ON);
+		set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_ON);
 #endif
+	}
+
 	return 0;
 }
 
@@ -945,7 +946,8 @@ static int isys_runtime_pm_suspend(struct device *dev)
 	isys->phy_termcal_val = 0;
 	cpu_latency_qos_update_request(&isys->pm_qos, PM_QOS_DEFAULT_VALUE);
 #ifdef IPU6
-	set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_OFF);
+	if (!IS_IPU7(adev->isp))
+		set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_OFF);
 #endif
 
 	ipu6_mmu_hw_cleanup(adev->mmu);
