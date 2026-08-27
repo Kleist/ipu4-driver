@@ -8,6 +8,8 @@
 #include <linux/spinlock_types.h>
 #include <linux/types.h>
 
+#include "ipu7-mmu-hw.h"
+
 struct device;
 struct page;
 
@@ -173,7 +175,10 @@ struct ipu6_mmu_hw_ops {
 struct ipu6_mmu {
 	struct list_head node;
 
-	struct ipu6_mmu_hw *ipu6_mmu_hw;
+	union {
+		struct ipu6_mmu_hw *ipu6_mmu_hw;
+		struct ipu7_mmu_hw *ipu7_mmu_hw;
+	};
 	unsigned int nr_mmus;
 	unsigned int mmid;
 
@@ -194,6 +199,7 @@ struct ipu6_mmu {
 };
 
 extern const struct ipu6_mmu_hw_ops ipu6_mmu_ops;
+extern const struct ipu6_mmu_hw_ops ipu7_mmu_ops;
 extern const struct ipu6_mmu_hw_ops ipu4_mmu_ops;
 
 struct ipu6_mmu *ipu6_mmu_init(struct device *dev,
