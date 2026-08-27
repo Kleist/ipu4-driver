@@ -1233,7 +1233,7 @@ void ipu6_isys_fw_put(struct ipu6_isys *isys)
 	isys->ref_count--;
 	if (!isys->ref_count) {
 		ipu6_fw_isys_close(isys);
-		if (isys->fwcom) {
+		if (isys->fwctx) {
 			dev_info(dev, "%s: Setting need_reset\n", __func__);
 			isys->need_reset = true;
 			dev_warn(&isys->adev->auxdev.dev,
