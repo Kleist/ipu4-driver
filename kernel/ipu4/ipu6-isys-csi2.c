@@ -24,6 +24,7 @@
 #include "ipu6-isys-csi2.h"
 #include "ipu6-isys-subdev.h"
 #include "ipu6-platform-isys-csi2-reg.h"
+#include "ipu7-isys-csi2-regs.h"
 
 #include "ipu4-compat.h"
 
@@ -425,6 +426,10 @@ static int ipu6_isys_csi2_stream_enable(struct ipu6_isys_csi2 *csi2)
 	cfg.port = csi2->port;
 	cfg.nlanes = csi2->nlanes;
 
+	ret = ipu6_isys_csi2_calc_timing(csi2, &timing, CSI2_ACCINV);
+	if (ret)
+		return ret;
+
 	mask = isys->pdata->ipdata->csi2.irq_mask;
 	nports = isys->pdata->ipdata->csi2.nports;
 
@@ -485,12 +490,107 @@ static int ipu6_isys_csi2_stream_enable(struct ipu6_isys_csi2 *csi2)
 	writel(1, csi2->base + CSI_REG_PPI2CSI_ENABLE);
 	writel(1, csi2->base + CSI_REG_CSI_FE_ENABLE);
 
-	ret = ipu6_isys_csi2_calc_timing(csi2, &timing, CSI2_ACCINV);
+	return isys->phy_set_power(isys, &cfg, &timing, true);
+#endif
+}
+
+static void ipu7_csi2_irq_enable(struct ipu6_isys_csi2 *csi2)
+{
+	struct ipu6_isys *isys = csi2->isys;
+	unsigned int offset, mask;
+
+	/* enable CSI2 legacy error irq */
+	offset = IPU7_IS_IO_CSI2_ERR_LEGACY_IRQ_CTL_BASE(csi2->port);
+	mask = IPU7_CSI_RX_ERROR_IRQ_MASK;
+	writel(mask, csi2->base + offset + IPU7_IRQ_CTL_CLEAR);
+	writel(mask, csi2->base + offset + IPU7_IRQ_CTL_MASK);
+	writel(mask, csi2->base + offset + IPU7_IRQ_CTL_ENABLE);
+
+	/* enable CSI2 legacy sync irq */
+	offset = IPU7_IS_IO_CSI2_SYNC_LEGACY_IRQ_CTL_BASE(csi2->port);
+	mask = IPU7_CSI_RX_SYNC_IRQ_MASK;
+	writel(mask, csi2->base + offset + IPU7_IRQ_CTL_CLEAR);
+	writel(mask, csi2->base + offset + IPU7_IRQ_CTL_MASK);
+	writel(mask, csi2->base + offset + IPU7_IRQ_CTL_ENABLE);
+
+	if (!IS_IPU7_MTL(isys->adev->isp)) {
+		mask = IPU7P5_CSI_RX_SYNC_FE_IRQ_MASK;
+		writel(mask, csi2->base + offset + IPU7_IRQ1_CTL_CLEAR);
+		writel(mask, csi2->base + offset + IPU7_IRQ1_CTL_MASK);
+		writel(mask, csi2->base + offset + IPU7_IRQ1_CTL_ENABLE);
+	}
+}
+
+static void ipu7_csi2_irq_disable(struct ipu6_isys_csi2 *csi2)
+{
+	struct ipu6_isys *isys = csi2->isys;
+	unsigned int offset, mask;
+
+	/* disable CSI2 legacy error irq */
+	offset = IPU7_IS_IO_CSI2_ERR_LEGACY_IRQ_CTL_BASE(csi2->port);
+	mask = IPU7_CSI_RX_ERROR_IRQ_MASK;
+	writel(mask, csi2->base + offset + IPU7_IRQ_CTL_CLEAR);
+	writel(0, csi2->base + offset + IPU7_IRQ_CTL_MASK);
+	writel(0, csi2->base + offset + IPU7_IRQ_CTL_ENABLE);
+
+	/* disable CSI2 legacy sync irq */
+	offset = IPU7_IS_IO_CSI2_SYNC_LEGACY_IRQ_CTL_BASE(csi2->port);
+	mask = IPU7_CSI_RX_SYNC_IRQ_MASK;
+	writel(mask, csi2->base + offset + IPU7_IRQ_CTL_CLEAR);
+	writel(0, csi2->base + offset + IPU7_IRQ_CTL_MASK);
+	writel(0, csi2->base + offset + IPU7_IRQ_CTL_ENABLE);
+
+	if (!IS_IPU7_MTL(isys->adev->isp)) {
+		writel(mask, csi2->base + offset + IPU7_IRQ1_CTL_CLEAR);
+		writel(0, csi2->base + offset + IPU7_IRQ1_CTL_MASK);
+		writel(0, csi2->base + offset + IPU7_IRQ1_CTL_ENABLE);
+	}
+}
+
+static void ipu7_isys_csi2_stream_disable(struct ipu6_isys_csi2 *csi2)
+{
+	struct ipu6_isys *isys = csi2->isys;
+	void __iomem *base = isys->pdata->base;
+	struct ipu6_isys_csi2_config cfg;
+
+	cfg.port = csi2->port;
+	cfg.nlanes = csi2->nlanes;
+
+	isys->phy_set_power(isys, &cfg, NULL, false);
+
+	writel(0x4,
+	       base + IPU7_IS_IO_GPREGS_BASE + IPU7_CLK_DIV_FACTOR_APB_CLK);
+	ipu7_csi2_irq_disable(csi2);
+}
+
+static int ipu7_isys_csi2_stream_enable(struct ipu6_isys_csi2 *csi2)
+{
+	struct ipu6_isys *isys = csi2->isys;
+	void __iomem *base = isys->pdata->base;
+	struct ipu6_isys_csi2_config cfg;
+	unsigned int offset = IPU7_IS_IO_GPREGS_BASE;
+	int ret;
+
+	writel(0x2, base + offset + IPU7_CLK_DIV_FACTOR_APB_CLK);
+	if (csi2->port == 0U && csi2->nlanes == 4U &&
+	    !IS_IPU7_MTL(isys->adev->isp))
+		writel(0x1, base + offset + IPU7_CSI_PORTAB_AGGREGATION);
+
+	/* input is coming from CSI receiver (sensor) */
+	offset = IPU7_IS_IO_CSI2_ADPL_PORT_BASE(csi2->port);
+	writel(CSI_SENSOR_INPUT, base + offset + IPU7_CSI2_ADPL_INPUT_MODE);
+	writel(1, base + offset + IPU7_CSI2_ADPL_CSI_RX_ERR_IRQ_CLEAR_EN);
+
+	cfg.port = csi2->port;
+	cfg.nlanes = csi2->nlanes;
+
+	ret = isys->phy_set_power(isys, &cfg, NULL, true);
 	if (ret)
 		return ret;
 
-	return isys->phy_set_power(isys, &cfg, &timing, true);
-#endif
+	ipu7_csi2_irq_enable(csi2);
+
+	return 0;
 }
 
 static int ipu6_isys_csi2_enable_streams(struct v4l2_subdev *sd,
@@ -499,6 +599,7 @@ static int ipu6_isys_csi2_enable_streams(struct v4l2_subdev *sd,
 {
 	struct ipu6_isys_subdev *asd = to_ipu6_isys_subdev(sd);
 	struct ipu6_isys_csi2 *csi2 = to_ipu6_isys_csi2(asd);
+	struct ipu6_device *isp = asd->isys->adev->isp;
 	struct v4l2_subdev *remote_sd;
 	struct media_pad *remote_pad;
 	u64 sink_streams;
@@ -511,14 +612,18 @@ static int ipu6_isys_csi2_enable_streams(struct v4l2_subdev *sd,
 		v4l2_subdev_state_xlate_streams(state, pad, CSI2_PAD_SINK,
 						&streams_mask);
 
-	ret = ipu6_isys_csi2_stream_enable(csi2);
+	ret = IS_IPU7(isp) ? ipu7_isys_csi2_stream_enable(csi2) :
+			     ipu6_isys_csi2_stream_enable(csi2);
 	if (ret)
 		return ret;
 
 	ret = v4l2_subdev_enable_streams(remote_sd, remote_pad->index,
 					 sink_streams);
 	if (ret) {
-		ipu6_isys_csi2_stream_disable(csi2);
+		if IS_IPU7(isp)
+			ipu7_isys_csi2_stream_disable(csi2);
+		else
+			ipu6_isys_csi2_stream_disable(csi2);
 		return ret;
 	}
 
@@ -531,6 +636,7 @@ static int ipu6_isys_csi2_disable_streams(struct v4l2_subdev *sd,
 {
 	struct ipu6_isys_subdev *asd = to_ipu6_isys_subdev(sd);
 	struct ipu6_isys_csi2 *csi2 = to_ipu6_isys_csi2(asd);
+	struct ipu6_device *isp = asd->isys->adev->isp;
 	struct v4l2_subdev *remote_sd;
 	struct media_pad *remote_pad;
 	u64 sink_streams;
@@ -542,7 +648,10 @@ static int ipu6_isys_csi2_disable_streams(struct v4l2_subdev *sd,
 	remote_pad = media_pad_remote_pad_first(&sd->entity.pads[CSI2_PAD_SINK]);
 	remote_sd = media_entity_to_v4l2_subdev(remote_pad->entity);
 
-	ipu6_isys_csi2_stream_disable(csi2);
+	if IS_IPU7(isp)
+		ipu7_isys_csi2_stream_disable(csi2);
+	else
+		ipu6_isys_csi2_stream_disable(csi2);
 
 	v4l2_subdev_disable_streams(remote_sd, remote_pad->index, sink_streams);
 

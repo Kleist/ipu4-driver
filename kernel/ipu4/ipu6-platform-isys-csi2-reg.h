@@ -8,6 +8,11 @@
 
 #include "ipu4-platform-isys-csi2-reg.h"
 
+enum CSI_FE_INPUT_SELECTOR {
+	CSI_SENSOR_INPUT = 0,
+	CSI_MIPIGEN_INPUT = 1,
+};
+
 #ifdef IPU6
 #define CSI_REG_BASE			0x220000
 #define CSI_REG_PORT_BASE(id)		(CSI_REG_BASE + (id) * 0x1000)
@@ -70,11 +75,6 @@ enum CSI_FE_ENABLE_TYPE {
 enum CSI_FE_MODE_TYPE {
 	CSI_FE_DPHY_MODE = 0,
 	CSI_FE_CPHY_MODE = 1,
-};
-
-enum CSI_FE_INPUT_SELECTOR {
-	CSI_SENSOR_INPUT = 0,
-	CSI_MIPIGEN_INPUT = 1,
 };
 
 enum CSI_FE_SYNC_CNTR_SEL_TYPE {
