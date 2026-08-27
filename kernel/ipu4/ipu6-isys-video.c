@@ -523,8 +523,10 @@ static void put_stream_opened(struct ipu6_isys_video *av)
 static int start_stream_firmware(struct ipu6_isys_video *av,
 				 struct ipu6_isys_buffer_list *bl)
 {
+	struct ipu6_bus_device *adev = av->isys->adev;
+	const struct ipu6_fw_isys_ops *fw_ops = adev->auxdrv_data->fw_ops;
 	struct ipu6_isys_stream *stream = av->stream;
-	struct device *dev = &av->isys->adev->auxdev.dev;
+	struct device *dev = &adev->auxdev.dev;
 	struct isys_fw_msgs *msg = NULL;
 	int ret, retout, tout;
 	bool capture = bl ? true : false;
@@ -533,7 +535,7 @@ static int start_stream_firmware(struct ipu6_isys_video *av,
 	if (!msg)
 		return -ENOMEM;
 
-	ret = ipu6_fw_isys_prepare_stream_cfg(av, msg);
+	ret = fw_ops->prepare_stream_cfg(av, msg);
 	if (ret < 0) {
 		ipu6_put_fw_msg_buf(av->isys, msg);
 		return ret;
@@ -541,7 +543,7 @@ static int start_stream_firmware(struct ipu6_isys_video *av,
 
 	reinit_completion(&stream->stream_open_completion);
 
-	ret = ipu6_fw_isys_stream_open(av->isys, stream->stream_handle, msg);
+	ret = fw_ops->stream_open(av->isys, stream->stream_handle, msg);
 	if (ret < 0) {
 		dev_err(dev, "can't open stream (%d)\n", ret);
 		ipu6_put_fw_msg_buf(av->isys, msg);
@@ -574,15 +576,15 @@ static int start_stream_firmware(struct ipu6_isys_video *av,
 			goto out_put_stream_opened;
 		}
 
-		ipu6_fw_isys_prepare_buf_set(msg, stream, bl);
+		fw_ops->prepare_buf_set(msg, stream, bl);
 		ipu6_isys_buffer_list_queue(bl,
 					    IPU6_ISYS_BUFFER_LIST_FL_ACTIVE, 0);
 	}
 
 	reinit_completion(&stream->stream_start_completion);
 
-	ret = ipu6_fw_isys_stream_start(av->isys, stream->stream_handle, msg,
-					capture);
+	ret = fw_ops->stream_start(av->isys, stream->stream_handle, msg,
+				   capture);
 
 	if (ret < 0) {
 		dev_err(dev, "can't start streaming (%d)\n", ret);
@@ -608,7 +610,7 @@ static int start_stream_firmware(struct ipu6_isys_video *av,
 out_stream_close:
 	reinit_completion(&stream->stream_close_completion);
 
-	retout = ipu6_fw_isys_stream_close(av->isys, stream->stream_handle);
+	retout = fw_ops->stream_close(av->isys, stream->stream_handle);
 	if (retout < 0) {
 		dev_dbg(dev, "can't close stream (%d)\n", retout);
 		goto out_put_stream_opened;
@@ -631,13 +633,15 @@ out_put_stream_opened:
 
 static void stop_streaming_firmware(struct ipu6_isys_video *av)
 {
-	struct device *dev = &av->isys->adev->auxdev.dev;
+	struct ipu6_bus_device *adev = av->isys->adev;
+	const struct ipu6_fw_isys_ops *fw_ops = adev->auxdrv_data->fw_ops;
+	struct device *dev = &adev->auxdev.dev;
 	struct ipu6_isys_stream *stream = av->stream;
 	int ret, tout;
 
 	reinit_completion(&stream->stream_stop_completion);
 
-	ret = ipu6_fw_isys_stream_flush(av->isys, stream->stream_handle);
+	ret = fw_ops->stream_flush(av->isys, stream->stream_handle);
 	if (ret < 0) {
 		dev_err(dev, "can't stop stream (%d)\n", ret);
 		return;
@@ -655,13 +659,15 @@ static void stop_streaming_firmware(struct ipu6_isys_video *av)
 
 static void close_streaming_firmware(struct ipu6_isys_video *av)
 {
+	struct ipu6_bus_device *adev = av->isys->adev;
+	const struct ipu6_fw_isys_ops *fw_ops = adev->auxdrv_data->fw_ops;
 	struct ipu6_isys_stream *stream = av->stream;
-	struct device *dev = &av->isys->adev->auxdev.dev;
+	struct device *dev = &adev->auxdev.dev;
 	int ret, tout;
 
 	reinit_completion(&stream->stream_close_completion);
 
-	ret = ipu6_fw_isys_stream_close(av->isys, stream->stream_handle);
+	ret = fw_ops->stream_close(av->isys, stream->stream_handle);
 	if (ret < 0) {
 		dev_err(dev, "can't close stream (%d)\n", ret);
 		return;
@@ -1106,7 +1112,7 @@ void ipu6_isys_fw_put(struct ipu6_isys *isys)
 
 	isys->ref_count--;
 	if (!isys->ref_count) {
-		ipu6_fw_isys_close(isys);
+		isys->adev->auxdrv_data->fw_ops->close(isys);
 		if (isys->fwctx) {
 			dev_info(dev, "%s: Setting need_reset\n", __func__);
 			isys->need_reset = true;

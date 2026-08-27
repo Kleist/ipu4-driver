@@ -127,41 +127,7 @@ static int ipu6_fw_isys_complex_cmd(struct ipu6_isys *isys,
 	return 0;
 }
 
-// Refactoring needed for silent_reset - upstream candidate?
-int ipu6_fw_isys_open(struct ipu6_isys *isys)
-{
-	const struct ipu6_isys_internal_pdata *ipdata = isys->pdata->ipdata;
-	struct ipu6_bus_device *adev = isys->adev;
-	int ret = 0;
-
-	if (!isys->resetting)
-		lockdep_assert_held(&isys->mutex);
-
-	ipu6_configure_spc(adev->isp, &ipdata->hw_variant,
-			   IPU6_CPD_PKG_DIR_ISYS_SERVER_IDX, isys->pdata->base,
-			   adev->pkg_dir, adev->pkg_dir_dma_addr);
-
-	/*
-	 * Buffers could have been left to wrong queue at last closure.
-	 * Move them now back to empty buffer queue.
-	 */
-	ipu6_cleanup_fw_msg_bufs(isys);
-
-	if (isys->fwctx) {
-		/*
-		 * Something went wrong in previous shutdown. As we are now
-		 * restarting isys we can safely delete old context.
-		 */
-		dev_info(&adev->auxdev.dev, "Clearing old context\n");
-		ipu6_fw_isys_cleanup(isys);
-	}
-
-	ret = ipu6_fw_isys_init(isys, ipdata->num_parallel_streams);
-
-	return ret;
-}
-
-int ipu6_fw_isys_close(struct ipu6_isys *isys)
+static int ipu6_fw_isys_close(struct ipu6_isys *isys)
 {
 	struct device *dev = &isys->adev->auxdev.dev;
 	int retry = IPU6_ISYS_CLOSE_RETRY;
@@ -204,7 +170,7 @@ int ipu6_fw_isys_close(struct ipu6_isys *isys)
 	return ret;
 }
 
-void ipu6_fw_isys_cleanup(struct ipu6_isys *isys)
+static void ipu6_fw_isys_cleanup(struct ipu6_isys *isys)
 {
 	int ret;
 
@@ -355,7 +321,7 @@ static int ipu6_isys_fwcom_cfg_init(struct ipu6_isys *isys,
 	return 0;
 }
 
-int ipu6_fw_isys_init(struct ipu6_isys *isys, unsigned int num_streams)
+static int ipu6_fw_isys_init(struct ipu6_isys *isys, unsigned int num_streams)
 {
 	struct device *dev = &isys->adev->auxdev.dev;
 	int retry = IPU6_ISYS_OPEN_RETRY;
@@ -397,13 +363,47 @@ int ipu6_fw_isys_init(struct ipu6_isys *isys, unsigned int num_streams)
 	return ret;
 }
 
-struct ipu6_fw_isys_resp_info_abi *
+// Refactoring needed for silent_reset - upstream candidate?
+int ipu6_fw_isys_open(struct ipu6_isys *isys)
+{
+	const struct ipu6_isys_internal_pdata *ipdata = isys->pdata->ipdata;
+	struct ipu6_bus_device *adev = isys->adev;
+	int ret = 0;
+
+	if (!isys->resetting)
+		lockdep_assert_held(&isys->mutex);
+
+	ipu6_configure_spc(adev->isp, &ipdata->hw_variant,
+			   IPU6_CPD_PKG_DIR_ISYS_SERVER_IDX, isys->pdata->base,
+			   adev->pkg_dir, adev->pkg_dir_dma_addr);
+
+	/*
+	 * Buffers could have been left to wrong queue at last closure.
+	 * Move them now back to empty buffer queue.
+	 */
+	ipu6_cleanup_fw_msg_bufs(isys);
+
+	if (isys->fwctx) {
+		/*
+		 * Something went wrong in previous shutdown. As we are now
+		 * restarting isys we can safely delete old context.
+		 */
+		dev_info(&adev->auxdev.dev, "Clearing old context\n");
+		ipu6_fw_isys_cleanup(isys);
+	}
+
+	ret = ipu6_fw_isys_init(isys, ipdata->num_parallel_streams);
+
+	return ret;
+}
+
+static struct ipu6_fw_isys_resp_info_abi *
 ipu6_fw_isys_get_resp(struct ipu6_isys *isys)
 {
 	return ipu6_recv_get_token(isys->fwctx, IPU4_BASE_MSG_RECV_QUEUES);
 }
 
-void ipu6_fw_isys_put_resp(struct ipu6_isys *isys)
+static void ipu6_fw_isys_put_resp(struct ipu6_isys *isys)
 {
 	ipu6_recv_put_token(isys->fwctx, IPU4_BASE_MSG_RECV_QUEUES);
 }
@@ -513,7 +513,8 @@ ipu4_fw_isys_dump_frame_buff_set(struct device *dev,
 	dev_dbg(dev, "-----------------------------------------------------\n");
 }
 
-void ipu6_fw_isys_dump_stream_cfg(struct device *dev, struct isys_fw_msgs *msg)
+static void ipu6_fw_isys_dump_stream_cfg(struct device *dev,
+					 struct isys_fw_msgs *msg)
 {
 #ifdef IPU6
 	struct ipu6_fw_isys_stream_cfg_data_abi *cfg = &msg->ipu6.stream;
@@ -594,9 +595,9 @@ void ipu6_fw_isys_dump_stream_cfg(struct device *dev, struct isys_fw_msgs *msg)
 #endif
 }
 
-void
-ipu6_fw_isys_dump_frame_buff_set(struct device *dev, struct isys_fw_msgs *msg,
-				 unsigned int outputs)
+static void
+ipu6_fw_isys_dump_frame_buf_set(struct device *dev, struct isys_fw_msgs *msg,
+				unsigned int outputs)
 {
 #ifdef IPU6
 	struct ipu6_fw_isys_frame_buff_set_abi *buf;
@@ -1062,8 +1063,8 @@ static int ipu6_isys_fw_pin_cfg(struct ipu6_isys_video *av,
 	return 0;
 }
 
-int ipu6_fw_isys_prepare_stream_cfg(struct ipu6_isys_video *av,
-				    struct isys_fw_msgs *msg)
+static int ipu6_fw_isys_prepare_stream_cfg(struct ipu6_isys_video *av,
+					   struct isys_fw_msgs *msg)
 {
 	struct ipu4_fw_isys_stream_cfg_data_abi *stream_cfg;
 	struct device *dev = &av->isys->adev->auxdev.dev;
@@ -1094,9 +1095,9 @@ int ipu6_fw_isys_prepare_stream_cfg(struct ipu6_isys_video *av,
 	return 0;
 }
 
-int ipu6_fw_isys_stream_open(struct ipu6_isys *isys,
-			     const unsigned int stream_handle,
-			     struct isys_fw_msgs *msg)
+static int ipu6_fw_isys_stream_open(struct ipu6_isys *isys,
+				    const unsigned int stream_handle,
+				    struct isys_fw_msgs *msg)
 {
 	return ipu6_fw_isys_complex_cmd(isys, stream_handle,
 				       &msg->ipu6.stream, msg->dma_addr,
@@ -1104,23 +1105,23 @@ int ipu6_fw_isys_stream_open(struct ipu6_isys *isys,
 				       IPU6_FW_ISYS_SEND_TYPE_STREAM_OPEN);
 }
 
-int ipu6_fw_isys_stream_close(struct ipu6_isys *isys,
-			      const unsigned int stream_handle)
+static int ipu6_fw_isys_stream_close(struct ipu6_isys *isys,
+				     const unsigned int stream_handle)
 {
 	return ipu6_fw_isys_complex_cmd(isys, stream_handle, NULL, 0, 0,
 					IPU6_FW_ISYS_SEND_TYPE_STREAM_CLOSE);
 }
 
-int ipu6_fw_isys_stream_flush(struct ipu6_isys *isys,
-			      const unsigned int stream_handle)
+static int ipu6_fw_isys_stream_flush(struct ipu6_isys *isys,
+				     const unsigned int stream_handle)
 {
 	return ipu6_fw_isys_complex_cmd(isys, stream_handle, NULL, 0, 0,
 					IPU6_FW_ISYS_SEND_TYPE_STREAM_FLUSH);
 }
 
-int ipu6_fw_isys_stream_start(struct ipu6_isys *isys,
-			      const unsigned int stream_handle,
-			      struct isys_fw_msgs *msg, bool capture)
+static int ipu6_fw_isys_stream_start(struct ipu6_isys *isys,
+				     const unsigned int stream_handle,
+				     struct isys_fw_msgs *msg, bool capture)
 {
 	u16 cmd_type;
 
@@ -1134,9 +1135,9 @@ int ipu6_fw_isys_stream_start(struct ipu6_isys *isys,
 					sizeof(msg->ipu6.stream), cmd_type);
 }
 
-int ipu6_fw_isys_stream_capture(struct ipu6_isys *isys,
-				const unsigned int stream_handle,
-				struct isys_fw_msgs *msg)
+static int ipu6_fw_isys_stream_capture(struct ipu6_isys *isys,
+				       const unsigned int stream_handle,
+				       struct isys_fw_msgs *msg)
 {
 	return ipu6_fw_isys_complex_cmd(isys, stream_handle,
 					&msg->ipu6.stream, msg->dma_addr,
@@ -1162,10 +1163,9 @@ ipu6_isys_buf_to_fw_frame_buf_pin(struct vb2_buffer *vb,
  * buffer list is not modified.
  */
 #define IPU6_ISYS_FRAME_NUM_THRESHOLD  (30)
-void
-ipu6_fw_isys_prepare_buf_set(struct isys_fw_msgs *msg,
-			     struct ipu6_isys_stream *stream,
-			     struct ipu6_isys_buffer_list *bl)
+static void ipu6_fw_isys_prepare_buf_set(struct isys_fw_msgs *msg,
+					 struct ipu6_isys_stream *stream,
+					 struct ipu6_isys_buffer_list *bl)
 {
 	struct ipu4_fw_isys_frame_buff_set_abi *set = &msg->ipu6.frame;
 	struct ipu6_isys_buffer *ib;
@@ -1186,3 +1186,18 @@ ipu6_fw_isys_prepare_buf_set(struct isys_fw_msgs *msg,
 		ipu6_isys_buf_to_fw_frame_buf_pin(vb, set);
 	}
 }
+
+const struct ipu6_fw_isys_ops ipu6_fw_isys_ops = {
+	.init = ipu6_fw_isys_init,
+	.close = ipu6_fw_isys_close,
+	.cleanup = ipu6_fw_isys_cleanup,
+	.prepare_stream_cfg = ipu6_fw_isys_prepare_stream_cfg,
+	.prepare_buf_set = ipu6_fw_isys_prepare_buf_set,
+	.stream_open = ipu6_fw_isys_stream_open,
+	.stream_start = ipu6_fw_isys_stream_start,
+	.stream_capture = ipu6_fw_isys_stream_capture,
+	.stream_flush = ipu6_fw_isys_stream_flush,
+	.stream_close = ipu6_fw_isys_stream_close,
+	.dump_stream_cfg = ipu6_fw_isys_dump_stream_cfg,
+	.dump_frame_buf_set = ipu6_fw_isys_dump_frame_buf_set,
+};
