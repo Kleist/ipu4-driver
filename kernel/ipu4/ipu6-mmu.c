@@ -5,7 +5,6 @@
 #include <asm/barrier.h>
 
 #include <linux/align.h>
-#include <linux/atomic.h>
 #include <linux/bitops.h>
 #include <linux/bits.h>
 #include <linux/bug.h>
@@ -13,10 +12,8 @@
 #include <linux/dma-mapping.h>
 #include <linux/err.h>
 #include <linux/gfp.h>
-#include <linux/io.h>
 #include <linux/iova.h>
 #include <linux/math.h>
-#include <linux/minmax.h>
 #include <linux/mm.h>
 #include <linux/pfn.h>
 #include <linux/slab.h>
@@ -45,144 +42,11 @@
 #define ISP_PADDR_SHIFT		12
 
 #define REG_TLB_INVALIDATE	0x0000
-#define MMU0_TLB_INVALIDATE	1
-#define MMU1_TLB_INVALIDATE	0xffff
 
 #define REG_L1_PHYS		0x0004	/* 27-bit pfn */
 #define REG_INFO		0x0008
 
-/* ZLW Enable for each stream in L1 MMU AT where i : 0..15 */
-#define MMUV2_AT_REG_L1_ZLW_EN_SID(i)		(0x100 + ((i) * 0x20))
-
-/* ZLW 1D mode Enable for each stream in L1 MMU AT where i : 0..15 */
-#define MMUV2_AT_REG_L1_ZLW_1DMODE_SID(i)	(0x100 + ((i) * 0x20) + 0x0004)
-
-/* Set ZLW insertion N pages ahead per stream 1D where i : 0..15 */
-#define MMUV2_AT_REG_L1_ZLW_INS_N_AHEAD_SID(i)	(0x100 + ((i) * 0x20) + 0x0008)
-
-/* ZLW 2D mode Enable for each stream in L1 MMU AT where i : 0..15 */
-#define MMUV2_AT_REG_L1_ZLW_2DMODE_SID(i)	(0x100 + ((i) * 0x20) + 0x0010)
-
-/* ZLW Insertion for each stream in L1 MMU AT where i : 0..15 */
-#define MMUV2_AT_REG_L1_ZLW_INSERTION(i)	(0x100 + ((i) * 0x20) + 0x000c)
-
-#define MMUV2_AT_REG_L1_FW_ZLW_FIFO		(0x100 + \
-			(IPU4_MMU_MAX_TLB_L1_STREAMS * 0x20) + 0x003c)
-
-/* FW ZLW has prioty - needed for ZLW invalidations */
-#define MMUV2_AT_REG_L1_FW_ZLW_PRIO		(0x100 + \
-			(IPU4_MMU_MAX_TLB_L1_STREAMS * 0x20))
-
 #define TBL_PHYS_ADDR(a)	((phys_addr_t)(a) << ISP_PADDR_SHIFT)
-
-static void zlw_invalidate(struct ipu6_mmu *mmu, struct ipu6_mmu_hw *mmu_hw)
-{
-	unsigned int retry = 0;
-	unsigned int i, j;
-	int ret;
-
-	for (i = 0; i < mmu_hw->nr_l1streams; i++) {
-		/* We need to invalidate only the zlw enabled stream IDs */
-		if (mmu_hw->l1_zlw_en[i]) {
-			/*
-			 * Maximum 16 blocks per L1 stream
-			 * Write trash buffer iova offset to the FW_ZLW
-			 * register. This will trigger pre-fetching of next 16
-			 * pages from the page table. So we need to increment
-			 * iova address by 16 * 4K to trigger the next 16 pages.
-			 * Once this loop is completed, the L1 cache will be
-			 * filled with trash buffer translation.
-			 *
-			 * TODO: Instead of maximum 16 blocks, use the allocated
-			 * block size
-			 */
-			for (j = 0; j < mmu_hw->l1_block_sz[i]; j++)
-				writel(mmu->iova_trash_page +
-					   j * MMUV2_TRASH_L1_BLOCK_OFFSET,
-					   mmu_hw->base +
-					   MMUV2_AT_REG_L1_ZLW_INSERTION(i));
-
-			/*
-			 * Now we need to fill the L2 cache entry. L2 cache
-			 * entries will be automatically updated, based on the
-			 * L1 entry. The above loop for L1 will update only one
-			 * of the two entries in L2 as the L1 is under 4MB
-			 * range. To force the other entry in L2 to update, we
-			 * just need to trigger another pre-fetch which is
-			 * outside the above 4MB range.
-			 */
-			writel(mmu->iova_trash_page +
-				   MMUV2_TRASH_L2_BLOCK_OFFSET,
-				   mmu_hw->base +
-				   MMUV2_AT_REG_L1_ZLW_INSERTION(0));
-		}
-	}
-
-	/*
-	 * Wait until AT is ready. FIFO read should return 2 when AT is ready.
-	 * Retry value of 1000 is just by guess work to avoid the forever loop.
-	 */
-	do {
-		if (retry > 1000) {
-			dev_err(mmu->dev, "zlw invalidation failed\n");
-			return;
-		}
-		ret = readl(mmu_hw->base + MMUV2_AT_REG_L1_FW_ZLW_FIFO);
-		retry++;
-	} while (ret != 2);
-}
-
-static void tlb_invalidate(struct ipu6_mmu *mmu)
-{
-	unsigned long flags;
-	unsigned int i;
-
-	spin_lock_irqsave(&mmu->ready_lock, flags);
-	if (!mmu->ready) {
-		spin_unlock_irqrestore(&mmu->ready_lock, flags);
-		return;
-	}
-
-	for (i = 0; i < mmu->nr_mmus; i++) {
-		/*
-		 * To avoid the HW bug induced dead lock in some of the IPU6
-		 * MMUs on successive invalidate calls, we need to first do a
-		 * read to the page table base before writing the invalidate
-		 * register. MMUs which need to implement this WA, will have
-		 * the insert_read_before_invalidate flags set as true.
-		 * Disregard the return value of the read.
-		 */
-		if (mmu->mmu_hw[i].insert_read_before_invalidate)
-			readl(mmu->mmu_hw[i].base + REG_L1_PHYS);
-
-		/* Normal invalidate or zlw invalidate */
-		if (mmu->mmu_hw[i].zlw_invalidate) {
-			/* trash buffer must be mapped by now, just in case! */
-			WARN_ON(!mmu->iova_trash_page);
-
-			zlw_invalidate(mmu, &mmu->mmu_hw[i]);
-		} else {
-			u32 inv;
-
-			if (mmu->mmu_hw[i].nr_l1streams == 32)
-				inv = 0xffffffff;
-			else if (mmu->mmu_hw[i].nr_l1streams == 0)
-				inv = MMU0_TLB_INVALIDATE;
-			else
-				inv = MMU1_TLB_INVALIDATE;
-			writel(inv, mmu->mmu_hw[i].base +
-				   REG_TLB_INVALIDATE);
-		}
-		/*
-		 * The TLB invalidation is a "single cycle" (IOMMU clock cycles)
-		 * When the actual MMIO write reaches the IPU6 TLB Invalidate
-		 * register, wmb() will force the TLB invalidate out if the CPU
-		 * attempts to update the IOMMU page table (or sooner).
-		 */
-		wmb();
-	}
-	spin_unlock_irqrestore(&mmu->ready_lock, flags);
-}
 
 #ifdef DEBUG
 static void page_table_dump(struct ipu6_mmu_info *mmu_info)
@@ -569,83 +433,14 @@ out_free_iova:
 
 int ipu6_mmu_hw_init(struct ipu6_mmu *mmu)
 {
-	struct ipu6_mmu_info *mmu_info;
 	unsigned long flags;
-	unsigned int i;
+	int ret;
 
-	mmu_info = mmu->dmap->mmu_info;
-
-	/* Initialise the each MMU HW block */
-	for (i = 0; i < mmu->nr_mmus; i++) {
-		struct ipu6_mmu_hw *mmu_hw = &mmu->mmu_hw[i];
-		unsigned int j;
-		u16 block_addr;
-		bool zlw_invalidate_in_any = false;
-
-		/* Write page table address per MMU */
-		writel((phys_addr_t)mmu_info->l1_pt_dma,
-		       mmu->mmu_hw[i].base + REG_L1_PHYS);
-
-		/* Set info bits per MMU */
-		writel(mmu->mmu_hw[i].info_bits,
-		       mmu->mmu_hw[i].base + REG_INFO);
-
-		/* Configure MMU TLB stream configuration for L1 */
-		for (j = 0, block_addr = 0; j < mmu_hw->nr_l1streams;
-		     block_addr += mmu->mmu_hw[i].l1_block_sz[j], j++) {
-			if (block_addr > IPU6_MAX_LI_BLOCK_ADDR) {
-				dev_err(mmu->dev, "invalid L1 configuration\n");
-				return -EINVAL;
-			}
-
-			/* Write block start address for each streams */
-			writel(block_addr, mmu_hw->base +
-			       mmu_hw->l1_stream_id_reg_offset + 4 * j);
-
-			/* Enable ZLW for streams based on the init table */
-			writel(mmu->mmu_hw[i].l1_zlw_en[j],
-			       mmu_hw->base +
-			       MMUV2_AT_REG_L1_ZLW_EN_SID(j));
-
-			/* To track if zlw is enabled in any streams */
-			zlw_invalidate_in_any |= mmu->mmu_hw[i].l1_zlw_en[j];
-
-			/* Enable ZLW 1D mode for streams from the init table */
-			writel(mmu->mmu_hw[i].l1_zlw_1d_mode[j],
-			       mmu_hw->base +
-			       MMUV2_AT_REG_L1_ZLW_1DMODE_SID(j));
-
-			/* Set when the ZLW insertion will happen */
-			writel(mmu->mmu_hw[i].l1_ins_zlw_ahead_pages[j],
-			       mmu_hw->base +
-			       MMUV2_AT_REG_L1_ZLW_INS_N_AHEAD_SID(j));
-
-			/* Set if ZLW 2D mode active for each streams */
-			writel(mmu->mmu_hw[i].l1_zlw_2d_mode[j],
-			       mmu_hw->base +
-			       MMUV2_AT_REG_L1_ZLW_2DMODE_SID(j));
-		}
-
-		if (zlw_invalidate_in_any)
-			writel(1, mmu_hw->base +
-			       MMUV2_AT_REG_L1_FW_ZLW_PRIO);
-
-		/* Configure MMU TLB stream configuration for L2 */
-		for (j = 0, block_addr = 0; j < mmu_hw->nr_l2streams;
-		     block_addr += mmu->mmu_hw[i].l2_block_sz[j], j++) {
-			if (block_addr > IPU6_MAX_L2_BLOCK_ADDR) {
-				dev_err(mmu->dev, "invalid L2 configuration\n");
-				return -EINVAL;
-			}
-
-			writel(block_addr, mmu_hw->base +
-			       mmu_hw->l2_stream_id_reg_offset + 4 * j);
-		}
-	}
+	ret = mmu->ops->hw_init(mmu);
+	if (ret)
+		return ret;
 
 	if (!mmu->trash_page) {
-		int ret;
-
 		mmu->trash_page = alloc_page(GFP_KERNEL);
 		if (!mmu->trash_page) {
 			dev_err(mmu->dev, "insufficient memory for trash buffer\n");
@@ -871,43 +666,25 @@ static void ipu6_mmu_destroy(struct ipu6_mmu *mmu)
 }
 
 struct ipu6_mmu *ipu6_mmu_init(struct device *dev,
-			       void __iomem *base, int mmid,
-			       const struct ipu6_hw_variants *hw)
+			       void __iomem *base, int mmid)
 {
 	struct ipu6_device *isp = pci_get_drvdata(to_pci_dev(dev));
-	struct ipu6_mmu_hw *mmu_hw;
 	struct ipu6_mmu *mmu;
-	unsigned int i;
-
-	if (hw->nr_mmus > IPU6_MMU_MAX_DEVICES)
-		return ERR_PTR(-EINVAL);
-
-	mmu_hw = devm_kcalloc(dev, sizeof(*mmu_hw), hw->nr_mmus, GFP_KERNEL);
-	if (!mmu_hw)
-		return ERR_PTR(-ENOMEM);
-
-	for (i = 0; i < hw->nr_mmus; i++) {
-		const struct ipu6_mmu_hw *src_mmu = &hw->mmu_hw[i];
-
-		if (src_mmu->nr_l1streams > IPU6_MMU_MAX_TLB_L1_STREAMS ||
-		    src_mmu->nr_l2streams > IPU6_MMU_MAX_TLB_L2_STREAMS)
-			return ERR_PTR(-EINVAL);
-
-		mmu_hw[i] = *src_mmu;
-		mmu_hw[i].base = base + src_mmu->offset;
-	}
+	int ret;
 
 	mmu = devm_kzalloc(dev, sizeof(*mmu), GFP_KERNEL);
 	if (!mmu)
 		return ERR_PTR(-ENOMEM);
 
+	mmu->ops = IS_IPU4(isp) ? &ipu4_mmu_ops : &ipu6_mmu_ops;
 	mmu->mmid = mmid;
-	mmu->mmu_hw = mmu_hw;
-	mmu->nr_mmus = hw->nr_mmus;
-	mmu->tlb_invalidate = tlb_invalidate;
 	mmu->ready = false;
 	INIT_LIST_HEAD(&mmu->vma_list);
 	spin_lock_init(&mmu->ready_lock);
+
+	ret = mmu->ops->init_hw_data(mmu, dev, base);
+	if (ret)
+		return ERR_PTR(ret);
 
 	mmu->dmap = alloc_dma_mapping(isp);
 	if (!mmu->dmap) {
