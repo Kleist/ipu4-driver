@@ -669,6 +669,15 @@ static u32 resp_type_to_index(int type)
 	return  ARRAY_SIZE(fw_msg) - 1;
 }
 
+static struct isys_fw_msgs *ipu4_fw_msg_from_handle(u64 handle)
+{
+	if (!handle)
+		return NULL;
+
+	return container_of((void *)(uintptr_t)handle, struct isys_fw_msgs,
+			    ipu6.dummy);
+}
+
 int ipu6_isys_isr_one(struct ipu6_bus_device *adev)
 {
 	struct ipu6_isys *isys = ipu6_bus_get_drvdata(adev);
@@ -731,7 +740,7 @@ int ipu6_isys_isr_one(struct ipu6_bus_device *adev)
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_START_AND_CAPTURE_ACK:
 		ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev),
-				    resp->buf_handle);
+				    ipu4_fw_msg_from_handle(resp->buf_handle));
 		complete(&stream->stream_start_completion);
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_STOP_ACK:
@@ -754,7 +763,7 @@ int ipu6_isys_isr_one(struct ipu6_bus_device *adev)
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_CAPTURE_ACK:
 		ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev),
-				    resp->buf_handle);
+				    ipu4_fw_msg_from_handle(resp->buf_handle));
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_START_AND_CAPTURE_DONE:
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_CAPTURE_DONE:
