@@ -24,6 +24,7 @@ struct ipu6_bus_device;
 #define IPU6_FIRMWARE_NAME		"intel/ipu/ipu6_fw.bin"
 #define IPU6EPMTL_FIRMWARE_NAME		"intel/ipu/ipu6epmtl_fw.bin"
 #define IPU6EPADLN_FIRMWARE_NAME	"intel/ipu/ipu6epadln_fw.bin"
+#define IPU7_FIRMWARE_NAME		"intel/ipu/ipu7_fw.bin"
 
 #define IPU4_FIRMWARE_NAME               "ipu4_cpd_b0.bin"
 #define IPU4_ISYS_NUM_STREAMS            8       /* Max 8 */
@@ -36,6 +37,7 @@ struct ipu6_bus_device;
 #define PCI_DEVICE_ID_INTEL_IPU6EP_ADLN		0x462e
 #define PCI_DEVICE_ID_INTEL_IPU6EP_RPLP		0xa75d
 #define PCI_DEVICE_ID_INTEL_IPU6EP_MTL		0x7d19
+#define PCI_DEVICE_ID_INTEL_IPU7		0x645d
 
 #define IPU4_NAME			"intel-ipu4"
 #define IPU4_MEDIA_DEV_MODEL_NAME	"ipu4"
@@ -85,6 +87,7 @@ struct ipu6_device {
 	u32 cpd_metadata_cmpnt_size;
 
 	void __iomem *base;
+	void __iomem *pb_base;
 	bool need_ipc_reset;
 	bool secure_mode;
 	u8 hw_ver;
