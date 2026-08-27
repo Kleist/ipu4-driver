@@ -618,7 +618,7 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 	struct ipu6_psys_pdata *psys_pdata;
 	u32 data, mask, done, fail;
 	int ret;
-	u32 bootloader_status_offset = is_ipu4(isp->hw_ver) ?
+	u32 bootloader_status_offset = IS_IPU4(isp) ?
 		IPU4_BOOTLOADER_STATUS_OFFSET : IPU6_BOOTLOADER_STATUS_OFFSET;
 
 	if (!isp->secure_mode) {
