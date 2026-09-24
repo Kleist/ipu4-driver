@@ -1000,11 +1000,9 @@ static void ipu6_pci_remove(struct pci_dev *pdev)
 	ipu6_cpd_free_pkg_dir(isp->psys);
 	ipu6_unmap_fw_region(isp->psys, dir);
 
-	if (isp->isys) {
-		ipu6_cpd_free_pkg_dir(isp->isys);
-		if (isp->isys->fw_sgt.nents)
-			ipu6_unmap_fw_region(isp->isys, dir);
-	}
+	ipu6_cpd_free_pkg_dir(isp->isys);
+	if (isp->isys->fw_sgt.nents)
+		ipu6_unmap_fw_region(isp->isys, dir);
 
 	vfree(isp->fw_code_region);
 	isp->fw_code_region = NULL;
