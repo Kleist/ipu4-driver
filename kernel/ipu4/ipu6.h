@@ -20,6 +20,7 @@ struct ipu6_bus_device;
 #define IPU6_MEDIA_DEV_MODEL_NAME	"ipu6"
 #define IPU7_MEDIA_DEV_MODEL_NAME	"ipu7"
 #define IPU7P5_MEDIA_DEV_MODEL_NAME	"ipu7.5"
+#define IPU8_MEDIA_DEV_MODEL_NAME	"ipu8"
 
 #define IPU6SE_FIRMWARE_NAME		"intel/ipu/ipu6se_fw.bin"
 #define IPU6EP_FIRMWARE_NAME		"intel/ipu/ipu6ep_fw.bin"
@@ -28,6 +29,7 @@ struct ipu6_bus_device;
 #define IPU6EPADLN_FIRMWARE_NAME	"intel/ipu/ipu6epadln_fw.bin"
 #define IPU7_FIRMWARE_NAME		"intel/ipu/ipu7_fw.bin"
 #define IPU7P5_FIRMWARE_NAME		"intel/ipu/ipu7ptl_fw.bin"
+#define IPU8_FIRMWARE_NAME		"intel/ipu/ipu8_fw.bin"
 
 #define IPU4_FIRMWARE_NAME               "ipu4_cpd_b0.bin"
 
@@ -51,6 +53,7 @@ struct ipu6_bus_device;
 #define IPU_VERSION_6EP_MTL	BIT(3) /* MTL */
 #define IPU_VERSION_7		BIT(4) /* LNL */
 #define IPU_VERSION_7P5		BIT(5) /* PTL */
+#define IPU_VERSION_8		BIT(6) /* NVL */
 #define IPU_VERSION_4		BIT(7) /* APL */
 
 #define IS_IPU6_TGL(isp)	((isp)->hw_ver & IPU_VERSION_6)
@@ -61,6 +64,7 @@ struct ipu6_bus_device;
 				 (IPU_VERSION_7 | IPU_VERSION_7P5))
 #define IS_IPU7_MTL(isp)	((isp)->hw_ver & IPU_VERSION_7)
 #define IS_IPU7P5(isp)		((isp)->hw_ver & IPU_VERSION_7P5)
+#define IS_IPU8(isp)		((isp)->hw_ver & IPU_VERSION_8)
 #define IS_IPU4(isp)		((isp)->hw_ver & IPU_VERSION_4)
 
 /*
