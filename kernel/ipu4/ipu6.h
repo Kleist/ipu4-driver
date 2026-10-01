@@ -43,6 +43,7 @@ struct ipu6_bus_device;
 #define PCI_DEVICE_ID_INTEL_IPU6EP_MTL		0x7d19
 #define PCI_DEVICE_ID_INTEL_IPU7		0x645d
 #define PCI_DEVICE_ID_INTEL_IPU7P5		0xb05d
+#define PCI_DEVICE_ID_INTEL_IPU8		0xd719
 
 #define IPU4_NAME			"intel-ipu4"
 #define IPU4_MEDIA_DEV_MODEL_NAME	"ipu4"
