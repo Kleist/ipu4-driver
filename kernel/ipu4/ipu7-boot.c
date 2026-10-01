@@ -18,9 +18,6 @@
 
 #define IPU7_FW_START_STOP_TIMEOUT		2000
 #define IPU7_BOOT_CELL_RESET_TIMEOUT		(2 * USEC_PER_SEC)
-#define IPU7_BOOT_STATE_CRITICAL(s)		(((s) & 0xffff0000U) == 0xdead0000U)
-#define IPU7_BOOT_STATE_READY(s)		((s) == 0x57a7e100U)
-#define IPU7_BOOT_STATE_INACTIVE(s)		((s) == 0x57a7e300U)
 #define IPU7_BUTTRESS_REG_FW_BOOT_PARAMS0				0x4000
 #define IPU7_BUTTRESS_FW_BOOT_PARAMS_ENTRY(i) \
 	(IPU7_BUTTRESS_REG_FW_BOOT_PARAMS0 + ((i) * 4U))
@@ -395,3 +392,9 @@ int ipu6_ipu7_boot_stop_fw(const struct ipu6_bus_device *adev)
 	return 0;
 }
 EXPORT_SYMBOL_NS_GPL(ipu6_ipu7_boot_stop_fw, "INTEL_IPU6");
+
+u32 ipu6_ipu7_boot_get_state(const struct ipu6_bus_device *adev)
+{
+	return read_fw_boot_param(adev, IPU7_FW_BOOT_STATE_ID);
+}
+EXPORT_SYMBOL_NS_GPL(ipu6_ipu7_boot_get_state, "INTEL_IPU6");
