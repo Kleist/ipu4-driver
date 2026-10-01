@@ -25,7 +25,7 @@ static void ipu7_fw_isys_cleanup(struct ipu6_isys *isys)
 	if (!fwctx)
 		return;
 
-	ipu6_ipu7_release_boot_config(adev);
+	ipu6_ipu7_release_boot_config(adev, fwctx);
 
 	if (fwctx->fw_config) {
 		ipu6_dma_free(adev, sizeof(*fwctx->fw_config), fwctx->fw_config,
@@ -41,7 +41,7 @@ static void ipu7_fw_isys_cleanup(struct ipu6_isys *isys)
 
 static int ipu7_fw_isys_open(struct ipu6_isys *isys)
 {
-	return ipu6_ipu7_boot_start_fw(isys->adev);
+	return ipu6_ipu7_boot_start_fw(isys->adev, isys->fwctx);
 }
 
 static int ipu7_fw_isys_close(struct ipu6_isys *isys)
@@ -133,9 +133,8 @@ static int ipu7_fw_isys_init(struct ipu6_isys *isys, unsigned int num_streams)
 
 	isys->fwctx = fwctx;
 
-	/* IPU8 firmware expects boot-message major version 2, not 1 */
-	ret = ipu6_ipu7_init_boot_config(adev, queue_configs, num_queues,
-					 freq, fw_config_dma_addr,
+	ret = ipu6_ipu7_init_boot_config(adev, fwctx, queue_configs,
+					 num_queues, freq, fw_config_dma_addr,
 					 IS_IPU8(adev->isp) ? 2U : 1U);
 	if (ret) {
 		ipu7_fw_isys_cleanup(isys);
