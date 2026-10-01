@@ -1068,6 +1068,28 @@ u32 ipu7_buttress_get_isys_freq(struct ipu6_device *isp)
 }
 EXPORT_SYMBOL_NS_GPL(ipu7_buttress_get_isys_freq, "INTEL_IPU6");
 
+/* trigger uc control to wakeup fw */
+void ipu7_buttress_wakeup_psys(const struct ipu6_device *isp)
+{
+	u32 val;
+
+	val = readl(isp->base + IPU7_BUTTRESS_REG_PSYS_UCX_CTRL_STATUS);
+	val |= IPU7_UCX_CTL_WAKEUP;
+	writel(val, isp->base + IPU7_BUTTRESS_REG_PSYS_UCX_CTRL_STATUS);
+}
+EXPORT_SYMBOL_NS_GPL(ipu7_buttress_wakeup_psys, "INTEL_IPU6");
+
+u32 ipu7_buttress_get_psys_freq(struct ipu6_device *isp)
+{
+	u32 val;
+
+	val = readl(isp->base + IPU7_BUTTRESS_REG_PS_WORKPOINT_REQ);
+	val &= IPU7_BUTTRESS_PS_FREQ_CTL_RATIO_MASK;
+
+	return val * IPU7_BUTTRESS_PS_FREQ_RATIO_STEP;
+}
+EXPORT_SYMBOL_NS_GPL(ipu7_buttress_get_psys_freq, "INTEL_IPU6");
+
 static const struct x86_cpu_id ipu7_misc_cfg_exclusion[] = {
 	X86_MATCH_VFM_STEPS(INTEL_PANTHERLAKE_L, 0x1, 0x1, 0),
 	{},

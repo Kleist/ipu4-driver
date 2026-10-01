@@ -107,4 +107,6 @@ void ipu6_buttress_csi_port_config(struct ipu6_device *isp,
 void ipu6_buttress_restore(struct ipu6_device *isp);
 void ipu7_buttress_wakeup_isys(const struct ipu6_device *isp);
 u32 ipu7_buttress_get_isys_freq(struct ipu6_device *isp);
+void ipu7_buttress_wakeup_psys(const struct ipu6_device *isp);
+u32 ipu7_buttress_get_psys_freq(struct ipu6_device *isp);
 #endif /* IPU6_BUTTRESS_H */

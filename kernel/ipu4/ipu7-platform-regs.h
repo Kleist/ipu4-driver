@@ -4,6 +4,8 @@
 #ifndef IPU7_PLATFORM_REGS_H
 #define IPU7_PLATFORM_REGS_H
 
+#include <linux/bits.h>
+
 #define IPU7_IS_UC_CTRL_BASE                   0x230000
 #define IPU7_ISYS_DMEM_OFFSET                  0x200000
 #define IPU7_PS_UC_CTRL_BASE                   0x130000
@@ -28,5 +30,15 @@
 #define IPU7_IS_UC_TO_SW_IRQ_MASK		0xf
 #define IPU7_TO_SW_IRQ_FW			BIT(0)
 #define IPU7_REG_PRINTF_AXI_CNTL		0x301c
+
+/* psys subdomain power request positions in PS_WORKPOINT_DOMAIN_REQ */
+enum ipu7_psys_subdomain_pos {
+	IPU7_PSYS_SUBDOMAIN_LB		= 0,
+	IPU7_PSYS_SUBDOMAIN_BB		= 1,
+};
+
+#define IPU7_PSYS_DOMAIN_POWER_MASK		(BIT(IPU7_PSYS_SUBDOMAIN_LB) | \
+						 BIT(IPU7_PSYS_SUBDOMAIN_BB))
+#define IPU7_PSYS_DOMAIN_POWER_IN_PROGRESS	BIT(31)
 
 #endif
