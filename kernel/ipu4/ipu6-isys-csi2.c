@@ -397,7 +397,8 @@ static void ipu6_isys_csi2_setup_watermark(struct ipu6_isys_csi2 *csi2,
 
 	/* IPU4 runs without iWake: no watermark proxy writes, no LTR/DID. */
 	if (IS_IPU4(csi2->asd.isys->adev->isp) ||
-	    IS_IPU7(csi2->asd.isys->adev->isp))
+	    IS_IPU7(csi2->asd.isys->adev->isp) ||
+	    IS_IPU8(csi2->asd.isys->adev->isp))
 		return;
 
 	ret = v4l2_g_ctrl(remote_sd->ctrl_handler, &hb);
@@ -453,7 +454,8 @@ static void ipu6_isys_csi2_clear_watermark(struct ipu6_isys_csi2 *csi2)
 {
 	/* IPU4 runs without iWake: no watermark proxy writes, no LTR/DID. */
 	if (IS_IPU4(csi2->asd.isys->adev->isp) ||
-	    IS_IPU7(csi2->asd.isys->adev->isp))
+	    IS_IPU7(csi2->asd.isys->adev->isp) ||
+	    IS_IPU8(csi2->asd.isys->adev->isp))
 		return;
 
 	csi2->watermark.force_iwake_disable = false;
@@ -843,8 +845,9 @@ static int ipu6_isys_csi2_enable_streams(struct v4l2_subdev *sd,
 		goto err_requeue_buffers;
 
 	if (!csi2->streaming_vc) {
-		ret = IS_IPU7(isp) ? ipu7_isys_csi2_stream_enable(csi2) :
-				     ipu6_isys_csi2_stream_enable(csi2);
+		ret = (IS_IPU7(isp) || IS_IPU8(isp)) ?
+			      ipu7_isys_csi2_stream_enable(csi2) :
+			      ipu6_isys_csi2_stream_enable(csi2);
 		if (ret)
 			goto err_stop_stream_firmware;
 	}
@@ -859,7 +862,7 @@ static int ipu6_isys_csi2_enable_streams(struct v4l2_subdev *sd,
 	return 0;
 
 err_stop_stream_csi2:
-	if (IS_IPU7(isp))
+	if (IS_IPU7(isp) || IS_IPU8(isp))
 		ipu7_isys_csi2_stream_disable(csi2);
 	else
 		ipu6_isys_csi2_stream_disable(csi2);
@@ -932,7 +935,7 @@ static int ipu6_isys_csi2_disable_streams(struct v4l2_subdev *sd,
 		ipu6_isys_find_stream_firmware(csi2, vc);
 	ipu6_isys_stop_stream_firmware(stream);
 
-	if IS_IPU7(isp)
+	if (IS_IPU7(isp) || IS_IPU8(isp))
 		ipu7_isys_csi2_stream_disable(csi2);
 	else
 		ipu6_isys_csi2_stream_disable(csi2);
