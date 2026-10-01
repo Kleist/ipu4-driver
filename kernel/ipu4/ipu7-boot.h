@@ -4,6 +4,8 @@
 #ifndef IPU7_BOOT_H
 #define IPU7_BOOT_H
 
+#include <linux/bits.h>
+
 #include "ipu7-fw-com.h"
 
 #define IPU7_BOOT_MSG_VER_MAX_ENTRIES	3U
@@ -11,6 +13,26 @@
 #define IPU7_BOOT_STATE_CRITICAL(s)	(((s) & 0xffff0000U) == 0xdead0000U)
 #define IPU7_BOOT_STATE_READY(s)	((s) == 0x57a7e100U)
 #define IPU7_BOOT_STATE_INACTIVE(s)	((s) == 0x57a7e300U)
+
+#define IPU7_FWLOG_MAX_LOGGER_SOURCES		(64U)
+
+#define IPU7_LOGGER_CFG_CHANNEL_ENABLE_SYSCOM	BIT(1)
+
+/* Shared by the insys and psys subsystem configurations */
+struct ipu7_fw_logger_config {
+	u8 use_source_severity;
+	u8 source_severity[IPU7_FWLOG_MAX_LOGGER_SOURCES];
+	u8 use_channels_enable_bitmask;
+	u8 channels_enable_bitmask;
+	u8 padding[1];
+	u32 hw_printf_buffer_base_addr;
+	u32 hw_printf_buffer_size_bytes;
+};
+
+struct ipu7_wdt_abi {
+	u32 wdt_timer1_us;
+	u32 wdt_timer2_us;
+};
 
 struct ipu7_boot_abi_version {
 	u8 patch;
