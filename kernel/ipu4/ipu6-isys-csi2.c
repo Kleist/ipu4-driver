@@ -1107,7 +1107,8 @@ int ipu6_isys_csi2_init(struct ipu6_isys_csi2 *csi2,
 	csi2->asd.source = IPU6_FW_ISYS_STREAM_SRC_CSI2_PORT0 + index;
 	csi2->asd.supported_codes = csi2_supported_codes;
 	snprintf(csi2->asd.sd.name, sizeof(csi2->asd.sd.name),
-		 IPU6_ISYS_ENTITY_PREFIX " CSI2 %u", index);
+		 "Intel IPU%s CSI2 %u",
+		 ipu6_isys_entity_version(isys->adev->isp), index);
 	v4l2_set_subdevdata(&csi2->asd.sd, &csi2->asd);
 	ret = v4l2_subdev_init_finalize(&csi2->asd.sd);
 	if (ret) {
