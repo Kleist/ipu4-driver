@@ -4,9 +4,9 @@
 #ifndef IPU7_FW_ISYS_H
 #define IPU7_FW_ISYS_H
 
+#include "ipu7-boot.h"
 #include <linux/limits.h>
 
-#define IPU7_FWLOG_MAX_LOGGER_SOURCES		(64U)
 #define IPU7_INSYS_MAX_OUTPUT_QUEUES		3U
 #define IPU7_INSYS_STREAM_ID_MAX		16U
 #define IPU7_INSYS_MAX_INPUT_QUEUES		(IPU7_INSYS_STREAM_ID_MAX + 1U)
@@ -158,24 +158,9 @@ enum insys_msg_err_groups {
 	INSYS_MSG_ERR_GROUP_N,
 };
 
-struct ipu7_fw_isys_logger_config {
-	u8 use_source_severity;
-	u8 source_severity[IPU7_FWLOG_MAX_LOGGER_SOURCES];
-	u8 use_channels_enable_bitmask;
-	u8 channels_enable_bitmask;
-	u8 padding[1];
-	u32 hw_printf_buffer_base_addr;
-	u32 hw_printf_buffer_size_bytes;
-};
-
-struct ipu7_wdt_abi {
-	u32 wdt_timer1_us;
-	u32 wdt_timer2_us;
-};
-
 struct ipu7_insys_config {
 	u32 timeout_val_ms;
-	struct ipu7_fw_isys_logger_config logger_config;
+	struct ipu7_fw_logger_config logger_config;
 	struct ipu7_wdt_abi wdt_config;
 };
 
