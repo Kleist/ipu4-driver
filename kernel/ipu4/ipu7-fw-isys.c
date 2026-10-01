@@ -28,8 +28,8 @@ static void ipu7_fw_isys_cleanup(struct ipu6_isys *isys)
 	ipu6_ipu7_release_boot_config(adev, fwctx);
 
 	if (fwctx->fw_config) {
-		ipu6_dma_free(adev, sizeof(*fwctx->fw_config), fwctx->fw_config,
-			      fwctx->fw_config_dma_addr, 0);
+		ipu6_dma_free(adev, sizeof(struct ipu7_insys_config),
+			      fwctx->fw_config, fwctx->fw_config_dma_addr, 0);
 		fwctx->fw_config = NULL;
 		fwctx->fw_config_dma_addr = 0;
 	}
