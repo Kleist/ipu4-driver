@@ -36,11 +36,14 @@ struct ipu7_boot_abi_cfg {
 } __packed;
 
 int ipu6_ipu7_init_boot_config(struct ipu6_bus_device *adev,
+			       struct ipu7_fw_com_context *fwctx,
 			       struct ipu7_fw_com_queue_config *qconfigs,
 			       int num_queues, u32 uc_freq,
 			       dma_addr_t subsys_config, u8 major);
-void ipu6_ipu7_release_boot_config(struct ipu6_bus_device *adev);
-int ipu6_ipu7_boot_start_fw(const struct ipu6_bus_device *adev);
+void ipu6_ipu7_release_boot_config(struct ipu6_bus_device *adev,
+				   struct ipu7_fw_com_context *fwctx);
+int ipu6_ipu7_boot_start_fw(const struct ipu6_bus_device *adev,
+			    struct ipu7_fw_com_context *fwctx);
 int ipu6_ipu7_boot_stop_fw(const struct ipu6_bus_device *adev);
 
 #endif
