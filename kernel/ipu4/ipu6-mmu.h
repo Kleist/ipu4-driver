@@ -11,6 +11,7 @@
 #include "ipu7-mmu-hw.h"
 
 struct device;
+struct ipu6_mmu;
 struct page;
 
 struct ipu6_mmu_info {
