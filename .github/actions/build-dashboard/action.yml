@@ -69,17 +69,29 @@ runs:
       run: |
         set -e
         # Find the most recent successful vm-smoke run on the requested
-        # branch (default branch if unset or it has none). Both
+        # branch (default branch if unset or it has none) that uploaded
+        # a coverage report. PRs that don't touch the VM inputs
+        # (tools/ci/changes.sh) finish green with the job skipped and
+        # no artifacts; step back over those, up to 10 runs. Both
         # artifacts may not exist on older runs; ignore individual
         # download errors so a partial set still renders.
         latest_run() {
-          gh run list \
+          local run_ids run_id
+          run_ids="$(gh run list \
               --workflow=vm-smoke \
               --branch="$1" \
               --status=success \
-              --limit=1 \
+              --limit=10 \
               --json databaseId \
-              --jq '.[0].databaseId' || true
+              --jq '.[].databaseId' || true)"
+          for run_id in $run_ids; do
+            if gh api "repos/$REPO_FULL/actions/runs/$run_id/artifacts?per_page=100" \
+                --jq '.artifacts[] | select(.expired | not) | .name' 2>/dev/null \
+                | grep -q '^coverage-html-'; then
+              echo "$run_id"
+              return 0
+            fi
+          done
         }
         RUN_ID=""
         if [[ -n "$WANT_BRANCH" && "$WANT_BRANCH" != "$DEFAULT_BRANCH" ]]; then
