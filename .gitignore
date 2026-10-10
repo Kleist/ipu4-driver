@@ -14,6 +14,7 @@ tools/linux-ipu6/
 tools/qemu/
 tools/rootfs/out/
 tools/rootfs/out-ipu6/
+tools/virt-sensor/out/
 tools/tests/out/
 tools/coverage/html/
 tools/coverage/summary.json

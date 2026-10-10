@@ -13,3 +13,6 @@ checkpatch
 
 # Guest kernel + initramfs boot under the QEMU IPU4 model (plan PR 4).
 vm-boot
+
+# virt-sensor + intel-ipu6* load/unload, 5a88 still unbound (plan PR 5).
+module-load

@@ -141,8 +141,8 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | 1 | This plan | — | merged (#100) |
 | 2 | `IPU4_FLAVOR=ipu6` bootstrap/build + empty `patches/ipu6-ipu4/` + `vm-ipu6.yml` ladder runner, all rungs disabled | — | in review (#101) |
 | 3 | Enable static rungs on the empty series | `series-applies`, `build`, `checkpatch` | in review (#102) |
-| 4 | Guest kernel config + rootfs for the ipu6 flavor | `vm-boot` | in review |
-| 5 | Standalone virt-sensor module, init loads `intel-ipu6*` | `module-load` | |
+| 4 | Guest kernel config + rootfs for the ipu6 flavor | `vm-boot` | in review (#103) |
+| 5 | Standalone virt-sensor module, init loads `intel-ipu6*` | `module-load` | in review |
 | 6 | `media: ipu6: Add helper to identify IPU4` (+ probe case, no table entry) | `probe-identify` | |
 | 7 | `media: ipu6: Add IPU4 buttress support` | `probe-buttress` | |
 | 8 | `media: ipu6: Add IPU4 MMU support` | `probe-mmu` | |
@@ -253,6 +253,57 @@ last; each entry names the PR that found it.
   small). An interrupted earlier fetch had left a 2.7 GB
   `tmp_pack_*` in `tools/linux-ipu6/.git` locally; delete it if a local
   tree looks oversized (CI trees are fresh fetches).
+- (PR 5) The virt-sensor is `tools/virt-sensor/virt-sensor.c`, built out
+  of tree by `tools/virt-sensor/build.sh` (`make -C tools/linux-ipu6
+  M=tools/virt-sensor MO=tools/virt-sensor/out W=1`, a few seconds,
+  W=1- and `checkpatch --strict`-clean). On load it finds `8086:5a88`
+  (`device=`/`vendor=` module parameters for other variants), builds the
+  ipu-bridge-shaped software-node graph (`INT343E` node, `port@0` /
+  `endpoint@0` with `data-lanes`, sensor endpoint with `bus-type`,
+  `data-lanes`, `link-frequencies`), attaches it with
+  `set_secondary_fwnode()`, registers an `ipu4-virt-sensor` platform
+  device carrying the sensor node and a state-based v4l2 subdev on it
+  (800x800 `RGB888_1X24`, `V4L2_CID_LINK_FREQ`, `enable_streams` no-op).
+  It refuses to load when the IPU is already bound or already has a
+  graph, and unloads cleanly (`set_secondary_fwnode(dev, NULL)`). In
+  QEMU the IPU (00:04.0) has an ACPI primary fwnode, so the graph is a
+  secondary, exactly as with ipu-bridge.
+- (PR 5) Upstream ipu6 calls `ipu_bridge_init()` unconditionally in
+  `ipu6_isys_init()`, but needs no change for the virt-sensor: the
+  harness config has `CONFIG_IPU_BRIDGE` off, where `ipu_bridge_init()`
+  is the constant 0, and with it on, `ipu_bridge_check_fwnode_graph()`
+  returns early because the graph exists. `isys_notifier_init()` walks
+  `dev_fwnode(pci dev)` ports 0..7 with `fwnode_graph_get_endpoint_by_id()`,
+  which sees secondaries.
+- (PR 5) `RGB888_1X24` is in upstream `csi2_supported_codes` and in the
+  ISYS video format table (`V4L2_PIX_FMT_BGR24`, CSI-2 DT `0x24`), so the
+  fork's format is kept.
+- (PR 5) The fork's `isys_install_virt_sensor_route()` (M5b-3) is not
+  needed as a route: upstream's `ipu6_isys_subdev_init_state()` already
+  installs the active 0/0 → 1/0 route on each CSI-2 subdev. What the
+  fork really installs is the **format**: upstream's default is
+  4096x3072 `SGRBG10_1X10`, which fails link validation against the
+  800x800 RGB888 sensor. The stream rungs should set the CSI-2 sink (and
+  downstream) format from userspace (`VIDIOC_SUBDEV_S_FMT` in the
+  streamon helper) instead of a driver hook.
+- (PR 5) `module-load` boots `tools/rootfs/init.ipu6-modules`: insmod
+  vb2-common/memops/v4l2/dma-sg, `virt-sensor`, `intel-ipu6`,
+  `intel-ipu6-isys` (`MODLOAD:ok|fail <name>`), assert `5a88` unbound and
+  the sensor device present, rmmod in reverse, scan dmesg for
+  `Oops|BUG:|WARNING:|Call Trace`, print `MODLOAD: PASS|FAIL`. Serial log:
+  `tools/tests/out/ipu6-module-load.serial`. v4l2-async/fwnode are
+  built in (`=y`) on this config. Out-of-tree load taints the kernel
+  (`O`); harmless.
+- (PR 5) Binding by `echo 8086 5a88 > .../drivers/intel-ipu6/new_id`
+  today reaches probe and fails in the device switch:
+  `intel-ipu6 0000:00:04.0: error -ENODEV: Unsupported IPU6 device 5a88`
+  (the `new_id` write itself returns 0). That line is what PR 6's
+  `probe-identify` turns into an IPU4 identification.
+- (PR 5) Timings (4 cores, TCG, warm): `module-load` alone 16 s
+  standalone (includes a no-op `build-kernel.sh`), 6 s inside the full
+  ladder; whole warm ladder 39 s. Gate checked: an init skipping
+  `videobuf2-common` and a truncated `virt-sensor.ko` both end in
+  `MODLOAD: FAIL`.
 
 ## Parallel track — QEMU coverage for IPU4P and IPU6
 

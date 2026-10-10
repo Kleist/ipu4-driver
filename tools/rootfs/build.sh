@@ -7,13 +7,15 @@
 # device nodes without needing root on the host.
 #
 # IPU4_FLAVOR=ipu6 takes the kernel modules and gen_init_cpio from
-# tools/linux-ipu6/ (driver: drivers/media/pci/intel/ipu6) and writes
+# tools/linux-ipu6/ (driver: drivers/media/pci/intel/ipu6), adds the
+# harness's tools/virt-sensor/out/virt-sensor.ko when built, and writes
 # tools/rootfs/out-ipu6/rootfs.cpio.gz, so the two flavors' images
 # never overwrite each other.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
+EXTRA_KOS=()
 case "${IPU4_FLAVOR:-fork}" in
 fork)
 	LINUX_DIR="$ROOT/tools/linux"
@@ -24,6 +26,8 @@ ipu6)
 	LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$ROOT/tools/linux-ipu6}"
 	DRV_DIR="$LINUX_DIR/drivers/media/pci/intel/ipu6"
 	OUT="$HERE/out-ipu6"
+	# Harness-only virtual sensor (tools/virt-sensor/build.sh).
+	EXTRA_KOS=("$ROOT/tools/virt-sensor/out/virt-sensor.ko")
 	;;
 *) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork or ipu6)" >&2; exit 1 ;;
 esac
@@ -125,6 +129,12 @@ if compgen -G "$DRV_DIR/*.ko" > /dev/null; then
 		echo "file /lib/modules/$(basename "$ko")  $ko 0644 0 0" >> "$LIST"
 	done
 fi
+
+for ko in "${EXTRA_KOS[@]}"; do
+	if [[ -f "$ko" ]]; then
+		echo "file /lib/modules/$(basename "$ko")  $ko 0644 0 0" >> "$LIST"
+	fi
+done
 
 # CPD firmware blob. Generated on-demand by tools/firmware/gen-cpd.py;
 # minimal content that passes ipu6_cpd_validate_cpd_file() but stops

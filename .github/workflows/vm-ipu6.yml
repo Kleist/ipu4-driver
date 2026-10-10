@@ -17,7 +17,9 @@ on:
 #
 # Runs alongside ci.yml / vm-smoke.yml (fork flow); nothing here touches
 # tools/linux/. QEMU comes from `tools/bootstrap.sh --qemu-only` and
-# shares its build cache with vm-smoke-reusable.yml (same key).
+# shares its build cache with vm-smoke-reusable.yml (same key). The
+# harness-only virt-sensor module (tools/virt-sensor/) is rebuilt by the
+# module-load rung on every run (a few seconds, so it is not cached).
 
 jobs:
   ladder:
@@ -80,5 +82,6 @@ jobs:
           path: |
             tools/tests/out/ipu6-ladder/
             tools/tests/out/vm-smoke-ipu6.serial
+            tools/tests/out/ipu6-module-load.serial
             tools/linux-ipu6/.config
           if-no-files-found: ignore
