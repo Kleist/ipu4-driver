@@ -12,10 +12,13 @@ case "${IPU4_FLAVOR:-fork}" in
 fork)
 	LINUX_DIR="$ROOT/tools/linux"
 	ROOTFS_OUT="$ROOT/tools/rootfs/out"
+	DYNDBG="intel_ipu4.dyndbg=+p intel_ipu4_isys.dyndbg=+p"
 	;;
 ipu6)
 	LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$ROOT/tools/linux-ipu6}"
 	ROOTFS_OUT="$ROOT/tools/rootfs/out-ipu6"
+	DYNDBG="intel_ipu6.dyndbg=+p intel_ipu6_isys.dyndbg=+p"
+	DYNDBG+=" virt_sensor.dyndbg=+p"
 	;;
 *) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork or ipu6)" >&2; exit 1 ;;
 esac
@@ -37,7 +40,7 @@ done
 
 APPEND="console=ttyS0 earlyprintk=serial,ttyS0 panic=-1 oops=panic nokaslr"
 APPEND+=" loglevel=7 rdinit=/init"
-APPEND+=" intel_ipu4.dyndbg=+p intel_ipu4_isys.dyndbg=+p"
+APPEND+=" $DYNDBG"
 # Boot-time tuning. mitigations=off skips the Spectre/Meltdown/MDS/etc.
 # init paths (~hundreds of ms on cold boot) — irrelevant in a single-
 # tenant test VM. tsc=reliable skips the TSC stability watchdog and
