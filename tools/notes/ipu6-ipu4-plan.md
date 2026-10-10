@@ -34,6 +34,10 @@ alignment fix) are picked up by an explicit pin-bump PR, not automatically.
 - The new flow runs **alongside** the existing `kernel/ipu4/` fork flow,
   selected with `IPU4_FLAVOR=ipu6` (default stays `fork`). Existing CI,
   pins and tests keep running unchanged.
+- The pin lives in `tools/ipu6/pin` (one line to bump). The tree is
+  fetched into `tools/linux-ipu6/` (gitignored, never `tools/linux/`) by
+  `tools/ipu6/bootstrap.sh`, which resets to the pin and re-applies the
+  series on every run; `tools/ipu6/build.sh` builds the ipu6 modules.
 - Harness-only code never goes into `patches/`. The virt-sensor becomes a
   standalone test module that attaches a software-node graph to the PCI
   device before `intel-ipu6` loads.
@@ -103,6 +107,11 @@ case in probe (without a table entry), so the driver identifies IPU4 when
 bound this way. The final kernel patch adds the table entry and the ladder
 switches to native binding.
 
+The runner is `tools/tests/ipu6/ladder.sh` (`--list` prints the names).
+Each rung ends PASS, FAIL, NOT-IMPLEMENTED (no test yet) or SKIP (a rung
+it depends on, run in the same invocation, did not pass); an enabled rung
+must PASS, and an unknown name in `enabled-tests` fails the job.
+
 Planned rungs (names are what goes into `enabled-tests`). Big tests are
 split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 `IPU4_STREAM_REQUIRED`), so every rung is small enough to turn on alone:
@@ -129,8 +138,8 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 
 | PR | Content | Rung(s) enabled | State |
 |---|---|---|---|
-| 1 | This plan | — | proposed |
-| 2 | `IPU4_FLAVOR=ipu6` bootstrap/build + empty `patches/ipu6-ipu4/` + `vm-ipu6.yml` ladder runner, all rungs disabled | — | |
+| 1 | This plan | — | in review (#100) |
+| 2 | `IPU4_FLAVOR=ipu6` bootstrap/build + empty `patches/ipu6-ipu4/` + `vm-ipu6.yml` ladder runner, all rungs disabled | — | in review |
 | 3 | Enable static rungs on the empty series | `series-applies`, `build`, `checkpatch` | |
 | 4 | Guest kernel config + rootfs for the ipu6 flavor | `vm-boot` | |
 | 5 | Standalone virt-sensor module, init loads `intel-ipu6*` | `module-load` | |
@@ -168,6 +177,28 @@ last; each entry names the PR that found it.
   `set_iwake_register` sends proxy tokens and waits up to 100 ms for a
   reply, so expect timeouts/errors there until the model or the driver
   path is adjusted.
+- (PR 2) GitHub serves the pin by SHA: `git fetch --depth 1 <url>
+  <full-sha>` works although the SHA is not on the default branch.
+  The shallow tree is ~300 MB of `.git`; the fetch took ~45 s here.
+- (PR 2) The `build` rung is `defconfig` + `modules_prepare` +
+  `make M=drivers/media/pci/intel/ipu6 W=1`: ~22 s cold on 4 cores, so no
+  full kernel build is needed until the VM rungs (PR 4). The pinned
+  ipu6 directory is W=1-clean with gcc 13.3 (zero warnings), so the rung
+  treats any compiler warning as a failure. `modules_prepare` needs
+  `libelf-dev` (objtool); `setup-harness` already installs it.
+- (PR 2) Ruslan's `drivers/media/pci/intel/Makefile` adds
+  `subdir-ccflags-y` warning suppressions (unused-parameter,
+  uninitialized, int-conversion, enum-conversion, ...) for his downstream
+  driver, and they also apply to `ipu6/` in a full-tree build. An `M=`
+  build does not read that Makefile, so it shows the warnings upstream
+  would see. Keep the `build` rung on `M=` (or check warnings in a way
+  that bypasses those flags) when PR 4 adds a full kernel build.
+- (PR 2) QEMU is still bootstrapped by `tools/bootstrap.sh` together with
+  the fork's `tools/linux/` clone, and `tools/build-kernel.sh` /
+  `tools/rootfs/build.sh` hard-code `tools/linux/`. PR 4 needs a
+  QEMU-only bootstrap path and ipu6-flavor variants of those two
+  scripts. Note `tools/build-kernel.sh` calls `tools/build.sh`, which
+  now dispatches on `IPU4_FLAVOR`.
 
 ## Parallel track — QEMU coverage for IPU4P and IPU6
 
