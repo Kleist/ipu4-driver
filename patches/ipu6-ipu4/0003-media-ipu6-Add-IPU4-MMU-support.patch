@@ -1,0 +1,173 @@
+From 52bd42c5e25b97e38bdf97f10c8ef29b46c78635 Mon Sep 17 00:00:00 2001
+From: Andreas Helbech Kleist <andreaskleist@gmail.com>
+Date: Sat, 10 Oct 2026 19:32:04 +0000
+Subject: [PATCH] media: ipu6: Add IPU4 MMU support
+
+IPU4 has the same ISYS and PSYS subsystem layout as IPU4P: the
+subsystems start at 0x100000 and 0x400000 of the BAR, with the MMUs at
+0xe0000 and 0xb0000 inside them, and SPC and DMEM at the same offsets.
+The MMUs themselves are also the IPU4P ones: an ISYS MMU0 and MMU1 and a
+PSYS MMU0, MMU1 and MMU1R, 16 L1 and 16 L2 streams on the MMU1 and
+MMU1R with two L2 blocks per stream, and the read-before-invalidate
+workaround on the MMU0s. Only the L1 stream block sizes differ.
+
+Use the IPU4P subsystem offsets for IPU4 and add the IPU4 MMU tables,
+used through the IPU4P MMU operations. The block sizes are the ones of
+the Intel IPU4 reference driver, and the stream start addresses they
+give match what that driver writes on Broxton. Like on IPU4P, the
+address translator ZLW settings of the reference driver are left at
+their defaults.
+
+Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
+---
+ drivers/media/pci/intel/ipu6/ipu6-mmu-hw.c | 77 +++++++++++++++++++++-
+ drivers/media/pci/intel/ipu6/ipu6-mmu.c    |  2 +-
+ drivers/media/pci/intel/ipu6/ipu6.c        | 10 +++
+ 3 files changed, 87 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-mmu-hw.c b/drivers/media/pci/intel/ipu6/ipu6-mmu-hw.c
+index ca2b23741..21410ee58 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-mmu-hw.c
++++ b/drivers/media/pci/intel/ipu6/ipu6-mmu-hw.c
+@@ -217,6 +217,65 @@ static struct ipu6_mmu_hw ipu4p_psys_mmu_hwdata[] = {
+ 	},
+ };
+ 
++static struct ipu6_mmu_hw ipu4_isys_mmu_hwdata[] = {
++	{
++		.offset = IPU4P_ISYS_IOMMU0_OFFSET,
++		.info_bits = IPU4P_INFO_REQUEST_DESTINATION_PRIMARY,
++		.nr_l1streams = 0,
++		.nr_l2streams = 0,
++		.insert_read_before_invalidate = true,
++	},
++	{
++		.offset = IPU4P_ISYS_IOMMU1_OFFSET,
++		.nr_l1streams = IPU4P_MMU_MAX_TLB_L1_STREAMS,
++		.l1_block_sz = {
++			8, 16, 16, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8,
++		},
++		.nr_l2streams = IPU4P_MMU_MAX_TLB_L2_STREAMS,
++		.l2_block_sz = {
++			2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
++		},
++		.l1_stream_id_reg_offset = IPU4P_MMU_L1_STREAM_ID_REG_OFFSET,
++		.l2_stream_id_reg_offset = IPU4P_MMU_L2_STREAM_ID_REG_OFFSET,
++	},
++};
++
++static struct ipu6_mmu_hw ipu4_psys_mmu_hwdata[] = {
++	{
++		.offset = IPU4P_PSYS_IOMMU0_OFFSET,
++		.info_bits = IPU4P_INFO_REQUEST_DESTINATION_PRIMARY,
++		.nr_l1streams = 0,
++		.nr_l2streams = 0,
++		.insert_read_before_invalidate = true,
++	},
++	{
++		.offset = IPU4P_PSYS_IOMMU1_OFFSET,
++		.nr_l1streams = IPU4P_MMU_MAX_TLB_L1_STREAMS,
++		.l1_block_sz = {
++			0, 0, 0, 0, 10, 8, 10, 8, 0, 4, 4, 12, 0, 0, 0, 8,
++		},
++		.nr_l2streams = IPU4P_MMU_MAX_TLB_L2_STREAMS,
++		.l2_block_sz = {
++			2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
++		},
++		.l1_stream_id_reg_offset = IPU4P_MMU_L1_STREAM_ID_REG_OFFSET,
++		.l2_stream_id_reg_offset = IPU4P_MMU_L2_STREAM_ID_REG_OFFSET,
++	},
++	{
++		.offset = IPU4P_PSYS_IOMMU1R_OFFSET,
++		.nr_l1streams = IPU4P_MMU_MAX_TLB_L1_STREAMS,
++		.l1_block_sz = {
++			0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 16, 12, 12, 16,
++		},
++		.nr_l2streams = IPU4P_MMU_MAX_TLB_L2_STREAMS,
++		.l2_block_sz = {
++			2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
++		},
++		.l1_stream_id_reg_offset = IPU4P_MMU_L1_STREAM_ID_REG_OFFSET,
++		.l2_stream_id_reg_offset = IPU4P_MMU_L2_STREAM_ID_REG_OFFSET,
++	},
++};
++
+ struct ipu6_mmu_hwdata {
+ 	struct ipu6_mmu_hw *hwdata;
+ 	unsigned int nr_mmus;
+@@ -280,6 +339,17 @@ static const struct ipu6_mmu_hwdata ipu4p_mmu_hwdata_lookup[IPU_SUBSYS_NUM] = {
+ 	},
+ };
+ 
++static const struct ipu6_mmu_hwdata ipu4_mmu_hwdata_lookup[IPU_SUBSYS_NUM] = {
++	[IPU_PSYS] = {
++		.hwdata = ipu4_psys_mmu_hwdata,
++		.nr_mmus = ARRAY_SIZE(ipu4_psys_mmu_hwdata),
++	},
++	[IPU_ISYS] = {
++		.hwdata = ipu4_isys_mmu_hwdata,
++		.nr_mmus = ARRAY_SIZE(ipu4_isys_mmu_hwdata),
++	},
++};
++
+ static int __ipu6_mmu_hw_init(struct ipu6_mmu *mmu)
+ {
+ 	struct ipu6_mmu_info *mmu_info = mmu->dmap->mmu_info;
+@@ -362,6 +432,7 @@ static int __ipu6_mmu_init_hw_data(struct ipu6_mmu *mmu, struct device *dev,
+ static int __ipu4p_mmu_init_hw_data(struct ipu6_mmu *mmu, struct device *dev,
+ 				    void __iomem *base)
+ {
++	struct ipu6_device *isp = pci_get_drvdata(to_pci_dev(dev));
+ 	const struct ipu6_mmu_hwdata *lookup;
+ 	struct ipu6_mmu_hw *mmu_hw, *src;
+ 	unsigned int i, nr_mmus;
+@@ -369,7 +440,11 @@ static int __ipu4p_mmu_init_hw_data(struct ipu6_mmu *mmu, struct device *dev,
+ 	if (mmu->mmid >= IPU_SUBSYS_NUM)
+ 		return -EINVAL;
+ 
+-	lookup = &ipu4p_mmu_hwdata_lookup[mmu->mmid];
++	/* IPU4 has the IPU4P MMU layout with its own stream tables */
++	if (IS_IPU4(isp))
++		lookup = &ipu4_mmu_hwdata_lookup[mmu->mmid];
++	else
++		lookup = &ipu4p_mmu_hwdata_lookup[mmu->mmid];
+ 	src = lookup->hwdata;
+ 	nr_mmus = lookup->nr_mmus;
+ 
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-mmu.c b/drivers/media/pci/intel/ipu6/ipu6-mmu.c
+index 93e3be1ef..dc3169cdf 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-mmu.c
++++ b/drivers/media/pci/intel/ipu6/ipu6-mmu.c
+@@ -686,7 +686,7 @@ struct ipu6_mmu *ipu6_mmu_init(struct device *dev,
+ 
+ 	if (IS_IPU7(isp))
+ 		mmu->ops = &ipu7_mmu_ops;
+-	else if (IS_IPU4P(isp))
++	else if (IS_IPU4(isp) || IS_IPU4P(isp))
+ 		mmu->ops = &ipu4p_mmu_ops;
+ 	else
+ 		mmu->ops = &ipu6_mmu_ops;
+diff --git a/drivers/media/pci/intel/ipu6/ipu6.c b/drivers/media/pci/intel/ipu6/ipu6.c
+index 28ce3ee4b..4b34e41dc 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6.c
++++ b/drivers/media/pci/intel/ipu6/ipu6.c
+@@ -465,6 +465,16 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
+ 		psys_ipdata.hw_variant.spc_offset = IPU4P_PSYS_SPC_OFFSET;
+ 		psys_ipdata.hw_variant.dmem_offset = IPU4P_PSYS_DMEM_OFFSET;
+ 	}
++
++	/* IPU4 has the IPU4P subsystem layout */
++	if (IS_IPU4(isp)) {
++		isys_ipdata.hw_variant.offset = IPU4P_ISYS_OFFSET;
++		isys_ipdata.hw_variant.spc_offset = IPU4P_ISYS_SPC_OFFSET;
++		isys_ipdata.hw_variant.dmem_offset = IPU4P_ISYS_DMEM_OFFSET;
++		psys_ipdata.hw_variant.offset = IPU4P_PSYS_OFFSET;
++		psys_ipdata.hw_variant.spc_offset = IPU4P_PSYS_SPC_OFFSET;
++		psys_ipdata.hw_variant.dmem_offset = IPU4P_PSYS_DMEM_OFFSET;
++	}
+ }
+ 
+ static struct ipu6_bus_device *
+-- 
+2.43.0
+
