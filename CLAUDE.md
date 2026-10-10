@@ -55,12 +55,12 @@ Two helpers under `tools/upstream/`, both relying on the same file mapping (`dri
 
 ## ipu6 flavor (upstream ipu6 driver + IPU4 patch series)
 
-A second, parallel flow adds IPU4 to the upstream `drivers/media/pci/intel/ipu6/` driver as mailable patches; the plan, rung table and learnings are in `tools/notes/ipu6-ipu4-plan.md` (re-read it before, and update it at the end of, every step). It never touches `tools/linux/` or `kernel/ipu4/`:
+A second, parallel flow adds IPU4 to the upstream `drivers/media/pci/intel/ipu6/` driver as mailable patches; the plan, test table and learnings are in `tools/notes/ipu6-ipu4-plan.md` (re-read it before, and update it at the end of, every step). It never touches `tools/linux/` or `kernel/ipu4/`:
 
 ```bash
 tools/ipu6/bootstrap.sh       # tools/linux-ipu6/ = pin (tools/ipu6/pin) + git am patches/ipu6-ipu4/*.patch
 tools/ipu6/build.sh           # intel-ipu6*.ko (W=1, M= build on modules_prepare)
-tools/tests/ipu6/ladder.sh    # every rung; fails only on rungs listed in tools/tests/ipu6/enabled-tests
+tools/tests/ipu6/ladder.sh    # every test; fails only on tests listed in tools/tests/ipu6/enabled-tests
 ```
 
 `IPU4_FLAVOR=ipu6 tools/bootstrap.sh` / `tools/build.sh` dispatch to the same scripts (default `fork`). Kernel changes go in `patches/ipu6-ipu4/` as `git format-patch` output (see its README); CI is `.github/workflows/vm-ipu6.yml`.

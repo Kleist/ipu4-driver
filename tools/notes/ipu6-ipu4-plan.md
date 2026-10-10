@@ -49,7 +49,7 @@ alignment fix) are picked up by an explicit pin-bump PR, not automatically.
 
 - **Every step starts by re-reading this plan** (on the tip of the branch
   it builds on) and **ends by updating it** in the same PR: the "State"
-  column, any change to the PR → rung mapping, and new facts in
+  column, any change to the PR → test mapping, and new facts in
   "Learnings" below. A PR that learned nothing says so in its
   description.
 - **Steps are pipelined.** As soon as a step's PR is up, the next step
@@ -96,13 +96,13 @@ silicon trace in `data/trace.txt`):
 
 A new CI workflow, `vm-ipu6.yml`, runs on every PR: bootstrap the pinned
 tree, `git am` the series, build kernel + QEMU, boot the VM and run a
-**test ladder**. Which rungs are gated is controlled by a checked-in list,
+**test ladder**. Which tests are gated is controlled by a checked-in list,
 `tools/tests/ipu6/enabled-tests`, one test name per line. The workflow runs
-every rung but only fails on the enabled ones, so later rungs are visible as
-"expected fail" before they are switched on. **It starts with every rung
+every test but only fails on the enabled ones, so later tests are visible as
+"expected fail" before they are switched on. **It starts with every test
 disabled; each PR enables (at least) one more.**
 
-Because upstream wants the PCI ID table entry last, the probe-level rungs
+Because upstream wants the PCI ID table entry last, the probe-level tests
 bind the driver with `echo 8086 5a88 > /sys/bus/pci/drivers/intel-ipu6/new_id`
 (harness-only). The first kernel patch adds the `PCI_DEVICE_ID_INTEL_IPU4`
 case in probe (without a table entry), so the driver identifies IPU4 when
@@ -110,15 +110,15 @@ bound this way. The final kernel patch adds the table entry and the ladder
 switches to native binding.
 
 The runner is `tools/tests/ipu6/ladder.sh` (`--list` prints the names).
-Each rung ends PASS, FAIL, NOT-IMPLEMENTED (no test yet) or SKIP (a rung
-it depends on, run in the same invocation, did not pass); an enabled rung
+Each test ends PASS, FAIL, NOT-IMPLEMENTED (not written yet) or SKIP (a test
+it depends on, run in the same invocation, did not pass); an enabled test
 must PASS, and an unknown name in `enabled-tests` fails the job.
 
-Planned rungs (names are what goes into `enabled-tests`). Big tests are
+Planned tests (names are what goes into `enabled-tests`). Big tests are
 split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
-`IPU4_STREAM_REQUIRED`), so every rung is small enough to turn on alone:
+`IPU4_STREAM_REQUIRED`), so every test is small enough to turn on alone:
 
-| Rung | Passes when |
+| Test | Passes when |
 |---|---|
 | `series-applies` | `git am` of `patches/ipu6-ipu4/` succeeds on the pin |
 | `build` | `intel-ipu6*.ko` build cleanly (W=1) |
@@ -138,11 +138,11 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 
 ## PR sequence
 
-| PR | Content | Rung(s) enabled | State |
+| PR | Content | Test(s) enabled | State |
 |---|---|---|---|
 | 1 | This plan | — | merged (#100) |
-| 2 | `IPU4_FLAVOR=ipu6` bootstrap/build + empty `patches/ipu6-ipu4/` + `vm-ipu6.yml` ladder runner, all rungs disabled | — | merged (#101) |
-| 3 | Enable static rungs on the empty series | `series-applies`, `build`, `checkpatch` | in review (#102) |
+| 2 | `IPU4_FLAVOR=ipu6` bootstrap/build + empty `patches/ipu6-ipu4/` + `vm-ipu6.yml` ladder runner, all tests disabled | — | merged (#101) |
+| 3 | Enable static tests on the empty series | `series-applies`, `build`, `checkpatch` | in review (#102) |
 | 4 | Guest kernel config + rootfs for the ipu6 flavor | `vm-boot` | in review (#103) |
 | 5 | Standalone virt-sensor module, init loads `intel-ipu6*` | `module-load` | in review (#113; replaces #104, closed for the stack limit) |
 | 6 | `media: ipu6: Add helper to identify IPU4` (+ probe case, no table entry) | `probe-identify` | |
@@ -155,10 +155,10 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | 13 | CSI-2 frame interrupts (decision 3) | `csi2-sof-irq` | |
 | 14 | `media: ipu6: Enable IPU4 PCI device` | `native-bind` | |
 | 15 | Cover letter draft + `get_maintainer.pl` output | — | |
-| Pages | Dashboard section "IPU4 port (upstream ipu6)": `ladder.sh` writes `results.json`, `vm-ipu6` uploads it per variant, Pages shows a rung × variant matrix | — | merged (#109) |
+| Pages | Dashboard section "IPU4 port (upstream ipu6)": `ladder.sh` writes `results.json`, `vm-ipu6` uploads it per variant, Pages shows a test × variant matrix | — | merged (#109) |
 
-The patch-to-rung mapping follows probe order and may shift by one when
-the real probe path is run; if a patch can't turn a rung green on its own,
+The patch-to-test mapping follows probe order and may shift by one when
+the real probe path is run; if a patch can't turn a test green on its own,
 the PR is split rather than enabling nothing.
 
 ## Learnings
@@ -183,10 +183,10 @@ last; each entry names the PR that found it.
 - (PR 2) GitHub serves the pin by SHA: `git fetch --depth 1 <url>
   <full-sha>` works although the SHA is not on the default branch.
   The shallow tree is ~300 MB of `.git`; the fetch took ~45 s here.
-- (PR 2) The `build` rung is `defconfig` + `modules_prepare` +
+- (PR 2) The `build` test is `defconfig` + `modules_prepare` +
   `make M=drivers/media/pci/intel/ipu6 W=1`: ~22 s cold on 4 cores, so no
-  full kernel build is needed until the VM rungs (PR 4). The pinned
-  ipu6 directory is W=1-clean with gcc 13.3 (zero warnings), so the rung
+  full kernel build is needed until the VM tests (PR 4). The pinned
+  ipu6 directory is W=1-clean with gcc 13.3 (zero warnings), so the test
   treats any compiler warning as a failure. `modules_prepare` needs
   `libelf-dev` (objtool); `setup-harness` already installs it.
 - (PR 2) Ruslan's `drivers/media/pci/intel/Makefile` adds
@@ -194,7 +194,7 @@ last; each entry names the PR that found it.
   uninitialized, int-conversion, enum-conversion, ...) for his downstream
   driver, and they also apply to `ipu6/` in a full-tree build. An `M=`
   build does not read that Makefile, so it shows the warnings upstream
-  would see. Keep the `build` rung on `M=` (or check warnings in a way
+  would see. Keep the `build` test on `M=` (or check warnings in a way
   that bypasses those flags) when PR 4 adds a full kernel build.
 - (PR 2) QEMU is still bootstrapped by `tools/bootstrap.sh` together with
   the fork's `tools/linux/` clone, and `tools/build-kernel.sh` /
@@ -205,8 +205,8 @@ last; each entry names the PR that found it.
 - (Pages PR) The ladder's machine-readable output is
   `tools/tests/out/ipu6-ladder/results.json` (schema in
   `tools/dashboard/README.md`), written by `write_results_json` at the
-  very end of `ladder.sh`. New rungs need no change for it: anything in
-  `RUNGS` is recorded, unimplemented ones as `NOT-IMPLEMENTED`. Keep
+  very end of `ladder.sh`. New tests need no change for it: anything in
+  `TESTS` is recorded, unimplemented ones as `NOT-IMPLEMENTED`. Keep
   that function and its call as the last thing before `exit`.
 - (Pages PR) `workflow_run` only fires for workflows that exist on the
   default branch, and `gh run list --workflow=vm-ipu6.yml --branch=main`
@@ -221,7 +221,7 @@ last; each entry names the PR that found it.
   function without a prototype fails `build`, and a non-applying patch
   fails `series-applies` (and `build` is SKIPped). The pin's `defconfig`
   has `CONFIG_WERROR=y`, so W=1 warnings in ipu6 are already hard errors
-  on top of the rung's log scan.
+  on top of the test's log scan.
 - (PR 3) `build` only builds the tip of the series. The "every patch
   builds on its own" rule in `patches/ipu6-ipu4/README.md` is not
   checked yet; add a per-patch build (e.g. `git rebase -x`) once the
@@ -237,18 +237,18 @@ last; each entry names the PR that found it.
   workflow reuses the other's build.
 - (PR 4) The QEMU-guest kconfig trim moved from `tools/build.sh` into
   `tools/vm-kconfig.sh`, which both flavors call. `tools/ipu6/build.sh`
-  applies it too, so the `build` rung (M=) and the guest kernel share one
+  applies it too, so the `build` test (M=) and the guest kernel share one
   `.config` and neither invalidates the other's objects. The trimmed
   config keeps the ipu6 directory W=1-clean.
 - (PR 4) `CONFIG_WERROR` is **off** for the ipu6 guest kernel (the pin's
   defconfig has it on). The full v7.3-rc4 tree builds without warnings
   with gcc 13.3 today, but with `-Werror` a runner gcc bump that adds a
-  warning in any unrelated subsystem would fail every VM rung. The
-  `build` rung's log scan is the warning gate for ipu6; re-checked with
+  warning in any unrelated subsystem would fail every VM test. The
+  `build` test's log scan is the warning gate for ipu6; re-checked with
   a throw-away patch (missing prototype) → `build` FAIL without
   `-Werror`.
 - (PR 4) The full build compiles ipu6 with the parent Makefile's
-  `subdir-ccflags` (see PR 2), and the `build` rung's `M=` clean +
+  `subdir-ccflags` (see PR 2), and the `build` test's `M=` clean +
   rebuild then compiles it again with upstream flags. The two builds
   overwrite each other's ipu6 objects, which costs a few seconds per
   run; the modules packed into the initramfs come from the full build.
@@ -258,7 +258,7 @@ last; each entry names the PR that found it.
 - (PR 4) Timings on 4 cores (TCG): cold `vm-boot` 334 s, nearly all of it
   the bzImage + modules build; the TCG boot reaches `/init` at ~1.6 s and
   the whole VM run (rootfs rebuild + boot + poweroff) is ~4 s. Warm
-  ladder (all four enabled rungs): 33 s. QEMU from `--qemu-only`: clone
+  ladder (all four enabled tests): 33 s. QEMU from `--qemu-only`: clone
   + wiring 4 s, cold build 2.5 min. Cold CI is therefore ~15 min plus
   apt and cache transfer; `vm-ipu6.yml` timeout is 45 min (same as
   `vm-smoke-reusable.yml`).
@@ -297,7 +297,7 @@ last; each entry names the PR that found it.
   installs the active 0/0 → 1/0 route on each CSI-2 subdev. What the
   fork really installs is the **format**: upstream's default is
   4096x3072 `SGRBG10_1X10`, which fails link validation against the
-  800x800 RGB888 sensor. The stream rungs should set the CSI-2 sink (and
+  800x800 RGB888 sensor. The stream tests should set the CSI-2 sink (and
   downstream) format from userspace (`VIDIOC_SUBDEV_S_FMT` in the
   streamon helper) instead of a driver hook.
 - (PR 5) `module-load` boots `tools/rootfs/init.ipu6-modules`: insmod
@@ -332,7 +332,7 @@ shown not to break the other variants of the shared driver.
   syscom/frame-delivery emulation is reused. Needs: PWR_STATE FSM values,
   UNISPART SW bit 22, SIP0/SIP1 CSI IRQ windows, queue-pointer base register 8,
   8 CSI-2 ports, PHY sideband registers as latches.
-- **IPU6 — feasible for probe-level rungs, streaming is a larger project.**
+- **IPU6 — feasible for probe-level tests, streaming is a larger project.**
   IPU6 keeps syscom state in buttress boot-parameter registers, uses a
   different firmware ABI, CSE authentication/secure mode and different MMU
   and CSI-2 layouts. Plan: `vm-boot` → `probe-complete` first; streaming

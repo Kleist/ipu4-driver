@@ -11,7 +11,7 @@ a daily 06:30 UTC cron. Coverage and MMIO data come from the latest
 *successful* `vm-smoke` run on the default branch; the IPU4 port
 ladder comes from the latest *completed* `vm-ipu6` run there that has
 `ipu6-ladder-results-*` artifacts, whatever its conclusion (a failing
-gated rung is status worth showing). PR previews look at the PR's own
+gated test is status worth showing). PR previews look at the PR's own
 branch first for both and fall back to the default branch. Both
 downloads live in `.github/actions/build-dashboard/`.
 
@@ -92,7 +92,7 @@ at the end of every run (schema 1):
   "series": {"count": 1, "patches": [{"file": "0001-….patch", "subject": "media: ipu6: …"}]},
   "enabled_tests": "tools/tests/ipu6/enabled-tests",
   "exit_status": 0,
-  "rungs": [
+  "tests": [
     {"name": "build", "depends_on": "series-applies", "enabled": true,
      "result": "PASS", "duration_s": 27}
   ]
@@ -100,7 +100,7 @@ at the end of every run (schema 1):
 ```
 
 `result` is one of `PASS`, `FAIL`, `SKIP`, `NOT-IMPLEMENTED` or `NOT-RUN`
-(rung not selected on the command line); `enabled` means the rung is
+(test not selected on the command line); `enabled` means the test is
 listed in the variant's `enabled-tests` and gates CI. `parse_ladder.py`
 keeps the newest file per `variant` and always shows the `ipu4`, `ipu4p`
 and `ipu6` columns, so a variant without data reads "not run yet".
@@ -133,7 +133,7 @@ The script tolerates missing inputs so a checkout without a recent
 | `render.py` | Jinja2 → `index.html`, copies CSS, writes `data/history.json`. |
 | `parse_registers.py` | `tools/notes/registers.md` → `{rows, counts}`. Tested. |
 | `parse_status.py` | `STATUS.md` → milestone list with state classification. Tested. |
-| `parse_ladder.py` | ipu6 ladder `results.json` files → rung × variant matrix. Tested. |
+| `parse_ladder.py` | ipu6 ladder `results.json` files → test × variant matrix. Tested. |
 | `templates/index.html.j2` | Single page. Embeds Chart.js from CDN; no JS build step. |
 | `templates/style.css` | Dark-mode CSS, no framework. |
 

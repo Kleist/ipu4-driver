@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# The rung_* functions are only called indirectly ("rung_$r").
+# The test_* functions are only called indirectly ("test_$r").
 # shellcheck disable=SC2317
 #
 # Run the ipu6-flavor test ladder (plan: tools/notes/ipu6-ipu4-plan.md).
 #
-#   tools/tests/ipu6/ladder.sh            run every known rung
-#   tools/tests/ipu6/ladder.sh RUNG...    run only these rungs (in ladder order)
-#   tools/tests/ipu6/ladder.sh --list     print the rung names
+#   tools/tests/ipu6/ladder.sh            run every known test
+#   tools/tests/ipu6/ladder.sh TEST...    run only these tests (in ladder order)
+#   tools/tests/ipu6/ladder.sh --list     print the test names
 #
-# Every rung ends as PASS, FAIL, SKIP (a rung it depends on did not pass)
-# or NOT-IMPLEMENTED. The exit status is non-zero only when a rung listed
+# Every test ends as PASS, FAIL, SKIP (a test it depends on did not pass)
+# or NOT-IMPLEMENTED. The exit status is non-zero only when a test listed
 # in tools/tests/ipu6/enabled-tests ends in anything but PASS, or when
-# that file names an unknown rung. Per-rung logs go to
-# tools/tests/out/ipu6-ladder/<rung>.log, the whole table as JSON to
+# that file names an unknown test. Per-test logs go to
+# tools/tests/out/ipu6-ladder/<test>.log, the whole table as JSON to
 # tools/tests/out/ipu6-ladder/results.json (read by the Pages dashboard).
 set -uo pipefail
 
@@ -23,9 +23,9 @@ PATCH_DIR="$ROOT/patches/ipu6-ipu4"
 ENABLED_FILE="${IPU4_IPU6_ENABLED_TESTS:-$HERE/enabled-tests}"
 OUT="$ROOT/tools/tests/out/ipu6-ladder"
 
-# Ladder order. "rung:dependency": when both are run, a rung is SKIPped
+# Ladder order. "test:dependency": when both are run, a test is SKIPped
 # unless its dependency PASSed.
-RUNGS=(
+TESTS=(
 	series-applies
 	build:series-applies
 	checkpatch
@@ -43,16 +43,16 @@ RUNGS=(
 	native-bind:vm-boot
 )
 
-# --- rungs ---------------------------------------------------------------
-# Each rung_<name> function runs with stdout/stderr going to its log and
-# returns 0 for PASS, non-zero for FAIL. A rung in RUNGS without a
-# rung_<name> function is NOT-IMPLEMENTED.
+# --- tests ---------------------------------------------------------------
+# Each test_<name> function runs with stdout/stderr going to its log and
+# returns 0 for PASS, non-zero for FAIL. A test in TESTS without a
+# test_<name> function is NOT-IMPLEMENTED.
 
-rung_series-applies() {
+test_series-applies() {
 	"$ROOT/tools/ipu6/bootstrap.sh"
 }
 
-rung_build() {
+test_build() {
 	local log="$OUT/build.compile.log"
 	IPU4_IPU6_CLEAN=1 IPU4_IPU6_BUILD_LOG="$log" "$ROOT/tools/ipu6/build.sh" ||
 		return 1
@@ -64,7 +64,7 @@ rung_build() {
 	fi
 }
 
-rung_checkpatch() {
+test_checkpatch() {
 	local cp="$LINUX_DIR/scripts/checkpatch.pl" p rc=0
 	shopt -s nullglob
 	local patches=("$PATCH_DIR"/*.patch)
@@ -88,7 +88,7 @@ rung_checkpatch() {
 # initramfs with the vm-smoke init, booted under the QEMU IPU4 model;
 # passes when the guest sees 8086:5a88 on its PCI bus. Needs the patched
 # QEMU (tools/bootstrap.sh --qemu-only && tools/build-qemu.sh).
-rung_vm-boot() {
+test_vm-boot() {
 	local qemu="${IPU4_QEMU_BIN:-$ROOT/tools/qemu/build/qemu-system-x86_64}"
 	if [[ ! -x "$qemu" ]]; then
 		echo "missing $qemu; run tools/bootstrap.sh --qemu-only &&" \
@@ -105,7 +105,7 @@ rung_vm-boot() {
 # ID-table entry yet), unload, and scan dmesg. The guest prints
 # MODLOAD: PASS|FAIL. Rebuilds the kernel only when vm-boot (which does
 # that) is not part of this run.
-rung_module-load() {
+test_module-load() {
 	local log="$ROOT/tools/tests/out/ipu6-module-load.serial"
 	if [[ -z "${WANT[vm-boot]:-}" ]]; then
 		IPU4_FLAVOR=ipu6 "$ROOT/tools/build-kernel.sh" || return 1
@@ -120,14 +120,14 @@ rung_module-load() {
 	grep -q '^MODLOAD: PASS' "$log"
 }
 
-# The later VM rungs (probe-identify onwards) are implemented by later
+# The later VM tests (probe-identify onwards) are implemented by later
 # PRs of the plan.
 
 # --- driver --------------------------------------------------------------
 
 declare -A DEP=() RESULT=() KNOWN=() DUR=()
 ORDER=()
-for entry in "${RUNGS[@]}"; do
+for entry in "${TESTS[@]}"; do
 	name="${entry%%:*}"
 	ORDER+=("$name")
 	KNOWN[$name]=1
@@ -147,7 +147,7 @@ if [[ -f "$ENABLED_FILE" ]]; then
 		line="$(echo "$line" | tr -d '[:space:]')"
 		[[ -z "$line" ]] && continue
 		if [[ -z "${KNOWN[$line]:-}" ]]; then
-			echo "enabled-tests: unknown rung '$line'" >&2
+			echo "enabled-tests: unknown test '$line'" >&2
 			bad_config=1
 			continue
 		fi
@@ -159,7 +159,7 @@ declare -A WANT=()
 if (( $# > 0 )); then
 	for r in "$@"; do
 		if [[ -z "${KNOWN[$r]:-}" ]]; then
-			echo "unknown rung '$r' (see --list)" >&2
+			echo "unknown test '$r' (see --list)" >&2
 			exit 2
 		fi
 		WANT[$r]=1
@@ -173,7 +173,7 @@ for r in "${ORDER[@]}"; do
 	[[ -z "${WANT[$r]:-}" ]] && continue
 	dep="${DEP[$r]:-}"
 	log="$OUT/$r.log"
-	if ! declare -F "rung_$r" > /dev/null; then
+	if ! declare -F "test_$r" > /dev/null; then
 		RESULT[$r]=NOT-IMPLEMENTED
 		echo "not implemented yet" > "$log"
 		continue
@@ -183,9 +183,9 @@ for r in "${ORDER[@]}"; do
 		echo "skipped: depends on $dep (${RESULT[$dep]:-not run})" > "$log"
 		continue
 	fi
-	echo "::group::rung $r"
+	echo "::group::test $r"
 	start=$SECONDS
-	"rung_$r" 2>&1 | tee "$log"
+	"test_$r" 2>&1 | tee "$log"
 	rc=${PIPESTATUS[0]}
 	echo "::endgroup::"
 	if (( rc == 0 )); then
@@ -194,12 +194,12 @@ for r in "${ORDER[@]}"; do
 		RESULT[$r]=FAIL
 	fi
 	DUR[$r]=$((SECONDS - start))
-	echo "rung $r: ${RESULT[$r]} ($((SECONDS - start))s)"
+	echo "test $r: ${RESULT[$r]} ($((SECONDS - start))s)"
 done
 
 status=$bad_config
 echo
-printf '%-16s %-8s %s\n' RUNG ENABLED RESULT
+printf '%-16s %-8s %s\n' TEST ENABLED RESULT
 printf '%-16s %-8s %s\n' ---- ------- ------
 for r in "${ORDER[@]}"; do
 	[[ -z "${WANT[$r]:-}" ]] && continue
@@ -210,17 +210,17 @@ for r in "${ORDER[@]}"; do
 	fi
 	printf '%-16s %-8s %s\n' "$r" "$en" "${RESULT[$r]}"
 done
-# Enabled rungs that weren't selected on the command line aren't run,
+# Enabled tests that weren't selected on the command line aren't run,
 # so they can't fail; say so rather than hiding it.
 for r in "${!ENABLED[@]}"; do
-	[[ -z "${WANT[$r]:-}" ]] && echo "note: enabled rung '$r' not selected"
+	[[ -z "${WANT[$r]:-}" ]] && echo "note: enabled test '$r' not selected"
 done
 
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
 	{
 		echo "### ipu6 ladder"
 		echo
-		echo "| Rung | Enabled | Result |"
+		echo "| Test | Enabled | Result |"
 		echo "|---|---|---|"
 		for r in "${ORDER[@]}"; do
 			[[ -z "${WANT[$r]:-}" ]] && continue
@@ -232,7 +232,7 @@ fi
 # Machine-readable copy of the table for the Pages dashboard
 # (tools/dashboard/parse_ladder.py; schema in tools/dashboard/README.md).
 # IPU4_VARIANT names the QEMU model variant the ladder ran against
-# (ipu4 | ipu4p | ipu6; plan "Parallel track"). Rungs not selected on the
+# (ipu4 | ipu4p | ipu6; plan "Parallel track"). Tests not selected on the
 # command line are recorded as NOT-RUN.
 write_results_json() {
 	local r rows=""
@@ -256,10 +256,10 @@ for p in sorted(glob.glob(os.path.join(e["LADDER_PATCH_DIR"], "*.patch"))):
     subj = " ".join((hdr.get("Subject") or "").split())
     patches.append({"file": os.path.basename(p),
                     "subject": re.sub(r"^\[PATCH[^\]]*\]\s*", "", subj)})
-rungs = []
+tests = []
 for line in e["LADDER_ROWS"].splitlines():
     name, dep, en, res, dur = line.split("\t")
-    rungs.append({"name": name, "depends_on": dep or None,
+    tests.append({"name": name, "depends_on": dep or None,
                   "enabled": en == "1", "result": res,
                   "duration_s": int(dur) if dur else None})
 try:
@@ -284,7 +284,7 @@ json.dump({
     "series": {"count": len(patches), "patches": patches},
     "enabled_tests": enabled_file,
     "exit_status": int(e["LADDER_STATUS"]),
-    "rungs": rungs,
+    "tests": tests,
 }, sys.stdout, indent=2)
 print()
 PY

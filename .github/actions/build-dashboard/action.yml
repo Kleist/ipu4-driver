@@ -152,7 +152,7 @@ runs:
       run: |
         set -e
         # Unlike vm-smoke, take the newest *completed* vm-ipu6 run whatever
-        # its conclusion: a red ladder (a gated rung failed) is exactly
+        # its conclusion: a red ladder (a gated test failed) is exactly
         # what the status matrix should show, and ladder.sh writes
         # results.json and the workflow uploads it (if: always()) on
         # failure too. Runs that died before the ladder (or predate the

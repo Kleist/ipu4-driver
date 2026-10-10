@@ -7,19 +7,19 @@ on:
   workflow_dispatch:
 
 # Test ladder for the ipu6 flavor (IPU4_FLAVOR=ipu6): the pinned upstream
-# ipu6 tree (tools/ipu6/pin) + patches/ipu6-ipu4/. Plan and rung table:
+# ipu6 tree (tools/ipu6/pin) + patches/ipu6-ipu4/. Plan and test table:
 # tools/notes/ipu6-ipu4-plan.md.
 #
-# tools/tests/ipu6/ladder.sh runs every known rung and prints a
+# tools/tests/ipu6/ladder.sh runs every known test and prints a
 # PASS / FAIL / SKIP / NOT-IMPLEMENTED table (also in the job summary).
-# Only the rungs listed in tools/tests/ipu6/enabled-tests fail the job, so
-# rungs that are not switched on yet stay visible without blocking merges.
+# Only the tests listed in tools/tests/ipu6/enabled-tests fail the job, so
+# tests that are not switched on yet stay visible without blocking merges.
 #
 # Runs alongside ci.yml / vm-smoke.yml (fork flow); nothing here touches
 # tools/linux/. QEMU comes from `tools/bootstrap.sh --qemu-only` and
 # shares its build cache with vm-smoke-reusable.yml (same key). The
 # harness-only virt-sensor module (tools/virt-sensor/) is rebuilt by the
-# module-load rung on every run (a few seconds, so it is not cached).
+# module-load test on every run (a few seconds, so it is not cached).
 
 jobs:
   ladder:

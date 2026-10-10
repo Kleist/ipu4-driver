@@ -1,5 +1,5 @@
 #!/bin/sh
-# Guest init for the ipu6 ladder's module-load rung
+# Guest init for the ipu6 ladder's module-load test
 # (tools/tests/ipu6/ladder.sh): load the virtual sensor and the upstream
 # ipu6 modules in dependency order, check the IPU4 PCI device, unload
 # everything again and scan dmesg for oopses/warnings.

@@ -1,4 +1,4 @@
-"""Collect ipu6 test-ladder results into a rung x variant matrix.
+"""Collect ipu6 test-ladder results into a test x variant matrix.
 
 ``tools/tests/ipu6/ladder.sh`` writes one ``results.json`` per run
 (schema 1, see tools/dashboard/README.md). The vm-ipu6 workflow uploads
@@ -40,7 +40,10 @@ def load_results(dirs) -> dict[str, dict]:
                 data = json.loads(path.read_text())
             except (OSError, json.JSONDecodeError):
                 continue
-            if not isinstance(data, dict) or not isinstance(data.get("rungs"), list):
+            # results.json written before the rename called them "rungs".
+            if isinstance(data, dict) and "tests" not in data and "rungs" in data:
+                data["tests"] = data.pop("rungs")
+            if not isinstance(data, dict) or not isinstance(data.get("tests"), list):
                 continue
             variant = data.get("variant") or "ipu4"
             prev = by_variant.get(variant)
@@ -49,15 +52,15 @@ def load_results(dirs) -> dict[str, dict]:
     return by_variant
 
 
-def _rung_order(by_variant: dict[str, dict], fallback: list[str]) -> list[str]:
-    """Ladder order: the ipu4 run first, then rungs only other variants
+def _test_order(by_variant: dict[str, dict], fallback: list[str]) -> list[str]:
+    """Ladder order: the ipu4 run first, then tests only other variants
     (or ``ladder.sh --list``) know about, appended in their order."""
     order: list[str] = []
     sources = [by_variant[v] for v in VARIANTS if v in by_variant]
     sources += [r for v, r in by_variant.items() if v not in VARIANTS]
     for res in sources:
-        for rung in res["rungs"]:
-            name = rung.get("name")
+        for test in res["tests"]:
+            name = test.get("name")
             if name and name not in order:
                 order.append(name)
     for name in fallback:
@@ -67,12 +70,12 @@ def _rung_order(by_variant: dict[str, dict], fallback: list[str]) -> list[str]:
 
 
 def _summary(res: dict) -> dict:
-    rungs = res["rungs"]
-    enabled = [r for r in rungs if r.get("enabled")]
+    tests = res["tests"]
+    enabled = [r for r in tests if r.get("enabled")]
     enabled_failing = [r["name"] for r in enabled if r.get("result") != "PASS"]
     return {
-        "total": len(rungs),
-        "passing": sum(1 for r in rungs if r.get("result") == "PASS"),
+        "total": len(tests),
+        "passing": sum(1 for r in tests if r.get("result") == "PASS"),
         "enabled": len(enabled),
         "enabled_passing": len(enabled) - len(enabled_failing),
         "enabled_failing": enabled_failing,
@@ -80,13 +83,13 @@ def _summary(res: dict) -> dict:
     }
 
 
-def build(by_variant: dict[str, dict], fallback_rungs: list[str] | None = None) -> dict:
+def build(by_variant: dict[str, dict], fallback_tests: list[str] | None = None) -> dict:
     """Shape the per-variant results for the template.
 
-    Returns ``{variants, rungs, primary, has_data}`` where ``variants``
+    Returns ``{variants, tests, primary, has_data}`` where ``variants``
     is a list of ``{name, has_data, summary, generated_at, run_url,
-    commit_sha}``, ``rungs`` a list of ``{name, cells}`` with one cell
-    per variant (``None`` when that variant has no data for the rung),
+    commit_sha}``, ``tests`` a list of ``{name, cells}`` with one cell
+    per variant (``None`` when that variant has no data for the test),
     and ``primary`` the results whose pin and series the section shows
     (ipu4 when present).
     """
@@ -103,33 +106,33 @@ def build(by_variant: dict[str, dict], fallback_rungs: list[str] | None = None) 
             "commit_sha": (res or {}).get("commit_sha"),
         })
 
-    rungs = []
-    for name in _rung_order(by_variant, list(fallback_rungs or [])):
+    tests = []
+    for name in _test_order(by_variant, list(fallback_tests or [])):
         cells = []
         for v in names:
             res = by_variant.get(v)
             if res is None:
                 cells.append(None)
                 continue
-            rung = next((r for r in res["rungs"] if r.get("name") == name), None)
-            if rung is None:
+            test = next((r for r in res["tests"] if r.get("name") == name), None)
+            if test is None:
                 cells.append(None)
                 continue
-            result = rung.get("result") or "NOT-RUN"
+            result = test.get("result") or "NOT-RUN"
             cells.append({
                 "result": result,
                 "css": result.lower() if result in RESULTS else "unknown",
-                "enabled": bool(rung.get("enabled")),
-                "duration_s": rung.get("duration_s"),
+                "enabled": bool(test.get("enabled")),
+                "duration_s": test.get("duration_s"),
             })
-        rungs.append({"name": name, "cells": cells})
+        tests.append({"name": name, "cells": cells})
 
     primary = next(
         (by_variant[v] for v in names if v in by_variant), None
     )
     return {
         "variants": variants,
-        "rungs": rungs,
+        "tests": tests,
         "primary": primary,
         "has_data": bool(by_variant),
     }
