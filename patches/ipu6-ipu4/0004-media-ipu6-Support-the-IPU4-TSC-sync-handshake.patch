@@ -1,0 +1,65 @@
+From fce4f68b87ce6437371527b420a0d845f57a75d3 Mon Sep 17 00:00:00 2001
+From: Andreas Helbech Kleist <andreaskleist@gmail.com>
+Date: Sat, 10 Oct 2026 20:42:16 +0000
+Subject: [PATCH] media: ipu6: Support the IPU4 TSC sync handshake
+
+The IPU4 buttress reports the state of the TSC sync handshake in
+PWR_STATE bits 13:12, not in bits 12:11 as IPU6 does. With the IPU6
+mask the driver never sees the handshake complete, so the TSC sync at
+ISYS runtime resume times out and the resume fails.
+
+Use the IPU4 field when polling for the handshake on IPU4. The mask is
+no longer a constant, so use field_get() instead of FIELD_GET().
+
+Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
+---
+ drivers/media/pci/intel/ipu6/ipu6-buttress.c               | 7 ++++---
+ drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h | 2 ++
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-buttress.c b/drivers/media/pci/intel/ipu6/ipu6-buttress.c
+index 8b2ec11b5..6627f1967 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-buttress.c
++++ b/drivers/media/pci/intel/ipu6/ipu6-buttress.c
+@@ -923,13 +923,14 @@ static int ipu6_buttress_send_tsc_request(struct ipu6_device *isp)
+ 	u32 val, mask, done;
+ 	int ret;
+ 
+-	mask = BUTTRESS_PWR_STATE_HH_STATUS_MASK;
++	mask = IS_IPU4(isp) ? IPU4_BUTTRESS_PWR_STATE_HH_STATUS_MASK :
++			      BUTTRESS_PWR_STATE_HH_STATUS_MASK;
+ 
+ 	writel(BUTTRESS_FABRIC_CMD_START_TSC_SYNC,
+ 	       isp->base + regs->fabric_cmd);
+ 
+ 	val = readl(isp->base + regs->pwr_status);
+-	val = FIELD_GET(mask, val);
++	val = field_get(mask, val);
+ 	if (val == BUTTRESS_PWR_STATE_HH_STATE_ERR) {
+ 		dev_err(&isp->pdev->dev, "Start tsc sync failed\n");
+ 		return -EINVAL;
+@@ -937,7 +938,7 @@ static int ipu6_buttress_send_tsc_request(struct ipu6_device *isp)
+ 
+ 	done = BUTTRESS_PWR_STATE_HH_STATE_DONE;
+ 	ret = readl_poll_timeout(isp->base + regs->pwr_status,
+-				 val, FIELD_GET(mask, val) == done, 500,
++				 val, field_get(mask, val) == done, 500,
+ 				 BUTTRESS_TSC_SYNC_TIMEOUT_US);
+ 	if (ret)
+ 		dev_err(&isp->pdev->dev, "Start tsc sync timeout\n");
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h b/drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h
+index 1a0ddbf5c..2fa3113a2 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h
++++ b/drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h
+@@ -353,6 +353,8 @@ enum {
+ #define IPU4_BUTTRESS_PWR_STATE_PS_PWR_FSM_IDLE		0x0
+ #define IPU4_BUTTRESS_PWR_STATE_PS_PWR_FSM_PS_PWR_UP	0xf
+ 
++#define IPU4_BUTTRESS_PWR_STATE_HH_STATUS_MASK		GENMASK(13, 12)
++
+ #define IPU4_IS_FREQ_CTL_DIVISOR			4
+ #define IPU4_PS_FREQ_CTL_DEFAULT_RATIO			0x12
+ #define IPU4_PS_FREQ_CTL_DEFAULT_QOS_FLOOR_RATIO	0x12
+-- 
+2.43.0
+
