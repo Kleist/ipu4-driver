@@ -1,0 +1,82 @@
+From b82e9d8f119cae94c5e44614880bb42eb3625db9 Mon Sep 17 00:00:00 2001
+From: Andreas Helbech Kleist <andreaskleist@gmail.com>
+Date: Sat, 10 Oct 2026 11:55:28 +0000
+Subject: [PATCH] media: ipu6: Identify IPU4 devices
+
+IPU4 is the imaging unit of Intel Apollo Lake (Broxton) SoCs, PCI ID
+8086:5a88. It shares the ISYS firmware ABI with IPU4P but differs in
+buttress power control, MMU stream layout, SysCom queue layout and
+CSI-2 receiver interrupts.
+
+Add an IPU_VERSION_4 hardware version with an IS_IPU4() helper, the
+PCI device ID and the firmware name, and identify the device in probe.
+IPU4 firmware uses the same CPD metadata component layout as IPU6SE and
+IPU4P, and is loaded as intel/ipu/ipu4_fw.bin, following the IPU4P
+naming.
+
+The IPU4 buttress, MMU and ISYS support is added by the following
+patches. Until then, IPU4 uses the IPU6 buttress registers and controls
+that probe sets up before the device switch, and the device is not
+added to the PCI ID table, so the driver does not bind to it.
+
+Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
+---
+ drivers/media/pci/intel/ipu6/ipu6.c | 6 ++++++
+ drivers/media/pci/intel/ipu6/ipu6.h | 3 +++
+ include/media/ipu6-pci-table.h      | 1 +
+ 3 files changed, 10 insertions(+)
+
+diff --git a/drivers/media/pci/intel/ipu6/ipu6.c b/drivers/media/pci/intel/ipu6/ipu6.c
+index 08032dd9d..a035b14c7 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6.c
++++ b/drivers/media/pci/intel/ipu6/ipu6.c
+@@ -668,6 +668,12 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+ 	psys_ctrl = &ipu6_psys_buttress_ctrl;
+ 
+ 	switch (id->device) {
++	case PCI_DEVICE_ID_INTEL_IPU4:
++		isp->hw_ver = IPU_VERSION_4;
++		isp->cpd_fw_name = IPU4_FIRMWARE_NAME;
++		isp->cpd_metadata_cmpnt_size =
++			sizeof(struct ipu6se_cpd_metadata_cmpnt);
++		break;
+ 	case PCI_DEVICE_ID_INTEL_IPU4P:
+ 		isp->hw_ver = IPU_VERSION_4P;
+ 		isp->cpd_fw_name = IPU4P_FIRMWARE_NAME;
+diff --git a/drivers/media/pci/intel/ipu6/ipu6.h b/drivers/media/pci/intel/ipu6/ipu6.h
+index 84a50fba1..594c3290b 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6.h
++++ b/drivers/media/pci/intel/ipu6/ipu6.h
+@@ -27,6 +27,7 @@ struct ipu6_bus_device;
+ #define IPU7_FIRMWARE_NAME		"intel/ipu/ipu7_fw.bin"
+ #define IPU7P5_FIRMWARE_NAME		"intel/ipu/ipu7ptl_fw.bin"
+ #define IPU4P_FIRMWARE_NAME		"intel/ipu/ipu4p_fw.bin"
++#define IPU4_FIRMWARE_NAME		"intel/ipu/ipu4_fw.bin"
+ 
+ #define IPU_VERSION_6		BIT(0) /* TGL */
+ #define IPU_VERSION_6SE		BIT(1) /* JSL */
+@@ -35,7 +36,9 @@ struct ipu6_bus_device;
+ #define IPU_VERSION_7		BIT(4) /* LNL */
+ #define IPU_VERSION_7P5		BIT(5) /* PTL */
+ #define IPU_VERSION_4P		BIT(6) /* ICL */
++#define IPU_VERSION_4		BIT(7) /* APL */
+ 
++#define IS_IPU4(isp)		((isp)->hw_ver & IPU_VERSION_4)
+ #define IS_IPU4P(isp)		((isp)->hw_ver & IPU_VERSION_4P)
+ #define IS_IPU6_TGL(isp)	((isp)->hw_ver & IPU_VERSION_6)
+ #define IS_IPU6SE(isp)		((isp)->hw_ver & IPU_VERSION_6SE)
+diff --git a/include/media/ipu6-pci-table.h b/include/media/ipu6-pci-table.h
+index 09b2ea58b..17ec5b15e 100644
+--- a/include/media/ipu6-pci-table.h
++++ b/include/media/ipu6-pci-table.h
+@@ -17,6 +17,7 @@
+ #define PCI_DEVICE_ID_INTEL_IPU7		0x645d
+ #define PCI_DEVICE_ID_INTEL_IPU7P5		0xb05d
+ #define PCI_DEVICE_ID_INTEL_IPU4P		0x8a19
++#define PCI_DEVICE_ID_INTEL_IPU4		0x5a88
+ 
+ static const struct pci_device_id ipu6_pci_tbl[] = {
+ 	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_IPU6) },
+-- 
+2.43.0
+
