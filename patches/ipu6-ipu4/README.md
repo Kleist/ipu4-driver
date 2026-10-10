@@ -1,0 +1,34 @@
+# IPU4 support for the upstream ipu6 driver — patch series
+
+This directory holds the kernel patches that add Intel IPU4 (Broxton /
+Apollo Lake, `8086:5a88`) to `drivers/media/pci/intel/ipu6/`. The plan,
+the base tree and the PR sequence are in
+[`tools/notes/ipu6-ipu4-plan.md`](../../tools/notes/ipu6-ipu4-plan.md).
+
+## Format
+
+- Plain `git format-patch` output, one file per commit, named
+  `NNNN-<subject>.patch` so that the shell glob order is the series order.
+- Applied with `git am` on top of the pinned tree (`tools/ipu6/pin`) by
+  `tools/ipu6/bootstrap.sh` (or `IPU4_FLAVOR=ipu6 tools/bootstrap.sh`).
+  Every bootstrap resets the tree to the pin first, so the files here are
+  the only source of truth.
+- Upstream quality: each patch is what would be mailed to linux-media —
+  `media: ipu6: ...` subject, commit message, `Signed-off-by`,
+  `scripts/checkpatch.pl --strict` clean, and the tree builds after every
+  patch.
+- No harness-only code. Test helpers (virt-sensor, `new_id` binding, QEMU
+  model changes) live under `tools/`, never here.
+
+## Workflow
+
+```bash
+tools/ipu6/bootstrap.sh                   # tools/linux-ipu6 = pin + this series
+# ... commit changes in tools/linux-ipu6 ...
+git -C tools/linux-ipu6 format-patch -o "$PWD/patches/ipu6-ipu4" \
+    "$(. tools/ipu6/pin; echo "$IPU6_LINUX_SHA")"
+tools/tests/ipu6/ladder.sh                # series-applies, build, checkpatch, ...
+```
+
+Regenerating the whole series with `format-patch` keeps the numbering
+contiguous; delete the old files first when a patch is dropped or renamed.
