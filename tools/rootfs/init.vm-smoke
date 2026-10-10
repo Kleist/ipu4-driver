@@ -24,11 +24,27 @@ for dev in /sys/bus/pci/devices/*; do
 	echo "$(basename "$dev") $ven:$did"
 done
 
-if grep -q '0x8086' /sys/bus/pci/devices/*/vendor 2>/dev/null \
-	&& grep -q '0x5a88' /sys/bus/pci/devices/*/device 2>/dev/null; then
-	echo "VM_SMOKE: PASS device=0x8086:0x5a88"
+# Expected device ID: tools/run-vm.sh passes the model variant's as
+# ipu_pci_id= (IPU4 when absent).
+want=0x5a88
+for arg in $(cat /proc/cmdline); do
+	case "$arg" in
+	ipu_pci_id=*) want=${arg#ipu_pci_id=} ;;
+	esac
+done
+
+found=
+for dev in /sys/bus/pci/devices/*; do
+	if [ "$(cat "$dev/vendor" 2>/dev/null)" = 0x8086 ] &&
+	   [ "$(cat "$dev/device" 2>/dev/null)" = "$want" ]; then
+		found=$dev
+	fi
+done
+
+if [ -n "$found" ]; then
+	echo "VM_SMOKE: PASS device=0x8086:$want"
 else
-	echo "VM_SMOKE: FAIL (no 0x8086:0x5a88 PCI device found)"
+	echo "VM_SMOKE: FAIL (no 0x8086:$want PCI device found)"
 fi
 
 echo "VM_SMOKE: shutting down"

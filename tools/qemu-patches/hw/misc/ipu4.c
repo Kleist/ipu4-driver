@@ -6,6 +6,12 @@
  * behavior required to keep ipu6_pci_probe() moving forward, and logs
  * every unknown MMIO access so the M3 fuzzing loop has a target list.
  *
+ * The "variant" property (ipu4 | ipu6, default ipu4) selects which IPU
+ * the device presents, so the upstream ipu6 driver's test ladder can run
+ * against other variants of the shared driver (tools/notes/
+ * ipu6-ipu4-plan.md, "Parallel track"). So far it only changes the PCI
+ * device ID; the register model is IPU4's for every variant.
+ *
  * Register semantics are documented in tools/notes/registers.md as they
  * are inferred from the driver. Do not extend this file without adding
  * a note there explaining the new behavior.
@@ -31,6 +37,8 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 
 #define IPU4_PCI_VENDOR_ID  0x8086
 #define IPU4_PCI_DEVICE_ID  0x5a88
+/* Tiger Lake IPU6 (PCI_DEVICE_ID_INTEL_IPU6 in the upstream driver). */
+#define IPU6_PCI_DEVICE_ID  0x9a19
 #define IPU4_BAR_SIZE       (16 * MiB)
 
 /* Buttress registers (from kernel/ipu4/ipu6-platform-buttress-regs.h).
@@ -452,9 +460,18 @@ static const hwaddr ipu4_csi2_port_base[IPU4_CSI2_NUM_PORTS] = {
     0x64000, 0x65000, 0x66000, 0x67000, 0x6c000, 0x6c800,
 };
 
+typedef enum Ipu4Variant {
+    IPU4_VARIANT_IPU4,
+    IPU4_VARIANT_IPU6,
+} Ipu4Variant;
+
 struct Ipu4State {
     PCIDevice parent_obj;
     MemoryRegion bar0;
+
+    /* "variant" property; parsed into `variant` at realize. */
+    char *variant_name;
+    Ipu4Variant variant;
 
     /* Latched registers. */
     uint32_t btrs_ctrl;
@@ -1566,6 +1583,17 @@ static void ipu4_realize(PCIDevice *pdev, Error **errp)
 {
     Ipu4State *s = IPU4(pdev);
 
+    if (!s->variant_name || !strcmp(s->variant_name, "ipu4")) {
+        s->variant = IPU4_VARIANT_IPU4;
+    } else if (!strcmp(s->variant_name, "ipu6")) {
+        s->variant = IPU4_VARIANT_IPU6;
+        pci_config_set_device_id(pdev->config, IPU6_PCI_DEVICE_ID);
+    } else {
+        error_setg(errp, "unknown variant '%s' (expected ipu4 or ipu6)",
+                   s->variant_name);
+        return;
+    }
+
     pci_config_set_interrupt_pin(pdev->config, 1);
 
     /* The driver does pci_alloc_irq_vectors(dev, 1, 1, PCI_IRQ_MSI).
@@ -1721,6 +1749,11 @@ static const VMStateDescription vmstate_ipu4 = {
     }
 };
 
+static Property ipu4_properties[] = {
+    DEFINE_PROP_STRING("variant", Ipu4State, variant_name),
+    DEFINE_PROP_END_OF_LIST(),
+};
+
 static void ipu4_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
@@ -1736,6 +1769,7 @@ static void ipu4_class_init(ObjectClass *klass, void *data)
     dc->desc = "Intel IPU4 (emulated)";
     dc->vmsd = &vmstate_ipu4;
     dc->reset = ipu4_reset;
+    device_class_set_props(dc, ipu4_properties);
     set_bit(DEVICE_CATEGORY_MISC, dc->categories);
 }
 
