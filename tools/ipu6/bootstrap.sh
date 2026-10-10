@@ -7,16 +7,21 @@
 # equals pin + current series. Files the series does not touch keep their
 # mtimes, so a cached build only recompiles what the series changes.
 #
+# IPU4_IPU6_PIN (default tools/ipu6/pin) and IPU4_IPU6_PATCH_DIR (default
+# patches/ipu6-ipu4; empty for no series) select another base, together
+# with IPU4_IPU6_LINUX_DIR; tools/tests/ipu6/ladder.sh sets all three per
+# QEMU model variant (the ipu6 variant runs on unpatched mainline).
+#
 # Exit codes: 0 ok, 1 harness/fetch error, 3 the series does not apply.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 # shellcheck source=pin
-. "$HERE/pin"
+. "${IPU4_IPU6_PIN:-$HERE/pin}"
 
 LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$ROOT/tools/linux-ipu6}"
-PATCH_DIR="$ROOT/patches/ipu6-ipu4"
+PATCH_DIR="${IPU4_IPU6_PATCH_DIR-$ROOT/patches/ipu6-ipu4}"
 BRANCH="ipu6-ipu4"
 
 # git am records a committer; CI runners have no identity configured.
@@ -45,11 +50,16 @@ git -C "$LINUX_DIR" checkout -q -f -B "$BRANCH" "$IPU6_LINUX_SHA"
 # .config) stay.
 git -C "$LINUX_DIR" clean -q -fd
 
-shopt -s nullglob
-patches=("$PATCH_DIR"/*.patch)
-shopt -u nullglob
+patches=()
+if [[ -n "$PATCH_DIR" ]]; then
+	shopt -s nullglob
+	patches=("$PATCH_DIR"/*.patch)
+	shopt -u nullglob
+fi
 
-if (( ${#patches[@]} == 0 )); then
+if [[ -z "$PATCH_DIR" ]]; then
+	echo ">>> no series for this base; tree is the bare pin"
+elif (( ${#patches[@]} == 0 )); then
 	echo ">>> no patches in ${PATCH_DIR#"$ROOT"/}; tree is the bare pin"
 else
 	echo ">>> applying ${#patches[@]} patch(es) from ${PATCH_DIR#"$ROOT"/}"

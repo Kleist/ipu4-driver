@@ -81,7 +81,12 @@ check_sym() {
 	fi
 }
 check_sym "CONFIG_VIDEO_INTEL_IPU6=m" VIDEO_INTEL_IPU6
-check_sym "# CONFIG_VIDEO_INTEL_IPU is not set" VIDEO_INTEL_IPU
+# The downstream driver only exists in the IPU4 pin; on mainline (the
+# ipu6 variant's base, tools/ipu6/pin.upstream) the symbol is absent.
+if grep -qE '^CONFIG_VIDEO_INTEL_IPU=' .config; then
+	echo "kconfig: CONFIG_VIDEO_INTEL_IPU must be off" >&2
+	exit 1
+fi
 check_sym "# CONFIG_WERROR is not set" WERROR
 
 if [[ "${IPU4_BUILD_CONFIG_ONLY:-0}" == "1" ]]; then
