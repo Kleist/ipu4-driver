@@ -1,8 +1,8 @@
 """Unit tests for tools/trace/check_writes.py.
 
 The checker compares the register writes two captures make in a set of
-BAR-offset ranges; the ipu6 ladder's probe-mmu test uses it to hold the
-guest's MMU writes (QEMU trace log) against data/trace.txt.
+BAR-offset ranges; the ipu6 ladder's probe-mmu and isys-irq tests use it
+to hold the guest's writes (QEMU trace log) against data/trace.txt.
 """
 from __future__ import annotations
 
@@ -48,6 +48,17 @@ def test_qemu_log_filters_region_and_rebases():
     assert writes == [(0x4b0008, 0x10), (0x4b010c, 0)]
 
 
+def test_line_range_limits_writes_but_not_map():
+    # MAP is on line 4, the writes on lines 3 and 6-9.
+    writes = list(check_writes.read_writes(io.StringIO(MMIOTRACE),
+                                           line_range=(7, 8)))
+    assert writes == [(0x4b0008, 0x10), (0x4b010c, 0)]
+    log = qemu(0xfb4b0008, 0x10) + qemu(0xfb4b010c, 0)
+    writes = list(check_writes.read_writes(io.StringIO(log),
+                                           line_range=(2, 2)))
+    assert writes == [(0x4b010c, 0)]
+
+
 def test_in_ranges_keeps_order():
     writes = [(0x8, 1), (0x4, 2), (0x10c, 3), (0x200, 4), (0x0c, 5)]
     assert check_writes.in_ranges(writes, [(0x8, 0x90), (0x108, 0x190)]) == [
@@ -66,6 +77,17 @@ def test_parse_range(text, expected):
 def test_parse_range_rejects(text):
     with pytest.raises(argparse.ArgumentTypeError):
         check_writes.parse_range(text)
+
+
+def test_parse_lines():
+    assert check_writes.parse_lines("487-599") == (487, 599)
+    assert check_writes.parse_lines("5-5") == (5, 5)
+
+
+@pytest.mark.parametrize("text", ["7", "0x1-0x2", "0-3", "9-8"])
+def test_parse_lines_rejects(text):
+    with pytest.raises(argparse.ArgumentTypeError):
+        check_writes.parse_lines(text)
 
 
 def test_compare_pass_fail_and_empty():
@@ -98,3 +120,8 @@ def test_main(tmp_path, capsys):
     assert check_writes.main(args + ["--actual", str(good)]) == 0
     assert check_writes.main(args + ["--actual", str(bad)]) == 1
     assert "expected 2 writes, got 0" in capsys.readouterr().out
+
+    # Only the write on line 7 is expected: the good capture has one more.
+    args += ["--expected-lines", "7-7", "--actual", str(good)]
+    assert check_writes.main(args) == 1
+    assert "expected 1 writes, got 2" in capsys.readouterr().out
