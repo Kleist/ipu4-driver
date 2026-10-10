@@ -10,17 +10,48 @@
 #
 # Every test ends as PASS, FAIL, SKIP (a test it depends on did not pass)
 # or NOT-IMPLEMENTED. The exit status is non-zero only when a test listed
-# in tools/tests/ipu6/enabled-tests ends in anything but PASS, or when
-# that file names an unknown test. Per-test logs go to
+# in the variant's enabled-tests file ends in anything but PASS, or when
+# that file names an unknown test.
+#
+# IPU4_VARIANT (ipu4 | ipu4p | ipu6, default ipu4) picks the QEMU model
+# variant the VM tests boot (tools/run-vm.sh), the kernel base and the
+# enabled-tests file (plan "Parallel track"):
+#
+#   ipu4, ipu4p  tools/ipu6/pin + patches/ipu6-ipu4/ in tools/linux-ipu6/
+#   ipu6         tools/ipu6/pin.upstream (mainline, no series) in
+#                tools/linux-ipu6-upstream/
+#
+# and tools/tests/ipu6/enabled-tests for ipu4, enabled-tests.<variant>
+# for the others. IPU4_IPU6_LINUX_DIR and IPU4_IPU6_ENABLED_TESTS
+# override the tree and the file. Per-test logs go to
 # tools/tests/out/ipu6-ladder/<test>.log, the whole table as JSON to
 # tools/tests/out/ipu6-ladder/results.json (read by the Pages dashboard).
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
-LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$ROOT/tools/linux-ipu6}"
-PATCH_DIR="$ROOT/patches/ipu6-ipu4"
-ENABLED_FILE="${IPU4_IPU6_ENABLED_TESTS:-$HERE/enabled-tests}"
+VARIANT="${IPU4_VARIANT:-ipu4}"
+case "$VARIANT" in
+ipu4 | ipu4p)
+	LINUX_DIR="$ROOT/tools/linux-ipu6"
+	PIN="$ROOT/tools/ipu6/pin"
+	PATCH_DIR="$ROOT/patches/ipu6-ipu4"
+	;;
+ipu6)
+	LINUX_DIR="$ROOT/tools/linux-ipu6-upstream"
+	PIN="$ROOT/tools/ipu6/pin.upstream"
+	PATCH_DIR=
+	;;
+*) echo "unknown IPU4_VARIANT '$VARIANT' (expected ipu4, ipu4p or ipu6)" >&2; exit 2 ;;
+esac
+ENABLED_FILE="$HERE/enabled-tests"
+[[ "$VARIANT" != ipu4 ]] && ENABLED_FILE+=".$VARIANT"
+ENABLED_FILE="${IPU4_IPU6_ENABLED_TESTS:-$ENABLED_FILE}"
+LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$LINUX_DIR}"
+# Read by tools/ipu6/*.sh, build-kernel.sh, rootfs/build.sh, run-vm.sh
+# and virt-sensor/build.sh.
+export IPU4_VARIANT="$VARIANT" IPU4_IPU6_LINUX_DIR="$LINUX_DIR"
+export IPU4_IPU6_PIN="$PIN" IPU4_IPU6_PATCH_DIR="$PATCH_DIR"
 OUT="$ROOT/tools/tests/out/ipu6-ladder"
 
 # Ladder order. "test:dependency": when both are run, a test is SKIPped
@@ -65,6 +96,10 @@ test_build() {
 
 test_checkpatch() {
 	local cp="$LINUX_DIR/scripts/checkpatch.pl" p rc=0
+	if [[ -z "$PATCH_DIR" ]]; then
+		echo "no series on the $VARIANT variant's base; nothing to check"
+		return 0
+	fi
 	shopt -s nullglob
 	local patches=("$PATCH_DIR"/*.patch)
 	shopt -u nullglob
@@ -333,7 +368,7 @@ write_results_json() {
 		rows+="${RESULT[$r]:-NOT-RUN}	${DUR[$r]:-}"$'\n'
 	done
 	# shellcheck source=tools/ipu6/pin
-	( . "$ROOT/tools/ipu6/pin"
+	( . "$PIN"
 	  LADDER_ROWS="$rows" LADDER_STATUS="$1" LADDER_ROOT="$ROOT" \
 	  LADDER_PATCH_DIR="$PATCH_DIR" LADDER_ENABLED_FILE="$ENABLED_FILE" \
 	  LADDER_PIN_URL="$IPU6_LINUX_URL" LADDER_PIN_SHA="$IPU6_LINUX_SHA" \
@@ -342,7 +377,8 @@ import datetime, email.parser, glob, json, os, re, subprocess, sys
 e = os.environ
 root = e["LADDER_ROOT"]
 patches = []
-for p in sorted(glob.glob(os.path.join(e["LADDER_PATCH_DIR"], "*.patch"))):
+pdir = e["LADDER_PATCH_DIR"]
+for p in sorted(glob.glob(os.path.join(pdir, "*.patch")) if pdir else []):
     with open(p, errors="replace") as f:
         hdr = email.parser.Parser().parse(f, headersonly=True)
     subj = " ".join((hdr.get("Subject") or "").split())
