@@ -47,6 +47,17 @@ jobs:
       - name: Run ipu6 ladder
         run: ./tools/tests/ipu6/ladder.sh
 
+      # Small dedicated artifact read by pages.yml (dashboard "IPU4 port"
+      # section). Named per QEMU variant so the parallel-track matrix can
+      # upload one per leg; matrix.variant is empty until that lands.
+      - name: Upload ladder results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipu6-ladder-results-${{ matrix.variant || 'ipu4' }}
+          path: tools/tests/out/ipu6-ladder/results.json
+          if-no-files-found: ignore
+
       - name: Upload ladder logs
         if: always()
         uses: actions/upload-artifact@v4
