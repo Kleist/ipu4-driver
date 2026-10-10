@@ -367,4 +367,11 @@ void ipu6_configure_spc(struct ipu6_device *isp,
 			int pkg_dir_idx, void __iomem *base, u64 *pkg_dir,
 			dma_addr_t pkg_dir_dma_addr);
 
+/* IPU4 buttress control descriptors. Defined in ipu6.c, exposed here
+ * so the KUnit suite in tools/linux-patches/.../tests/ can field-test
+ * them against the IPU4 register layout.
+ */
+extern const struct ipu6_buttress_ctrl ipu4_isys_buttress_ctrl;
+extern const struct ipu6_buttress_ctrl ipu4_psys_buttress_ctrl;
+
 #endif /* IPU6_H */
