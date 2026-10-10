@@ -139,8 +139,8 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | PR | Content | Rung(s) enabled | State |
 |---|---|---|---|
 | 1 | This plan | — | in review (#100) |
-| 2 | `IPU4_FLAVOR=ipu6` bootstrap/build + empty `patches/ipu6-ipu4/` + `vm-ipu6.yml` ladder runner, all rungs disabled | — | in review |
-| 3 | Enable static rungs on the empty series | `series-applies`, `build`, `checkpatch` | |
+| 2 | `IPU4_FLAVOR=ipu6` bootstrap/build + empty `patches/ipu6-ipu4/` + `vm-ipu6.yml` ladder runner, all rungs disabled | — | in review (#101) |
+| 3 | Enable static rungs on the empty series | `series-applies`, `build`, `checkpatch` | in review |
 | 4 | Guest kernel config + rootfs for the ipu6 flavor | `vm-boot` | |
 | 5 | Standalone virt-sensor module, init loads `intel-ipu6*` | `module-load` | |
 | 6 | `media: ipu6: Add helper to identify IPU4` (+ probe case, no table entry) | `probe-identify` | |
@@ -199,6 +199,19 @@ last; each entry names the PR that found it.
   QEMU-only bootstrap path and ipu6-flavor variants of those two
   scripts. Note `tools/build-kernel.sh` calls `tools/build.sh`, which
   now dispatches on `IPU4_FLAVOR`.
+- (PR 3) With the empty series, `series-applies` and `build` are real
+  gates (bootstrap resets to the pin; `build` recompiles every ipu6
+  object at W=1), but `checkpatch` passes vacuously ("no patches") until
+  PR 6 adds the first kernel patch. Verified with throw-away patches:
+  a style/no-`Signed-off-by` patch fails `checkpatch`, a patch adding a
+  function without a prototype fails `build`, and a non-applying patch
+  fails `series-applies` (and `build` is SKIPped). The pin's `defconfig`
+  has `CONFIG_WERROR=y`, so W=1 warnings in ipu6 are already hard errors
+  on top of the rung's log scan.
+- (PR 3) `build` only builds the tip of the series. The "every patch
+  builds on its own" rule in `patches/ipu6-ipu4/README.md` is not
+  checked yet; add a per-patch build (e.g. `git rebase -x`) once the
+  series has more than one patch.
 
 ## Parallel track — QEMU coverage for IPU4P and IPU6
 
