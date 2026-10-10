@@ -2,7 +2,8 @@
 
 Renders a single-page GitHub Pages site with the project's "current
 state": code coverage, MMIO divergence, register coverage, upstream
-divergence + watcher state, latest CI runs, and STATUS.md milestones.
+divergence + watcher state, latest CI runs, STATUS.md milestones, and
+the IPU4-on-upstream-ipu6 port's test ladder per QEMU variant.
 
 Deployed by `.github/workflows/pages.yml` via `actions/deploy-pages`
 on every push to `main`, every successful `vm-smoke` completion, and
@@ -61,11 +62,42 @@ The dashboard is a contract over files already produced elsewhere:
 | `tools/tests/out/compare-mmio/report.json` | `tools/tests/compare-mmio.sh` | optional |
 | `tools/tests/out/compare-mmio/report.txt` | same | optional |
 | `tools/tests/out/streamon.summary` | `tools/tests/streamon-smoke.sh` | optional |
+| `tools/tests/out/ipu6-ladder-results/**/results.json` (`$IPU6_LADDER_DIR`) | `tools/tests/ipu6/ladder.sh`, via the `ipu6-ladder-results-<variant>` artifacts of `vm-ipu6` | optional (matrix renders "not run yet") |
+| `tools/tests/out/ipu6-ladder/results.json` | a local `tools/tests/ipu6/ladder.sh` run | optional |
+| `tools/tests/ipu6/ladder.sh --list` | committed | optional (row names before any results exist) |
 | `tools/notes/registers.md` | committed | yes |
 | `tools/notes/upstream-watch-state.json` | `tools/upstream/watch.sh` (committed) | yes |
 | `tools/notes/upstream-diff/summary.md` | `tools/upstream/diff.sh` (regenerated each pages run) | optional |
 | `STATUS.md` | committed | yes |
 | GitHub Actions API | `gh api` at build time | optional |
+
+## IPU4 port section (`results.json`)
+
+`tools/tests/ipu6/ladder.sh` writes `tools/tests/out/ipu6-ladder/results.json`
+at the end of every run (schema 1):
+
+```jsonc
+{
+  "schema": 1,
+  "variant": "ipu4",              // $IPU4_VARIANT: ipu4 | ipu4p | ipu6
+  "generated_at": "2026-10-10T12:14:40Z",
+  "commit_sha": "…", "run_id": "…", "run_url": "…",   // null outside CI
+  "pin": {"url": "https://github.com/ruslanbay/linux.git", "sha": "…"},
+  "series": {"count": 1, "patches": [{"file": "0001-….patch", "subject": "media: ipu6: …"}]},
+  "enabled_tests": "tools/tests/ipu6/enabled-tests",
+  "exit_status": 0,
+  "rungs": [
+    {"name": "build", "depends_on": "series-applies", "enabled": true,
+     "result": "PASS", "duration_s": 27}
+  ]
+}
+```
+
+`result` is one of `PASS`, `FAIL`, `SKIP`, `NOT-IMPLEMENTED` or `NOT-RUN`
+(rung not selected on the command line); `enabled` means the rung is
+listed in the variant's `enabled-tests` and gates CI. `parse_ladder.py`
+keeps the newest file per `variant` and always shows the `ipu4`, `ipu4p`
+and `ipu6` columns, so a variant without data reads "not run yet".
 
 ## Local render
 
@@ -74,7 +106,10 @@ The dashboard is a contract over files already produced elsewhere:
 tools/upstream/diff.sh
 
 # Render to /tmp/site/. No vm-smoke artifacts → coverage / mmio
-# sections render as "no data yet" placeholders.
+# sections render as "no data yet" placeholders. A local
+# tools/tests/ipu6/ladder.sh run fills the ipu4 column of the IPU4
+# port section; IPU6_LADDER_DIR=<dir> points at downloaded
+# ipu6-ladder-results-* artifacts instead.
 OUT_DIR=/tmp/site tools/dashboard/build.sh
 xdg-open /tmp/site/index.html
 ```
@@ -92,6 +127,7 @@ The script tolerates missing inputs so a checkout without a recent
 | `render.py` | Jinja2 → `index.html`, copies CSS, writes `data/history.json`. |
 | `parse_registers.py` | `tools/notes/registers.md` → `{rows, counts}`. Tested. |
 | `parse_status.py` | `STATUS.md` → milestone list with state classification. Tested. |
+| `parse_ladder.py` | ipu6 ladder `results.json` files → rung × variant matrix. Tested. |
 | `templates/index.html.j2` | Single page. Embeds Chart.js from CDN; no JS build step. |
 | `templates/style.css` | Dark-mode CSS, no framework. |
 

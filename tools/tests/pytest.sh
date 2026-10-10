@@ -25,6 +25,7 @@ exec pytest tests/ \
 	--cov=normalize_report \
 	--cov=parse_registers \
 	--cov=parse_status \
+	--cov=parse_ladder \
 	--cov-report=term-missing \
 	--cov-fail-under=90 \
 	"$@"

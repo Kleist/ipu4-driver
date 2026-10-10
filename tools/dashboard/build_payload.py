@@ -20,6 +20,7 @@ from pathlib import Path
 
 # Make the parsers importable when this script lives next to them.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import parse_ladder  # noqa: E402
 import parse_registers  # noqa: E402
 import parse_status  # noqa: E402
 
@@ -180,6 +181,36 @@ def _duration(start: str | None, end: str | None) -> str | None:
     return f"{secs // 60}m{secs % 60:02d}s"
 
 
+def _ladder_rungs(root: Path) -> list[str]:
+    """Rung names from ``ladder.sh --list``, so the IPU4-port matrix
+    has its rows even before any vm-ipu6 run published results."""
+    ladder = root / "tools" / "tests" / "ipu6" / "ladder.sh"
+    if not ladder.is_file():
+        return []
+    try:
+        out = subprocess.check_output(
+            ["bash", str(ladder), "--list"], stderr=subprocess.DEVNULL, timeout=30,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return []
+    return [line.strip() for line in out.decode().splitlines() if line.strip()]
+
+
+def _ipu6_port(root: Path, repo: str, ladder_dirs: list[str], run_id: str | None) -> dict:
+    port = parse_ladder.build(
+        parse_ladder.load_results(ladder_dirs), _ladder_rungs(root),
+    )
+    primary = port["primary"] or {}
+    if run_id:
+        run_url = f"https://github.com/{repo}/actions/runs/{run_id}"
+    else:
+        run_url = primary.get("run_url")
+    port["run_url"] = run_url
+    port["workflow_url"] = f"https://github.com/{repo}/actions/workflows/vm-ipu6.yml"
+    port["plan_url"] = f"https://github.com/{repo}/blob/main/tools/notes/ipu6-ipu4-plan.md"
+    return port
+
+
 def _append_history(out_dir: Path, payload: dict, vm_smoke_run_id: str | None) -> dict:
     history_path = out_dir / "data" / "history.json"
     history = _read_json(history_path) or {"schema": 1, "points": []}
@@ -233,6 +264,9 @@ def main(argv=None):
     p.add_argument("--streamon-summary", required=True, help="streamon.summary file")
     p.add_argument("--repo", required=True, help="GitHub owner/name slug")
     p.add_argument("--vm-smoke-run-id", default=None)
+    p.add_argument("--ipu6-ladder-dir", action="append", default=[],
+                   help="dir searched for ladder results*.json (repeatable)")
+    p.add_argument("--vm-ipu6-run-id", default=None)
     args = p.parse_args(argv)
 
     root = Path(args.root)
@@ -265,6 +299,7 @@ def main(argv=None):
         "registers": registers,
         "milestones": milestones,
         "upstream": {"diff": upstream_diff, "watch": upstream_watch},
+        "ipu6_port": _ipu6_port(root, args.repo, args.ipu6_ladder_dir, args.vm_ipu6_run_id),
     }
     payload["history"] = _append_history(out_dir, payload, args.vm_smoke_run_id)
 
