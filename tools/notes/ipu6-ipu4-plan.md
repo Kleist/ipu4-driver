@@ -344,6 +344,16 @@ shown not to break the other variants of the shared driver.
   `data/trace.txt`.
 - Runs as separate PRs interleaved with the main sequence; it never
   blocks it.
+- **PRs.** One PR per ladder rung for the variant, top of the table
+  first, at most 3 stacked (`CLAUDE.md`). The stack starts from `main`
+  and is independent of the main sequence's stack.
+
+  | PR | Content | `enabled-tests.<variant>` gains | State |
+  |---|---|---|---|
+  | V1 | `vm-ipu6` matrix (`ipu4`, `ipu6`), `IPU4_VARIANT` plumbing in `ladder.sh` / `run-vm.sh` | ipu6: `series-applies`, `build`, `checkpatch` | in review |
+  | V2 | QEMU `variant=ipu6` property (IPU6 PCI ID), variant-aware `vm-boot` | ipu6: `vm-boot` | |
+  | V3 | variant-aware `module-load` | ipu6: `module-load` | |
+
 - **Dashboard hook (Pages PR):** the Pages "IPU4 port" matrix already
   has `ipu4`, `ipu4p` and `ipu6` columns. A variant lights up once its
   matrix leg runs the ladder with `IPU4_VARIANT=<variant>` (recorded in
@@ -353,3 +363,16 @@ shown not to break the other variants of the shared driver.
   `IPU4_VARIANT` / `IPU4_IPU6_ENABLED_TESTS` (per-variant list) to the
   ladder step is all that is needed. Pages picks up every
   `ipu6-ladder-results-*` artifact of the run.
+- (V1) The static rungs are variant-independent; the ipu6 leg gates them
+  anyway so its column on the dashboard starts green, and they cost
+  ~1 min per leg. `IPU4_VARIANT` is validated by `ladder.sh` (ipu4,
+  ipu4p, ipu6) and selects `enabled-tests` (ipu4) or
+  `enabled-tests.<variant>`; a missing file gates nothing. `run-vm.sh`
+  passes `-device ipu4,variant=<v>` for non-ipu4 variants only, so the
+  fork flow's QEMU command line is unchanged; until V2 adds the
+  property, QEMU rejects it and the ipu6 leg's VM rungs FAIL (ungated)
+  instead of silently booting the IPU4 model. The two legs share the
+  QEMU and Linux cache keys (only one saves; the other logs "unable to
+  reserve cache"). Adding the matrix renames the check from `ladder` to
+  `ladder (ipu4)` / `ladder (ipu6)`; update branch protection if it
+  requires `ladder` by name.
