@@ -1,0 +1,56 @@
+name: vm-ipu6
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+# Test ladder for the ipu6 flavor (IPU4_FLAVOR=ipu6): the pinned upstream
+# ipu6 tree (tools/ipu6/pin) + patches/ipu6-ipu4/. Plan and rung table:
+# tools/notes/ipu6-ipu4-plan.md.
+#
+# tools/tests/ipu6/ladder.sh runs every known rung and prints a
+# PASS / FAIL / SKIP / NOT-IMPLEMENTED table (also in the job summary).
+# Only the rungs listed in tools/tests/ipu6/enabled-tests fail the job, so
+# rungs that are not switched on yet stay visible without blocking merges.
+#
+# Runs alongside ci.yml / vm-smoke.yml (fork flow); nothing here touches
+# tools/linux/.
+
+jobs:
+  ladder:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup harness (apt)
+        uses: ./.github/actions/setup-harness
+
+      # The pinned tree is ~300 MB of git objects; the module build on top
+      # of modules_prepare is well under a minute, so the cache mainly
+      # saves the fetch. Keyed by the pin so a pin bump starts clean (the
+      # restore prefix includes it); bootstrap resets the restored tree to
+      # the pin and re-applies the series, keeping mtimes of untouched
+      # files so make only rebuilds what changed.
+      - name: Cache ipu6 Linux tree
+        uses: actions/cache@v4
+        with:
+          path: tools/linux-ipu6
+          key: linux-ipu6-${{ hashFiles('tools/ipu6/pin') }}-${{ hashFiles('patches/ipu6-ipu4/**', 'tools/ipu6/*.sh') }}
+          restore-keys: |
+            linux-ipu6-${{ hashFiles('tools/ipu6/pin') }}-
+
+      - name: Run ipu6 ladder
+        run: ./tools/tests/ipu6/ladder.sh
+
+      - name: Upload ladder logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-ipu6-ladder-${{ github.run_id }}
+          path: tools/tests/out/ipu6-ladder/
+          if-no-files-found: ignore
