@@ -1,17 +1,28 @@
 #!/usr/bin/env bash
 # Boot the test VM with the forked QEMU and the IPU4 device model attached.
 # Reads bzImage / rootfs.cpio.gz produced by tools/build-kernel.sh and
-# tools/rootfs/build.sh.
+# tools/rootfs/build.sh. IPU4_FLAVOR=ipu6 picks the ipu6-flavor kernel
+# (tools/linux-ipu6/) and initramfs (tools/rootfs/out-ipu6/).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 QEMU_DIR="$ROOT/tools/qemu"
-LINUX_DIR="$ROOT/tools/linux"
+case "${IPU4_FLAVOR:-fork}" in
+fork)
+	LINUX_DIR="$ROOT/tools/linux"
+	ROOTFS_OUT="$ROOT/tools/rootfs/out"
+	;;
+ipu6)
+	LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$ROOT/tools/linux-ipu6}"
+	ROOTFS_OUT="$ROOT/tools/rootfs/out-ipu6"
+	;;
+*) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork or ipu6)" >&2; exit 1 ;;
+esac
 
 QEMU_BIN="${IPU4_QEMU_BIN:-$QEMU_DIR/build/qemu-system-x86_64}"
 KERNEL="${IPU4_KERNEL:-$LINUX_DIR/arch/x86/boot/bzImage}"
-INITRD="${IPU4_INITRD:-$ROOT/tools/rootfs/out/rootfs.cpio.gz}"
+INITRD="${IPU4_INITRD:-$ROOTFS_OUT/rootfs.cpio.gz}"
 SHARE_DIR="${IPU4_TESTS_SHARE:-$ROOT/tools/tests/out}"
 mkdir -p "$SHARE_DIR"
 
