@@ -17,6 +17,7 @@ source = [
     "normalize_report",
     "parse_registers",
     "parse_status",
+    "parse_ladder",
 ]
 
 [tool.coverage.report]

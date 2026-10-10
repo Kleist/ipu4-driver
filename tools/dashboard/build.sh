@@ -7,6 +7,9 @@
 #   tools/tests/out/compare-mmio/report.json    ($MMIO_DIR/report.json)
 #   tools/tests/out/compare-mmio/report.txt     ($MMIO_DIR/report.txt) → site/mmio/
 #   tools/tests/out/streamon.summary            ($STREAMON_SUMMARY)
+#   tools/tests/out/ipu6-ladder-results/**/results.json  ($IPU6_LADDER_DIR,
+#                                               vm-ipu6 artifacts) and
+#   tools/tests/out/ipu6-ladder/results.json    (a local ladder.sh run)
 #   tools/notes/registers.md
 #   tools/notes/upstream-watch-state.json
 #   tools/notes/upstream-diff/summary.md        (regenerated if missing)
@@ -34,6 +37,8 @@ MMIO_DIR="${MMIO_DIR:-$ROOT/tools/tests/out/compare-mmio}"
 STREAMON_SUMMARY="${STREAMON_SUMMARY:-$ROOT/tools/tests/out/streamon.summary}"
 REPO_SLUG="${REPO_SLUG:-Kleist/ipu4-driver}"
 VM_SMOKE_RUN_ID="${VM_SMOKE_RUN_ID:-}"
+IPU6_LADDER_DIR="${IPU6_LADDER_DIR:-$ROOT/tools/tests/out/ipu6-ladder-results}"
+VM_IPU6_RUN_ID="${VM_IPU6_RUN_ID:-}"
 
 mkdir -p "$OUT_DIR" "$OUT_DIR/data"
 
@@ -49,6 +54,9 @@ python3 "$HERE/build_payload.py" \
   --streamon-summary "$STREAMON_SUMMARY" \
   --repo "$REPO_SLUG" \
   ${VM_SMOKE_RUN_ID:+--vm-smoke-run-id "$VM_SMOKE_RUN_ID"} \
+  --ipu6-ladder-dir "$IPU6_LADDER_DIR" \
+  --ipu6-ladder-dir "$ROOT/tools/tests/out/ipu6-ladder" \
+  ${VM_IPU6_RUN_ID:+--vm-ipu6-run-id "$VM_IPU6_RUN_ID"} \
   > "$PAYLOAD"
 
 # --- render ---

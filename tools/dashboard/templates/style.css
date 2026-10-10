@@ -136,6 +136,35 @@ code {
 .milestones li.state-deferred { border-left-color: var(--muted); }
 .milestones li.state-unknown { border-left-color: var(--bad); }
 
+.ladder-variant { border-left-width: 3px; }
+.ladder-variant.ladder-ok { border-left-color: var(--good); }
+.ladder-variant.ladder-bad { border-left-color: var(--bad); }
+.ladder-variant.ladder-none .kpi-value { color: var(--muted); }
+.ladder-failing { color: var(--bad); }
+.table-scroll { overflow-x: auto; }
+.ladder-table td.ladder-cell { white-space: nowrap; }
+.ladder-cell.res-pass { color: var(--good); }
+.ladder-cell.res-fail { color: var(--bad); font-weight: 600; }
+.ladder-cell.res-skip { color: var(--warn); }
+.ladder-cell.res-not-implemented,
+.ladder-cell.res-not-run,
+.ladder-cell.res-unknown,
+.ladder-cell.res-none { color: var(--muted); }
+.ladder-cell.res-none { font-style: italic; }
+.ladder-cell .gated {
+  display: inline-block;
+  margin-left: 0.35em;
+  padding: 0 0.4em;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ladder-cell .dur { color: var(--muted); font-size: 0.8em; margin-left: 0.3em; }
+.series { margin: 0.25rem 0 0.5rem 1.25rem; padding: 0; }
+.series li { margin-bottom: 0.2rem; }
+
 .watch-state { margin: 0.25rem 0 0.5rem 1.25rem; padding: 0; }
 .watch-state li { margin-bottom: 0.2rem; }
 
