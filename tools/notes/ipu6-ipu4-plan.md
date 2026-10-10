@@ -41,6 +41,19 @@ alignment fix) are picked up by an explicit pin-bump PR, not automatically.
   `ipu4p_*`, `checkpatch.pl --strict` clean, every patch builds on its own.
 - Every change goes in through a PR from a short-lived branch into `main`.
 
+## Working rules
+
+- **Every step starts by re-reading this plan** (on the tip of the branch
+  it builds on) and **ends by updating it** in the same PR: the "State"
+  column, any change to the PR → rung mapping, and new facts in
+  "Learnings" below. A PR that learned nothing says so in its
+  description.
+- **Steps are pipelined.** As soon as a step's PR is up, the next step
+  starts on a branch stacked on it while the previous PR is in review.
+  The stacked PR targets the previous step's branch and is retargeted
+  to `main` once that merges. Review feedback on an earlier PR is merged
+  forward into the stacked branches.
+
 ## Decisions
 
 | # | Decision |
@@ -135,6 +148,26 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 The patch-to-rung mapping follows probe order and may shift by one when
 the real probe path is run; if a patch can't turn a rung green on its own,
 the PR is split rather than enabling nothing.
+
+## Learnings
+
+Facts found while executing the plan that later steps depend on. Newest
+last; each entry names the PR that found it.
+
+- (PR 1) The pinned tree also carries Ruslan's downstream IPU4/IPU4P
+  driver (`CONFIG_VIDEO_INTEL_IPU`, `drivers/media/pci/intel/ipu4/`,
+  `ipu-*.c`). It binds `5a88`/`8a19` too, so the harness config must
+  keep it disabled.
+- (PR 1) `lore.kernel.org` and `git.kernel.org` are not reachable from the
+  CI/agent sandbox; GitHub is. Fetch kernel trees from GitHub mirrors.
+- (PR 1) The QEMU model hard-codes the syscom queue layout with the queue
+  pointer base at DMEM register 6 (msg-send cursors at DMEM regs 10, 12, …),
+  matching IPU4 silicon. A driver that uses IPU4P's base (8) on IPU4 gets
+  no firmware responses from the model.
+- (PR 1) The model never answers the firmware proxy queue. Ruslan's
+  `set_iwake_register` sends proxy tokens and waits up to 100 ms for a
+  reply, so expect timeouts/errors there until the model or the driver
+  path is adjusted.
 
 ## Parallel track — QEMU coverage for IPU4P and IPU6
 
