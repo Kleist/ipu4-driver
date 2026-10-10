@@ -16,7 +16,7 @@ ladder_test probe-mmu probe-buttress
 # 0xffffffff, silicon 0x1 / 0xffff) and the address translator ZLW
 # registers from +0x100 (the reference driver programs them, upstream
 # ipu6 does not). The ISYS MMU (+0x1e0000) is only initialised at ISYS
-# runtime resume (first stream open), so it is not part of this test.
+# runtime resume (first stream open); isys-irq checks it.
 test_probe-mmu() {
 	boot_probe_vm || return 1
 	probe_log_ok &&
