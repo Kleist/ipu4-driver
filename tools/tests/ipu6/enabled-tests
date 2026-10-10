@@ -19,3 +19,6 @@ module-load
 
 # new_id bind of 5a88 identifies IPU4 (plan PR 6, first kernel patch).
 probe-identify
+
+# ISYS/PSYS power-up through the IPU4 buttress controls (plan PR 7).
+probe-buttress

@@ -144,8 +144,8 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | 3 | Enable static rungs on the empty series | `series-applies`, `build`, `checkpatch` | in review (#102) |
 | 4 | Guest kernel config + rootfs for the ipu6 flavor | `vm-boot` | in review (#103) |
 | 5 | Standalone virt-sensor module, init loads `intel-ipu6*` | `module-load` | in review (#104) |
-| 6 | `media: ipu6: Identify IPU4 devices` (helper, PCI ID, firmware name, probe case; no table entry) | `probe-identify` | in review |
-| 7 | `media: ipu6: Add IPU4 buttress support` + harness stages a synthesized `intel/ipu/ipu4_fw.bin` (see PR 6 learnings) | `probe-buttress` | |
+| 6 | `media: ipu6: Identify IPU4 devices` (helper, PCI ID, firmware name, probe case; no table entry) | `probe-identify` | in review (#106) |
+| 7 | `media: ipu6: Add IPU4 buttress support` + harness stages a synthesized `intel/ipu/ipu4_fw.bin` (see PR 6 learnings) | `probe-buttress` | in review |
 | 8 | `media: ipu6: Add IPU4 MMU support` | `probe-mmu` | |
 | 9 | Internal pdata (`media: ipu6: Add IPU4 platform data`); the firmware name landed in PR 6 | `probe-fw` | |
 | 10 | `media: ipu6: Add IPU4 ISYS and CSI-2 register definitions` + `media: ipu6: Add IPU4 ISYS interrupt handling` + wire-up in ISYS | `probe-complete` | |
@@ -364,6 +364,87 @@ last; each entry names the PR that found it.
   W=1-clean with it. Timings (4 cores, TCG, warm): full ladder 64 s
   (`vm-boot` 37 s incl. the kernel rebuild for the new patch,
   `probe-identify` 5 s); `series-applies` + `probe-identify` alone 38 s.
+- (PR 7) Second kernel patch `0002-media-ipu6-Add-IPU4-buttress-support.patch`
+  (0001 kept byte-identical; 0002 generated with `format-patch -N
+  --start-number 2 HEAD~1`). Values checked against the silicon trace
+  (`data/trace.txt`, BAR `0x90000000`): power-up writes IS_FREQ_CTL
+  `0x80000004` and PS_FREQ_CTL `0x80001212`, PWR_STATE then reads
+  `0xa72433` (IS FSM 23:20 = `0xa`) and `0xfa72333` (PS FSM 28:24 =
+  `0xf`); power-down writes 0. So the FREQ_CTL layout is IPU6's
+  (ratio 7:0, QoS floor 15:8; IS ratio 4 / floor 0, PS ratio 0x12 / floor
+  0x12) **without** the ICCMAX level (19:16) that `__ipu6_power()` always
+  sets. The patch therefore reuses `__ipu6_power()` with an
+  `if (!IS_IPU4(isp))` around the ICCMAX bit instead of adding an
+  `__ipu4_power()` (Ruslan's IPU4P needs one for its shifted ratio
+  fields; IPU4 does not). Also in the patch: IPU4 `ipu6_buttress_ctrl`
+  pair, an `ipu4_buttress_regs` table (copy of `ipu6_buttress_regs` with
+  `irq_status = BUTTRESS_REG_ISR_ENABLED_STATUS`, like IPU7P5's copy for
+  one differing field; the trace only ever reads 0x94), bootloader status
+  at PSYS + 0x8000 via `(IS_IPU4(isp) || IS_IPU4P(isp))` reusing
+  `IPU4P_BOOTLOADER_STATUS_OFFSET`, and the probe case points at them.
+  One patch: the register-set part is a table plus one line, too small to
+  split.
+- (PR 7) The QEMU model already matches: `IS/PS_FREQ_CTL` BIT(31) latches
+  per-island power, PWR_STATE composes `0xa << 20` / `0xf << 24`, ICCMAX
+  is ignored, 0x90 and 0x94 read the same. No model change needed. The
+  model pre-sets AUTH_DONE in SECURITY_CTL, so `ipu6_buttress_authenticate()`
+  returns early and the bootloader-offset change is not exercised by any
+  rung (silicon-only, per the fork and the trace).
+- (PR 7) Deferred buttress differences (not on the probe path, all
+  ISYS-stream time): TSC sync polls `BUTTRESS_PWR_STATE_HH_STATUS_MASK`
+  = GENMASK(12, 11), but IPU4 reports the handshake in bits 13:12 (fork
+  `IPU4_BUTTRESS_PWR_STATE_HH_STATUS_MASK`; silicon `0xa72433` has DONE=2
+  in 13:12 and 0 in 12:11; the model sets `2 << 12`). It runs in
+  `isys_runtime_pm_resume()`, i.e. at the first stream-on, so it will
+  show up as "Start tsc sync timeout" at `fw-open`/`stream-on`; it needs
+  an IPU4 case (a follow-up buttress patch or with the ISYS patches).
+  TSC tick conversion uses `b->ref_clk` from BTRS_CTRL; silicon reads
+  BTRS_CTRL `0x10` (REF_CLK_IND 0 → 24.0 MHz) while the fork hard-codes
+  19.2 MHz for IPU4 — timestamps only, decide with the stream rungs.
+  The SECURITY_TOUCH / CAMERA_MASK debug reads that Ruslan skips for
+  IPU4P are kept for IPU4 (the fork reads them too; the model returns 0).
+- (PR 7) Harness: `tools/rootfs/build.sh` stages the `gen-cpd.py` blob
+  under the name each flavor requests (`FW_NAME`): fork
+  `/lib/firmware/ipu4_cpd_b0.bin` (unchanged), ipu6
+  `/lib/firmware/intel/ipu/ipu4_fw.bin`. `probe-identify` keeps passing
+  with the file present (dyndbg "Loading firmware from ..." marker).
+- (PR 7) Once power-up works, the PSYS MMU init maps the 8 MB trash
+  buffer page by page with `dev_dbg` per page (~8000 lines), which pushes
+  the start of probe out of the kernel log buffer and broke the
+  `identify` check. `init.ipu6-probe` now turns off `ipu6-mmu.c` debug
+  after insmod, except `format "iova trash buffer"`, and dumps every
+  `intel_ipu6`/`intel-ipu6` line (aux devices too), not just the PCI
+  device's.
+- (PR 7) `probe-buttress` = `PROBE:buttress ok` + `PROBE:pwr-errors
+  none`: the `intel_ipu6.psys.*: iova trash buffer for MMUID` line
+  (printed by the PSYS MMU init right after the PSYS runtime resume,
+  which powers up ISYS — its parent — first), both aux devices
+  `runtime_status` = suspended after probe (power-down through the FSM
+  worked), and no "Change power status timeout" / "power down failed!"
+  from bind to rmmod. The probe rungs now share one VM boot per ladder
+  run (`boot_probe_vm`, stamp file because rungs run in a subshell).
+  Gate check: without 0002, `probe-buttress` FAILs with
+  `PROBE:buttress fail (Change power status timeout)` (`0xa02003`, twice)
+  while `probe-identify` still passes. Timings (4 cores, TCG, warm):
+  full ladder 68 s (`vm-boot` 38 s incl. the kernel rebuild for the new
+  patch, `probe-identify` 6 s incl. the boot, `probe-buttress` 0 s on the
+  shared boot).
+- (PR 7) **How far probe gets now: all the way.** Under the model,
+  `ipu6_pci_probe()` completes ("IPU0-v0[5a88] hardware version 128"; SKU
+  reads 0): PSYS MMU hw init passes with the IPU6 MMU defaults, the
+  firmware is mapped, authentication short-circuits on the model's
+  AUTH_DONE, and the ISYS driver probes too (virt-sensor bound on port 0,
+  `/dev/media0`, 32 `/dev/video*`, subdevs). Unbind/rmmod are clean, no
+  oops. So the model does not distinguish the IPU6 from the IPU4 MMU
+  layout at probe: `probe-mmu`, `probe-fw` and `probe-complete` as
+  defined above would already pass with PR 7 and cannot gate PR 8/9/10.
+  The first IPU4-specific failure is expected at `fw-open` (ISYS runtime
+  resume: ISYS MMU hw init, TSC sync HH mask, SysCom queue base 8 vs 6).
+  PR 8 has to redefine `probe-mmu` on something the model can observe —
+  e.g. the MMU L1/L2 stream block-size registers written in
+  `ipu6_mmu_hw_init()` checked against the IPU4 values (model-side
+  check or an mmiotrace compare), or a model change that rejects wrong
+  values (separate PR) — or the mapping should be reordered.
 
 ## Parallel track — QEMU coverage for IPU4P and IPU6
 

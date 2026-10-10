@@ -8,10 +8,16 @@
 # Markers, parsed by the ladder on the host:
 #   PROBE:ok|fail <what>     individual checks
 #   PROBE:identify ok|fail   probe accepted 5a88 as IPU4
+#   PROBE:buttress ok|fail   ISYS/PSYS powered up, then down again
+#   PROBE:pwr-errors none|found  no buttress power-up/-down error from
+#                            bind to rmmod
+#   PROBE:info <what>        how far probe got (not a check)
 #   PROBE:oops none|found    kernel log free of oops/BUG/WARNING
 #   PROBE: DONE              the init ran to the end
 # The probe result itself (PROBE:bound yes|no) is informational until
-# the probe-* rung that needs it is enabled.
+# the probe-* rung that needs it is enabled. The *fail markers of the
+# individual rungs (identify, buttress, ...) are not "PROBE:fail", so
+# each rung checks its own marker.
 
 PATH=/bin:/sbin
 export PATH
@@ -46,6 +52,17 @@ for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
 	fi
 done
 
+# The MMU code logs every page it maps at debug level; mapping the 8 MB
+# trash buffer alone pushes the start of probe out of the kernel log
+# buffer. Keep its debug output off, except the line that says the MMU
+# hardware init got as far as the trash buffer.
+echo 'file drivers/media/pci/intel/ipu6/ipu6-mmu.c -p' \
+	> /proc/dynamic_debug/control 2>/dev/null ||
+	say "fail ipu6-mmu dyndbg"
+echo 'format "iova trash buffer" +p' \
+	> /proc/dynamic_debug/control 2>/dev/null ||
+	say "fail trash buffer dyndbg"
+
 ipu=
 for dev in /sys/bus/pci/devices/*; do
 	if [ "$(cat "$dev/vendor")" = 0x8086 ] &&
@@ -64,7 +81,7 @@ else
 fi
 
 echo "=== dmesg (intel-ipu6 $ipu) ==="
-dmesg | grep -F "$ipu"
+dmesg | grep -E "$ipu|intel_ipu6|intel-ipu6"
 echo "=== end dmesg ==="
 
 # Identification: the device switch in ipu6_pci_probe() either rejects
@@ -83,6 +100,59 @@ else
 	say "identify fail (no request for intel/ipu/ipu4_fw.bin)"
 fi
 
+# Buttress power. probe powers up ISYS and PSYS by runtime-resuming the
+# PSYS device (the ISYS device is its parent): ipu6_buttress_power()
+# writes IS/PS_FREQ_CTL and polls the PWR_STATE FSM, logging "Change
+# power status timeout" if it does not get there. The PSYS MMU hardware
+# init runs right after that and logs the trash buffer it maps, which is
+# the positive marker for power-up. At the end of probe both devices are
+# runtime-suspended again, which powers them down through the same FSM;
+# a failed power-down leaves them active ("power down failed!").
+aux=/sys/bus/auxiliary/devices
+if dmesg | grep -q 'intel_ipu6\.psys\..*iova trash buffer for MMUID'; then
+	powered_up=1
+else
+	powered_up=
+fi
+suspended=
+i=0
+while [ "$i" -lt 50 ]; do
+	n=0
+	for d in "$aux"/intel_ipu6.isys.* "$aux"/intel_ipu6.psys.*; do
+		[ "$(cat "$d/power/runtime_status" 2>/dev/null)" = suspended ] &&
+			n=$((n + 1))
+	done
+	if [ "$n" = 2 ]; then
+		suspended=1
+		break
+	fi
+	sleep 0.1
+	i=$((i + 1))
+done
+for d in "$aux"/intel_ipu6.*; do
+	[ -e "$d" ] || continue
+	say "info ${d##*/} $(cat "$d/power/runtime_status")"
+done
+if dmesg | grep -q 'Change power status timeout'; then
+	say "buttress fail (Change power status timeout)"
+elif [ -z "$powered_up" ]; then
+	say "buttress fail (PSYS runtime resume did not reach the MMU init)"
+elif [ -z "$suspended" ]; then
+	say "buttress fail (ISYS/PSYS not runtime-suspended after probe)"
+else
+	say "buttress ok"
+fi
+
+# How far probe got, for the later probe-* rungs.
+if dmesg | grep -F "$ipu" | grep -q 'hardware version'; then
+	say "info pci probe done"
+fi
+n=0
+for v in /dev/video*; do
+	[ -e "$v" ] && n=$((n + 1))
+done
+say "info $n video nodes"
+
 if [ -e "/sys/bus/pci/devices/$ipu/driver" ]; then
 	say "bound yes"
 	echo "$ipu" > /sys/bus/pci/drivers/intel-ipu6/unbind
@@ -99,6 +169,12 @@ for m in intel_ipu6_isys intel_ipu6 virt_sensor; do
 		say "fail rmmod $m"
 	fi
 done
+
+if dmesg | grep -E 'Change power status timeout|power down failed'; then
+	say "pwr-errors found"
+else
+	say "pwr-errors none"
+fi
 
 if dmesg | grep -E 'Oops|BUG:|WARNING:|Call Trace'; then
 	say "oops found"
