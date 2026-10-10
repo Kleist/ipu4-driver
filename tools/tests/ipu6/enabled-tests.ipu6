@@ -11,3 +11,6 @@
 series-applies
 build
 checkpatch
+
+# Guest boot with the model presenting 8086:9a19 (plan "Parallel track", V2).
+vm-boot
