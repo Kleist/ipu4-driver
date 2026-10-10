@@ -1,0 +1,11 @@
+# Ladder rungs gated in CI for the ipu6 variant of the QEMU model
+# (IPU4_VARIANT=ipu6; plan "Parallel track" in
+# tools/notes/ipu6-ipu4-plan.md). Same format as enabled-tests (the ipu4
+# list): one rung name per line, '#' starts a comment. The variant leg
+# shows that the IPU4 series does not break plain IPU6; each parallel-
+# track PR enables one more rung here.
+
+# Static rungs: variant-independent, same result as the ipu4 leg.
+series-applies
+build
+checkpatch

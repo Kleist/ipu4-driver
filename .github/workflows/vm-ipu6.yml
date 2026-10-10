@@ -15,6 +15,11 @@ on:
 # Only the rungs listed in tools/tests/ipu6/enabled-tests fail the job, so
 # rungs that are not switched on yet stay visible without blocking merges.
 #
+# One leg per QEMU model variant (plan "Parallel track"): ipu4 is the
+# port itself, ipu6 shows the series does not break plain IPU6. Each leg
+# passes IPU4_VARIANT to the ladder, which boots that variant and gates
+# on its own list (enabled-tests for ipu4, enabled-tests.<variant>).
+#
 # Runs alongside ci.yml / vm-smoke.yml (fork flow); nothing here touches
 # tools/linux/. QEMU comes from `tools/bootstrap.sh --qemu-only` and
 # shares its build cache with vm-smoke-reusable.yml (same key). The
@@ -24,6 +29,10 @@ on:
 jobs:
   ladder:
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [ipu4, ipu6]
     # Cold (no cache): QEMU build + full guest-kernel build dominate,
     # see the PR 4 learnings in the plan for measured times. Warm runs
     # rebuild only what the series touches.
@@ -73,15 +82,15 @@ jobs:
         run: ./tools/tests/ipu6/ladder.sh
         env:
           IPU4_ACCEL: tcg
+          IPU4_VARIANT: ${{ matrix.variant }}
 
       # Small dedicated artifact read by pages.yml (dashboard "IPU4 port"
-      # section). Named per QEMU variant so the parallel-track matrix can
-      # upload one per leg; matrix.variant is empty until that lands.
+      # section), one per QEMU variant leg.
       - name: Upload ladder results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ipu6-ladder-results-${{ matrix.variant || 'ipu4' }}
+          name: ipu6-ladder-results-${{ matrix.variant }}
           path: tools/tests/out/ipu6-ladder/results.json
           if-no-files-found: ignore
 
@@ -89,7 +98,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vm-ipu6-ladder-${{ github.run_id }}
+          name: vm-ipu6-ladder-${{ matrix.variant }}-${{ github.run_id }}
           path: |
             tools/tests/out/ipu6-ladder/
             tools/tests/out/vm-smoke-ipu6.serial
