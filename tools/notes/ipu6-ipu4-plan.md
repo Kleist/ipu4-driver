@@ -59,6 +59,9 @@ alignment fix) are picked up by an explicit pin-bump PR, not automatically.
   forward into the stacked branches. At most 3 unmerged PRs may be
   stacked (see `CLAUDE.md`); when the stack is full, the next step waits
   for the bottom PR to merge.
+- **Stay in this track's files.** Other tracks (QEMU variants) run in
+  parallel with their own plans; see "Tracks and file ownership" below
+  for which files each owns and how shared files are changed.
 
 ## Decisions
 
@@ -160,6 +163,42 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 The patch-to-test mapping follows probe order and may shift by one when
 the real probe path is run; if a patch can't turn a test green on its own,
 the PR is split rather than enabling nothing.
+
+## Tracks and file ownership
+
+Three tracks work on the ipu6 flavor in parallel, each with its own plan
+and its own PR stack from `main` (at most 3 stacked, `CLAUDE.md`):
+
+| Track | Plan | Owns |
+|---|---|---|
+| IPU4 port (this plan) | `tools/notes/ipu6-ipu4-plan.md` | `patches/ipu6-ipu4/`, `tools/tests/ipu6/enabled-tests` |
+| IPU6 variant | [`tools/notes/ipu6-variant-plan.md`](ipu6-variant-plan.md) | `tools/tests/ipu6/enabled-tests.ipu6` |
+| IPU4P variant | [`tools/notes/ipu4p-variant-plan.md`](ipu4p-variant-plan.md) | `tools/tests/ipu6/enabled-tests.ipu4p` |
+
+Goal of the variant tracks: run the same ladder against the other variants
+of the shared driver, so the IPU4 patches are shown not to break them. They
+run interleaved with this plan's sequence and never block it.
+
+To keep the tracks from conflicting:
+
+- **One file per test.** A ladder test is `tools/tests/ipu6/tests.d/NNN-<test>.sh`
+  and its guest-side probe checks are
+  `tools/rootfs/init.ipu6-probe.d/NNN-<test>.{bound,unloaded}.sh` (READMEs
+  there). A track adding a test adds files; it does not edit a shared list.
+  A test belongs to the track that added it; another track adapting it to
+  its variant does so with a `$IPU4_VARIANT` / `$want` case in that file,
+  in a PR of its own.
+- **Shared core changes go first, alone.** `ladder.sh`, `probe-boot.sh`,
+  the `init.ipu6-*` frames, `tools/run-vm.sh`, `tools/rootfs/build.sh` and
+  `vm-ipu6.yml` are shared. A change to them is its own small PR, merged
+  before the feature PR that needs it; feature PRs don't carry core
+  changes.
+- **Own plan only.** A track's PR edits its own plan file; facts another
+  track needs go in its PR description (and the owner records them).
+- **QEMU model.** `tools/qemu-patches/hw/misc/ipu4.c` is shared by every
+  variant. Variant-specific register behaviour goes behind the model's
+  `variant` switch in functions of its own (`ipu4p_*`, `ipu6v_*`), added
+  in their own hunks, so two variant tracks rarely touch the same lines.
 
 ## Learnings
 
@@ -559,89 +598,3 @@ last; each entry names the PR that found it.
   for intel/ipu/ipu4_fw.bin`, `PROBE:bound no`) and the later probe tests
   SKIP. `native-bind` is gone from the ladder: every probe test now binds
   natively.
-
-## Parallel track — QEMU coverage for IPU4P and IPU6
-
-Goal: run the same ladder against IPU4P and IPU6 so the IPU4 patches are
-shown not to break the other variants of the shared driver.
-
-- **Mechanism:** a `variant=` property on the QEMU device
-  (`-device ipu4,variant=ipu4|ipu4p|ipu6`) that switches PCI ID and the
-  per-variant register behaviour; a matrix job in `vm-ipu6.yml`, with one
-  `enabled-tests` list per variant.
-- **IPU4P — feasible, moderate.** Same firmware ABI and base offsets, so the
-  syscom/frame-delivery emulation is reused. Needs: PWR_STATE FSM values,
-  UNISPART SW bit 22, SIP0/SIP1 CSI IRQ windows, queue-pointer base register 8,
-  8 CSI-2 ports, PHY sideband registers as latches.
-- **IPU6 — feasible for probe-level tests, streaming is a larger project.**
-  IPU6 keeps syscom state in buttress boot-parameter registers, uses a
-  different firmware ABI, CSE authentication/secure mode and different MMU
-  and CSI-2 layouts. Plan: `vm-boot` → `probe-complete` first; streaming
-  only if it turns out to be worth it.
-- **Caveat:** there is no silicon trace for either variant here, so their
-  models are inferred from the driver, which risks testing the driver
-  against itself. An mmiotrace from a Surface Pro 7 (Ruslan /
-  linux-surface) would give IPU4P the same footing IPU4 has with
-  `data/trace.txt`.
-- Runs as separate PRs interleaved with the main sequence; it never
-  blocks it.
-- **Base.** The ipu6 variant runs on unpatched mainline v7.3-rc4
-  (`tools/ipu6/pin.upstream`), not the IPU4 pin + series: the IPU6
-  emulation is developed against the upstream driver as released.
-- **PRs.** One PR per ladder test for the variant, top of the table
-  first, at most 3 stacked (`CLAUDE.md`). The stack starts from `main`
-  and is independent of the main sequence's stack.
-
-  | PR | Content | `enabled-tests.<variant>` gains | State |
-  |---|---|---|---|
-  | V1 | `vm-ipu6` matrix (`ipu4`, `ipu6`), `IPU4_VARIANT` plumbing in `ladder.sh` / `run-vm.sh`, ipu6 base = unpatched mainline v7.3-rc4 | ipu6: `series-applies`, `build`, `checkpatch` | merged (#118) |
-  | V2 | QEMU `variant=ipu6` property (IPU6 PCI ID), variant-aware `vm-boot` | ipu6: `vm-boot` | in review (#119) |
-  | V3 | variant-aware `module-load` | ipu6: `module-load` | |
-
-- **Dashboard hook (Pages PR):** the Pages "IPU4 port" matrix already
-  has `ipu4`, `ipu4p` and `ipu6` columns. A variant lights up once its
-  matrix leg runs the ladder with `IPU4_VARIANT=<variant>` (recorded in
-  `results.json`) and uploads it as `ipu6-ladder-results-<variant>` —
-  the upload step already names the artifact `${{ matrix.variant ||
-  'ipu4' }}`, so adding `strategy.matrix.variant` and passing
-  `IPU4_VARIANT` / `IPU4_IPU6_ENABLED_TESTS` (per-variant list) to the
-  ladder step is all that is needed. Pages picks up every
-  `ipu6-ladder-results-*` artifact of the run.
-- (V1) The ipu6 variant is developed against **unpatched mainline
-  v7.3-rc4** (`tools/ipu6/pin.upstream`, GitHub mirror of torvalds/linux,
-  the IPU4 pin's base): neither Ruslan's IPU4P/IPU7 patches nor
-  `patches/ipu6-ipu4/`, so the model is checked against the upstream
-  driver as released. `ladder.sh` maps `IPU4_VARIANT` to a base and
-  exports it: ipu4 (and later ipu4p) → `tools/ipu6/pin` + the series in
-  `tools/linux-ipu6/`; ipu6 → `pin.upstream`, no series, in
-  `tools/linux-ipu6-upstream/` (a second ~300 MB shallow fetch plus its
-  own kernel build; separate trees so switching variants locally does
-  not rebuild everything). `tools/ipu6/bootstrap.sh` takes the base via
-  `IPU4_IPU6_PIN` / `IPU4_IPU6_PATCH_DIR` (empty = no series); every
-  other script already honoured `IPU4_IPU6_LINUX_DIR`.
-- (V1) Mainline has no `CONFIG_VIDEO_INTEL_IPU` (Ruslan's downstream
-  driver), so `tools/ipu6/build.sh` checks that it is not `=y`/`=m`
-  rather than that it is explicitly unset. `VIDEO_INTEL_IPU6_IPU7` is
-  also absent there; `olddefconfig` drops it.
-- (V1) On the ipu6 base `series-applies` is the bare fetch and
-  `checkpatch` passes vacuously ("no series"); both are gated anyway so
-  a broken fetch fails the leg. `IPU4_VARIANT` selects `enabled-tests`
-  (ipu4) or `enabled-tests.<variant>`; a missing file gates nothing.
-  `run-vm.sh` passes `-device ipu4,variant=<v>` for non-ipu4 variants
-  only, so the fork flow's QEMU command line is unchanged; until V2 adds
-  the property, QEMU rejects it and the ipu6 leg's VM tests FAIL
-  (ungated) instead of silently booting the IPU4 model.
-- (V1) CI: matrix `include` carries each variant's tree directory and pin
-  file for the tree cache (named after the directory, so the ipu4 key
-  is unchanged); the QEMU cache is shared. The dashboard cards show each
-  variant's base and series count, since the columns no longer share a
-  base. Adding the matrix renames the check from `ladder` to
-  `ladder (ipu4)` / `ladder (ipu6)`; update branch protection if it
-  requires `ladder` by name.
-- (V2) The model's `variant` property (`-device ipu4,variant=ipu6`) only
-  changes the PCI device ID to `9a19` (Tiger Lake, `IPU_VERSION_6`) via
-  `pci_config_set_device_id()` at realize; registers stay IPU4's. An
-  unknown variant fails realize. `run-vm.sh` maps the variant to its ID
-  and passes it to the guest as `ipu_pci_id=` (the kernel hands unknown
-  parameters to `/init`); `init.vm-smoke` reads `/proc/cmdline` and
-  defaults to `0x5a88`, so the fork flow is unaffected.

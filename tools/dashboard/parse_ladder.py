@@ -17,7 +17,7 @@ import json
 from pathlib import Path
 
 # Column order: IPU4 (the port), then the variants of the shared driver
-# it must not break (plan "Parallel track").
+# it must not break (plan "Tracks and file ownership").
 VARIANTS = ("ipu4", "ipu4p", "ipu6")
 
 RESULTS = ("PASS", "FAIL", "SKIP", "NOT-IMPLEMENTED", "NOT-RUN")

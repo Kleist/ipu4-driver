@@ -15,7 +15,7 @@
 #
 # IPU4_VARIANT (ipu4 | ipu4p | ipu6, default ipu4) picks the QEMU model
 # variant the VM tests boot (tools/run-vm.sh), the kernel base and the
-# enabled-tests file (plan "Parallel track"):
+# enabled-tests file (plan "Tracks and file ownership"):
 #
 #   ipu4, ipu4p  tools/ipu6/pin + patches/ipu6-ipu4/ in tools/linux-ipu6/
 #   ipu6         tools/ipu6/pin.upstream (mainline, no series) in
@@ -181,7 +181,7 @@ fi
 # Machine-readable copy of the table for the Pages dashboard
 # (tools/dashboard/parse_ladder.py; schema in tools/dashboard/README.md).
 # IPU4_VARIANT names the QEMU model variant the ladder ran against
-# (ipu4 | ipu4p | ipu6; plan "Parallel track"). Tests not selected on the
+# (ipu4 | ipu4p | ipu6; plan "Tracks and file ownership"). Tests not selected on the
 # command line are recorded as NOT-RUN.
 write_results_json() {
 	local r rows=""
