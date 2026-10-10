@@ -11,6 +11,7 @@ htmlcov/
 # IPU4_LINUX_URL / IPU4_QEMU_URL) and the out/ dirs are regenerated per run.
 tools/linux/
 tools/linux-ipu6/
+tools/linux-ipu6-upstream/
 tools/qemu/
 tools/rootfs/out/
 tools/rootfs/out-ipu6/
