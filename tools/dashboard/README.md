@@ -24,10 +24,31 @@ on the same SHA (push + vm-smoke completion + cron) refresh the same
 point rather than appending duplicates. History is capped at 365
 points (one year of daily refreshes plus per-push events).
 
+## PR previews
+
+`.github/workflows/pages-preview.yml` renders the dashboard from each
+same-repo PR's head and publishes it to a temporary area,
+`https://<owner>.github.io/<repo>/pr-preview/pr-<N>/`, with a sticky
+PR comment linking to it. Coverage / MMIO sections come from the PR
+branch's newest successful `vm-smoke` run (the default branch's if
+the PR has none yet).
+
+`deploy-pages` replaces the whole site on every deploy and the
+`github-pages` environment only accepts the default branch, so the
+PR job can't deploy itself. Instead `previews.sh publish` parks the
+rendered site on the `pages-previews` branch (one `pr-<N>/` directory
+per PR, a single force-pushed orphan commit, so no history piles up)
+and dispatches `pages.yml` on the default branch. Every production
+deploy runs `previews.sh merge`, which copies that branch into
+`site/pr-preview/`, skipping PRs that are no longer open. Closing a
+PR runs `previews.sh remove` and redeploys. Fork PRs are skipped
+(their token can't push).
+
 ## One-time Pages setup
 
 In repo Settings → Pages, set **Source: GitHub Actions**. No `gh-pages`
-branch is involved.
+branch is involved; `pages-previews` is only a parking spot that
+`pages.yml` reads from, not a Pages source.
 
 ## Inputs
 
@@ -66,6 +87,7 @@ The script tolerates missing inputs so a checkout without a recent
 | File | Role |
 |---|---|
 | `build.sh` | Top-level orchestrator. Calls the Python modules in order. |
+| `previews.sh` | PR previews on the `pages-previews` branch: publish / remove / merge / comment. |
 | `build_payload.py` | Gathers all inputs into a single JSON dict for the renderer. |
 | `render.py` | Jinja2 → `index.html`, copies CSS, writes `data/history.json`. |
 | `parse_registers.py` | `tools/notes/registers.md` → `{rows, counts}`. Tested. |
@@ -76,8 +98,8 @@ The script tolerates missing inputs so a checkout without a recent
 ## Adding a new section
 
 1. Decide whether the section consumes a committed file (cheap, no
-   contract change) or a CI artifact (touch `pages.yml` to download
-   it).
+   contract change) or a CI artifact (touch
+   `.github/actions/build-dashboard/action.yml` to download it).
 2. Add a parser in `tools/dashboard/` if needed. Keep parsers
    stateless and unit-testable — see `parse_registers.py` for the
    shape.
