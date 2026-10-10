@@ -1,12 +1,12 @@
-# Ladder rungs gated in CI for the ipu6 flavor (tools/tests/ipu6/ladder.sh).
+# Ladder tests gated in CI for the ipu6 flavor (tools/tests/ipu6/ladder.sh).
 #
-# One rung name per line; '#' starts a comment. Every known rung runs on
-# every PR, but only the rungs listed here fail the job. Each PR in the
+# One test name per line; '#' starts a comment. Every known test runs on
+# every PR, but only the tests listed here fail the job. Each PR in the
 # plan (tools/notes/ipu6-ipu4-plan.md, "PR sequence") enables at least one
-# more rung; run `tools/tests/ipu6/ladder.sh --list` for the names.
+# more test; run `tools/tests/ipu6/ladder.sh --list` for the names.
 #
 
-# Static rungs (plan PR 3).
+# Static tests (plan PR 3).
 series-applies
 build
 checkpatch

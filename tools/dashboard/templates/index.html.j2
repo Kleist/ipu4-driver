@@ -55,7 +55,7 @@
     <div class="kpi ladder-variant {{ 'ladder-ok' if v.summary.ok else 'ladder-bad' }}">
       <div class="kpi-label">{{ v.name }}</div>
       <div class="kpi-value">{{ v.summary.passing }} / {{ v.summary.total }}</div>
-      <div class="kpi-sub">rungs passing · gated {{ v.summary.enabled_passing }} / {{ v.summary.enabled }} pass</div>
+      <div class="kpi-sub">tests passing · gated {{ v.summary.enabled_passing }} / {{ v.summary.enabled }} pass</div>
       {% if v.summary.enabled_failing %}<div class="kpi-sub ladder-failing">failing: {{ v.summary.enabled_failing | join(', ') }}</div>{% endif %}
       <div class="kpi-sub">{% if v.run_url %}<a href="{{ v.run_url }}">{% endif %}{{ (v.generated_at or '')[:16] | replace('T', ' ') }}{% if v.run_url %}</a>{% endif %}{% if v.commit_sha %} · <code>{{ v.commit_sha[:7] }}</code>{% endif %}</div>
     </div>
@@ -68,15 +68,15 @@
     {% endif %}
     {% endfor %}
   </div>
-  {% if ipu6_port.rungs %}
+  {% if ipu6_port.tests %}
   <div class="table-scroll">
   <table class="reg-table ladder-table">
-    <thead><tr><th>Rung</th>{% for v in ipu6_port.variants %}<th>{{ v.name }}</th>{% endfor %}</tr></thead>
+    <thead><tr><th>Test</th>{% for v in ipu6_port.variants %}<th>{{ v.name }}</th>{% endfor %}</tr></thead>
     <tbody>
-    {% for rung in ipu6_port.rungs %}
+    {% for test in ipu6_port.tests %}
     <tr>
-      <td><code>{{ rung.name }}</code></td>
-      {% for cell in rung.cells %}
+      <td><code>{{ test.name }}</code></td>
+      {% for cell in test.cells %}
       {% if cell %}
       <td class="ladder-cell res-{{ cell.css }}">{{ cell.result | lower | replace('-', ' ') }}{% if cell.enabled %} <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span>{% endif %}{% if cell.duration_s %} <span class="dur">{{ cell.duration_s }}s</span>{% endif %}</td>
       {% else %}

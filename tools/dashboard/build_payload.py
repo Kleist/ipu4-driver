@@ -181,8 +181,8 @@ def _duration(start: str | None, end: str | None) -> str | None:
     return f"{secs // 60}m{secs % 60:02d}s"
 
 
-def _ladder_rungs(root: Path) -> list[str]:
-    """Rung names from ``ladder.sh --list``, so the IPU4-port matrix
+def _ladder_tests(root: Path) -> list[str]:
+    """Test names from ``ladder.sh --list``, so the IPU4-port matrix
     has its rows even before any vm-ipu6 run published results."""
     ladder = root / "tools" / "tests" / "ipu6" / "ladder.sh"
     if not ladder.is_file():
@@ -198,7 +198,7 @@ def _ladder_rungs(root: Path) -> list[str]:
 
 def _ipu6_port(root: Path, repo: str, ladder_dirs: list[str], run_id: str | None) -> dict:
     port = parse_ladder.build(
-        parse_ladder.load_results(ladder_dirs), _ladder_rungs(root),
+        parse_ladder.load_results(ladder_dirs), _ladder_tests(root),
     )
     primary = port["primary"] or {}
     if run_id:

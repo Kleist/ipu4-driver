@@ -4,14 +4,14 @@
 #
 # Builds only the ipu6 directory as an external module on top of
 # `modules_prepare` (~minutes) rather than `make modules` / bzImage: the
-# static ladder rungs need just the .ko files. The guest kernel for the VM
-# rungs (bzImage + modules) is built by
+# static ladder tests need just the .ko files. The guest kernel for the VM
+# tests (bzImage + modules) is built by
 # `IPU4_FLAVOR=ipu6 tools/build-kernel.sh`, which runs this script with
 # IPU4_BUILD_CONFIG_ONLY=1 for the config pass, so both builds share one
 # .config and neither invalidates the other's objects.
 #
 # W=1 is on by default (IPU4_IPU6_W=1) because that is what the `build`
-# rung checks. The compiler output is mirrored to $IPU4_IPU6_BUILD_LOG
+# test checks. The compiler output is mirrored to $IPU4_IPU6_BUILD_LOG
 # when set, so the ladder can scan it for warnings.
 set -euo pipefail
 
@@ -65,8 +65,8 @@ fi
 "$ROOT/tools/vm-kconfig.sh"
 # CONFIG_WERROR off: the pin's defconfig has it on, which would make any
 # warning anywhere in the full guest-kernel build (a runner gcc bump in
-# an unrelated subsystem) fail the VM rungs. Warnings in ipu6 are gated
-# by the `build` rung instead, which scans the W=1 M= build log for
+# an unrelated subsystem) fail the VM tests. Warnings in ipu6 are gated
+# by the `build` test instead, which scans the W=1 M= build log for
 # "warning:" and fails on any hit, so the gate does not depend on
 # -Werror.
 ./scripts/config --disable WERROR
@@ -97,7 +97,7 @@ make -s -j"$JOBS" modules_prepare
 # drivers/media/pci/intel/Makefile, so the downstream driver's
 # subdir-ccflags warning suppressions there do not leak into ipu6/.
 # IPU4_IPU6_CLEAN=1 drops the ipu6 objects first so every file is
-# recompiled and its warnings show up (the `build` rung uses this; the
+# recompiled and its warnings show up (the `build` test uses this; the
 # directory is small, so it costs seconds).
 if [[ "${IPU4_IPU6_CLEAN:-0}" == "1" ]]; then
 	make -s M=drivers/media/pci/intel/ipu6 clean
