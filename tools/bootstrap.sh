@@ -3,17 +3,28 @@
 # apply the patches carried in tools/linux-patches/ and tools/qemu-patches/.
 #
 # This script is idempotent and expects to be re-run after pulling.
+#
+# `tools/bootstrap.sh --qemu-only` sets up only tools/qemu/ (clone,
+# tools/qemu-patches/, Kconfig/meson wiring) and never touches
+# tools/linux/. The ipu6 flavor uses it: QEMU is the same for every
+# flavor, but the fork's Linux clone is not needed there.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
+
+QEMU_ONLY=0
+if [[ "${1:-}" == "--qemu-only" ]]; then
+	QEMU_ONLY=1
+	shift
+fi
 
 # IPU4_FLAVOR=ipu6 selects the upstream-ipu6 + patch-series flow
 # (tools/ipu6/, plan in tools/notes/ipu6-ipu4-plan.md). The default
 # "fork" flow below is unchanged.
 case "${IPU4_FLAVOR:-fork}" in
 fork) ;;
-ipu6) exec "$HERE/ipu6/bootstrap.sh" "$@" ;;
+ipu6) (( QEMU_ONLY )) || exec "$HERE/ipu6/bootstrap.sh" "$@" ;;
 *) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork or ipu6)" >&2; exit 1 ;;
 esac
 
@@ -54,11 +65,42 @@ apply_patch_tree() {
 	done
 }
 
-clone_if_missing "$LINUX_DIR" "$LINUX_URL"  "$LINUX_TAG"  "$LINUX_BRANCH"
+if (( ! QEMU_ONLY )); then
+	clone_if_missing "$LINUX_DIR" "$LINUX_URL"  "$LINUX_TAG"  "$LINUX_BRANCH"
+fi
 clone_if_missing "$QEMU_DIR"  "$QEMU_URL"   "$QEMU_TAG"   "$QEMU_BRANCH"
 
-apply_patch_tree "$ROOT/tools/linux-patches" "$LINUX_DIR"
+if (( ! QEMU_ONLY )); then
+	apply_patch_tree "$ROOT/tools/linux-patches" "$LINUX_DIR"
+fi
 apply_patch_tree "$ROOT/tools/qemu-patches"  "$QEMU_DIR"
+
+# Wire CONFIG_IPU4 into QEMU's hw/misc/Kconfig and hw/misc/meson.build so
+# the forked QEMU picks up the ipu4.c device model that apply_patch_tree
+# just copied over. Idempotent.
+QEMU_HW_KCONFIG="$QEMU_DIR/hw/misc/Kconfig"
+QEMU_HW_MESON="$QEMU_DIR/hw/misc/meson.build"
+
+if [[ -f "$QEMU_HW_KCONFIG" ]] && ! grep -q '^config IPU4$' "$QEMU_HW_KCONFIG"; then
+	echo ">>> wiring ipu4 into $QEMU_HW_KCONFIG"
+	cat >> "$QEMU_HW_KCONFIG" <<'EOF'
+
+config IPU4
+    bool
+    default y if PCI_DEVICES
+    depends on PCI && MSI_NONBROKEN
+EOF
+fi
+if [[ -f "$QEMU_HW_MESON" ]] && ! grep -q "files('ipu4.c')" "$QEMU_HW_MESON"; then
+	echo ">>> wiring ipu4.c into $QEMU_HW_MESON"
+	printf "\nsystem_ss.add(when: 'CONFIG_IPU4', if_true: files('ipu4.c'))\n" >> "$QEMU_HW_MESON"
+fi
+
+if (( QEMU_ONLY )); then
+	echo ">>> bootstrap (qemu only) complete"
+	echo "qemu:  $QEMU_DIR   branch=$QEMU_BRANCH"
+	exit 0
+fi
 
 # Copy the driver sources from kernel/ipu4/ into the in-tree path on first run.
 # Source files are not stored under linux-patches/ to avoid confusing diffs
@@ -94,27 +136,6 @@ fi
 if ! grep -q '^obj-\$(CONFIG_VIDEO_INTEL_IPU4)\s*+=\s*ipu4/$' "$PARENT_MAKEFILE"; then
 	echo ">>> wiring ipu4/ into $PARENT_MAKEFILE"
 	printf 'obj-$(CONFIG_VIDEO_INTEL_IPU4)\t+= ipu4/\n' >> "$PARENT_MAKEFILE"
-fi
-
-# Wire CONFIG_IPU4 into QEMU's hw/misc/Kconfig and hw/misc/meson.build so
-# the forked QEMU picks up the ipu4.c device model that apply_patch_tree
-# just copied over. Idempotent.
-QEMU_HW_KCONFIG="$QEMU_DIR/hw/misc/Kconfig"
-QEMU_HW_MESON="$QEMU_DIR/hw/misc/meson.build"
-
-if [[ -f "$QEMU_HW_KCONFIG" ]] && ! grep -q '^config IPU4$' "$QEMU_HW_KCONFIG"; then
-	echo ">>> wiring ipu4 into $QEMU_HW_KCONFIG"
-	cat >> "$QEMU_HW_KCONFIG" <<'EOF'
-
-config IPU4
-    bool
-    default y if PCI_DEVICES
-    depends on PCI && MSI_NONBROKEN
-EOF
-fi
-if [[ -f "$QEMU_HW_MESON" ]] && ! grep -q "files('ipu4.c')" "$QEMU_HW_MESON"; then
-	echo ">>> wiring ipu4.c into $QEMU_HW_MESON"
-	printf "\nsystem_ss.add(when: 'CONFIG_IPU4', if_true: files('ipu4.c'))\n" >> "$QEMU_HW_MESON"
 fi
 
 echo ">>> bootstrap complete"
