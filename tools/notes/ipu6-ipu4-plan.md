@@ -128,7 +128,7 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | `module-load` | `intel-ipu6` + `intel-ipu6-isys` + virt-sensor load without oops |
 | `probe-identify` | `new_id` bind reaches probe and identifies IPU4 |
 | `probe-buttress` | buttress init + ISYS/PSYS power-up succeed |
-| `probe-mmu` | MMU hardware init succeeds |
+| `probe-mmu` | the PSYS MMU init at probe writes the IPU4 stream tables: the guest's writes to INFO and the L1/L2 stream start registers of the three PSYS MMUs (BAR + `0x4b0000`) equal, in order, the ones in `data/trace.txt` (QEMU write log, `tools/trace/check_writes.py`) |
 | `probe-fw` | firmware (`ipu4_fw.bin`, synthesized) is mapped and authenticated (`ipu6_buttress_authenticate()`) |
 | `probe-complete` | ISYS probe finishes, `/dev/video*` and media graph appear |
 | `fw-open` | syscom open + `STREAM_OPEN_DONE` round trip |
@@ -148,8 +148,8 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | 5 | Standalone virt-sensor module, init loads `intel-ipu6*` | `module-load` | merged (#113) |
 | 6 | `media: ipu6: Identify IPU4 devices` (helper, PCI ID, firmware name, probe case; no table entry) | `probe-identify` | in review (#115; replaces #106, closed for the stack limit) |
 | 7 | `media: ipu6: Add IPU4 buttress support` + harness stages a synthesized `intel/ipu/ipu4_fw.bin` (see PR 6 learnings) | `probe-buttress` | in review (#117; replaces #108, closed for the stack limit) |
-| 8 | `media: ipu6: Add IPU4 MMU support` | `probe-mmu` | |
-| 9 | Internal pdata (`media: ipu6: Add IPU4 platform data`); the firmware name landed in PR 6 | `probe-fw` | |
+| 8 | `media: ipu6: Add IPU4 MMU support` (MMU tables + the IPU4P subsystem offsets they hang off) + harness logs the probe boot's MMIO writes | `probe-mmu` | in review |
+| 9 | Internal pdata (`media: ipu6: Add IPU4 platform data`); the firmware name landed in PR 6, the ISYS/PSYS/SPC/DMEM offsets in PR 8 | `probe-fw` | |
 | 10 | `media: ipu6: Add IPU4 ISYS and CSI-2 register definitions` + `media: ipu6: Add IPU4 ISYS interrupt handling` + wire-up in ISYS | `probe-complete` | |
 | 11 | `media: ipu6: Support the IPU4 SysCom queue layout` | `fw-open` | |
 | 12 | `media: ipu6: Add IPU4 CSI-2 receiver support` | `stream-on`, `stream-pattern` | |
@@ -459,6 +459,88 @@ last; each entry names the PR that found it.
   `ipu6_mmu_hw_init()` checked against the IPU4 values (model-side
   check or an mmiotrace compare), or a model change that rejects wrong
   values (separate PR) — or the mapping should be reordered.
+- (PR 8) Third kernel patch `0003-media-ipu6-Add-IPU4-MMU-support.patch`
+  (0001/0002 byte-identical; `format-patch -N --start-number 3 HEAD~1`).
+  The pin keeps the MMU tables in `ipu6-mmu-hw.c`, selected per variant
+  through `mmu->ops` in `ipu6_mmu_init()`, so they are not platform
+  data. IPU4 reuses everything of IPU4P's except the L1 block sizes:
+  `ipu4p_mmu_ops` (`IS_IPU4() || IS_IPU4P()` in `ipu6_mmu_init()`),
+  whose `__ipu4p_mmu_init_hw_data()` now picks an
+  `ipu4_mmu_hwdata_lookup` for IPU4. The IPU4P MMU offsets, info bit
+  (`BIT(4)` on the MMU0s), stream counts (16/16) and MMU0
+  read-before-invalidate are the fork's values too. L1 block sizes
+  (fork `kernel/ipu4/ipu6.c`): ISYS MMU1 `8,16,16,16,0×11,8`; PSYS MMU1
+  `0,0,0,0,10,8,10,8,0,4,4,12,0,0,0,8`; PSYS MMU1R
+  `0×8,8,0,0,0,16,12,12,16`; L2 all 2. The start addresses they give
+  are exactly the silicon trace's (PSYS at `data/trace.txt` lines
+  55–254, ISYS at 269–369 and again at 489–589).
+- (PR 8) The MMU windows are addressed from the subsystem base
+  (`hw_variant.offset`), which IPU4 had at 0 (IPU6 unified layout), so
+  the IPU6 tables went to BAR + `0x1b0000`. The patch therefore also
+  sets the IPU4P subsystem layout for IPU4 in
+  `ipu6_internal_pdata_init()` (ISYS `0x100000`, PSYS `0x400000`, SPC 0,
+  DMEM `0x8000`; = fork `ipu4-platform-regs.h`) in its own
+  `if (IS_IPU4(isp))` block, which PR 9 extends with the rest of the
+  internal pdata (CSI-2 ports, stream/SRAM/queue limits). SPC/DMEM are
+  only used at ISYS stream open, so they are not visible at probe. With
+  the PSYS base right, `ipu6_buttress_authenticate()` now reads the
+  bootloader status at the real BAR + `0x408000` (still short-circuited
+  by the model's AUTH_DONE).
+- (PR 8) Not ported, on purpose: the reference driver's address
+  translator ZLW setup (silicon writes `ZLW_EN/1D/N/2D` per L1 stream
+  at MMU1 + `0x100 + 0x20 * i` and `FW_ZLW_PRIO` at MMU1 + `0x300`;
+  upstream ipu6 keeps the `l1_zlw_*` fields but never writes them, and
+  IPU4P does not either), and its TLB invalidate value (silicon writes
+  `0x1` to MMU0 and `0xffff` to MMU1, upstream `0xffffffff` to all).
+  Both only matter on hardware (prefetch, the extra bits); revisit if
+  real IPU4 hardware shows MMU faults or throughput problems.
+- (PR 8) How `probe-mmu` sees the MMU: `tools/run-vm.sh` takes
+  `IPU4_MMIO_WRITE_LOG=<file>` and adds `-D <file> -trace
+  memory_region_ops_write` (QEMU core trace event, log backend, built
+  into the harness QEMU; absolute address, value and region name,
+  `ipu4-bar0` for the IPU). It is host-side, so it needs no
+  `CONFIG_MMIOTRACE` in the ipu6 guest, does not slow the guest down and
+  rides on the shared probe boot: ~15 MB raw (150k writes, mostly serial
+  and VGA), filtered to the ~160 IPU BAR writes in
+  `tools/tests/out/ipu6-probe.mmio-writes` (uploaded by `vm-ipu6`).
+  `tools/trace/check_writes.py` (unit tests in
+  `tests/test_check_writes.py`) compares the in-order writes of two
+  captures in given BAR-offset ranges; it reads mmiotrace and the QEMU
+  log alike (BAR from the `MAP` line, or the address modulo 16 MiB), so
+  it also works on the fork's mmiotrace captures. The test compares MMU
+  base + `0x08..0x8c` of the three PSYS MMUs: 67 writes. A guest
+  mmiotrace (the fork's `init.mmiotrace` path) was the alternative; it
+  needs a kernel option, a slower traced boot and a flavor-aware init,
+  and gives no more information about writes.
+- (PR 8) Only the PSYS MMU is initialised at probe; the ISYS MMU init
+  runs in `isys_runtime_pm_resume()` (first video open). `probe-mmu`
+  therefore checks the PSYS tables; the ISYS ones (ranges
+  `0x1e0008-0x1e0090 0x1e0108-0x1e0190`) should be added to a test once
+  a ladder boot opens a stream (`fw-open`). Silicon initialises the ISYS
+  MMU twice (two resumes), so compare against a guest that resumes as
+  often or cut the expected side to the first pass. The ISYS MMU0 write
+  to BAR + `0x1e0004` is also what the model latches as the L1
+  page-table base for its IOVA walker, so `fw-open` needed this patch
+  anyway. Forcing an ISYS resume at probe through `power/control` was
+  rejected: the resume runs the TSC sync, which times out on the IPU4 HH
+  status bits (PR 7 learnings) and leaves the device in a runtime error
+  state.
+- (PR 8) Gate check: without 0003, `probe-mmu` FAILs with
+  `expected 67 writes, got 0` (the tables went to `0x1b0000`); with two
+  PSYS MMU1 block sizes swapped in 0003 it FAILs on the one start
+  address between them (`+0x4b0128 = 0x1a`, expected `0x1c`); with 0003
+  all 67 writes match. Probe still completes under the model (32 video
+  nodes, clean unbind/rmmod, no oops). Timings (4 cores, TCG, warm):
+  full ladder ~60 s (`vm-boot` 33 s incl. the kernel rebuild,
+  `probe-identify` 5 s incl. the traced boot, `probe-buttress` and
+  `probe-mmu` 0 s on the shared boot); the trace event adds no
+  measurable boot time.
+- (PR 8) For PR 9: none of the remaining internal pdata is used on the
+  PCI probe path (only the PSYS MMU and authentication are), so
+  `probe-fw` as defined passes before PR 9. What PR 9 changes visibly is
+  the ISYS probe (6 CSI-2 ports instead of IPU6's 4: CSI-2 subdevs and
+  the video node count), so PR 9 likely needs `probe-fw` redefined on
+  that, or PR 9 and PR 10 swapped in the mapping.
 
 ## Parallel track — QEMU coverage for IPU4P and IPU6
 
