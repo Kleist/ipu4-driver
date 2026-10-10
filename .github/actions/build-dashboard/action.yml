@@ -1,0 +1,174 @@
+name: Build dashboard
+description: |
+  Render the GitHub Pages dashboard (tools/dashboard/build.sh) into
+  `out-dir`, pulling the inputs it needs: the carried-forward
+  history.json from the live site, the newest successful vm-smoke
+  artifacts on `vm-smoke-branch`, and a fresh upstream-diff summary.
+  Shared by pages.yml (production) and pages-preview.yml (PR previews).
+
+  The caller must run actions/checkout (fetch-depth: 0) first and
+  grant `actions: read` so the vm-smoke artifacts can be downloaded.
+
+inputs:
+  out-dir:
+    description: Directory to render the site into (relative to the workspace).
+    required: false
+    default: site
+  vm-smoke-branch:
+    description: |
+      Branch whose newest successful vm-smoke run supplies coverage +
+      MMIO artifacts. Falls back to the default branch when it has no
+      successful run yet. Empty means the default branch.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install python dependencies
+      shell: bash
+      run: pip3 install --user jinja2
+
+    - name: Carry forward history.json from the live site
+      # The dashboard's only persistent state is data/history.json.
+      # actions/deploy-pages is stateless, so we fetch the previously
+      # published copy from the live Pages URL before regenerating.
+      # First-time deploys (404) fall back to an empty history.
+      shell: bash
+      env:
+        OUT_DIR: ${{ inputs.out-dir }}
+      run: |
+        set -e
+        mkdir -p "$OUT_DIR/data"
+        OWNER="${GITHUB_REPOSITORY%%/*}"
+        REPO="${GITHUB_REPOSITORY##*/}"
+        OWNER_LC="$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')"
+        URL="https://${OWNER_LC}.github.io/${REPO}/data/history.json"
+        echo "fetching prior history from $URL"
+        if curl -fsSL --max-time 30 "$URL" -o "$OUT_DIR/data/history.json"; then
+          echo "carried forward $(jq '.points|length' "$OUT_DIR/data/history.json") point(s)"
+        else
+          echo "no prior history (first deploy or fetch failed); starting fresh"
+          rm -f "$OUT_DIR/data/history.json"
+        fi
+
+    - name: Download latest vm-smoke artifacts
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO_FULL: ${{ github.repository }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch || 'main' }}
+        WANT_BRANCH: ${{ inputs.vm-smoke-branch }}
+      run: |
+        set -e
+        # Find the most recent successful vm-smoke run on the requested
+        # branch (default branch if unset or it has none). Both
+        # artifacts may not exist on older runs; ignore individual
+        # download errors so a partial set still renders.
+        latest_run() {
+          gh run list \
+              --workflow=vm-smoke \
+              --branch="$1" \
+              --status=success \
+              --limit=1 \
+              --json databaseId \
+              --jq '.[0].databaseId' || true
+        }
+        RUN_ID=""
+        if [[ -n "$WANT_BRANCH" && "$WANT_BRANCH" != "$DEFAULT_BRANCH" ]]; then
+          RUN_ID="$(latest_run "$WANT_BRANCH")"
+          [[ "$RUN_ID" == "null" ]] && RUN_ID=""
+          [[ -z "$RUN_ID" ]] && echo "no successful vm-smoke on $WANT_BRANCH; falling back to $DEFAULT_BRANCH"
+        fi
+        if [[ -z "$RUN_ID" ]]; then
+          RUN_ID="$(latest_run "$DEFAULT_BRANCH")"
+        fi
+        if [[ -n "$RUN_ID" && "$RUN_ID" != "null" ]]; then
+          echo "VM_SMOKE_RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
+          mkdir -p tools/coverage tools/tests/out
+          # vm-smoke-reusable.yml namespaces uploads with the caller's
+          # display-name (e.g. coverage-html-6.12-<run_id>), so look up
+          # the actual artifact names instead of guessing the suffix.
+          ARTIFACTS_JSON="$(gh api \
+              "repos/$REPO_FULL/actions/runs/$RUN_ID/artifacts?per_page=100")"
+          COV_NAME="$(jq -r \
+              '.artifacts[] | select(.name | startswith("coverage-html-")) | .name' \
+              <<<"$ARTIFACTS_JSON" | head -1)"
+          MMIO_NAME="$(jq -r \
+              '.artifacts[] | select(.name | startswith("mmio-trace-coverage-vm-smoke-")) | .name' \
+              <<<"$ARTIFACTS_JSON" | head -1)"
+          echo "coverage artifact: ${COV_NAME:-<none>}"
+          echo "mmio artifact:     ${MMIO_NAME:-<none>}"
+          if [[ -n "$COV_NAME" ]]; then
+            gh run download "$RUN_ID" \
+              --name "$COV_NAME" \
+              --dir tools/coverage/_artifact || true
+          fi
+          if [[ -n "$MMIO_NAME" ]]; then
+            gh run download "$RUN_ID" \
+              --name "$MMIO_NAME" \
+              --dir tools/tests/out/_artifact || true
+          fi
+          # Coverage artifact layout (after collect.sh's emit-summary
+          # change):
+          #   <root>/html/index.html ...
+          #   <root>/summary.json
+          # Older artifacts (path: tools/coverage/html alone) put the
+          # html tree at the artifact root; handle both shapes.
+          if [[ -d tools/coverage/_artifact ]]; then
+            rm -rf tools/coverage/html tools/coverage/summary.json
+            if [[ -d tools/coverage/_artifact/html ]]; then
+              mv tools/coverage/_artifact/html tools/coverage/html
+              [[ -f tools/coverage/_artifact/summary.json ]] && \
+                mv tools/coverage/_artifact/summary.json tools/coverage/summary.json
+            elif [[ -f tools/coverage/_artifact/index.html ]]; then
+              mv tools/coverage/_artifact tools/coverage/html
+            fi
+            rm -rf tools/coverage/_artifact
+          fi
+          if [[ -d tools/tests/out/_artifact ]]; then
+            # Artifact contents: compare-mmio/ + mmiotrace/ at root.
+            cp -r tools/tests/out/_artifact/. tools/tests/out/ 2>/dev/null || true
+            rm -rf tools/tests/out/_artifact
+          fi
+        else
+          echo "no successful vm-smoke run yet; rendering with placeholders"
+        fi
+
+    # Read-only restore of whatever tools/linux/ the most recent
+    # 6.12 vm-smoke run built. Saves the ~30s shallow clone on warm
+    # days; on a cache miss the next step's `git clone` still
+    # populates the tree from scratch.
+    - name: Restore tools/linux cache from vm-smoke (6.12)
+      uses: actions/cache/restore@v4
+      with:
+        path: tools/linux
+        key: pages-linux-restore-noop
+        restore-keys: |
+          linux-6.12-
+
+    - name: Regenerate upstream-diff summary
+      shell: bash
+      run: |
+        set -e
+        # diff.sh just needs the Linux source tree at the pinned tag
+        # to git-diff against — clone shallow directly rather than
+        # running the full bootstrap (which also clones QEMU).
+        # Failure is non-fatal: the dashboard renders without the
+        # upstream-diff section if this step is skipped.
+        LINUX_TAG="${IPU4_LINUX_TAG:-v6.12}"
+        LINUX_URL="${IPU4_LINUX_URL:-https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git}"
+        if [[ ! -d tools/linux/.git ]]; then
+          git clone --depth 1 --branch "$LINUX_TAG" "$LINUX_URL" tools/linux \
+            || { echo "linux clone failed; skipping diff" >&2; exit 0; }
+        fi
+        ./tools/upstream/diff.sh || echo "diff.sh failed; rendering without it" >&2
+
+    - name: Build dashboard
+      shell: bash
+      env:
+        OUT_DIR: ${{ github.workspace }}/${{ inputs.out-dir }}
+        REPO_SLUG: ${{ github.repository }}
+        GH_TOKEN: ${{ github.token }}
+      # VM_SMOKE_RUN_ID comes from $GITHUB_ENV (download step above).
+      run: ./tools/dashboard/build.sh

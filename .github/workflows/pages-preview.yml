@@ -1,0 +1,93 @@
+name: pages-preview
+# Render the dashboard from a PR's head and publish it to a temporary
+# area of the Pages site: https://<owner>.github.io/<repo>/pr-preview/pr-<N>/
+#
+# actions/deploy-pages replaces the whole site and the github-pages
+# environment only accepts deploys from the default branch, so a PR
+# can't deploy directly. Instead this workflow parks the rendered site
+# on the `pages-previews` branch (tools/dashboard/previews.sh) and
+# dispatches pages.yml on the default branch, which merges every open
+# PR's preview into the production deploy. Closing the PR removes its
+# directory and redeploys.
+#
+# Fork PRs get a read-only token, so they're skipped.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+# One run per PR; a newer push supersedes an in-flight render.
+# previews.sh serialises pushes to pages-previews across PRs itself.
+concurrency:
+  group: pages-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write       # push pages-previews
+  actions: write        # gh run download + gh workflow run pages.yml
+  pull-requests: write  # sticky preview-link comment
+
+env:
+  PR: ${{ github.event.pull_request.number }}
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+
+jobs:
+  publish:
+    if: >-
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build dashboard
+        uses: ./.github/actions/build-dashboard
+        with:
+          out-dir: site
+          vm-smoke-branch: ${{ github.head_ref }}
+
+      - name: Park preview on pages-previews
+        run: ./tools/dashboard/previews.sh publish "$PR" site
+
+      - name: Redeploy Pages
+        run: gh workflow run pages.yml --ref "$DEFAULT_BRANCH"
+
+      - name: Comment preview link
+        env:
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -e
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          OWNER_LC="$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')"
+          URL="https://${OWNER_LC}.github.io/${GITHUB_REPOSITORY##*/}/pr-preview/pr-${PR}/"
+          RUNS="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/workflows/pages.yml"
+          printf -v BODY '%s\n\n%s\n%s' \
+            "**Dashboard preview:** $URL" \
+            "Built from ${SHA:0:7}; live once the [pages deploy]($RUNS) finishes." \
+            "Removed when this PR closes."
+          ./tools/dashboard/previews.sh comment "$PR" "$BODY"
+
+  cleanup:
+    if: >-
+      github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Drop preview from pages-previews
+        run: ./tools/dashboard/previews.sh remove "$PR"
+
+      - name: Redeploy Pages
+        run: gh workflow run pages.yml --ref "$DEFAULT_BRANCH"
+
+      - name: Update preview comment
+        run: |
+          ./tools/dashboard/previews.sh comment "$PR" \
+            "**Dashboard preview:** removed (PR closed)." --if-exists
