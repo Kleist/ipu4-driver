@@ -15,9 +15,18 @@ on:
         description: Short human label used in step output (e.g. "6.12").
         required: true
         type: string
+      run:
+        description: >-
+          False skips the job (reported as skipped, so required checks
+          pass) when the caller's change classifier found no relevant
+          change.
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   build-and-kunit:
+    if: inputs.run
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

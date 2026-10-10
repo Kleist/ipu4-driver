@@ -23,6 +23,11 @@ on:
 # validate a hand-bumped non-6.12 track before merging.
 
 jobs:
+  # Skip the VM run on PRs that don't touch its inputs
+  # (tools/ci/changes.sh); push / workflow_dispatch always run it.
+  changes:
+    uses: ./.github/workflows/changes.yml
+
   pins:
     name: load kernel pins
     runs-on: ubuntu-24.04
@@ -62,9 +67,10 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   vm-smoke:
-    needs: pins
+    needs: [changes, pins]
     uses: ./.github/workflows/vm-smoke-reusable.yml
     with:
       linux-url:    ${{ needs.pins.outputs.url }}
       linux-ref:    ${{ needs.pins.outputs.ref }}
       display-name: ${{ needs.pins.outputs.display }}
+      run:          ${{ needs.changes.outputs.vm_smoke == 'true' }}

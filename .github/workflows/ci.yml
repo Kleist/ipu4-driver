@@ -34,10 +34,17 @@ on:
 # existing shim cascade (the 6.14+ namespace literal branch covers it).
 
 jobs:
+  # Which areas the PR touches (tools/ci/changes.sh); everything on
+  # push / workflow_dispatch. Unselected jobs still report, as skipped.
+  changes:
+    uses: ./.github/workflows/changes.yml
+
   # Python trace-tool tests are kernel-ref-independent, so they run
   # once here instead of on every matrix leg of build-and-kunit.
   pytest:
     name: pytest
+    needs: changes
+    if: needs.changes.outputs.pytest == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -98,7 +105,7 @@ jobs:
 
   build-and-kunit:
     name: build-and-kunit (${{ matrix.name }})
-    needs: pins
+    needs: [changes, pins]
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.pins.outputs.matrix) }}
@@ -107,3 +114,6 @@ jobs:
       linux-url:    ${{ matrix.url }}
       linux-ref:    ${{ matrix.ref }}
       display-name: ${{ matrix.name }}
+      # Gated inside the reusable workflow so the matrix still expands
+      # and each leg keeps its check name when skipped.
+      run:          ${{ needs.changes.outputs.kunit == 'true' }}
