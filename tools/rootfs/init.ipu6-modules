@@ -4,8 +4,8 @@
 # ipu6 modules in dependency order, check the IPU4 PCI device, unload
 # everything again and scan dmesg for oopses/warnings.
 #
-# Until the series adds IPU4 to the driver, intel-ipu6 has no ID-table
-# entry for 8086:5a88, so the device must stay unbound here.
+# Whether intel-ipu6 binds to 8086:5a88 (and how far probe gets) is
+# reported but not checked here; the probe-* tests check that.
 #
 # The MODLOAD: markers are parsed by the ladder on the host.
 
@@ -49,10 +49,9 @@ if [ -z "$ipu" ]; then
 	fail=1
 elif [ -e "$ipu/driver" ]; then
 	drv=$(cd "$ipu/driver" && pwd -P)
-	say "fail ${ipu##*/} bound to ${drv##*/} (expected unbound)"
-	fail=1
+	say "info ${ipu##*/} bound to ${drv##*/}"
 else
-	say "ok ${ipu##*/} unbound"
+	say "info ${ipu##*/} unbound"
 fi
 
 if [ -d /sys/bus/platform/devices/ipu4-virt-sensor ]; then

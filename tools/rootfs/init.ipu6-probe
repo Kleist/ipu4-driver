@@ -40,8 +40,14 @@ echo 'file drivers/base/firmware_loader/main.c +p' \
 
 for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
 	virt-sensor intel-ipu6 intel-ipu6-isys; do
+	# The MMU code logs every page it maps at debug level; mapping the
+	# 8 MB trash buffer alone pushes the start of probe out of the
+	# kernel log buffer. Keep ipu6-mmu.c quiet, except the line that
+	# says the MMU hardware init got as far as the trash buffer. This
+	# has to be part of the insmod: probe may run inside it.
 	case "$m" in
 	videobuf2-*) args= ;;
+	intel-ipu6) args='dyndbg="+p;file ipu6-mmu.c -p;format iova\040trash\040buffer +p"' ;;
 	*) args=dyndbg=+p ;;
 	esac
 	# shellcheck disable=SC2086 # $args is empty or one word
@@ -52,17 +58,6 @@ for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
 	fi
 done
 
-# The MMU code logs every page it maps at debug level; mapping the 8 MB
-# trash buffer alone pushes the start of probe out of the kernel log
-# buffer. Keep its debug output off, except the line that says the MMU
-# hardware init got as far as the trash buffer.
-echo 'file drivers/media/pci/intel/ipu6/ipu6-mmu.c -p' \
-	> /proc/dynamic_debug/control 2>/dev/null ||
-	say "fail ipu6-mmu dyndbg"
-echo 'format "iova trash buffer" +p' \
-	> /proc/dynamic_debug/control 2>/dev/null ||
-	say "fail trash buffer dyndbg"
-
 ipu=
 for dev in /sys/bus/pci/devices/*; do
 	if [ "$(cat "$dev/vendor")" = 0x8086 ] &&
@@ -72,9 +67,13 @@ for dev in /sys/bus/pci/devices/*; do
 done
 [ -n "$ipu" ] || say "fail no 8086:5a88 PCI device"
 
-# new_id makes the PCI core run probe synchronously for every unbound
-# matching device; the write succeeds even when probe fails.
-if echo 8086 5a88 > /sys/bus/pci/drivers/intel-ipu6/new_id; then
+# With 8086:5a88 in the driver's PCI ID table, probe already ran inside
+# the insmod. Without it, new_id makes the PCI core run probe
+# synchronously for every unbound matching device; the write succeeds
+# even when probe fails.
+if [ -e "/sys/bus/pci/devices/$ipu/driver" ]; then
+	say "info bound at insmod"
+elif echo 8086 5a88 > /sys/bus/pci/drivers/intel-ipu6/new_id; then
 	say "ok new_id"
 else
 	say "fail new_id"

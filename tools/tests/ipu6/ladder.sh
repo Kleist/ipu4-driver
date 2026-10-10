@@ -101,8 +101,9 @@ test_vm-boot() {
 
 # Boot the vm-boot guest kernel with tools/rootfs/init.ipu6-modules:
 # load the vb2 modules, the harness's virt-sensor (tools/virt-sensor/),
-# intel-ipu6 and intel-ipu6-isys, check that 8086:5a88 stays unbound (no
-# ID-table entry yet), unload, and scan dmesg. The guest prints
+# intel-ipu6 and intel-ipu6-isys, check that 8086:5a88 is there, unload,
+# and scan dmesg. Whether probe binds is up to the probe-* tests. The
+# guest prints
 # MODLOAD: PASS|FAIL. Rebuilds the kernel only when vm-boot (which does
 # that) is not part of this run.
 test_module-load() {
