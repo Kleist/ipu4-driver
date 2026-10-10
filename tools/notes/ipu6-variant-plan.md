@@ -42,7 +42,8 @@ shown not to break the other variants of the shared driver.
   | V1 | `vm-ipu6` matrix (`ipu4`, `ipu6`), `IPU4_VARIANT` plumbing in `ladder.sh` / `run-vm.sh`, ipu6 base = unpatched mainline v7.3-rc4 | ipu6: `series-applies`, `build`, `checkpatch` | merged (#118) |
   | V2 | QEMU `variant=ipu6` property (IPU6 PCI ID), variant-aware `vm-boot` | ipu6: `vm-boot` | merged (#119) |
   | V3 | variant-aware `module-load` | ipu6: `module-load` | merged (#120) |
-  | V4 | `probe-identify` for ipu6: virt-sensor gets the variant's ID (core PR #127), `060-probe-identify.bound.sh` expects the variant's firmware | ipu6: `probe-identify` | in review (#123) |
+  | V4 | `probe-identify` for ipu6: virt-sensor gets the variant's ID (core PR #127), `060-probe-identify.bound.sh` expects the variant's firmware | ipu6: `probe-identify` | merged (#123) |
+  | V5a | QEMU `ipu6v_pwr_state()`: IPU6 PWR_STATE layout for the ipu6 variant (no test yet; prerequisite for staging `ipu6_fw.bin`) | — | in review (#128) |
 
 - **Dashboard hook (Pages PR):** the Pages "IPU4 port" matrix already
   has `ipu4`, `ipu4p` and `ipu6` columns. A variant lights up once its
@@ -114,3 +115,29 @@ shown not to break the other variants of the shared driver.
   PSYS runtime resume the buttress check looks for, so the next ipu6
   test needs a synthesized `ipu6_fw.bin` (an IPU6 CPD that
   `ipu6_cpd_validate_cpd_file()` accepts), not register work.
+- (V5a) With `intel/ipu/ipu6_fw.bin` staged (the synthesized CPD that
+  `tools/firmware/gen-cpd.py` already makes for IPU4 passes IPU6's
+  `ipu6_cpd_validate_cpd_file()` too), mainline probe on the ipu6
+  variant goes on to the buttress power-up and polls PWR_STATE for
+  IPU6's 2-bit island status (IS [4:3], PS [7:6], UP_DONE = 3). The
+  IPU4 model's FSM word (`0x0fa02003`) never matches, so probe fails
+  with `Change power status timeout with 0xa02003`. `ipu6v_pwr_state()`
+  answers in IPU6's layout (`0x20db` with both islands up), and probe
+  then completes: `IPU0-v0[9a19] hardware version 1`, 64 video nodes,
+  ISYS/PSYS powered up and suspended again (`PROBE:buttress ok`). The
+  SKU register reads 0, hence "IPU0-v0".
+- (V5a) **Upstream bug seen on the way:** without `ipu6v_pwr_state()`,
+  the failed power-up sends `ipu6_pci_probe()` down its error path,
+  which WARNs in `ipu6_dma_free()` (ipu6-dma.c:255) and then oopses in
+  `ipu6_dma_unmap_sg()` called from `ipu6_buttress_unmap_fw_image()`.
+  Mainline v7.3-rc4 as released; worth a report or fix upstream. In the
+  harness `oops=panic` kills the guest, so staging `ipu6_fw.bin` must
+  not land before `ipu6v_pwr_state()` or the gated ipu6 `module-load`
+  breaks. Order: V5a (model) → core PR staging `ipu6_fw.bin` in
+  `tools/rootfs/build.sh` → V5b gating `probe-buttress`.
+- (V5a) Next after `probe-buttress` on ipu6: the first ISYS runtime
+  resume logs `Start tsc sync timeout` ten times and `TSC sync failed`
+  (IPU6's TSC sync handshake, BUTTRESS_REG_TSW_CTL / HH status, is not
+  modelled for the variant). `probe-mmu` as written compares PSYS MMU
+  writes with the IPU4 silicon trace, so it needs an ipu6 counterpart
+  (or stays IPU4-only) rather than model work.

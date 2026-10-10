@@ -9,8 +9,9 @@
  * The "variant" property (ipu4 | ipu6, default ipu4) selects which IPU
  * the device presents, so the upstream ipu6 driver's test ladder can run
  * against other variants of the shared driver (tools/notes/
- * ipu6-ipu4-plan.md, "Parallel track"). So far it only changes the PCI
- * device ID; the register model is IPU4's for every variant.
+ * ipu6-variant-plan.md). Besides the PCI device ID it switches the
+ * registers the upstream driver reads differently on that variant, each
+ * in its own ipu6v_*() helper; everything else is IPU4's model.
  *
  * Register semantics are documented in tools/notes/registers.md as they
  * are inferred from the driver. Do not extend this file without adding
@@ -1155,6 +1156,33 @@ static bool ipu4_csi2_port_write(Ipu4Csi2Port *p, hwaddr reg_off,
     return false;
 }
 
+/*
+ * ipu6 variant: the upstream driver polls PWR_STATE for a 2-bit power
+ * status per island instead of IPU4's FSM fields
+ * (IPU6_BUTTRESS_PWR_STATE_{IS,PS}_PWR_{SHIFT,MASK} in
+ * ipu6-platform-buttress-regs.h): IS at bits 4:3, PS at bits 7:6, UP_DONE
+ * (3) once FREQ_CTL START powered the island up, DN_DONE (0) after it
+ * was cleared. The model switches instantly, so the transitional
+ * UP/DN_PROCESS values never show. PWR_RDY and HH_DONE are tied high as
+ * for IPU4.
+ */
+#define IPU6V_PWR_STATE_IS_SHIFT    3
+#define IPU6V_PWR_STATE_PS_SHIFT    6
+#define IPU6V_PWR_STATE_UP_DONE     0x3
+
+static uint32_t ipu6v_pwr_state(Ipu4State *s)
+{
+    uint32_t val = BTRS_PWR_STATE_PWR_RDY | BTRS_PWR_STATE_HH_DONE;
+
+    if (s->is_powered) {
+        val |= IPU6V_PWR_STATE_UP_DONE << IPU6V_PWR_STATE_IS_SHIFT;
+    }
+    if (s->ps_powered) {
+        val |= IPU6V_PWR_STATE_UP_DONE << IPU6V_PWR_STATE_PS_SHIFT;
+    }
+    return val;
+}
+
 static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
 {
     Ipu4State *s = IPU4(opaque);
@@ -1180,6 +1208,11 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
         val = s->fw_reset_ctl;
         break;
     case BTRS_REG_PWR_STATE:
+        if (s->variant == IPU4_VARIANT_IPU6) {
+            val = ipu6v_pwr_state(s);
+            s->pwr_state = val;
+            break;
+        }
         /* Compose the PWR_STATE word from the per-island FSM flags
          * (Step 5). PWR_RDY and HH_DONE are tied high — buttress
          * itself and TSC-sync are always considered ready since we
