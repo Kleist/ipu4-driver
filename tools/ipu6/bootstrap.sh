@@ -43,6 +43,15 @@ if [[ -d "$LINUX_DIR/.git/rebase-apply" ]]; then
 	git -C "$LINUX_DIR" am --abort || rm -rf "$LINUX_DIR/.git/rebase-apply"
 fi
 
+# A cache-restored tree (actions/cache in vm-ipu6.yml) has the right
+# contents and mtimes but new inodes and ctimes, so every index entry
+# looks stat-dirty and `checkout -f` rewrites every file. That gives all
+# sources a fresh mtime and turns the warm guest-kernel build into a
+# full rebuild (~6 min in CI). Refreshing the index first re-hashes the
+# files once and records their new stat data, so the checkout only
+# touches files that really differ.
+git -C "$LINUX_DIR" update-index -q --refresh > /dev/null || true
+
 echo ">>> resetting $LINUX_DIR to $IPU6_LINUX_SHA"
 git -C "$LINUX_DIR" checkout -q -f -B "$BRANCH" "$IPU6_LINUX_SHA"
 # Files added by a previously applied series are untracked now; remove
