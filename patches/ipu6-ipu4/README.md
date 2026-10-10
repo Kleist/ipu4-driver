@@ -17,8 +17,14 @@ the base tree and the PR sequence are in
   `media: ipu6: ...` subject, commit message, `Signed-off-by`,
   `scripts/checkpatch.pl --strict` clean, and the tree builds after every
   patch.
-- No harness-only code. Test helpers (virt-sensor, `new_id` binding, QEMU
-  model changes) live under `tools/`, never here.
+- No harness-only code. Test helpers (virt-sensor, QEMU model changes)
+  live under `tools/`, never here.
+- The patch that adds `8086:5a88` to the PCI ID table
+  (`media: ipu6: Enable IPU4 PCI device`) is always the **last** patch,
+  as upstream wants the device enabled only once its support is in. The
+  series carries it from the start so the tests bind the device the
+  normal way; a new patch goes in before it, and regenerating the series
+  renumbers it.
 
 ## Workflow
 

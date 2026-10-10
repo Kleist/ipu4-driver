@@ -1,0 +1,28 @@
+From 8badccb3f88b9825c33d5c8dc12d29bfacf0da3c Mon Sep 17 00:00:00 2001
+From: Andreas Helbech Kleist <andreaskleist@gmail.com>
+Date: Sat, 10 Oct 2026 19:59:00 +0000
+Subject: [PATCH] media: ipu6: Enable IPU4 PCI device
+
+Register IPU4 in the PCI ID table after the IPU4 identification,
+buttress and MMU support has been added.
+
+Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
+---
+ include/media/ipu6-pci-table.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/include/media/ipu6-pci-table.h b/include/media/ipu6-pci-table.h
+index 17ec5b15e..f9f858106 100644
+--- a/include/media/ipu6-pci-table.h
++++ b/include/media/ipu6-pci-table.h
+@@ -29,6 +29,7 @@ static const struct pci_device_id ipu6_pci_tbl[] = {
+ 	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_IPU7) },
+ 	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_IPU7P5) },
+ 	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_IPU4P) },
++	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_IPU4) },
+ 	{ }
+ };
+ 
+-- 
+2.43.0
+

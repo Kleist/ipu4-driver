@@ -1,9 +1,9 @@
 #!/bin/sh
 # Guest init for the ipu6 ladder's probe tests (probe-identify onwards,
 # tools/tests/ipu6/ladder.sh): load the modules as init.ipu6-modules
-# does, bind intel-ipu6 to the IPU4 with a harness-only new_id write
-# (the series adds 8086:5a88 to the PCI ID table only in its last
-# patch), report how far probe got, unbind, unload and scan dmesg.
+# does (intel-ipu6 probes the IPU4 inside its insmod, through the PCI ID
+# the last patch of the series adds), report how far probe got, unbind,
+# unload and scan dmesg.
 #
 # Markers, parsed by the ladder on the host:
 #   PROBE:ok|fail <what>     individual checks
@@ -66,18 +66,6 @@ for dev in /sys/bus/pci/devices/*; do
 	fi
 done
 [ -n "$ipu" ] || say "fail no 8086:5a88 PCI device"
-
-# With 8086:5a88 in the driver's PCI ID table, probe already ran inside
-# the insmod. Without it, new_id makes the PCI core run probe
-# synchronously for every unbound matching device; the write succeeds
-# even when probe fails.
-if [ -e "/sys/bus/pci/devices/$ipu/driver" ]; then
-	say "info bound at insmod"
-elif echo 8086 5a88 > /sys/bus/pci/drivers/intel-ipu6/new_id; then
-	say "ok new_id"
-else
-	say "fail new_id"
-fi
 
 echo "=== dmesg (intel-ipu6 $ipu) ==="
 dmesg | grep -E "$ipu|intel_ipu6|intel-ipu6"
