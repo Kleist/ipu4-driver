@@ -40,7 +40,6 @@ TESTS=(
 	stream-on:fw-open
 	stream-pattern:stream-on
 	csi2-sof-irq:stream-on
-	native-bind:vm-boot
 )
 
 # --- tests ---------------------------------------------------------------
@@ -122,9 +121,8 @@ test_module-load() {
 }
 
 # Boot with tools/rootfs/init.ipu6-probe: load the modules as
-# module-load does, bind intel-ipu6 to 8086:5a88 through new_id
-# (harness-only; the series adds the PCI ID table entry last), report
-# how far probe got through PROBE: markers, unbind, unload and scan
+# module-load does (intel-ipu6 probes 8086:5a88 inside its insmod),
+# report how far probe got through PROBE: markers, unbind, unload and scan
 # dmesg. Serial log: tools/tests/out/ipu6-probe.serial. The probe-* tests
 # share one boot per ladder run; the first one to run does it.
 # Tests run in a subshell (piped into tee), so the "already booted" state
@@ -159,7 +157,7 @@ boot_probe_vm() {
 }
 
 # Common checks of the probe boot: the init ran to the end without
-# PROBE:fail markers (module load, new_id, unload) or an oops.
+# PROBE:fail markers (module load, unload) or an oops.
 probe_log_ok() {
 	grep -E '^PROBE:|intel-ipu6|intel_ipu6|virt-sensor' "$PROBE_LOG" |
 		grep -vE 'dma_alloc|dmamap|mapping entry'
