@@ -18,3 +18,7 @@ vm-boot
 # virt-sensor + intel-ipu6* load/unload; intel-ipu6 probes 9a19 on load
 # (plan "Parallel track", V3).
 module-load
+
+# Probe identifies 9a19 as IPU6 (requests intel/ipu/ipu6_fw.bin)
+# (plan "Parallel track", V4).
+probe-identify

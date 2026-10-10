@@ -41,7 +41,8 @@ shown not to break the other variants of the shared driver.
   |---|---|---|---|
   | V1 | `vm-ipu6` matrix (`ipu4`, `ipu6`), `IPU4_VARIANT` plumbing in `ladder.sh` / `run-vm.sh`, ipu6 base = unpatched mainline v7.3-rc4 | ipu6: `series-applies`, `build`, `checkpatch` | merged (#118) |
   | V2 | QEMU `variant=ipu6` property (IPU6 PCI ID), variant-aware `vm-boot` | ipu6: `vm-boot` | merged (#119) |
-  | V3 | variant-aware `module-load` | ipu6: `module-load` | in review (#120) |
+  | V3 | variant-aware `module-load` | ipu6: `module-load` | merged (#120) |
+  | V4 | `probe-identify` for ipu6: virt-sensor gets the variant's ID (core PR #127), `060-probe-identify.bound.sh` expects the variant's firmware | ipu6: `probe-identify` | in review (#123) |
 
 - **Dashboard hook (Pages PR):** the Pages "IPU4 port" matrix already
   has `ipu4`, `ipu4p` and `ipu6` columns. A variant lights up once its
@@ -101,3 +102,15 @@ shown not to break the other variants of the shared driver.
 - (V3) `init.ipu6-modules` reads `ipu_pci_id=` like `init.vm-smoke`,
   loads `virt-sensor device=<id>` and looks for that ID. Binding is only
   reported (since PR 8a, for every variant); the probe-* tests check it.
+- (V4) Since #126 the probe checks are per-test snippets: the
+  identify check is `init.ipu6-probe.d/060-probe-identify.bound.sh`,
+  which maps the frame's `$want` to the firmware file
+  `ipu6_pci_probe()` requests for it (`ipu4_fw.bin` for `5a88`,
+  `ipu6_fw.bin` for `9a19`). The frame change it needs (virt-sensor
+  loaded with `device=$want`, `ipu_pci_id=` read before the module
+  loop) went in first as its own core PR (#127). On mainline the ipu6
+  variant passes `probe-identify` with no model change. Its
+  `probe-buttress` fails: probe stops at the missing firmware before the
+  PSYS runtime resume the buttress check looks for, so the next ipu6
+  test needs a synthesized `ipu6_fw.bin` (an IPU6 CPD that
+  `ipu6_cpd_validate_cpd_file()` accepts), not register work.
