@@ -88,8 +88,9 @@ def build(by_variant: dict[str, dict], fallback_tests: list[str] | None = None) 
 
     Returns ``{variants, tests, primary, has_data}`` where ``variants``
     is a list of ``{name, has_data, summary, generated_at, run_url,
-    commit_sha}``, ``tests`` a list of ``{name, cells}`` with one cell
-    per variant (``None`` when that variant has no data for the test),
+    commit_sha, pin, series_count}``, ``tests`` a list of ``{name,
+    cells}`` with one cell per variant (``None`` when that variant has no
+    data for the test),
     and ``primary`` the results whose pin and series the section shows
     (ipu4 when present).
     """
@@ -104,6 +105,10 @@ def build(by_variant: dict[str, dict], fallback_tests: list[str] | None = None) 
             "generated_at": (res or {}).get("generated_at"),
             "run_url": (res or {}).get("run_url"),
             "commit_sha": (res or {}).get("commit_sha"),
+            # Variants can run on different bases (the ipu6 variant on
+            # unpatched mainline), so each card names its own.
+            "pin": (res or {}).get("pin"),
+            "series_count": ((res or {}).get("series") or {}).get("count"),
         })
 
     tests = []

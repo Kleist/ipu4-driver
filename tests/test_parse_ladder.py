@@ -163,3 +163,20 @@ def test_load_results_reads_old_rungs_key(tmp_path):
     out = parse_ladder.load_results([tmp_path])
     assert [r["name"] for r in out["ipu4"]["tests"]] == [
         r["name"] for r in _results()["tests"]]
+
+
+def test_build_variants_carry_their_own_base():
+    upstream = _results(
+        variant="ipu6",
+        pin={"url": "https://github.com/torvalds/linux.git", "sha": "93f51579e7df"},
+        series={"count": 0, "patches": []},
+    )
+    out = parse_ladder.build({"ipu4": _results(), "ipu6": upstream})
+    by_name = {v["name"]: v for v in out["variants"]}
+    assert by_name["ipu4"]["pin"]["url"] == "https://github.com/ruslanbay/linux.git"
+    assert by_name["ipu4"]["series_count"] == 1
+    assert by_name["ipu6"]["pin"]["sha"] == "93f51579e7df"
+    assert by_name["ipu6"]["series_count"] == 0
+    assert by_name["ipu4p"]["pin"] is None and by_name["ipu4p"]["series_count"] is None
+    # The section's pin/series block still describes the ipu4 run.
+    assert out["primary"]["variant"] == "ipu4"

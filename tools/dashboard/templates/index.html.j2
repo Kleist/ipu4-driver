@@ -58,6 +58,7 @@
       <div class="kpi-sub">tests passing · gated {{ v.summary.enabled_passing }} / {{ v.summary.enabled }} pass</div>
       {% if v.summary.enabled_failing %}<div class="kpi-sub ladder-failing">failing: {{ v.summary.enabled_failing | join(', ') }}</div>{% endif %}
       <div class="kpi-sub">{% if v.run_url %}<a href="{{ v.run_url }}">{% endif %}{{ (v.generated_at or '')[:16] | replace('T', ' ') }}{% if v.run_url %}</a>{% endif %}{% if v.commit_sha %} · <code>{{ v.commit_sha[:7] }}</code>{% endif %}</div>
+      {% if v.pin and v.pin.url %}<div class="kpi-sub">base <code>{{ v.pin.url | replace('https://github.com/', '') | replace('.git', '') }}@{{ (v.pin.sha or '')[:7] }}</code> + {{ v.series_count or 0 }} patch{{ '' if v.series_count == 1 else 'es' }}</div>{% endif %}
     </div>
     {% else %}
     <div class="kpi ladder-variant ladder-none">
