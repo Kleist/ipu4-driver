@@ -94,6 +94,16 @@ nod  /dev/null           0666 0 0 c 1 3
 nod  /dev/zero           0666 0 0 c 1 5
 EOF
 
+# Snippets of the init, if it has any (tools/rootfs/init.<name>.d/, e.g.
+# the ipu6 probe tests' checks), as /init.d/.
+if [[ -d "$INIT_SRC.d" ]]; then
+	echo "dir  /init.d             0755 0 0" >> "$LIST"
+	for f in "$INIT_SRC.d"/*.sh; do
+		[[ -e "$f" ]] || continue
+		echo "file /init.d/$(basename "$f")  $f 0644 0 0" >> "$LIST"
+	done
+fi
+
 # Busybox applet symlinks.
 for applet in sh mount umount insmod rmmod modprobe lsmod dmesg echo cat ls \
 	ln sleep poweroff reboot mkdir grep sed awk head tail find tar; do
