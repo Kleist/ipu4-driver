@@ -54,211 +54,33 @@ export IPU4_VARIANT="$VARIANT" IPU4_IPU6_LINUX_DIR="$LINUX_DIR"
 export IPU4_IPU6_PIN="$PIN" IPU4_IPU6_PATCH_DIR="$PATCH_DIR"
 OUT="$ROOT/tools/tests/out/ipu6-ladder"
 
-# Ladder order. "test:dependency": when both are run, a test is SKIPped
-# unless its dependency PASSed.
-TESTS=(
-	series-applies
-	build:series-applies
-	checkpatch
-	vm-boot:build
-	module-load:vm-boot
-	probe-identify:module-load
-	probe-buttress:probe-identify
-	probe-mmu:probe-buttress
-	probe-fw:probe-mmu
-	probe-complete:probe-fw
-	fw-open:probe-complete
-	stream-on:fw-open
-	stream-pattern:stream-on
-	csi2-sof-irq:stream-on
-)
-
-# --- tests ---------------------------------------------------------------
-# Each test_<name> function runs with stdout/stderr going to its log and
-# returns 0 for PASS, non-zero for FAIL. A test in TESTS without a
-# test_<name> function is NOT-IMPLEMENTED.
-
-test_series-applies() {
-	"$ROOT/tools/ipu6/bootstrap.sh"
-}
-
-test_build() {
-	local log="$OUT/build.compile.log"
-	IPU4_IPU6_CLEAN=1 IPU4_IPU6_BUILD_LOG="$log" "$ROOT/tools/ipu6/build.sh" ||
-		return 1
-	# "cleanly": no compiler warnings at W=1. modpost's "WARNING:" lines
-	# about unresolved symbols are expected (no vmlinux) and not matched.
-	if grep -E '(warning|error):' "$log"; then
-		echo "!!! compiler warnings in the W=1 build (see above)"
-		return 1
-	fi
-}
-
-test_checkpatch() {
-	local cp="$LINUX_DIR/scripts/checkpatch.pl" p rc=0
-	if [[ -z "$PATCH_DIR" ]]; then
-		echo "no series on the $VARIANT variant's base; nothing to check"
-		return 0
-	fi
-	shopt -s nullglob
-	local patches=("$PATCH_DIR"/*.patch)
-	shopt -u nullglob
-	if (( ${#patches[@]} == 0 )); then
-		echo "no patches in ${PATCH_DIR#"$ROOT"/}; nothing to check"
-		return 0
-	fi
-	if [[ ! -f "$cp" ]]; then
-		echo "missing $cp; run tools/ipu6/bootstrap.sh first"
-		return 1
-	fi
-	for p in "${patches[@]}"; do
-		echo ">>> checkpatch --strict ${p#"$ROOT"/}"
-		(cd "$LINUX_DIR" && perl "$cp" --strict --color=never "$p") || rc=1
-	done
-	return "$rc"
-}
-
-# Full guest kernel (bzImage + modules, same .config as `build`) +
-# initramfs with the vm-smoke init, booted under the QEMU IPU4 model;
-# passes when the guest sees 8086:5a88 on its PCI bus. Needs the patched
-# QEMU (tools/bootstrap.sh --qemu-only && tools/build-qemu.sh).
-test_vm-boot() {
-	local qemu="${IPU4_QEMU_BIN:-$ROOT/tools/qemu/build/qemu-system-x86_64}"
-	if [[ ! -x "$qemu" ]]; then
-		echo "missing $qemu; run tools/bootstrap.sh --qemu-only &&" \
-			"tools/build-qemu.sh"
-		return 1
-	fi
-	IPU4_FLAVOR=ipu6 "$ROOT/tools/build-kernel.sh" || return 1
-	IPU4_FLAVOR=ipu6 "$ROOT/tools/tests/vm-smoke.sh"
-}
-
-# Boot the vm-boot guest kernel with tools/rootfs/init.ipu6-modules:
-# load the vb2 modules, the harness's virt-sensor (tools/virt-sensor/),
-# intel-ipu6 and intel-ipu6-isys, check that 8086:5a88 is there, unload,
-# and scan dmesg. Whether probe binds is up to the probe-* tests. The
-# guest prints
-# MODLOAD: PASS|FAIL. Rebuilds the kernel only when vm-boot (which does
-# that) is not part of this run.
-test_module-load() {
-	local log="$ROOT/tools/tests/out/ipu6-module-load.serial"
-	if [[ -z "${WANT[vm-boot]:-}" ]]; then
-		IPU4_FLAVOR=ipu6 "$ROOT/tools/build-kernel.sh" || return 1
-	fi
-	"$ROOT/tools/virt-sensor/build.sh" || return 1
-	IPU4_FLAVOR=ipu6 IPU4_INIT=ipu6-modules "$ROOT/tools/rootfs/build.sh" ||
-		return 1
-	rm -f "$log"
-	timeout --preserve-status "${IPU4_SMOKE_TIMEOUT:-90}" \
-		env IPU4_FLAVOR=ipu6 "$ROOT/tools/run-vm.sh" > "$log" 2>&1
-	grep -E '^MODLOAD:|virt-sensor|ipu6' "$log"
-	grep -q '^MODLOAD: PASS' "$log"
-}
-
-# Boot with tools/rootfs/init.ipu6-probe: load the modules as
-# module-load does (intel-ipu6 probes 8086:5a88 inside its insmod),
-# report how far probe got through PROBE: markers, unbind, unload and scan
-# dmesg. Serial log: tools/tests/out/ipu6-probe.serial. The probe-* tests
-# share one boot per ladder run; the first one to run does it.
-# Tests run in a subshell (piped into tee), so the "already booted" state
-# is a stamp file, removed when the ladder starts.
-# The boot also logs every MMIO write to the IPU BAR (QEMU's
-# memory_region_ops_write trace event, IPU4_MMIO_WRITE_LOG in run-vm.sh)
-# to tools/tests/out/ipu6-probe.mmio-writes, for tests that compare
-# register values with the silicon trace (tools/trace/check_writes.py).
-PROBE_LOG="$ROOT/tools/tests/out/ipu6-probe.serial"
-PROBE_WRITES="$ROOT/tools/tests/out/ipu6-probe.mmio-writes"
-PROBE_STAMP="$OUT/probe-boot.stamp"
-boot_probe_vm() {
-	if [[ -e "$PROBE_STAMP" ]]; then
-		echo ">>> reusing the probe boot of this run (${PROBE_LOG#"$ROOT"/})"
-		return 0
-	fi
-	if [[ -z "${WANT[vm-boot]:-}" ]]; then
-		IPU4_FLAVOR=ipu6 "$ROOT/tools/build-kernel.sh" || return 1
-	fi
-	"$ROOT/tools/virt-sensor/build.sh" || return 1
-	IPU4_FLAVOR=ipu6 IPU4_INIT=ipu6-probe "$ROOT/tools/rootfs/build.sh" ||
-		return 1
-	rm -f "$PROBE_LOG" "$PROBE_WRITES"
-	# The raw log has every region's writes (~15 MB, mostly serial and
-	# VGA); keep only the IPU BAR's.
-	timeout --preserve-status "${IPU4_SMOKE_TIMEOUT:-90}" \
-		env IPU4_FLAVOR=ipu6 IPU4_MMIO_WRITE_LOG="$PROBE_WRITES.all" \
-		"$ROOT/tools/run-vm.sh" > "$PROBE_LOG" 2>&1
-	grep -F "name 'ipu4-bar0'" "$PROBE_WRITES.all" > "$PROBE_WRITES"
-	rm -f "$PROBE_WRITES.all"
-	touch "$PROBE_STAMP"
-}
-
-# Common checks of the probe boot: the init ran to the end without
-# PROBE:fail markers (module load, unload) or an oops.
-probe_log_ok() {
-	grep -E '^PROBE:|intel-ipu6|intel_ipu6|virt-sensor' "$PROBE_LOG" |
-		grep -vE 'dma_alloc|dmamap|mapping entry'
-	if grep -q '^PROBE:fail' "$PROBE_LOG"; then
-		echo "!!! PROBE:fail markers (see above)"
-		return 1
-	fi
-	grep -q '^PROBE: DONE' "$PROBE_LOG" &&
-		grep -q '^PROBE:oops none' "$PROBE_LOG"
-}
-
-# Probe identified the IPU4 (requested intel/ipu/ipu4_fw.bin rather than
-# rejecting the device). Probe itself may still fail further on; that is
-# what the later probe-* tests check.
-test_probe-identify() {
-	boot_probe_vm || return 1
-	probe_log_ok && grep -q '^PROBE:identify ok' "$PROBE_LOG"
-}
-
-# Buttress init and ISYS/PSYS power-up succeed: probe got through the
-# PSYS runtime resume (which powers up ISYS, its parent, first) to the
-# PSYS MMU init, both devices were runtime-suspended (powered down)
-# afterwards, and no "Change power status timeout" / "power down
-# failed!" was logged from bind to rmmod.
-test_probe-buttress() {
-	boot_probe_vm || return 1
-	probe_log_ok &&
-		grep -q '^PROBE:buttress ok' "$PROBE_LOG" &&
-		grep -q '^PROBE:pwr-errors none' "$PROBE_LOG"
-}
-
-# The PSYS MMU hardware init in probe programs the IPU4 MMU tables: the
-# guest's writes to the PSYS MMU configuration registers are the ones
-# silicon makes in data/trace.txt, in the same order. The QEMU model
-# accepts any value there, so this compares the probe boot's MMIO write
-# log (QEMU trace event) with the silicon trace instead of looking at
-# how probe went. Per MMU (MMU0 at BAR + 0x4b0000, MMU1 at + 0x4b0100,
-# MMU1R at + 0x4b0600) the compared range is +0x08..+0x8c: INFO and the
-# 16 L1 and 16 L2 stream start addresses, i.e. everything
-# __ipu6_mmu_hw_init() writes except the page-table address at +0x04.
-# Left out on purpose: +0x00 (TLB invalidate; upstream writes
-# 0xffffffff, silicon 0x1 / 0xffff) and the address translator ZLW
-# registers from +0x100 (the reference driver programs them, upstream
-# ipu6 does not). The ISYS MMU (+0x1e0000) is only initialised at ISYS
-# runtime resume (first stream open), so it is not part of this test.
-test_probe-mmu() {
-	boot_probe_vm || return 1
-	probe_log_ok &&
-		python3 "$ROOT/tools/trace/check_writes.py" \
-			--expected "$ROOT/data/trace.txt" --actual "$PROBE_WRITES" \
-			0x4b0008-0x4b0090 0x4b0108-0x4b0190 0x4b0608-0x4b0690
-}
-
-# The later VM tests (probe-fw onwards) are implemented by later PRs of
-# the plan.
-
-# --- driver --------------------------------------------------------------
-
+# The tests. Each one lives in its own file, tools/tests/ipu6/tests.d/
+# NNN-<name>.sh (README.md there), so adding a test adds a file instead
+# of editing a list here. The files are sourced in name order, which is
+# the ladder order; each registers itself with ladder_test and defines
+# test_<name>, which runs with stdout/stderr going to the test's log and
+# returns 0 for PASS, non-zero for FAIL. A registered test without a
+# test_<name> function is NOT-IMPLEMENTED. "ladder_test NAME DEP": when
+# both are run, NAME is SKIPped unless DEP PASSed.
 declare -A DEP=() RESULT=() KNOWN=() DUR=()
 ORDER=()
-for entry in "${TESTS[@]}"; do
-	name="${entry%%:*}"
-	ORDER+=("$name")
-	KNOWN[$name]=1
-	[[ "$entry" == *:* ]] && DEP[$name]="${entry#*:}"
+ladder_test() {
+	ORDER+=("$1")
+	KNOWN[$1]=1
+	[[ -n "${2:-}" ]] && DEP[$1]="$2"
+	return 0
+}
+
+# Helpers shared by several tests.
+# shellcheck source=tools/tests/ipu6/probe-boot.sh
+. "$HERE/probe-boot.sh"
+
+for f in "$HERE"/tests.d/[0-9]*.sh; do
+	# shellcheck source=/dev/null
+	. "$f"
 done
+
+# --- driver --------------------------------------------------------------
 
 if [[ "${1:-}" == "--list" ]]; then
 	printf '%s\n' "${ORDER[@]}"
