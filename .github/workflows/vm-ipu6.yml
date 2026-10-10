@@ -15,6 +15,13 @@ on:
 # Only the tests listed in tools/tests/ipu6/enabled-tests fail the job, so
 # tests that are not switched on yet stay visible without blocking merges.
 #
+# One leg per QEMU model variant (plan "Parallel track"): ipu4 is the
+# port itself (tools/ipu6/pin + the series); ipu6 develops the model's
+# IPU6 emulation against unpatched mainline (tools/ipu6/pin.upstream).
+# Each leg passes IPU4_VARIANT to the ladder, which picks that variant's
+# base and tree, boots it, and gates on its own list (enabled-tests for
+# ipu4, enabled-tests.<variant>).
+#
 # Runs alongside ci.yml / vm-smoke.yml (fork flow); nothing here touches
 # tools/linux/. QEMU comes from `tools/bootstrap.sh --qemu-only` and
 # shares its build cache with vm-smoke-reusable.yml (same key). The
@@ -23,7 +30,25 @@ on:
 
 jobs:
   ladder:
+    # Keep the check name short ("ladder (ipu4)"); by default it would
+    # list every matrix.include field.
+    name: ladder (${{ matrix.variant }})
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # linux-dir / pin mirror the variant -> base table in
+        # tools/tests/ipu6/ladder.sh; they only key the tree cache, whose
+        # name is the tree's directory (so the ipu4 key is unchanged).
+        include:
+          - variant: ipu4
+            linux-dir: tools/linux-ipu6
+            pin: tools/ipu6/pin
+            cache: linux-ipu6
+          - variant: ipu6
+            linux-dir: tools/linux-ipu6-upstream
+            pin: tools/ipu6/pin.upstream
+            cache: linux-ipu6-upstream
     # Cold (no cache): QEMU build + full guest-kernel build dominate,
     # see the PR 4 learnings in the plan for measured times. Warm runs
     # rebuild only what the series touches.
@@ -57,31 +82,31 @@ jobs:
         run: ./tools/build-qemu.sh
 
       # The pinned tree is ~300 MB of git objects plus the guest-kernel
-      # build output. Keyed by the pin so a pin bump starts clean (the
-      # restore prefix includes it); bootstrap resets the restored tree to
-      # the pin and re-applies the series, keeping mtimes of untouched
-      # files so make only rebuilds what changed.
+      # build output. Keyed by the variant's pin so a pin bump starts
+      # clean (the restore prefix includes it); bootstrap resets the
+      # restored tree to the pin and re-applies the series, keeping
+      # mtimes of untouched files so make only rebuilds what changed.
       - name: Cache ipu6 Linux tree
         uses: actions/cache@v4
         with:
-          path: tools/linux-ipu6
-          key: linux-ipu6-${{ hashFiles('tools/ipu6/pin') }}-${{ hashFiles('patches/ipu6-ipu4/**', 'tools/ipu6/*.sh', 'tools/build-kernel.sh', 'tools/vm-kconfig.sh') }}
+          path: ${{ matrix.linux-dir }}
+          key: ${{ matrix.cache }}-${{ hashFiles(matrix.pin) }}-${{ hashFiles('patches/ipu6-ipu4/**', 'tools/ipu6/*.sh', 'tools/build-kernel.sh', 'tools/vm-kconfig.sh') }}
           restore-keys: |
-            linux-ipu6-${{ hashFiles('tools/ipu6/pin') }}-
+            ${{ matrix.cache }}-${{ hashFiles(matrix.pin) }}-
 
       - name: Run ipu6 ladder
         run: ./tools/tests/ipu6/ladder.sh
         env:
           IPU4_ACCEL: tcg
+          IPU4_VARIANT: ${{ matrix.variant }}
 
       # Small dedicated artifact read by pages.yml (dashboard "IPU4 port"
-      # section). Named per QEMU variant so the parallel-track matrix can
-      # upload one per leg; matrix.variant is empty until that lands.
+      # section), one per QEMU variant leg.
       - name: Upload ladder results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ipu6-ladder-results-${{ matrix.variant || 'ipu4' }}
+          name: ipu6-ladder-results-${{ matrix.variant }}
           path: tools/tests/out/ipu6-ladder/results.json
           if-no-files-found: ignore
 
@@ -89,12 +114,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vm-ipu6-ladder-${{ github.run_id }}
+          name: vm-ipu6-ladder-${{ matrix.variant }}-${{ github.run_id }}
           path: |
             tools/tests/out/ipu6-ladder/
             tools/tests/out/vm-smoke-ipu6.serial
             tools/tests/out/ipu6-module-load.serial
             tools/tests/out/ipu6-probe.serial
             tools/tests/out/ipu6-probe.mmio-writes
-            tools/linux-ipu6/.config
+            ${{ matrix.linux-dir }}/.config
           if-no-files-found: ignore
