@@ -46,6 +46,17 @@ for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
 	fi
 done
 
+# The MMU code logs every page it maps at debug level; mapping the 8 MB
+# trash buffer alone pushes the start of probe out of the kernel log
+# buffer. Keep its debug output off, except the line that says the MMU
+# hardware init got as far as the trash buffer.
+echo 'file drivers/media/pci/intel/ipu6/ipu6-mmu.c -p' \
+	> /proc/dynamic_debug/control 2>/dev/null ||
+	say "fail ipu6-mmu dyndbg"
+echo 'format "iova trash buffer" +p' \
+	> /proc/dynamic_debug/control 2>/dev/null ||
+	say "fail trash buffer dyndbg"
+
 ipu=
 for dev in /sys/bus/pci/devices/*; do
 	if [ "$(cat "$dev/vendor")" = 0x8086 ] &&
@@ -64,7 +75,7 @@ else
 fi
 
 echo "=== dmesg (intel-ipu6 $ipu) ==="
-dmesg | grep -F "$ipu"
+dmesg | grep -E "$ipu|intel_ipu6|intel-ipu6"
 echo "=== end dmesg ==="
 
 # Identification: the device switch in ipu6_pci_probe() either rejects
