@@ -10,3 +10,6 @@
 series-applies
 build
 checkpatch
+
+# Guest kernel + initramfs boot under the QEMU IPU4 model (plan PR 4).
+vm-boot

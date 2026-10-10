@@ -138,10 +138,10 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 
 | PR | Content | Rung(s) enabled | State |
 |---|---|---|---|
-| 1 | This plan | — | in review (#100) |
+| 1 | This plan | — | merged (#100) |
 | 2 | `IPU4_FLAVOR=ipu6` bootstrap/build + empty `patches/ipu6-ipu4/` + `vm-ipu6.yml` ladder runner, all rungs disabled | — | in review (#101) |
-| 3 | Enable static rungs on the empty series | `series-applies`, `build`, `checkpatch` | in review |
-| 4 | Guest kernel config + rootfs for the ipu6 flavor | `vm-boot` | |
+| 3 | Enable static rungs on the empty series | `series-applies`, `build`, `checkpatch` | in review (#102) |
+| 4 | Guest kernel config + rootfs for the ipu6 flavor | `vm-boot` | in review |
 | 5 | Standalone virt-sensor module, init loads `intel-ipu6*` | `module-load` | |
 | 6 | `media: ipu6: Add helper to identify IPU4` (+ probe case, no table entry) | `probe-identify` | |
 | 7 | `media: ipu6: Add IPU4 buttress support` | `probe-buttress` | |
@@ -212,6 +212,47 @@ last; each entry names the PR that found it.
   builds on its own" rule in `patches/ipu6-ipu4/README.md` is not
   checked yet; add a per-patch build (e.g. `git rebase -x`) once the
   series has more than one patch.
+- (PR 4) The fork's VM scripts take the flavor as a parameter instead of
+  getting ipu6 copies: `IPU4_FLAVOR=ipu6` makes `tools/build-kernel.sh`,
+  `tools/rootfs/build.sh`, `tools/run-vm.sh` and `tools/tests/vm-smoke.sh`
+  use `tools/linux-ipu6/`, the ipu6 driver directory,
+  `tools/rootfs/out-ipu6/` and `tools/tests/out/vm-smoke-ipu6.serial`.
+  The default (fork) paths are unchanged. QEMU comes from
+  `tools/bootstrap.sh --qemu-only`, which skips `tools/linux/`; the CI
+  QEMU cache key is the same as in `vm-smoke-reusable.yml`, so either
+  workflow reuses the other's build.
+- (PR 4) The QEMU-guest kconfig trim moved from `tools/build.sh` into
+  `tools/vm-kconfig.sh`, which both flavors call. `tools/ipu6/build.sh`
+  applies it too, so the `build` rung (M=) and the guest kernel share one
+  `.config` and neither invalidates the other's objects. The trimmed
+  config keeps the ipu6 directory W=1-clean.
+- (PR 4) `CONFIG_WERROR` is **off** for the ipu6 guest kernel (the pin's
+  defconfig has it on). The full v7.3-rc4 tree builds without warnings
+  with gcc 13.3 today, but with `-Werror` a runner gcc bump that adds a
+  warning in any unrelated subsystem would fail every VM rung. The
+  `build` rung's log scan is the warning gate for ipu6; re-checked with
+  a throw-away patch (missing prototype) → `build` FAIL without
+  `-Werror`.
+- (PR 4) The full build compiles ipu6 with the parent Makefile's
+  `subdir-ccflags` (see PR 2), and the `build` rung's `M=` clean +
+  rebuild then compiles it again with upstream flags. The two builds
+  overwrite each other's ipu6 objects, which costs a few seconds per
+  run; the modules packed into the initramfs come from the full build.
+  The initramfs already contains `intel-ipu6*.ko` and the vb2 modules
+  (VIDEOBUF2_* end up `=m` because only `VIDEO_INTEL_IPU6=m` selects
+  them), so PR 5 only has to load them.
+- (PR 4) Timings on 4 cores (TCG): cold `vm-boot` 334 s, nearly all of it
+  the bzImage + modules build; the TCG boot reaches `/init` at ~1.6 s and
+  the whole VM run (rootfs rebuild + boot + poweroff) is ~4 s. Warm
+  ladder (all four enabled rungs): 33 s. QEMU from `--qemu-only`: clone
+  + wiring 4 s, cold build 2.5 min. Cold CI is therefore ~15 min plus
+  apt and cache transfer; `vm-ipu6.yml` timeout is 45 min (same as
+  `vm-smoke-reusable.yml`).
+- (PR 4) The build tree is ~2.7 GB on disk (≈1.5 GB checkout, 290 MB
+  `.git`, rest build output; `DEBUG_INFO_NONE` in defconfig keeps it
+  small). An interrupted earlier fetch had left a 2.7 GB
+  `tmp_pack_*` in `tools/linux-ipu6/.git` locally; delete it if a local
+  tree looks oversized (CI trees are fresh fetches).
 
 ## Parallel track — QEMU coverage for IPU4P and IPU6
 

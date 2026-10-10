@@ -5,7 +5,10 @@
 # Builds only the ipu6 directory as an external module on top of
 # `modules_prepare` (~minutes) rather than `make modules` / bzImage: the
 # static ladder rungs need just the .ko files. The guest kernel for the VM
-# rungs is a separate step (plan PR 4).
+# rungs (bzImage + modules) is built by
+# `IPU4_FLAVOR=ipu6 tools/build-kernel.sh`, which runs this script with
+# IPU4_BUILD_CONFIG_ONLY=1 for the config pass, so both builds share one
+# .config and neither invalidates the other's objects.
 #
 # W=1 is on by default (IPU4_IPU6_W=1) because that is what the `build`
 # rung checks. The compiler output is mirrored to $IPU4_IPU6_BUILD_LOG
@@ -58,6 +61,15 @@ fi
 	--disable VIDEO_INTEL_IPU7 \
 	--module VIDEO_INTEL_IPU6 \
 	--enable VIDEO_INTEL_IPU6_IPU7
+# Same QEMU-guest trim as the fork flavor (no disk/net/USB/graphics).
+"$ROOT/tools/vm-kconfig.sh"
+# CONFIG_WERROR off: the pin's defconfig has it on, which would make any
+# warning anywhere in the full guest-kernel build (a runner gcc bump in
+# an unrelated subsystem) fail the VM rungs. Warnings in ipu6 are gated
+# by the `build` rung instead, which scans the W=1 M= build log for
+# "warning:" and fails on any hit, so the gate does not depend on
+# -Werror.
+./scripts/config --disable WERROR
 make -s olddefconfig
 
 check_sym() {
@@ -70,6 +82,7 @@ check_sym() {
 }
 check_sym "CONFIG_VIDEO_INTEL_IPU6=m" VIDEO_INTEL_IPU6
 check_sym "# CONFIG_VIDEO_INTEL_IPU is not set" VIDEO_INTEL_IPU
+check_sym "# CONFIG_WERROR is not set" WERROR
 
 if [[ "${IPU4_BUILD_CONFIG_ONLY:-0}" == "1" ]]; then
 	exit 0

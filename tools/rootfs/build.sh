@@ -5,12 +5,28 @@
 # Uses busybox-static from the host (apt: busybox-static) + the kernel
 # tree's gen_init_cpio to produce a cpio archive that includes /dev
 # device nodes without needing root on the host.
+#
+# IPU4_FLAVOR=ipu6 takes the kernel modules and gen_init_cpio from
+# tools/linux-ipu6/ (driver: drivers/media/pci/intel/ipu6) and writes
+# tools/rootfs/out-ipu6/rootfs.cpio.gz, so the two flavors' images
+# never overwrite each other.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
-LINUX_DIR="$ROOT/tools/linux"
-OUT="$HERE/out"
+case "${IPU4_FLAVOR:-fork}" in
+fork)
+	LINUX_DIR="$ROOT/tools/linux"
+	DRV_DIR="$LINUX_DIR/drivers/media/pci/intel/ipu4"
+	OUT="$HERE/out"
+	;;
+ipu6)
+	LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$ROOT/tools/linux-ipu6}"
+	DRV_DIR="$LINUX_DIR/drivers/media/pci/intel/ipu6"
+	OUT="$HERE/out-ipu6"
+	;;
+*) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork or ipu6)" >&2; exit 1 ;;
+esac
 mkdir -p "$OUT"
 
 # Guest /init to embed. Defaults to the M2 vm-smoke init; callers pass a
@@ -38,8 +54,6 @@ if [[ ! -x "$GEN" ]]; then
 	echo "missing $GEN; run tools/build-kernel.sh first" >&2
 	exit 2
 fi
-
-DRV_DIR="$LINUX_DIR/drivers/media/pci/intel/ipu4"
 
 # Compile the streamon-attempt helper statically against the host's
 # libc/headers. Used only by tools/tests/streamon-smoke.sh.
