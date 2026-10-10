@@ -52,6 +52,18 @@ Two helpers under `tools/upstream/`, both relying on the same file mapping (`dri
 - `tools/upstream/diff.sh` — regenerates `tools/notes/upstream-diff/{summary.md,per-file/<f>.diff}` showing the current divergence between `kernel/ipu4/` and upstream IPU6 at the pinned tag. Read this when picking the next divergence chunk to remove. Output is gitignored — re-run on demand. Honours `IPU4_LINUX_TAG` for one-off comparisons against a different upstream pin.
 - `tools/upstream/watch.sh` — driven by `.github/workflows/upstream-watch.yml` (daily 04:00 UTC). Detects new IPU6 commits on `linux-6.12.y` (stable) and Linus `master` (deduped against 6.12.y by patch-id), tries `git am` of each onto `kernel/ipu4/`, and opens a PR on `claude/upstream-watch/<date>` listing applied / conflict / n-a commits. State is kept in `tools/notes/upstream-watch-state.json` and rolls forward in the last commit on the bot branch. Run locally with `IPU4_UPSTREAM_WATCH_DRY_RUN=1` to inspect the would-be PR without pushing.
 
+## ipu6 flavor (upstream ipu6 driver + IPU4 patch series)
+
+A second, parallel flow adds IPU4 to the upstream `drivers/media/pci/intel/ipu6/` driver as mailable patches; the plan, rung table and learnings are in `tools/notes/ipu6-ipu4-plan.md` (re-read it before, and update it at the end of, every step). It never touches `tools/linux/` or `kernel/ipu4/`:
+
+```bash
+tools/ipu6/bootstrap.sh       # tools/linux-ipu6/ = pin (tools/ipu6/pin) + git am patches/ipu6-ipu4/*.patch
+tools/ipu6/build.sh           # intel-ipu6*.ko (W=1, M= build on modules_prepare)
+tools/tests/ipu6/ladder.sh    # every rung; fails only on rungs listed in tools/tests/ipu6/enabled-tests
+```
+
+`IPU4_FLAVOR=ipu6 tools/bootstrap.sh` / `tools/build.sh` dispatch to the same scripts (default `fork`). Kernel changes go in `patches/ipu6-ipu4/` as `git format-patch` output (see its README); CI is `.github/workflows/vm-ipu6.yml`.
+
 ## Common commands
 
 Out-of-tree build against an external kernel tree:
@@ -92,6 +104,7 @@ The bootstrap script is idempotent. Re-run after pulling to re-apply patches fro
 - `.github/workflows/vm-smoke.yml` — full-VM boot + probe-smoke + streamon-smoke + mmiotrace + `compare-mmio` divergence report on every PR and on push to `main`/`master`. Pinned to the **6.12 leg only** (read from `.github/kernel-pins/`, the same source `ci.yml` uses); 6.18 and 7.0 run weekly via `vm-smoke-weekly.yml`. A thin `workflow_call` caller — the body lives in `vm-smoke-reusable.yml`.
 - `.github/workflows/vm-smoke-weekly.yml` — Sundays 07:00 UTC + `workflow_dispatch`. Matrix caller covering every non-6.12 track in `.github/kernel-pins/` (today: 6.18 + 7.0).
 - `.github/workflows/vm-smoke-reusable.yml` — reusable workflow (`workflow_call`) shared by `vm-smoke.yml` and `vm-smoke-weekly.yml`. Inputs: `linux-url`, `linux-ref`, `display-name`. The Linux build cache is namespaced by `display-name` so the 6.12 and 6.18 callers don't trample each other; the QEMU cache (independent of the kernel ref) is shared. Failure artifacts (`vm-smoke-failure-<display-name>-*`) include the serial logs; the coverage report (`mmio-trace-coverage-vm-smoke-<display-name>-*`) is published unconditionally.
+- `.github/workflows/vm-ipu6.yml` — ipu6-flavor test ladder (`tools/tests/ipu6/ladder.sh`) on every PR and on push to `main`/`master`; gated only by `tools/tests/ipu6/enabled-tests`. See "ipu6 flavor" above.
 - `.github/workflows/upstream-watch.yml` — daily cron that surfaces new upstream IPU6 commits as cherry-pick PRs (see "Upstream sync tooling" above).
 
 ## QEMU device-model workflow
