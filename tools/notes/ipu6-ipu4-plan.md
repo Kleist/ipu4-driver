@@ -52,7 +52,9 @@ alignment fix) are picked up by an explicit pin-bump PR, not automatically.
   starts on a branch stacked on it while the previous PR is in review.
   The stacked PR targets the previous step's branch and is retargeted
   to `main` once that merges. Review feedback on an earlier PR is merged
-  forward into the stacked branches.
+  forward into the stacked branches. At most 3 unmerged PRs may be
+  stacked (see `CLAUDE.md`); when the stack is full, the next step waits
+  for the bottom PR to merge.
 
 ## Decisions
 
