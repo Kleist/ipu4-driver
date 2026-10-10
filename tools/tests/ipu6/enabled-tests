@@ -22,3 +22,6 @@ probe-identify
 
 # ISYS/PSYS power-up through the IPU4 buttress controls (plan PR 7).
 probe-buttress
+
+# PSYS MMU init writes the IPU4 stream tables seen on silicon (plan PR 8).
+probe-mmu
