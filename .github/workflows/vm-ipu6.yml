@@ -94,5 +94,6 @@ jobs:
             tools/tests/out/ipu6-ladder/
             tools/tests/out/vm-smoke-ipu6.serial
             tools/tests/out/ipu6-module-load.serial
+            tools/tests/out/ipu6-probe.serial
             tools/linux-ipu6/.config
           if-no-files-found: ignore
