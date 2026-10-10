@@ -86,7 +86,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: tools/linux
-          key: linux-${{ inputs.display-name }}-${{ inputs.linux-ref }}-${{ hashFiles('kernel/ipu4/**/*', 'tools/linux-patches/**/*', 'tools/bootstrap.sh', 'tools/build.sh', 'tools/build-kernel.sh') }}
+          key: linux-${{ inputs.display-name }}-${{ inputs.linux-ref }}-${{ hashFiles('kernel/ipu4/**/*', 'tools/linux-patches/**/*', 'tools/bootstrap.sh', 'tools/build.sh', 'tools/vm-kconfig.sh', 'tools/build-kernel.sh') }}
           restore-keys: |
             linux-${{ inputs.display-name }}-${{ inputs.linux-ref }}-
 
