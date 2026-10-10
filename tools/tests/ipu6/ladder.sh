@@ -10,8 +10,14 @@
 #
 # Every rung ends as PASS, FAIL, SKIP (a rung it depends on did not pass)
 # or NOT-IMPLEMENTED. The exit status is non-zero only when a rung listed
-# in tools/tests/ipu6/enabled-tests ends in anything but PASS, or when
-# that file names an unknown rung. Per-rung logs go to
+# in the variant's enabled-tests file ends in anything but PASS, or when
+# that file names an unknown rung.
+#
+# IPU4_VARIANT (ipu4 | ipu4p | ipu6, default ipu4) picks the QEMU model
+# variant the VM rungs boot (tools/run-vm.sh) and the enabled-tests file:
+# tools/tests/ipu6/enabled-tests for ipu4, enabled-tests.<variant> for
+# the others (plan "Parallel track"). IPU4_IPU6_ENABLED_TESTS overrides
+# the file. Per-rung logs go to
 # tools/tests/out/ipu6-ladder/<rung>.log, the whole table as JSON to
 # tools/tests/out/ipu6-ladder/results.json (read by the Pages dashboard).
 set -uo pipefail
@@ -20,7 +26,14 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
 LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$ROOT/tools/linux-ipu6}"
 PATCH_DIR="$ROOT/patches/ipu6-ipu4"
-ENABLED_FILE="${IPU4_IPU6_ENABLED_TESTS:-$HERE/enabled-tests}"
+VARIANT="${IPU4_VARIANT:-ipu4}"
+case "$VARIANT" in
+ipu4) ENABLED_FILE="$HERE/enabled-tests" ;;
+ipu4p | ipu6) ENABLED_FILE="$HERE/enabled-tests.$VARIANT" ;;
+*) echo "unknown IPU4_VARIANT '$VARIANT' (expected ipu4, ipu4p or ipu6)" >&2; exit 2 ;;
+esac
+ENABLED_FILE="${IPU4_IPU6_ENABLED_TESTS:-$ENABLED_FILE}"
+export IPU4_VARIANT="$VARIANT"
 OUT="$ROOT/tools/tests/out/ipu6-ladder"
 
 # Ladder order. "rung:dependency": when both are run, a rung is SKIPped

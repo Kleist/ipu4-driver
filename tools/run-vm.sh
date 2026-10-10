@@ -69,7 +69,14 @@ fi
 # Stock qemu rejects it. Allow callers that don't exercise the IPU4
 # device model (e.g. the kunit gcov harvest in tools/tests/kunit.sh)
 # to opt out so they can run under the system qemu.
+#
+# IPU4_VARIANT (ipu4 | ipu4p | ipu6, default ipu4) selects which IPU the
+# model presents (tools/tests/ipu6/ladder.sh, plan "Parallel track");
+# the default leaves the command line exactly as before.
 DEVICE_ARGS=(-device ipu4)
+if [[ "${IPU4_VARIANT:-ipu4}" != ipu4 ]]; then
+	DEVICE_ARGS=(-device "ipu4,variant=$IPU4_VARIANT")
+fi
 if [[ "${IPU4_NO_DEVICE:-0}" == "1" ]]; then
 	DEVICE_ARGS=()
 fi
