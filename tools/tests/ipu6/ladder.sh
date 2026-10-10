@@ -119,7 +119,35 @@ rung_module-load() {
 	grep -q '^MODLOAD: PASS' "$log"
 }
 
-# The later VM rungs (probe-identify onwards) are implemented by later
+# Boot with tools/rootfs/init.ipu6-probe: load the modules as
+# module-load does, bind intel-ipu6 to 8086:5a88 through new_id
+# (harness-only; the series adds the PCI ID table entry last) and check
+# that probe identified the IPU4 (requested intel/ipu/ipu4_fw.bin rather
+# than rejecting the device). Probe itself may still fail further on;
+# that is what the later probe-* rungs check. Fails on any PROBE:fail
+# marker or oops. Serial log: tools/tests/out/ipu6-probe.serial.
+rung_probe-identify() {
+	local log="$ROOT/tools/tests/out/ipu6-probe.serial"
+	if [[ -z "${WANT[vm-boot]:-}" ]]; then
+		IPU4_FLAVOR=ipu6 "$ROOT/tools/build-kernel.sh" || return 1
+	fi
+	"$ROOT/tools/virt-sensor/build.sh" || return 1
+	IPU4_FLAVOR=ipu6 IPU4_INIT=ipu6-probe "$ROOT/tools/rootfs/build.sh" ||
+		return 1
+	rm -f "$log"
+	timeout --preserve-status "${IPU4_SMOKE_TIMEOUT:-90}" \
+		env IPU4_FLAVOR=ipu6 "$ROOT/tools/run-vm.sh" > "$log" 2>&1
+	grep -E '^PROBE:|intel-ipu6|virt-sensor' "$log"
+	if grep -q '^PROBE:fail' "$log"; then
+		echo "!!! PROBE:fail markers (see above)"
+		return 1
+	fi
+	grep -q '^PROBE: DONE' "$log" &&
+		grep -q '^PROBE:oops none' "$log" &&
+		grep -q '^PROBE:identify ok' "$log"
+}
+
+# The later VM rungs (probe-buttress onwards) are implemented by later
 # PRs of the plan.
 
 # --- driver --------------------------------------------------------------

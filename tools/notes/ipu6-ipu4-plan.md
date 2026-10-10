@@ -89,6 +89,7 @@ silicon trace in `data/trace.txt`):
 | PHY sideband setup | required | none |
 | CSI-2 port ↔ firmware source | `{3, 6..12}` | identity |
 | CSI-RX error bits | 16 | 17 (adds "inter-frame long packet discarded") |
+| Buttress IRQ status register | `BUTTRESS_REG_ISR_STATUS` (`ipu6_buttress_regs`) | `BUTTRESS_REG_ISR_ENABLED_STATUS` (`0x94`, fork: `isp->buttress.reg_irq_sts`) |
 
 ## Testing approach
 
@@ -126,7 +127,7 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | `probe-identify` | `new_id` bind reaches probe and identifies IPU4 |
 | `probe-buttress` | buttress init + ISYS/PSYS power-up succeed |
 | `probe-mmu` | MMU hardware init succeeds |
-| `probe-fw` | firmware (`ipu4_fw.bin`, synthesized) validates and loads |
+| `probe-fw` | firmware (`ipu4_fw.bin`, synthesized) is mapped and authenticated (`ipu6_buttress_authenticate()`) |
 | `probe-complete` | ISYS probe finishes, `/dev/video*` and media graph appear |
 | `fw-open` | syscom open + `STREAM_OPEN_DONE` round trip |
 | `stream-on` | `streamon-smoke` reaches `STREAM:streamon` |
@@ -142,11 +143,11 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | 2 | `IPU4_FLAVOR=ipu6` bootstrap/build + empty `patches/ipu6-ipu4/` + `vm-ipu6.yml` ladder runner, all rungs disabled | — | in review (#101) |
 | 3 | Enable static rungs on the empty series | `series-applies`, `build`, `checkpatch` | in review (#102) |
 | 4 | Guest kernel config + rootfs for the ipu6 flavor | `vm-boot` | in review (#103) |
-| 5 | Standalone virt-sensor module, init loads `intel-ipu6*` | `module-load` | in review |
-| 6 | `media: ipu6: Add helper to identify IPU4` (+ probe case, no table entry) | `probe-identify` | |
-| 7 | `media: ipu6: Add IPU4 buttress support` | `probe-buttress` | |
+| 5 | Standalone virt-sensor module, init loads `intel-ipu6*` | `module-load` | in review (#104) |
+| 6 | `media: ipu6: Identify IPU4 devices` (helper, PCI ID, firmware name, probe case; no table entry) | `probe-identify` | in review |
+| 7 | `media: ipu6: Add IPU4 buttress support` + harness stages a synthesized `intel/ipu/ipu4_fw.bin` (see PR 6 learnings) | `probe-buttress` | |
 | 8 | `media: ipu6: Add IPU4 MMU support` | `probe-mmu` | |
-| 9 | Firmware name + internal pdata (`media: ipu6: Add IPU4 platform data`) | `probe-fw` | |
+| 9 | Internal pdata (`media: ipu6: Add IPU4 platform data`); the firmware name landed in PR 6 | `probe-fw` | |
 | 10 | `media: ipu6: Add IPU4 ISYS and CSI-2 register definitions` + `media: ipu6: Add IPU4 ISYS interrupt handling` + wire-up in ISYS | `probe-complete` | |
 | 11 | `media: ipu6: Support the IPU4 SysCom queue layout` | `fw-open` | |
 | 12 | `media: ipu6: Add IPU4 CSI-2 receiver support` | `stream-on`, `stream-pattern` | |
@@ -304,6 +305,65 @@ last; each entry names the PR that found it.
   ladder; whole warm ladder 39 s. Gate checked: an init skipping
   `videobuf2-common` and a truncated `virt-sensor.ko` both end in
   `MODLOAD: FAIL`.
+- (PR 6) The first kernel patch is
+  `0001-media-ipu6-Identify-IPU4-devices.patch`: `IPU_VERSION_4`
+  (`BIT(7)`, "APL") + `IS_IPU4()`, `PCI_DEVICE_ID_INTEL_IPU4 0x5a88` in
+  `include/media/ipu6-pci-table.h` (not in `ipu6_pci_tbl`),
+  `IPU4_FIRMWARE_NAME "intel/ipu/ipu4_fw.bin"`, and the probe case
+  (`hw_ver`, `cpd_fw_name`, `ipu6se_cpd_metadata_cmpnt` size — the fork
+  uses the IPU6SE layout for IPU4 too, as Ruslan does for IPU4P). One
+  patch, not Ruslan's helper/probe split: his helper patch only adds the
+  bit, and his probe case arrives with the buttress patch; ours needs the
+  probe case for the `probe-identify` rung, and the whole patch is 10
+  added lines. The subject says "Identify IPU4 devices" because it does
+  more than add the helper.
+- (PR 6) The probe case leaves `isp->buttress.regs` and the
+  `isys_ctrl`/`psys_ctrl` at the IPU6 defaults set before the switch (the
+  commit message says so); PR 7 points them at IPU4 tables. IPU4 also
+  needs its own `ipu6_buttress_registers`: the fork reads IRQ status from
+  `BUTTRESS_REG_ISR_ENABLED_STATUS` (`0x94`), see the new table row.
+- (PR 6) `hw_ver` is a `u8`; `IPU_VERSION_4` takes its last free bit.
+  Another variant would have to widen it.
+- (PR 6) `probe-identify` boots `tools/rootfs/init.ipu6-probe` (module
+  load as in `init.ipu6-modules`, then `new_id`, unbind if bound, rmmod,
+  oops scan; `PROBE:` markers). Identification = no `Unsupported IPU6
+  device 5a88` and a firmware request for `intel/ipu/ipu4_fw.bin` from
+  `0000:00:04.0`: the loader logs the name when the file is missing
+  ("Direct firmware load ... failed") and, with
+  `drivers/base/firmware_loader/main.c` dyndbg (enabled by the init),
+  when it loads it ("Loading firmware from ..."), so the marker stays
+  valid once later PRs ship the file. It needs probe to get through
+  `ipu6_buttress_init()`, which it does. The later probe rungs should
+  reuse this init and add markers. busybox `insmod` ignores
+  `<module>.dyndbg=` from the kernel command line, so the init passes
+  `dyndbg=+p` itself (the `module-load` init gets no driver debug).
+- (PR 6) How far probe gets now: PCI BAR, `ipu6_buttress_init()` passes
+  on the IPU6 defaults under the model ("IPU in secure mode", "IPU6 touch
+  0x0 mask 0x0", "IPC reset done"), then the first failure is
+  `request_firmware()`: `error -ENOENT: Requesting signed firmware
+  intel/ipu/ipu4_fw.bin failed` (the ipu6 rootfs only has the fork's
+  `ipu4_cpd_b0.bin`). No oops. Experiment with the fork's
+  `tools/firmware/gen-cpd.py` blob staged as `intel/ipu/ipu4_fw.bin`:
+  the CPD validates with the IPU6SE component size ("FW version: 0"),
+  ISYS and PSYS MMU domains initialise, then ISYS/PSYS power-up fails
+  twice with `Change power status timeout with 0xa02003` and probe ends
+  with `-EBUSY` (-16), no oops. `0xa02003` has the IPU4 IS FSM value `0xa`
+  in bits 23:20, while the IPU6 control polls bits 4:3 for `0x3`.
+- (PR 6) Probe order is buttress init → `request_firmware()` + CPD
+  validation → ISYS/PSYS bus devices (MMU sw init) → PSYS runtime resume
+  (buttress power-up) → MMU hw init → map firmware → authenticate. So
+  `probe-buttress` (PR 7) can only pass once the rootfs carries a CPD
+  file that validates; PR 7 has to stage the synthesized blob as
+  `/lib/firmware/intel/ipu/ipu4_fw.bin` (harness change in
+  `tools/rootfs/build.sh` for the ipu6 flavor). `probe-fw` is redefined
+  above to mean mapping + authentication, which is where probe goes after
+  the MMU.
+- (PR 6) Gate check: with the patch removed, `probe-identify` FAILs with
+  `PROBE:identify fail (Unsupported IPU6 device 5a88)`. `checkpatch` now
+  checks a real patch (0 errors/warnings/checks, `--strict`); `build` is
+  W=1-clean with it. Timings (4 cores, TCG, warm): full ladder 64 s
+  (`vm-boot` 37 s incl. the kernel rebuild for the new patch,
+  `probe-identify` 5 s); `series-applies` + `probe-identify` alone 38 s.
 
 ## Parallel track — QEMU coverage for IPU4P and IPU6
 
