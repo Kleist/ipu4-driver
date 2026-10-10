@@ -1,11 +1,13 @@
 #!/bin/sh
 # Guest init for the ipu6 ladder's module-load test
 # (tools/tests/ipu6/ladder.sh): load the virtual sensor and the upstream
-# ipu6 modules in dependency order, check the IPU4 PCI device, unload
+# ipu6 modules in dependency order, check the IPU PCI device, unload
 # everything again and scan dmesg for oopses/warnings.
 #
-# Whether intel-ipu6 binds to 8086:5a88 (and how far probe gets) is
-# reported but not checked here; the probe-* tests check that.
+# Whether intel-ipu6 binds to the IPU (and how far probe gets) is
+# reported but not checked here; the probe-* tests check that. The PCI ID
+# to look for is the QEMU model variant's: tools/run-vm.sh passes it as
+# ipu_pci_id= (8086:5a88, IPU4, when absent).
 #
 # The MODLOAD: markers are parsed by the ladder on the host.
 
@@ -18,6 +20,13 @@ mount -t devtmpfs none /dev 2>/dev/null || true
 
 fail=0
 
+want=0x5a88
+for arg in $(cat /proc/cmdline); do
+	case "$arg" in
+	ipu_pci_id=*) want=${arg#ipu_pci_id=} ;;
+	esac
+done
+
 say() {
 	echo "MODLOAD:$*"
 }
@@ -26,7 +35,9 @@ say() {
 # before the IPU driver probes), then the IPU core and ISYS.
 for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
 	virt-sensor intel-ipu6 intel-ipu6-isys; do
-	insmod "/lib/modules/$m.ko"
+	args=
+	[ "$m" = virt-sensor ] && args="device=$want"
+	insmod "/lib/modules/$m.ko" $args
 	rc=$?
 	if [ "$rc" -eq 0 ]; then
 		say "ok $m"
@@ -39,13 +50,13 @@ done
 ipu=
 for dev in /sys/bus/pci/devices/*; do
 	if [ "$(cat "$dev/vendor")" = 0x8086 ] &&
-	   [ "$(cat "$dev/device")" = 0x5a88 ]; then
+	   [ "$(cat "$dev/device")" = "$want" ]; then
 		ipu=$dev
 	fi
 done
 
 if [ -z "$ipu" ]; then
-	say "fail no 8086:5a88 PCI device"
+	say "fail no 8086:$want PCI device"
 	fail=1
 elif [ -e "$ipu/driver" ]; then
 	drv=$(cd "$ipu/driver" && pwd -P)

@@ -14,3 +14,7 @@ checkpatch
 
 # Guest boot with the model presenting 8086:9a19 (plan "Parallel track", V2).
 vm-boot
+
+# virt-sensor + intel-ipu6* load/unload; intel-ipu6 probes 9a19 on load
+# (plan "Parallel track", V3).
+module-load
