@@ -131,8 +131,9 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | `probe-identify` | probe (from the PCI table, at `insmod`) identifies IPU4 |
 | `probe-buttress` | buttress init + ISYS/PSYS power-up succeed |
 | `probe-mmu` | the PSYS MMU init at probe writes the IPU4 stream tables: the guest's writes to INFO and the L1/L2 stream start registers of the three PSYS MMUs (BAR + `0x4b0000`) equal, in order, the ones in `data/trace.txt` (QEMU write log, `tools/trace/check_writes.py`) |
+| `isys-irq` | a forced ISYS runtime resume (probe init, `power/control`) succeeds and writes what silicon's second ISYS resume writes (`data/trace.txt` lines 487–599): ISYS MMU stream tables, no LTR/DID (`0x68`), one TSC sync request (`0x88`), the UNISPART interrupt setup (`0x17c000`, `0x40001878`) |
 | `probe-fw` | firmware (`ipu4_fw.bin`, synthesized) is mapped and authenticated (`ipu6_buttress_authenticate()`) |
-| `probe-complete` | ISYS probe finishes, `/dev/video*` and media graph appear |
+| `probe-complete` | ISYS probe finishes, `/dev/video*` and media graph appear (passes under the model since PR 7, so it gates nothing in the IPU4 sequence; kept for the IPU6 variant, see "Parallel track") |
 | `fw-open` | syscom open + `STREAM_OPEN_DONE` round trip |
 | `stream-on` | `streamon-smoke` reaches `STREAM:streamon` |
 | `stream-pattern` | `streamon-smoke` reaches `STREAM:pattern_ok` |
@@ -150,9 +151,9 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | 6 | `media: ipu6: Identify IPU4 devices` (helper, PCI ID, firmware name, probe case; no table entry) | `probe-identify` | merged (#115) |
 | 7 | `media: ipu6: Add IPU4 buttress support` + harness stages a synthesized `intel/ipu/ipu4_fw.bin` (see PR 6 learnings) | `probe-buttress` | merged (#117) |
 | 8 | `media: ipu6: Add IPU4 MMU support` (MMU tables + the IPU4P subsystem offsets they hang off) + harness logs the probe boot's MMIO writes | `probe-mmu` | merged (#121) |
-| 8a | Carry `media: ipu6: Enable IPU4 PCI device` as the always-last patch; drop the harness's `new_id` binding (was PR 14) | — (`probe-identify` now binds natively; `native-bind` dropped) | in review |
-| 9 | Internal pdata (`media: ipu6: Add IPU4 platform data`); the firmware name landed in PR 6, the ISYS/PSYS/SPC/DMEM offsets in PR 8 | `probe-fw` | |
-| 10 | `media: ipu6: Add IPU4 ISYS and CSI-2 register definitions` + `media: ipu6: Add IPU4 ISYS interrupt handling` + wire-up in ISYS | `probe-complete` | |
+| 8a | Carry `media: ipu6: Enable IPU4 PCI device` as the always-last patch; drop the harness's `new_id` binding (was PR 14) | — (`probe-identify` now binds natively; `native-bind` dropped) | merged (#122) |
+| 9 | `media: ipu6: Support the IPU4 TSC sync handshake` + `media: ipu6: Add IPU4 ISYS and CSI-2 register definitions` + `media: ipu6: Add IPU4 ISYS interrupt handling` (wire-up in ISYS, 6 CSI-2 ports); probe init forces an ISYS runtime resume (was PR 10, swapped with the pdata step) | `isys-irq` (was `probe-complete`) | in review |
+| 10 | Internal pdata (`media: ipu6: Add IPU4 platform data`); the firmware name landed in PR 6, the ISYS/PSYS/SPC/DMEM offsets in PR 8, the CSI-2 port count in PR 9 (was PR 9) | `probe-fw` | |
 | 11 | `media: ipu6: Support the IPU4 SysCom queue layout` | `fw-open` | |
 | 12 | `media: ipu6: Add IPU4 CSI-2 receiver support` | `stream-on`, `stream-pattern` | |
 | 13 | CSI-2 frame interrupts (decision 3) | `csi2-sof-irq` | |
@@ -598,3 +599,78 @@ last; each entry names the PR that found it.
   for intel/ipu/ipu4_fw.bin`, `PROBE:bound no`) and the later probe tests
   SKIP. `native-bind` is gone from the ladder: every probe test now binds
   natively.
+- (PR 9) **PR 9 and PR 10 swapped** (user decision): the ISYS register
+  and interrupt step came before the internal pdata step because the
+  pdata has no effect the model can see at probe (PR 8 learnings), while
+  the ISYS setup can be checked against silicon once a ladder boot
+  resumes the ISYS. Earlier entries that say "PR 9" for the pdata mean
+  what is now PR 10. The CSI-2 port count (`csi2.nports = 6`) went into
+  PR 9 with the port table it sizes, as Ruslan's IPU4P ISR patch did;
+  PR 10 keeps the stream/SRAM/queue limits and needs its own observable
+  test (the 48 video nodes are already PR 9's).
+- (PR 9) The ISYS interrupt setup runs only in `isys_runtime_pm_resume()`
+  (after the ISYS MMU init and the TSC sync), so the probe init now (snippet `085-isys-irq.bound.sh`)
+  forces one ISYS runtime resume after the buttress checks: `echo on` /
+  `echo auto` to the ISYS aux device's `power/control`, then
+  `PROBE:isys-resume ok|fail (TSC sync|runtime_status <x>|not suspended
+  again)`. Opening a video node does not resume the ISYS (only
+  `ipu6_isys_fw_open()` at stream start does), so `power/control` is the
+  smallest trigger. The resume goes through the bus PM domain (buttress
+  power-up) and the ISYS driver's callback exactly as at stream start.
+- (PR 9) The PR 8 note that forcing an ISYS resume fails is fixed by its
+  own kernel patch, `0004-media-ipu6-Support-the-IPU4-TSC-sync-handshake`:
+  `ipu6_buttress_send_tsc_request()` polls PWR_STATE bits 13:12 on IPU4
+  (`IPU4_BUTTRESS_PWR_STATE_HH_STATUS_MASK`, fork value; silicon reads
+  `0xa71433` = in progress, then `0xa72433` = done, `data/trace.txt`
+  lines 591–592). `FIELD_GET()` needs a constant mask, so the patch uses
+  `field_get()` (`<linux/bitfield.h>`, runtime masks) instead. The
+  model ties HH_DONE (`2 << 12`) high, so it cannot tell whether the
+  driver waits; the test only sees that the resume succeeds and that
+  there is one `0x88` request instead of ten (retries).
+- (PR 9) Kernel patches `0005-media-ipu6-Add-IPU4-ISYS-and-CSI-2-register-definiti`
+  and `0006-media-ipu6-Add-IPU4-ISYS-interrupt-handling` (PCI ID patch
+  now 0007). Values (fork `kernel/ipu4/ipu4-platform-regs.h`,
+  `ipu4-platform-isys-csi2-reg.h`; silicon lines 593–599, 664–668,
+  672–675, 765–766): UNISPART SW BIT(30), port bits `0x8 << port` /
+  `0x800 << (port - 4)` (6 ports + SW = `0x40001878`, written to
+  EDGE, LEVEL_NOT_PULSE, CLEAR, MASK, ENABLE in that order, then 0 to
+  SW_IRQ_REG and SW_IRQ_MUX_REG), port bases `0x64000 0x65000 0x66000
+  0x67000 0x6c000 0x6c800`, per-port CSI2PART/CSIRX/CSI2S2M interrupt
+  controllers at port + `0x400/0x500/0x600` (CSI2PART bit 16 = CSIRX
+  summary, FS/FE per VC at bits `4*vc` / `4*vc+1`; silicon's ISR reads
+  CSI2PART status `0x1`/`0x2` and CSIRX status `0x4000`). The IPU4 defines
+  live in `ipu4p-isys-csi2-regs.h` (UNISPART register offsets, CSI-RX
+  receiver layout and the 17 `IPU4P_CSIRX_*` error bits are IPU4P's): a
+  new header file makes checkpatch warn "does MAINTAINERS need
+  updating?", which fails the `checkpatch` test. The ISR mirrors
+  `ipu4p_isys_isr()` without the SIP controllers; the setup writes no
+  CDC thresholds and no LTR/DID (silicon never writes `0x68`), so
+  `set_iwake_ltrdid()` is skipped at suspend as for IPU4P. IPU4 now uses
+  `ipu4p_fw_isys_ops` (its own `ipu4_isys_auxdrv_data`), since the ISR
+  hands responses to `fw_ops->isr_one`; PR 11's SysCom work is on that
+  path. Port → firmware source stays identity (the non-IPU4P default).
+  The error table reuses `ipu4p_csi2_errors` plus a 17th entry ("Inter-frame
+  long packet discarded"); IPU4P still prints only its 16. Not in this
+  step: CSI-2 receiver enable/disable and PHY (`stream_enable` still takes
+  the IPU6 path; PR 12) and the CSI-2 frame interrupts (decision 3,
+  PR 13).
+- (PR 9) `isys-irq` compares the probe boot's writes with silicon's
+  **second** ISYS resume only (`check_writes.py --expected-lines
+  487-599`, new option): silicon initialises the ISYS MMU twice (lines
+  269–369 without an interrupt setup, then 489–589), and its ISR rewrites
+  UNISPART CLEAR and SW_IRQ_REG on every firmware event from line 617
+  on. Ranges: ISYS MMU0/MMU1 `+0x08..+0x8c` (the ISYS half of the PR 8
+  to-do), `0x68`, `0x88`, `0x17c000-0x17c420`; 42 writes. The guest
+  makes each of them once per resume and the probe boot resumes once,
+  so the guest side needs no window. A later test that streams in the
+  same boot would add ISR writes to the UNISPART range.
+- (PR 9) Gate check: without 0005/0006 `isys-irq` FAILs (`expected 42
+  writes, got 37`: no UNISPART writes, the IPU6 setup went to BAR +
+  `0x37c000` and `set_iwake_ltrdid()` wrote `0x68` twice); without 0004
+  (but with 0005/0006) on `PROBE:isys-resume fail (TSC sync)` and nine
+  extra `0x88` writes; with `csi2.nports` left at IPU6's 4 on
+  `0x40000078` instead of `0x40001878`. With the series it passes and the
+  ISYS registers six CSI-2 ports (48 video nodes, was 32). Probe, unbind
+  and rmmod stay clean. Timings (4 cores, TCG, warm): full ladder ~65 s
+  (`vm-boot` 34 s incl. the kernel rebuild), `isys-irq` 0 s on the shared
+  boot; the forced resume adds well under a second to it.
