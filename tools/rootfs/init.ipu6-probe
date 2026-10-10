@@ -1,0 +1,110 @@
+#!/bin/sh
+# Guest init for the ipu6 ladder's probe tests (probe-identify onwards,
+# tools/tests/ipu6/ladder.sh): load the modules as init.ipu6-modules
+# does, bind intel-ipu6 to the IPU4 with a harness-only new_id write
+# (the series adds 8086:5a88 to the PCI ID table only in its last
+# patch), report how far probe got, unbind, unload and scan dmesg.
+#
+# Markers, parsed by the ladder on the host:
+#   PROBE:ok|fail <what>     individual checks
+#   PROBE:identify ok|fail   probe accepted 5a88 as IPU4
+#   PROBE:oops none|found    kernel log free of oops/BUG/WARNING
+#   PROBE: DONE              the init ran to the end
+# The probe result itself (PROBE:bound yes|no) is informational until
+# the probe-* test that needs it is enabled.
+
+PATH=/bin:/sbin
+export PATH
+
+mount -t proc     none /proc
+mount -t sysfs    none /sys
+mount -t devtmpfs none /dev 2>/dev/null || true
+
+say() {
+	echo "PROBE:$*"
+}
+
+# busybox insmod does not apply <module>.dyndbg= from the kernel command
+# line (run-vm.sh), so pass it here. The firmware loader's debug output
+# names the file it loads, which the identify check below relies on once
+# the firmware exists.
+echo 'file drivers/base/firmware_loader/main.c +p' \
+	> /proc/dynamic_debug/control 2>/dev/null ||
+	say "fail firmware loader dyndbg"
+
+for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
+	virt-sensor intel-ipu6 intel-ipu6-isys; do
+	case "$m" in
+	videobuf2-*) args= ;;
+	*) args=dyndbg=+p ;;
+	esac
+	# shellcheck disable=SC2086 # $args is empty or one word
+	if insmod "/lib/modules/$m.ko" $args; then
+		say "ok insmod $m"
+	else
+		say "fail insmod $m"
+	fi
+done
+
+ipu=
+for dev in /sys/bus/pci/devices/*; do
+	if [ "$(cat "$dev/vendor")" = 0x8086 ] &&
+	   [ "$(cat "$dev/device")" = 0x5a88 ]; then
+		ipu=${dev##*/}
+	fi
+done
+[ -n "$ipu" ] || say "fail no 8086:5a88 PCI device"
+
+# new_id makes the PCI core run probe synchronously for every unbound
+# matching device; the write succeeds even when probe fails.
+if echo 8086 5a88 > /sys/bus/pci/drivers/intel-ipu6/new_id; then
+	say "ok new_id"
+else
+	say "fail new_id"
+fi
+
+echo "=== dmesg (intel-ipu6 $ipu) ==="
+dmesg | grep -F "$ipu"
+echo "=== end dmesg ==="
+
+# Identification: the device switch in ipu6_pci_probe() either rejects
+# the ID ("Unsupported IPU6 device 5a88") or picks the IPU4 settings,
+# among them the firmware file. probe requests that file right after
+# buttress init, and the firmware loader logs its name whether the file
+# exists ("Loading firmware from .../intel/ipu/ipu4_fw.bin", dyndbg) or
+# not ("Direct firmware load for intel/ipu/ipu4_fw.bin failed"). So this
+# check also needs probe to get through buttress init, which it does from
+# the first patch of the series on.
+if dmesg | grep -q "Unsupported IPU6 device 5a88"; then
+	say "identify fail (Unsupported IPU6 device 5a88)"
+elif dmesg | grep -F "$ipu" | grep -q "intel/ipu/ipu4_fw.bin"; then
+	say "identify ok"
+else
+	say "identify fail (no request for intel/ipu/ipu4_fw.bin)"
+fi
+
+if [ -e "/sys/bus/pci/devices/$ipu/driver" ]; then
+	say "bound yes"
+	echo "$ipu" > /sys/bus/pci/drivers/intel-ipu6/unbind
+else
+	say "bound no"
+fi
+
+lsmod
+
+for m in intel_ipu6_isys intel_ipu6 virt_sensor; do
+	if rmmod "$m"; then
+		say "ok rmmod $m"
+	else
+		say "fail rmmod $m"
+	fi
+done
+
+if dmesg | grep -E 'Oops|BUG:|WARNING:|Call Trace'; then
+	say "oops found"
+else
+	say "oops none"
+fi
+
+echo "PROBE: DONE"
+poweroff -f
