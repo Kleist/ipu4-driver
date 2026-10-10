@@ -594,8 +594,8 @@ shown not to break the other variants of the shared driver.
 
   | PR | Content | `enabled-tests.<variant>` gains | State |
   |---|---|---|---|
-  | V1 | `vm-ipu6` matrix (`ipu4`, `ipu6`), `IPU4_VARIANT` plumbing in `ladder.sh` / `run-vm.sh`, ipu6 base = unpatched mainline v7.3-rc4 | ipu6: `series-applies`, `build`, `checkpatch` | in review (#118) |
-  | V2 | QEMU `variant=ipu6` property (IPU6 PCI ID), variant-aware `vm-boot` | ipu6: `vm-boot` | |
+  | V1 | `vm-ipu6` matrix (`ipu4`, `ipu6`), `IPU4_VARIANT` plumbing in `ladder.sh` / `run-vm.sh`, ipu6 base = unpatched mainline v7.3-rc4 | ipu6: `series-applies`, `build`, `checkpatch` | merged (#118) |
+  | V2 | QEMU `variant=ipu6` property (IPU6 PCI ID), variant-aware `vm-boot` | ipu6: `vm-boot` | in review (#119) |
   | V3 | variant-aware `module-load` | ipu6: `module-load` | |
 
 - **Dashboard hook (Pages PR):** the Pages "IPU4 port" matrix already
@@ -638,3 +638,10 @@ shown not to break the other variants of the shared driver.
   base. Adding the matrix renames the check from `ladder` to
   `ladder (ipu4)` / `ladder (ipu6)`; update branch protection if it
   requires `ladder` by name.
+- (V2) The model's `variant` property (`-device ipu4,variant=ipu6`) only
+  changes the PCI device ID to `9a19` (Tiger Lake, `IPU_VERSION_6`) via
+  `pci_config_set_device_id()` at realize; registers stay IPU4's. An
+  unknown variant fails realize. `run-vm.sh` maps the variant to its ID
+  and passes it to the guest as `ipu_pci_id=` (the kernel hands unknown
+  parameters to `/init`); `init.vm-smoke` reads `/proc/cmdline` and
+  defaults to `0x5a88`, so the fork flow is unaffected.
