@@ -25,9 +25,14 @@ so wrong values would otherwise go unnoticed. Pick ranges that the
 driver writes deterministically (configuration tables), not addresses
 or counters.
 
+``--expected-lines FIRST-LAST`` limits the expected side to the writes
+on those lines (1-based, inclusive) of the expected file, for registers
+that silicon writes again later in the trace (a second resume, an
+interrupt handler) where the capture under test writes them once.
+
 Usage:
   check_writes.py --expected data/trace.txt --actual capture.log \\
-      0x4b0008-0x4b0090 0x4b0108-0x4b0190
+      [--expected-lines 487-599] 0x4b0008-0x4b0090 0x4b0108-0x4b0190
 
 Exit status: 0 when the sequences match, 1 when they differ or the
 expected side has no writes in the ranges, 2 on usage errors.
@@ -57,15 +62,34 @@ def parse_range(text):
     return start, end
 
 
-def read_writes(lines, region="ipu4-bar0", bar_size=BAR_SIZE):
-    """Yield (bar_offset, value) for every write to the IPU BAR."""
+def parse_lines(text):
+    """Parse ``FIRST-LAST`` line numbers (1-based, LAST inclusive)."""
+    try:
+        first, last = (int(part, 10) for part in text.split("-", 1))
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"bad line range '{text}' (expected FIRST-LAST, e.g. 487-599)")
+    if first < 1 or last < first:
+        raise argparse.ArgumentTypeError(f"empty line range '{text}'")
+    return first, last
+
+
+def read_writes(lines, region="ipu4-bar0", bar_size=BAR_SIZE,
+                line_range=None):
+    """Yield (bar_offset, value) for every write to the IPU BAR.
+
+    With ``line_range`` (first, last), only writes on those lines
+    (1-based, inclusive) count; ``MAP`` lines are read anywhere.
+    """
     bar = None
-    for line in lines:
+    for lineno, line in enumerate(lines, 1):
         fields = line.split()
         if not fields:
             continue
         if fields[0] == "MAP" and bar is None and len(fields) >= 6:
             bar, size = int(fields[3], 16), int(fields[5], 16)
+            continue
+        if line_range and not line_range[0] <= lineno <= line_range[1]:
             continue
         if fields[0] == "W" and len(fields) >= 6 and bar is not None:
             addr = int(fields[4], 16)
@@ -111,6 +135,9 @@ def main(argv=None):
     ap.add_argument("--expected", required=True,
                     help="reference capture, usually data/trace.txt")
     ap.add_argument("--actual", required=True, help="capture under test")
+    ap.add_argument("--expected-lines", type=parse_lines, metavar="FIRST-LAST",
+                    help="only count the expected file's writes on these "
+                         "lines (1-based, inclusive)")
     ap.add_argument("--region", default="ipu4-bar0",
                     help="QEMU memory region name of the IPU BAR")
     ap.add_argument("ranges", nargs="+", type=parse_range,
@@ -118,7 +145,9 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     with open(args.expected, errors="replace") as f:
-        expected = in_ranges(read_writes(f, args.region), args.ranges)
+        expected = in_ranges(read_writes(f, args.region,
+                                         line_range=args.expected_lines),
+                             args.ranges)
     with open(args.actual, errors="replace") as f:
         actual = in_ranges(read_writes(f, args.region), args.ranges)
     return 0 if compare(expected, actual, sys.stdout) else 1
