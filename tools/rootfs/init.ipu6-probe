@@ -32,6 +32,17 @@ say() {
 	echo "PROBE:$*"
 }
 
+# The IPU's PCI ID: the QEMU model variant's, which tools/run-vm.sh may
+# pass as ipu_pci_id= (8086:5a88, IPU4, when absent). Read before the
+# module loads, since virt-sensor attaches its graph to that device.
+want=0x5a88
+read -r cmdline < /proc/cmdline
+for arg in $cmdline; do
+	case "$arg" in
+	ipu_pci_id=*) want=${arg#ipu_pci_id=} ;;
+	esac
+done
+
 # busybox insmod does not apply <module>.dyndbg= from the kernel command
 # line (run-vm.sh), so pass it here. The firmware loader's debug output
 # names the file it loads, which the identify check below relies on once
@@ -50,6 +61,7 @@ for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
 	case "$m" in
 	videobuf2-*) args= ;;
 	intel-ipu6) args='dyndbg="+p;file ipu6-mmu.c -p;format iova\040trash\040buffer +p"' ;;
+	virt-sensor) args="dyndbg=+p device=$want" ;;
 	*) args=dyndbg=+p ;;
 	esac
 	# shellcheck disable=SC2086 # $args is empty or one word
@@ -58,16 +70,6 @@ for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
 	else
 		say "fail insmod $m"
 	fi
-done
-
-# The IPU's PCI ID: the QEMU model variant's, which tools/run-vm.sh may
-# pass as ipu_pci_id= (8086:5a88, IPU4, when absent).
-want=0x5a88
-read -r cmdline < /proc/cmdline
-for arg in $cmdline; do
-	case "$arg" in
-	ipu_pci_id=*) want=${arg#ipu_pci_id=} ;;
-	esac
 done
 
 ipu=
