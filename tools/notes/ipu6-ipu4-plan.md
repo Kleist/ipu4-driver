@@ -155,6 +155,7 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | 13 | CSI-2 frame interrupts (decision 3) | `csi2-sof-irq` | |
 | 14 | `media: ipu6: Enable IPU4 PCI device` | `native-bind` | |
 | 15 | Cover letter draft + `get_maintainer.pl` output | — | |
+| Pages | Dashboard section "IPU4 port (upstream ipu6)": `ladder.sh` writes `results.json`, `vm-ipu6` uploads it per variant, Pages shows a rung × variant matrix | — | in review (stacked on PR 2) |
 
 The patch-to-rung mapping follows probe order and may shift by one when
 the real probe path is run; if a patch can't turn a rung green on its own,
@@ -201,6 +202,17 @@ last; each entry names the PR that found it.
   QEMU-only bootstrap path and ipu6-flavor variants of those two
   scripts. Note `tools/build-kernel.sh` calls `tools/build.sh`, which
   now dispatches on `IPU4_FLAVOR`.
+- (Pages PR) The ladder's machine-readable output is
+  `tools/tests/out/ipu6-ladder/results.json` (schema in
+  `tools/dashboard/README.md`), written by `write_results_json` at the
+  very end of `ladder.sh`. New rungs need no change for it: anything in
+  `RUNGS` is recorded, unimplemented ones as `NOT-IMPLEMENTED`. Keep
+  that function and its call as the last thing before `exit`.
+- (Pages PR) `workflow_run` only fires for workflows that exist on the
+  default branch, and `gh run list --workflow=vm-ipu6.yml --branch=main`
+  returns nothing (no error) until `vm-ipu6` has run there, so the
+  dashboard shows "not run yet" until PR 2 is merged and has run once
+  on `main`.
 
 ## Parallel track — QEMU coverage for IPU4P and IPU6
 
@@ -227,3 +239,12 @@ shown not to break the other variants of the shared driver.
   `data/trace.txt`.
 - Runs as separate PRs interleaved with the main sequence; it never
   blocks it.
+- **Dashboard hook (Pages PR):** the Pages "IPU4 port" matrix already
+  has `ipu4`, `ipu4p` and `ipu6` columns. A variant lights up once its
+  matrix leg runs the ladder with `IPU4_VARIANT=<variant>` (recorded in
+  `results.json`) and uploads it as `ipu6-ladder-results-<variant>` —
+  the upload step already names the artifact `${{ matrix.variant ||
+  'ipu4' }}`, so adding `strategy.matrix.variant` and passing
+  `IPU4_VARIANT` / `IPU4_IPU6_ENABLED_TESTS` (per-variant list) to the
+  ladder step is all that is needed. Pages picks up every
+  `ipu6-ladder-results-*` artifact of the run.

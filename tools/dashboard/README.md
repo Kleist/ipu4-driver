@@ -6,8 +6,14 @@ divergence + watcher state, latest CI runs, STATUS.md milestones, and
 the IPU4-on-upstream-ipu6 port's test ladder per QEMU variant.
 
 Deployed by `.github/workflows/pages.yml` via `actions/deploy-pages`
-on every push to `main`, every successful `vm-smoke` completion, and
-a daily 06:00 UTC cron.
+on every push to `main`, every `vm-smoke` / `vm-ipu6` completion, and
+a daily 06:30 UTC cron. Coverage and MMIO data come from the latest
+*successful* `vm-smoke` run on the default branch; the IPU4 port
+ladder comes from the latest *completed* `vm-ipu6` run there that has
+`ipu6-ladder-results-*` artifacts, whatever its conclusion (a failing
+gated rung is status worth showing). PR previews look at the PR's own
+branch first for both and fall back to the default branch. Both
+downloads live in `.github/actions/build-dashboard/`.
 
 ## How history works
 

@@ -14,6 +14,13 @@ inputs:
     description: Directory to render the site into (relative to the workspace).
     required: false
     default: site
+  ladder-branch:
+    description: |
+      Branch whose newest completed vm-ipu6 run supplies the IPU4 port
+      ladder results. Falls back to the default branch when it has no
+      run with results yet. Empty means the default branch.
+    required: false
+    default: ""
   vm-smoke-branch:
     description: |
       Branch whose newest successful vm-smoke run supplies coverage +
@@ -135,6 +142,60 @@ runs:
           echo "no successful vm-smoke run yet; rendering with placeholders"
         fi
 
+    - name: Download latest vm-ipu6 ladder results
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO_FULL: ${{ github.repository }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch || 'main' }}
+        WANT_BRANCH: ${{ inputs.ladder-branch }}
+      run: |
+        set -e
+        # Unlike vm-smoke, take the newest *completed* vm-ipu6 run whatever
+        # its conclusion: a red ladder (a gated rung failed) is exactly
+        # what the status matrix should show, and ladder.sh writes
+        # results.json and the workflow uploads it (if: always()) on
+        # failure too. Runs that died before the ladder (or predate the
+        # results artifact) have no ipu6-ladder-results-* artifact; skip
+        # back over those, up to 10 runs. Try `ladder-branch` first (a PR
+        # preview), then the default branch; with no run anywhere the
+        # section stays on "not run yet".
+        fetch_results() {
+          local branch="$1" run_ids run_id names name
+          run_ids="$(gh run list \
+              --repo "$REPO_FULL" \
+              --workflow=vm-ipu6.yml \
+              --branch="$branch" \
+              --status=completed \
+              --limit=10 \
+              --json databaseId \
+              --jq '.[].databaseId' 2>/dev/null || true)"
+          for run_id in $run_ids; do
+            names="$(gh api \
+                "repos/$REPO_FULL/actions/runs/$run_id/artifacts?per_page=100" \
+                --jq '.artifacts[]
+                      | select(.expired | not)
+                      | select(.name | startswith("ipu6-ladder-results-"))
+                      | .name' 2>/dev/null || true)"
+            [[ -z "$names" ]] && continue
+            echo "vm-ipu6 run $run_id ($branch): $(echo "$names" | tr '\n' ' ')"
+            echo "VM_IPU6_RUN_ID=$run_id" >> "$GITHUB_ENV"
+            for name in $names; do
+              gh run download "$run_id" --repo "$REPO_FULL" \
+                --name "$name" \
+                --dir "tools/tests/out/ipu6-ladder-results/$name" || true
+            done
+            return 0
+          done
+          return 1
+        }
+        if [[ -n "$WANT_BRANCH" && "$WANT_BRANCH" != "$DEFAULT_BRANCH" ]]; then
+          fetch_results "$WANT_BRANCH" && exit 0
+          echo "no vm-ipu6 ladder results on $WANT_BRANCH; falling back to $DEFAULT_BRANCH"
+        fi
+        fetch_results "$DEFAULT_BRANCH" && exit 0
+        echo "no vm-ipu6 ladder results on $DEFAULT_BRANCH yet; rendering placeholders"
+
     # Read-only restore of whatever tools/linux/ the most recent
     # 6.12 vm-smoke run built. Saves the ~30s shallow clone on warm
     # days; on a cache miss the next step's `git clone` still
@@ -170,5 +231,6 @@ runs:
         OUT_DIR: ${{ github.workspace }}/${{ inputs.out-dir }}
         REPO_SLUG: ${{ github.repository }}
         GH_TOKEN: ${{ github.token }}
-      # VM_SMOKE_RUN_ID comes from $GITHUB_ENV (download step above).
+      # VM_SMOKE_RUN_ID / VM_IPU6_RUN_ID come from $GITHUB_ENV (download
+      # steps above).
       run: ./tools/dashboard/build.sh

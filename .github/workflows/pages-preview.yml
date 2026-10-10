@@ -49,6 +49,7 @@ jobs:
         with:
           out-dir: site
           vm-smoke-branch: ${{ github.head_ref }}
+          ladder-branch: ${{ github.head_ref }}
 
       - name: Park preview on pages-previews
         run: ./tools/dashboard/previews.sh publish "$PR" site

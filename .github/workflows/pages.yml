@@ -9,7 +9,8 @@ on:
   # updates the pages-previews branch, so the deploy (and the
   # github-pages environment's branch protection) stays on main.
   workflow_run:
-    workflows: ["vm-smoke"]
+    # vm-ipu6: refresh the "IPU4 port" ladder section after every run.
+    workflows: ["vm-smoke", "vm-ipu6"]
     types: [completed]
   schedule:
     # Daily refresh at 06:30 UTC. After upstream-watch (04:00 daily)
@@ -28,7 +29,7 @@ permissions:
   contents: read
   pages: write       # deploy
   id-token: write    # OIDC for actions/deploy-pages
-  actions: read      # gh run download for vm-smoke artifacts
+  actions: read      # gh run download for vm-smoke / vm-ipu6 artifacts
   pull-requests: read  # previews.sh merge: skip closed PRs
 
 jobs:
