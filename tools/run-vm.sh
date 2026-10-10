@@ -48,6 +48,13 @@ APPEND+=" $DYNDBG"
 # against PIT/HPET. Neither flag affects debug ability: dmesg, ftrace,
 # mmiotrace, dyndbg, and oops/KASAN backtraces are all unaffected.
 APPEND+=" mitigations=off tsc=reliable"
+# PCI device ID the model presents for IPU4_VARIANT (see below). The
+# kernel hands the unknown parameter to /init, whose checks read it.
+case "${IPU4_VARIANT:-ipu4}" in
+ipu4) APPEND+=" ipu_pci_id=0x5a88" ;;
+ipu6) APPEND+=" ipu_pci_id=0x9a19" ;;
+*) echo "unknown IPU4_VARIANT '${IPU4_VARIANT}' (expected ipu4 or ipu6)" >&2; exit 1 ;;
+esac
 if [[ "${IPU4_MMIOTRACE:-0}" == 1 ]]; then
 	# Pre-size the ftrace ring buffer so a full probe-capture fits
 	# without wrapping. The mmiotrace tracer itself is enabled by the
