@@ -15,7 +15,7 @@ on:
 # Only the tests listed in tools/tests/ipu6/enabled-tests fail the job, so
 # tests that are not switched on yet stay visible without blocking merges.
 #
-# One leg per QEMU model variant (plan "Parallel track"): ipu4 is the
+# One leg per QEMU model variant (plan "Tracks and file ownership"): ipu4 is the
 # port itself (tools/ipu6/pin + the series); ipu6 develops the model's
 # IPU6 emulation against unpatched mainline (tools/ipu6/pin.upstream).
 # Each leg passes IPU4_VARIANT to the ladder, which picks that variant's
