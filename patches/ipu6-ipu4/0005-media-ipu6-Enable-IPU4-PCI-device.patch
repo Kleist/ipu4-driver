@@ -1,4 +1,4 @@
-From 8badccb3f88b9825c33d5c8dc12d29bfacf0da3c Mon Sep 17 00:00:00 2001
+From d081eb9ed51e42bd594b2900a094b8443452a06c Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 19:59:00 +0000
 Subject: [PATCH] media: ipu6: Enable IPU4 PCI device
