@@ -122,34 +122,66 @@ test_module-load() {
 
 # Boot with tools/rootfs/init.ipu6-probe: load the modules as
 # module-load does, bind intel-ipu6 to 8086:5a88 through new_id
-# (harness-only; the series adds the PCI ID table entry last) and check
-# that probe identified the IPU4 (requested intel/ipu/ipu4_fw.bin rather
-# than rejecting the device). Probe itself may still fail further on;
-# that is what the later probe-* tests check. Fails on any PROBE:fail
-# marker or oops. Serial log: tools/tests/out/ipu6-probe.serial.
-test_probe-identify() {
-	local log="$ROOT/tools/tests/out/ipu6-probe.serial"
+# (harness-only; the series adds the PCI ID table entry last), report
+# how far probe got through PROBE: markers, unbind, unload and scan
+# dmesg. Serial log: tools/tests/out/ipu6-probe.serial. The probe-* tests
+# share one boot per ladder run; the first one to run does it.
+# Tests run in a subshell (piped into tee), so the "already booted" state
+# is a stamp file, removed when the ladder starts.
+PROBE_LOG="$ROOT/tools/tests/out/ipu6-probe.serial"
+PROBE_STAMP="$OUT/probe-boot.stamp"
+boot_probe_vm() {
+	if [[ -e "$PROBE_STAMP" ]]; then
+		echo ">>> reusing the probe boot of this run (${PROBE_LOG#"$ROOT"/})"
+		return 0
+	fi
 	if [[ -z "${WANT[vm-boot]:-}" ]]; then
 		IPU4_FLAVOR=ipu6 "$ROOT/tools/build-kernel.sh" || return 1
 	fi
 	"$ROOT/tools/virt-sensor/build.sh" || return 1
 	IPU4_FLAVOR=ipu6 IPU4_INIT=ipu6-probe "$ROOT/tools/rootfs/build.sh" ||
 		return 1
-	rm -f "$log"
+	rm -f "$PROBE_LOG"
 	timeout --preserve-status "${IPU4_SMOKE_TIMEOUT:-90}" \
-		env IPU4_FLAVOR=ipu6 "$ROOT/tools/run-vm.sh" > "$log" 2>&1
-	grep -E '^PROBE:|intel-ipu6|virt-sensor' "$log"
-	if grep -q '^PROBE:fail' "$log"; then
+		env IPU4_FLAVOR=ipu6 "$ROOT/tools/run-vm.sh" > "$PROBE_LOG" 2>&1
+	touch "$PROBE_STAMP"
+}
+
+# Common checks of the probe boot: the init ran to the end without
+# PROBE:fail markers (module load, new_id, unload) or an oops.
+probe_log_ok() {
+	grep -E '^PROBE:|intel-ipu6|intel_ipu6|virt-sensor' "$PROBE_LOG" |
+		grep -vE 'dma_alloc|dmamap|mapping entry'
+	if grep -q '^PROBE:fail' "$PROBE_LOG"; then
 		echo "!!! PROBE:fail markers (see above)"
 		return 1
 	fi
-	grep -q '^PROBE: DONE' "$log" &&
-		grep -q '^PROBE:oops none' "$log" &&
-		grep -q '^PROBE:identify ok' "$log"
+	grep -q '^PROBE: DONE' "$PROBE_LOG" &&
+		grep -q '^PROBE:oops none' "$PROBE_LOG"
 }
 
-# The later VM tests (probe-buttress onwards) are implemented by later
-# PRs of the plan.
+# Probe identified the IPU4 (requested intel/ipu/ipu4_fw.bin rather than
+# rejecting the device). Probe itself may still fail further on; that is
+# what the later probe-* tests check.
+test_probe-identify() {
+	boot_probe_vm || return 1
+	probe_log_ok && grep -q '^PROBE:identify ok' "$PROBE_LOG"
+}
+
+# Buttress init and ISYS/PSYS power-up succeed: probe got through the
+# PSYS runtime resume (which powers up ISYS, its parent, first) to the
+# PSYS MMU init, both devices were runtime-suspended (powered down)
+# afterwards, and no "Change power status timeout" / "power down
+# failed!" was logged from bind to rmmod.
+test_probe-buttress() {
+	boot_probe_vm || return 1
+	probe_log_ok &&
+		grep -q '^PROBE:buttress ok' "$PROBE_LOG" &&
+		grep -q '^PROBE:pwr-errors none' "$PROBE_LOG"
+}
+
+# The later VM tests (probe-mmu onwards) are implemented by later PRs of
+# the plan.
 
 # --- driver --------------------------------------------------------------
 
@@ -197,6 +229,7 @@ else
 fi
 
 mkdir -p "$OUT"
+rm -f "$PROBE_STAMP"
 for r in "${ORDER[@]}"; do
 	[[ -z "${WANT[$r]:-}" ]] && continue
 	dep="${DEP[$r]:-}"
