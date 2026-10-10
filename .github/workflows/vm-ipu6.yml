@@ -139,11 +139,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: vm-ipu6-ladder-${{ matrix.variant }}-${{ github.run_id }}
+          # By pattern, so a new test's logs (tools/tests/out/ipu6-*)
+          # need no change here.
           path: |
-            tools/tests/out/ipu6-ladder/
+            tools/tests/out/ipu6-*
             tools/tests/out/vm-smoke-ipu6.serial
-            tools/tests/out/ipu6-module-load.serial
-            tools/tests/out/ipu6-probe.serial
-            tools/tests/out/ipu6-probe.mmio-writes
             ${{ matrix.linux-dir }}/.config
           if-no-files-found: ignore
