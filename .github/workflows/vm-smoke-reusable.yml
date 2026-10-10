@@ -23,6 +23,14 @@ on:
         required: false
         type: boolean
         default: true
+      run:
+        description: >-
+          False skips the job (reported as skipped, so required checks
+          pass) when the caller's change classifier found no relevant
+          change. The weekly caller leaves it at the default.
+        required: false
+        type: boolean
+        default: true
 
 # Runs the full boot pipeline (bootstrap → build QEMU → build kernel →
 # build initramfs → boot VM) and asserts the emulated IPU4 device
@@ -36,6 +44,7 @@ on:
 
 jobs:
   vm-smoke:
+    if: inputs.run
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
