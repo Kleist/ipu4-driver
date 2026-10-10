@@ -12,7 +12,8 @@
 # or NOT-IMPLEMENTED. The exit status is non-zero only when a rung listed
 # in tools/tests/ipu6/enabled-tests ends in anything but PASS, or when
 # that file names an unknown rung. Per-rung logs go to
-# tools/tests/out/ipu6-ladder/<rung>.log.
+# tools/tests/out/ipu6-ladder/<rung>.log, the whole table as JSON to
+# tools/tests/out/ipu6-ladder/results.json (read by the Pages dashboard).
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -87,7 +88,7 @@ rung_checkpatch() {
 
 # --- driver --------------------------------------------------------------
 
-declare -A DEP=() RESULT=() KNOWN=()
+declare -A DEP=() RESULT=() KNOWN=() DUR=()
 ORDER=()
 for entry in "${RUNGS[@]}"; do
 	name="${entry%%:*}"
@@ -155,6 +156,7 @@ for r in "${ORDER[@]}"; do
 	else
 		RESULT[$r]=FAIL
 	fi
+	DUR[$r]=$((SECONDS - start))
 	echo "rung $r: ${RESULT[$r]} ($((SECONDS - start))s)"
 done
 
@@ -189,5 +191,68 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
 		done
 	} >> "$GITHUB_STEP_SUMMARY"
 fi
+
+# Machine-readable copy of the table for the Pages dashboard
+# (tools/dashboard/parse_ladder.py; schema in tools/dashboard/README.md).
+# IPU4_VARIANT names the QEMU model variant the ladder ran against
+# (ipu4 | ipu4p | ipu6; plan "Parallel track"). Rungs not selected on the
+# command line are recorded as NOT-RUN.
+write_results_json() {
+	local r rows=""
+	for r in "${ORDER[@]}"; do
+		rows+="$r	${DEP[$r]:-}	${ENABLED[$r]:+1}	"
+		rows+="${RESULT[$r]:-NOT-RUN}	${DUR[$r]:-}"$'\n'
+	done
+	# shellcheck source=tools/ipu6/pin
+	( . "$ROOT/tools/ipu6/pin"
+	  LADDER_ROWS="$rows" LADDER_STATUS="$1" LADDER_ROOT="$ROOT" \
+	  LADDER_PATCH_DIR="$PATCH_DIR" LADDER_ENABLED_FILE="$ENABLED_FILE" \
+	  LADDER_PIN_URL="$IPU6_LINUX_URL" LADDER_PIN_SHA="$IPU6_LINUX_SHA" \
+	  python3 - > "$OUT/results.json" <<'PY'
+import datetime, email.parser, glob, json, os, re, subprocess, sys
+e = os.environ
+root = e["LADDER_ROOT"]
+patches = []
+for p in sorted(glob.glob(os.path.join(e["LADDER_PATCH_DIR"], "*.patch"))):
+    with open(p, errors="replace") as f:
+        hdr = email.parser.Parser().parse(f, headersonly=True)
+    subj = " ".join((hdr.get("Subject") or "").split())
+    patches.append({"file": os.path.basename(p),
+                    "subject": re.sub(r"^\[PATCH[^\]]*\]\s*", "", subj)})
+rungs = []
+for line in e["LADDER_ROWS"].splitlines():
+    name, dep, en, res, dur = line.split("\t")
+    rungs.append({"name": name, "depends_on": dep or None,
+                  "enabled": en == "1", "result": res,
+                  "duration_s": int(dur) if dur else None})
+try:
+    sha = subprocess.check_output(["git", "-C", root, "rev-parse", "HEAD"],
+                                  stderr=subprocess.DEVNULL, text=True).strip()
+except Exception:
+    sha = None
+run_id = e.get("GITHUB_RUN_ID") or None
+run_url = (f"{e.get('GITHUB_SERVER_URL', 'https://github.com')}/"
+           f"{e['GITHUB_REPOSITORY']}/actions/runs/{run_id}"
+           if run_id and e.get("GITHUB_REPOSITORY") else None)
+enabled_file = os.path.relpath(e["LADDER_ENABLED_FILE"], root)
+json.dump({
+    "schema": 1,
+    "variant": e.get("IPU4_VARIANT") or "ipu4",
+    "generated_at": datetime.datetime.now(datetime.timezone.utc)
+                    .strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "commit_sha": e.get("GITHUB_SHA") or sha,
+    "run_id": run_id,
+    "run_url": run_url,
+    "pin": {"url": e["LADDER_PIN_URL"], "sha": e["LADDER_PIN_SHA"]},
+    "series": {"count": len(patches), "patches": patches},
+    "enabled_tests": enabled_file,
+    "exit_status": int(e["LADDER_STATUS"]),
+    "rungs": rungs,
+}, sys.stdout, indent=2)
+print()
+PY
+	) || echo "warning: could not write $OUT/results.json" >&2
+}
+write_results_json "$status"
 
 exit "$status"
