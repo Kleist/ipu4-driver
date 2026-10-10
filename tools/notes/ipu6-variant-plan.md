@@ -40,8 +40,8 @@ shown not to break the other variants of the shared driver.
   | PR | Content | `enabled-tests.<variant>` gains | State |
   |---|---|---|---|
   | V1 | `vm-ipu6` matrix (`ipu4`, `ipu6`), `IPU4_VARIANT` plumbing in `ladder.sh` / `run-vm.sh`, ipu6 base = unpatched mainline v7.3-rc4 | ipu6: `series-applies`, `build`, `checkpatch` | merged (#118) |
-  | V2 | QEMU `variant=ipu6` property (IPU6 PCI ID), variant-aware `vm-boot` | ipu6: `vm-boot` | in review (#119) |
-  | V3 | variant-aware `module-load` | ipu6: `module-load` | |
+  | V2 | QEMU `variant=ipu6` property (IPU6 PCI ID), variant-aware `vm-boot` | ipu6: `vm-boot` | merged (#119) |
+  | V3 | variant-aware `module-load` | ipu6: `module-load` | in review (#120) |
 
 - **Dashboard hook (Pages PR):** the Pages "IPU4 port" matrix already
   has `ipu4`, `ipu4p` and `ipu6` columns. A variant lights up once its
@@ -90,3 +90,14 @@ shown not to break the other variants of the shared driver.
   and passes it to the guest as `ipu_pci_id=` (the kernel hands unknown
   parameters to `/init`); `init.vm-smoke` reads `/proc/cmdline` and
   defaults to `0x5a88`, so the fork flow is unaffected.
+- (V3) On the ipu6 variant (mainline v7.3-rc4), `insmod intel-ipu6`
+  binds `9a19` from the ID table and probe gets through
+  `ipu6_pci_config_setup()` and `ipu6_buttress_init()` on the IPU4
+  register model, then fails cleanly with `-ENOENT` on
+  `intel/ipu/ipu6_fw.bin` (no oops); the device ends unbound. The IPU4
+  pin's tree behaves the same. So the next ipu6 test that needs new
+  model work is the firmware (a synthesized `ipu6_fw.bin` CPD), not the
+  buttress.
+- (V3) `init.ipu6-modules` reads `ipu_pci_id=` like `init.vm-smoke`,
+  loads `virt-sensor device=<id>` and looks for that ID. Binding is only
+  reported (since PR 8a, for every variant); the probe-* tests check it.
