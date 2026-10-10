@@ -22,6 +22,13 @@ Do not restructure or "clean up" IPU6 code. Do not rename `ipu6_*` symbols. Keep
 
 `kernel/ipu4/ipu4-compat.h` holds `LINUX_VERSION_CODE`-gated shims for 6.6 / 6.10 / 6.11 / 6.14 / 6.18 kernel API changes. The cascade is upper-bound-open, so kernels newer than the highest shim (currently 6.18) ride on the no-shim path — 7.0.1 falls through cleanly. Add new shims here rather than `#ifdef`-ing callers.
 
+## Commits and PRs
+
+- Make small, logical commits: one self-contained change per commit, with a message that explains why.
+- Every commit must pass CI on its own, not just the tip of the PR. Don't leave "fix previous commit" commits in a PR; fold them into the commit they fix before review.
+- The same applies to kernel patches in `patches/`: each patch in the series must build and pass the checks on its own.
+- Changes go through PRs from short-lived branches into `main`; never commit directly to `main`.
+
 ## Local prerequisites
 
 Everything CI needs to build the harness lives in `.github/actions/setup-harness/action.yml`. To get the same setup on a fresh machine (Ubuntu 24.04 / Debian-equivalent):

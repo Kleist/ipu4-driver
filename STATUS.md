@@ -380,6 +380,11 @@ data/trace.txt           silicon's mmiotrace capture; baseline for compare-mmio
   pointing at the chosen ref; the bumper would need a parallel
   `# bump-pin:master` rule (or no bumper if it's a moving branch).
 
+- **M9 — IPU4 on the upstream IPU6 driver:** proposed. Patch series on
+  top of Ruslan Bay's IPU4P series, tested against the QEMU model on
+  every PR via a step-wise test ladder. Plan and PR sequence:
+  `tools/notes/ipu6-ipu4-plan.md`.
+
 ## Running the harness
 
 Prereqs: install the apt + pip packages listed in `CLAUDE.md` ("Local
