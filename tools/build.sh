@@ -4,6 +4,16 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
+
+# IPU4_FLAVOR=ipu6 selects the upstream-ipu6 + patch-series flow
+# (tools/ipu6/, plan in tools/notes/ipu6-ipu4-plan.md). The default
+# "fork" flow below is unchanged.
+case "${IPU4_FLAVOR:-fork}" in
+fork) ;;
+ipu6) exec "$HERE/ipu6/build.sh" "$@" ;;
+*) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork or ipu6)" >&2; exit 1 ;;
+esac
+
 LINUX_DIR="$ROOT/tools/linux"
 
 if [[ ! -d "$LINUX_DIR" ]]; then

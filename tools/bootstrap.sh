@@ -8,6 +8,15 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 
+# IPU4_FLAVOR=ipu6 selects the upstream-ipu6 + patch-series flow
+# (tools/ipu6/, plan in tools/notes/ipu6-ipu4-plan.md). The default
+# "fork" flow below is unchanged.
+case "${IPU4_FLAVOR:-fork}" in
+fork) ;;
+ipu6) exec "$HERE/ipu6/bootstrap.sh" "$@" ;;
+*) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork or ipu6)" >&2; exit 1 ;;
+esac
+
 LINUX_URL="${IPU4_LINUX_URL:-https://github.com/torvalds/linux.git}"
 LINUX_TAG="${IPU4_LINUX_TAG:-v6.12}"
 LINUX_BRANCH="${IPU4_LINUX_BRANCH:-ipu4-6.12}"
