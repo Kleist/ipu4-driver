@@ -11,7 +11,12 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 OUT="$HERE/out"
 mkdir -p "$OUT"
 
-LOG="$OUT/vm-smoke.serial"
+# IPU4_FLAVOR is inherited by rootfs/build.sh and run-vm.sh below; the
+# ipu6 flavor keeps its own serial log so the two never mix.
+case "${IPU4_FLAVOR:-fork}" in
+fork) LOG="$OUT/vm-smoke.serial" ;;
+*) LOG="$OUT/vm-smoke-${IPU4_FLAVOR}.serial" ;;
+esac
 rm -f "$LOG"
 
 # Rebuild initramfs with the M2 guest init embedded — probe-smoke runs

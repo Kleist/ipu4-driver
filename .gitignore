@@ -13,6 +13,7 @@ tools/linux/
 tools/linux-ipu6/
 tools/qemu/
 tools/rootfs/out/
+tools/rootfs/out-ipu6/
 tools/tests/out/
 tools/coverage/html/
 tools/coverage/summary.json
