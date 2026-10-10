@@ -82,14 +82,39 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # Fine-grained PATs expire. An expired/revoked BUMP_PAT makes
+      # create-pull-request die on its first git call with the opaque
+      # "could not read Username for 'https://github.com'", so probe
+      # the PAT first and fall back to GITHUB_TOKEN (with a warning
+      # annotation) instead of failing every leg.
+      - name: Check BUMP_PAT
+        id: pat
+        env:
+          BUMP_PAT: ${{ secrets.BUMP_PAT }}
+        run: |
+          if [ -z "$BUMP_PAT" ]; then
+            echo "use=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $BUMP_PAT" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY")
+          if [ "$code" = 200 ]; then
+            echo "use=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::BUMP_PAT rejected by GitHub (HTTP $code) — expired, revoked, or missing access to $GITHUB_REPOSITORY. Falling back to GITHUB_TOKEN; the bump PR will not trigger CI. Regenerate the PAT and update the BUMP_PAT secret."
+            echo "use=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Open / refresh PR if anything changed
         uses: peter-evans/create-pull-request@v6
         with:
           # BUMP_PAT (fine-grained PAT, Contents+PRs+Workflows write
           # on this repo) makes the bump PR auto-trigger ci.yml /
           # vm-smoke. Falls back to GITHUB_TOKEN if the secret is not
-          # configured — the PR still opens, just doesn't fire CI.
-          token: ${{ secrets.BUMP_PAT || github.token }}
+          # configured or fails the check above — the PR still opens,
+          # just doesn't fire CI.
+          token: ${{ steps.pat.outputs.use == 'true' && secrets.BUMP_PAT || github.token }}
           branch: bot/bump-kernel-pins-${{ matrix.key }}
           base: main
           title: "ci: bump kernel ${{ matrix.key }} pin"
