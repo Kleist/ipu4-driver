@@ -103,12 +103,11 @@ every test but only fails on the enabled ones, so later tests are visible as
 "expected fail" before they are switched on. **It starts with every test
 disabled; each PR enables (at least) one more.**
 
-Because upstream wants the PCI ID table entry last, the probe-level tests
-bind the driver with `echo 8086 5a88 > /sys/bus/pci/drivers/intel-ipu6/new_id`
-(harness-only). The first kernel patch adds the `PCI_DEVICE_ID_INTEL_IPU4`
-case in probe (without a table entry), so the driver identifies IPU4 when
-bound this way. The final kernel patch adds the table entry and the ladder
-switches to native binding.
+Upstream wants the PCI ID table entry last, so the series always ends with
+`media: ipu6: Enable IPU4 PCI device`. The series carries that patch from
+PR 8a on (new patches go in before it), so the driver binds `5a88` from its
+PCI table inside `insmod`, exactly as on a real system; there is no
+harness-only binding. (PRs 5–8 used a `new_id` write instead.)
 
 The runner is `tools/tests/ipu6/ladder.sh` (`--list` prints the names).
 Each test ends PASS, FAIL, NOT-IMPLEMENTED (not written yet) or SKIP (a test
@@ -126,7 +125,7 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | `checkpatch` | `checkpatch.pl --strict` clean on every patch |
 | `vm-boot` | guest boots and enumerates `8086:5a88` |
 | `module-load` | `intel-ipu6` + `intel-ipu6-isys` + virt-sensor load without oops |
-| `probe-identify` | `new_id` bind reaches probe and identifies IPU4 |
+| `probe-identify` | probe (from the PCI table, at `insmod`) identifies IPU4 |
 | `probe-buttress` | buttress init + ISYS/PSYS power-up succeed |
 | `probe-mmu` | the PSYS MMU init at probe writes the IPU4 stream tables: the guest's writes to INFO and the L1/L2 stream start registers of the three PSYS MMUs (BAR + `0x4b0000`) equal, in order, the ones in `data/trace.txt` (QEMU write log, `tools/trace/check_writes.py`) |
 | `probe-fw` | firmware (`ipu4_fw.bin`, synthesized) is mapped and authenticated (`ipu6_buttress_authenticate()`) |
@@ -135,7 +134,6 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | `stream-on` | `streamon-smoke` reaches `STREAM:streamon` |
 | `stream-pattern` | `streamon-smoke` reaches `STREAM:pattern_ok` |
 | `csi2-sof-irq` | CSI-2 FS IRQ observed on port 0 |
-| `native-bind` | driver binds `5a88` from the PCI table (no `new_id`) |
 
 ## PR sequence
 
@@ -146,15 +144,16 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | 3 | Enable static tests on the empty series | `series-applies`, `build`, `checkpatch` | merged (#102) |
 | 4 | Guest kernel config + rootfs for the ipu6 flavor | `vm-boot` | merged (#103) |
 | 5 | Standalone virt-sensor module, init loads `intel-ipu6*` | `module-load` | merged (#113) |
-| 6 | `media: ipu6: Identify IPU4 devices` (helper, PCI ID, firmware name, probe case; no table entry) | `probe-identify` | in review (#115; replaces #106, closed for the stack limit) |
-| 7 | `media: ipu6: Add IPU4 buttress support` + harness stages a synthesized `intel/ipu/ipu4_fw.bin` (see PR 6 learnings) | `probe-buttress` | in review (#117; replaces #108, closed for the stack limit) |
-| 8 | `media: ipu6: Add IPU4 MMU support` (MMU tables + the IPU4P subsystem offsets they hang off) + harness logs the probe boot's MMIO writes | `probe-mmu` | in review |
+| 6 | `media: ipu6: Identify IPU4 devices` (helper, PCI ID, firmware name, probe case; no table entry) | `probe-identify` | merged (#115) |
+| 7 | `media: ipu6: Add IPU4 buttress support` + harness stages a synthesized `intel/ipu/ipu4_fw.bin` (see PR 6 learnings) | `probe-buttress` | merged (#117) |
+| 8 | `media: ipu6: Add IPU4 MMU support` (MMU tables + the IPU4P subsystem offsets they hang off) + harness logs the probe boot's MMIO writes | `probe-mmu` | merged (#121) |
+| 8a | Carry `media: ipu6: Enable IPU4 PCI device` as the always-last patch; drop the harness's `new_id` binding (was PR 14) | — (`probe-identify` now binds natively; `native-bind` dropped) | in review |
 | 9 | Internal pdata (`media: ipu6: Add IPU4 platform data`); the firmware name landed in PR 6, the ISYS/PSYS/SPC/DMEM offsets in PR 8 | `probe-fw` | |
 | 10 | `media: ipu6: Add IPU4 ISYS and CSI-2 register definitions` + `media: ipu6: Add IPU4 ISYS interrupt handling` + wire-up in ISYS | `probe-complete` | |
 | 11 | `media: ipu6: Support the IPU4 SysCom queue layout` | `fw-open` | |
 | 12 | `media: ipu6: Add IPU4 CSI-2 receiver support` | `stream-on`, `stream-pattern` | |
 | 13 | CSI-2 frame interrupts (decision 3) | `csi2-sof-irq` | |
-| 14 | `media: ipu6: Enable IPU4 PCI device` | `native-bind` | |
+| 14 | ~~`media: ipu6: Enable IPU4 PCI device`~~ | — | moved to PR 8a |
 | 15 | Cover letter draft + `get_maintainer.pl` output | — | |
 | Pages | Dashboard section "IPU4 port (upstream ipu6)": `ladder.sh` writes `results.json`, `vm-ipu6` uploads it per variant, Pages shows a test × variant matrix | — | merged (#109) |
 
@@ -541,6 +540,25 @@ last; each entry names the PR that found it.
   the ISYS probe (6 CSI-2 ports instead of IPU6's 4: CSI-2 subdevs and
   the video node count), so PR 9 likely needs `probe-fw` redefined on
   that, or PR 9 and PR 10 swapped in the mapping.
+- (PR 8a) The PCI ID patch `0004-media-ipu6-Enable-IPU4-PCI-device.patch`
+  is one line in `include/media/ipu6-pci-table.h`, modelled on Ruslan's
+  `media: ipu6: Enable IPU4P PCI device` (the pin's last commit). It is
+  always the last patch: a new patch is committed in `tools/linux-ipu6`
+  and moved before it (`git rebase -i` there), then the series is
+  regenerated with `format-patch`, which renumbers the PCI ID patch. The
+  rule is in `patches/ipu6-ipu4/README.md`.
+- (PR 8a) With the table entry, `intel-ipu6` probes inside its `insmod`.
+  So the `ipu6-mmu.c` dynamic-debug settings that keep the trash-buffer
+  mapping out of the log can no longer be written to the control file
+  after `insmod`; `init.ipu6-probe` passes them as the module's
+  `dyndbg="+p;file ipu6-mmu.c -p;format iova\040trash\040buffer +p"`
+  parameter (busybox `insmod` joins its arguments with spaces; `\040` is
+  dynamic debug's escape for a space in a format). `init.ipu6-modules`
+  reports the binding instead of requiring the device to stay unbound.
+- (PR 8a) Gate check: without 0004, `probe-identify` FAILs (`no request
+  for intel/ipu/ipu4_fw.bin`, `PROBE:bound no`) and the later probe tests
+  SKIP. `native-bind` is gone from the ladder: every probe test now binds
+  natively.
 
 ## Parallel track — QEMU coverage for IPU4P and IPU6
 
