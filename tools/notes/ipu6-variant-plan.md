@@ -34,7 +34,7 @@ shown not to break the other variants of the shared driver.
   (`tools/ipu6/pin.upstream`), not the IPU4 pin + series: the IPU6
   emulation is developed against the upstream driver as released.
 - **PRs.** One PR per ladder test for the variant, top of the table
-  first, at most 3 stacked (`CLAUDE.md`). The stack starts from `main`
+  first, at most 2 stacked (`CLAUDE.md`). The stack starts from `main`
   and is independent of the main sequence's stack.
 
   | PR | Content | `enabled-tests.<variant>` gains | State |
