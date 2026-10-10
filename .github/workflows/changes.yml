@@ -1,0 +1,56 @@
+name: changes (reusable)
+
+on:
+  workflow_call:
+    outputs:
+      kunit:
+        description: Fork driver build + KUnit inputs changed.
+        value: ${{ jobs.changes.outputs.kunit }}
+      pytest:
+        description: Python trace / dashboard tools or their tests changed.
+        value: ${{ jobs.changes.outputs.pytest }}
+      vm_smoke:
+        description: Fork full-VM (vm-smoke) inputs changed.
+        value: ${{ jobs.changes.outputs.vm_smoke }}
+      ipu6:
+        description: ipu6-flavor ladder inputs changed.
+        value: ${{ jobs.changes.outputs.ipu6 }}
+
+# Path-based job selection for PRs. tools/ci/changes.sh maps the PR's
+# changed files to the areas above; the callers skip the jobs whose
+# area is false. Push / workflow_dispatch / schedule select everything,
+# so main still runs the full set after every merge.
+#
+# The callers gate *inside* the job (a reusable workflow's `run` input,
+# or per-step `if:` on the vm-ipu6 matrix) rather than with
+# `paths:` / job-level `if:`, so every check keeps its usual name and
+# reports success-by-skip — a required status check never sits pending
+# on a PR that didn't touch its inputs.
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      kunit:    ${{ steps.classify.outputs.kunit }}
+      pytest:   ${{ steps.classify.outputs.pytest }}
+      vm_smoke: ${{ steps.classify.outputs.vm_smoke }}
+      ipu6:     ${{ steps.classify.outputs.ipu6 }}
+    steps:
+      # On pull_request the checkout is the test-merge commit; its
+      # first parent is the base tip, so HEAD^1...HEAD is exactly the
+      # PR's net change against the current base. Depth 2 is enough.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - id: classify
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -eo pipefail
+          if [[ "$EVENT" == pull_request ]]; then
+            ./tools/ci/changes.sh 'HEAD^1' HEAD | tee -a "$GITHUB_OUTPUT"
+          else
+            ./tools/ci/changes.sh --all | tee -a "$GITHUB_OUTPUT"
+          fi
