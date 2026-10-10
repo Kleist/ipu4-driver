@@ -8,7 +8,8 @@
 #
 # IPU4_FLAVOR=ipu6 takes the kernel modules and gen_init_cpio from
 # tools/linux-ipu6/ (driver: drivers/media/pci/intel/ipu6), adds the
-# harness's tools/virt-sensor/out/virt-sensor.ko when built, and writes
+# harness's tools/virt-sensor/out/virt-sensor.ko when built, stages the
+# synthesized CPD firmware as /lib/firmware/intel/ipu/ipu4_fw.bin, and writes
 # tools/rootfs/out-ipu6/rootfs.cpio.gz, so the two flavors' images
 # never overwrite each other.
 set -euo pipefail
@@ -21,6 +22,8 @@ fork)
 	LINUX_DIR="$ROOT/tools/linux"
 	DRV_DIR="$LINUX_DIR/drivers/media/pci/intel/ipu4"
 	OUT="$HERE/out"
+	# Firmware path the fork driver requests (relative to /lib/firmware).
+	FW_NAME="ipu4_cpd_b0.bin"
 	;;
 ipu6)
 	LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$ROOT/tools/linux-ipu6}"
@@ -28,6 +31,8 @@ ipu6)
 	OUT="$HERE/out-ipu6"
 	# Harness-only virtual sensor (tools/virt-sensor/build.sh).
 	EXTRA_KOS=("$ROOT/tools/virt-sensor/out/virt-sensor.ko")
+	# IPU4_FIRMWARE_NAME in patches/ipu6-ipu4/.
+	FW_NAME="intel/ipu/ipu4_fw.bin"
 	;;
 *) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork or ipu6)" >&2; exit 1 ;;
 esac
@@ -139,14 +144,22 @@ done
 # CPD firmware blob. Generated on-demand by tools/firmware/gen-cpd.py;
 # minimal content that passes ipu6_cpd_validate_cpd_file() but stops
 # probe later at pkg_dir creation (see STATUS.md for the M4 roadmap).
+# Both flavors get the same blob, under the name their driver requests.
 FW_DIR="$OUT/firmware"
 mkdir -p "$FW_DIR"
 FW_BLOB="$FW_DIR/ipu4_cpd_b0.bin"
 if [[ ! -f "$FW_BLOB" || "$ROOT/tools/firmware/gen-cpd.py" -nt "$FW_BLOB" ]]; then
 	python3 "$ROOT/tools/firmware/gen-cpd.py" "$FW_BLOB"
 fi
-echo "dir  /lib/firmware           0755 0 0" >> "$LIST"
-echo "file /lib/firmware/ipu4_cpd_b0.bin  $FW_BLOB 0644 0 0" >> "$LIST"
+fw_dir=/lib/firmware
+echo "dir  $fw_dir           0755 0 0" >> "$LIST"
+IFS=/ read -ra fw_parts <<< "$(dirname "$FW_NAME")"
+for part in "${fw_parts[@]}"; do
+	[[ "$part" == . ]] && continue
+	fw_dir="$fw_dir/$part"
+	echo "dir  $fw_dir           0755 0 0" >> "$LIST"
+done
+echo "file /lib/firmware/$FW_NAME  $FW_BLOB 0644 0 0" >> "$LIST"
 
 if [[ -x "$STREAMON_BIN" ]]; then
 	echo "file /bin/streamon  $STREAMON_BIN 0755 0 0" >> "$LIST"
