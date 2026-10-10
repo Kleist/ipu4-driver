@@ -5,4 +5,8 @@
 # plan (tools/notes/ipu6-ipu4-plan.md, "PR sequence") enables at least one
 # more rung; run `tools/tests/ipu6/ladder.sh --list` for the names.
 #
-# Nothing is enabled yet (plan PR 2).
+
+# Static rungs (plan PR 3).
+series-applies
+build
+checkpatch
