@@ -74,6 +74,18 @@ if [[ "${IPU4_NO_DEVICE:-0}" == "1" ]]; then
 	DEVICE_ARGS=()
 fi
 
+# IPU4_MMIO_WRITE_LOG=<file>: log every MMIO write the guest makes, as
+# QEMU's memory_region_ops_write trace event (log backend, one line per
+# write with the absolute address, the value and the region name, e.g.
+# 'ipu4-bar0'). Host-side, so it needs no guest kernel support and does
+# not slow the guest down like mmiotrace. It covers every region
+# (serial, VGA, APIC, ...), so callers filter it by name;
+# tools/trace/check_writes.py reads it.
+TRACE_ARGS=()
+if [[ -n "${IPU4_MMIO_WRITE_LOG:-}" ]]; then
+	TRACE_ARGS=(-D "$IPU4_MMIO_WRITE_LOG" -trace memory_region_ops_write)
+fi
+
 exec "$QEMU_BIN" \
 	-M q35,accel="$ACCEL" \
 	-cpu max \
@@ -85,4 +97,5 @@ exec "$QEMU_BIN" \
 	-append "$APPEND" \
 	-virtfs "local,path=$SHARE_DIR,mount_tag=tests,security_model=none" \
 	"${DEVICE_ARGS[@]}" \
+	"${TRACE_ARGS[@]}" \
 	-serial mon:stdio

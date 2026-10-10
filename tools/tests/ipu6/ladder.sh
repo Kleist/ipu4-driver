@@ -128,7 +128,12 @@ test_module-load() {
 # share one boot per ladder run; the first one to run does it.
 # Tests run in a subshell (piped into tee), so the "already booted" state
 # is a stamp file, removed when the ladder starts.
+# The boot also logs every MMIO write to the IPU BAR (QEMU's
+# memory_region_ops_write trace event, IPU4_MMIO_WRITE_LOG in run-vm.sh)
+# to tools/tests/out/ipu6-probe.mmio-writes, for tests that compare
+# register values with the silicon trace (tools/trace/check_writes.py).
 PROBE_LOG="$ROOT/tools/tests/out/ipu6-probe.serial"
+PROBE_WRITES="$ROOT/tools/tests/out/ipu6-probe.mmio-writes"
 PROBE_STAMP="$OUT/probe-boot.stamp"
 boot_probe_vm() {
 	if [[ -e "$PROBE_STAMP" ]]; then
@@ -141,9 +146,14 @@ boot_probe_vm() {
 	"$ROOT/tools/virt-sensor/build.sh" || return 1
 	IPU4_FLAVOR=ipu6 IPU4_INIT=ipu6-probe "$ROOT/tools/rootfs/build.sh" ||
 		return 1
-	rm -f "$PROBE_LOG"
+	rm -f "$PROBE_LOG" "$PROBE_WRITES"
+	# The raw log has every region's writes (~15 MB, mostly serial and
+	# VGA); keep only the IPU BAR's.
 	timeout --preserve-status "${IPU4_SMOKE_TIMEOUT:-90}" \
-		env IPU4_FLAVOR=ipu6 "$ROOT/tools/run-vm.sh" > "$PROBE_LOG" 2>&1
+		env IPU4_FLAVOR=ipu6 IPU4_MMIO_WRITE_LOG="$PROBE_WRITES.all" \
+		"$ROOT/tools/run-vm.sh" > "$PROBE_LOG" 2>&1
+	grep -F "name 'ipu4-bar0'" "$PROBE_WRITES.all" > "$PROBE_WRITES"
+	rm -f "$PROBE_WRITES.all"
 	touch "$PROBE_STAMP"
 }
 
