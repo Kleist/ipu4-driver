@@ -16,23 +16,46 @@ on:
 # rungs that are not switched on yet stay visible without blocking merges.
 #
 # Runs alongside ci.yml / vm-smoke.yml (fork flow); nothing here touches
-# tools/linux/.
+# tools/linux/. QEMU comes from `tools/bootstrap.sh --qemu-only` and
+# shares its build cache with vm-smoke-reusable.yml (same key).
 
 jobs:
   ladder:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Cold (no cache): QEMU build + full guest-kernel build dominate,
+    # see the PR 4 learnings in the plan for measured times. Warm runs
+    # rebuild only what the series touches.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Setup harness (apt)
+      - name: Setup harness (apt + QEMU build deps)
         uses: ./.github/actions/setup-harness
+        with:
+          extra-packages: >-
+            ninja-build pkg-config libglib2.0-dev libpixman-1-dev
+            meson python3-venv busybox-static cpio gzip
 
-      # The pinned tree is ~300 MB of git objects; the module build on top
-      # of modules_prepare is well under a minute, so the cache mainly
-      # saves the fetch. Keyed by the pin so a pin bump starts clean (the
+      # Same key as vm-smoke-reusable.yml, so either workflow's saved
+      # build is reused by the other.
+      - name: Cache forked QEMU build
+        uses: actions/cache@v4
+        with:
+          path: tools/qemu
+          key: qemu-${{ hashFiles('tools/qemu-patches/**/*', 'tools/bootstrap.sh', 'tools/build-qemu.sh') }}
+          restore-keys: |
+            qemu-
+
+      - name: Bootstrap QEMU (no fork Linux tree)
+        run: ./tools/bootstrap.sh --qemu-only
+
+      - name: Build QEMU (ipu4 device)
+        run: ./tools/build-qemu.sh
+
+      # The pinned tree is ~300 MB of git objects plus the guest-kernel
+      # build output. Keyed by the pin so a pin bump starts clean (the
       # restore prefix includes it); bootstrap resets the restored tree to
       # the pin and re-applies the series, keeping mtimes of untouched
       # files so make only rebuilds what changed.
@@ -40,12 +63,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: tools/linux-ipu6
-          key: linux-ipu6-${{ hashFiles('tools/ipu6/pin') }}-${{ hashFiles('patches/ipu6-ipu4/**', 'tools/ipu6/*.sh') }}
+          key: linux-ipu6-${{ hashFiles('tools/ipu6/pin') }}-${{ hashFiles('patches/ipu6-ipu4/**', 'tools/ipu6/*.sh', 'tools/build-kernel.sh', 'tools/vm-kconfig.sh') }}
           restore-keys: |
             linux-ipu6-${{ hashFiles('tools/ipu6/pin') }}-
 
       - name: Run ipu6 ladder
         run: ./tools/tests/ipu6/ladder.sh
+        env:
+          IPU4_ACCEL: tcg
 
       # Small dedicated artifact read by pages.yml (dashboard "IPU4 port"
       # section). Named per QEMU variant so the parallel-track matrix can
@@ -63,5 +88,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: vm-ipu6-ladder-${{ github.run_id }}
-          path: tools/tests/out/ipu6-ladder/
+          path: |
+            tools/tests/out/ipu6-ladder/
+            tools/tests/out/vm-smoke-ipu6.serial
+            tools/linux-ipu6/.config
           if-no-files-found: ignore
