@@ -1,0 +1,90 @@
+#!/bin/sh
+# Guest init for the ipu6 ladder's module-load rung
+# (tools/tests/ipu6/ladder.sh): load the virtual sensor and the upstream
+# ipu6 modules in dependency order, check the IPU4 PCI device, unload
+# everything again and scan dmesg for oopses/warnings.
+#
+# Until the series adds IPU4 to the driver, intel-ipu6 has no ID-table
+# entry for 8086:5a88, so the device must stay unbound here.
+#
+# The MODLOAD: markers are parsed by the ladder on the host.
+
+PATH=/bin:/sbin
+export PATH
+
+mount -t proc     none /proc
+mount -t sysfs    none /sys
+mount -t devtmpfs none /dev 2>/dev/null || true
+
+fail=0
+
+say() {
+	echo "MODLOAD:$*"
+}
+
+# Dependency order: vb2 helpers, the sensor (its fwnode graph must exist
+# before the IPU driver probes), then the IPU core and ISYS.
+for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
+	virt-sensor intel-ipu6 intel-ipu6-isys; do
+	insmod "/lib/modules/$m.ko"
+	rc=$?
+	if [ "$rc" -eq 0 ]; then
+		say "ok $m"
+	else
+		say "fail $m rc=$rc"
+		fail=1
+	fi
+done
+
+ipu=
+for dev in /sys/bus/pci/devices/*; do
+	if [ "$(cat "$dev/vendor")" = 0x8086 ] &&
+	   [ "$(cat "$dev/device")" = 0x5a88 ]; then
+		ipu=$dev
+	fi
+done
+
+if [ -z "$ipu" ]; then
+	say "fail no 8086:5a88 PCI device"
+	fail=1
+elif [ -e "$ipu/driver" ]; then
+	drv=$(cd "$ipu/driver" && pwd -P)
+	say "fail ${ipu##*/} bound to ${drv##*/} (expected unbound)"
+	fail=1
+else
+	say "ok ${ipu##*/} unbound"
+fi
+
+if [ -d /sys/bus/platform/devices/ipu4-virt-sensor ]; then
+	say "ok virt-sensor device"
+else
+	say "fail no ipu4-virt-sensor platform device"
+	fail=1
+fi
+
+lsmod
+
+# Clean unload, reverse order.
+for m in intel_ipu6_isys intel_ipu6 virt_sensor; do
+	rmmod "$m"
+	rc=$?
+	if [ "$rc" -eq 0 ]; then
+		say "ok rmmod $m"
+	else
+		say "fail rmmod $m rc=$rc"
+		fail=1
+	fi
+done
+
+if dmesg | grep -E 'Oops|BUG:|WARNING:|Call Trace'; then
+	say "fail kernel log has oops/warning (above)"
+	fail=1
+fi
+
+if [ "$fail" -eq 0 ]; then
+	echo "MODLOAD: PASS"
+else
+	echo "MODLOAD: FAIL"
+fi
+
+poweroff -f
