@@ -40,6 +40,7 @@
       <div class="kpi-sub">tests passing · gated {{ v.summary.enabled_passing }} / {{ v.summary.enabled }} pass</div>
       {% if v.summary.enabled_failing %}<div class="kpi-sub ladder-failing">failing: {{ v.summary.enabled_failing | join(', ') }}</div>{% endif %}
       <div class="kpi-sub">{% if v.run_url %}<a href="{{ v.run_url }}">{% endif %}{{ (v.generated_at or '')[:16] | replace('T', ' ') }}{% if v.run_url %}</a>{% endif %}{% if v.commit_sha %} · <code>{{ v.commit_sha[:7] }}</code>{% endif %}</div>
+      {% if v.coverage and v.coverage.lines %}<div class="kpi-sub">driver lines {% if v.coverage_url %}<a href="{{ v.coverage_url }}">{{ v.coverage.lines.pct | pct }}</a>{% else %}{{ v.coverage.lines.pct | pct }}{% endif %} ({{ v.coverage.lines.hit }} / {{ v.coverage.lines.total }})</div>{% endif %}
       {% if v.pin and v.pin.url %}<div class="kpi-sub">base <code>{{ v.pin.tag or (v.pin.url | replace('https://github.com/', '') | replace('.git', '')) ~ '@' ~ (v.pin.sha or '')[:7] }}</code>{% for b in v.base_series %} + {{ b.label }} ({{ b.count }}){% endfor %}{% if v.series_count %} + {{ v.series_count }} IPU4 patch{{ '' if v.series_count == 1 else 'es' }}{% endif %}</div>{% endif %}
     </div>
     {% else %}
@@ -72,6 +73,9 @@
   </table>
   </div>
   {% endif %}
+  <h3>Driver line coverage per leg</h3>
+  <p class="meta">Probe and stream boots of each leg (<code>IPU4_GCOV=1</code>, <code>tools/coverage/ladder.sh</code>). The ipu4p and ipu4-patches trees also count the IPU7/IPU4P code in the driver directory, so compare a driver across variants rather than drivers against each other.</p>
+  <canvas id="ladder-coverage-trend" height="80"></canvas>
   {% if ipu6_port.primary %}
   {% set pr = ipu6_port.primary %}
   <h3>Base and series ({{ pr.leg or pr.variant }} run)</h3>
@@ -254,6 +258,23 @@
     { label: 'lines %', data: points.map(p => (p.coverage || {}).lines_pct ?? null), borderColor: '#5ec27e', tension: 0.2 },
     { label: 'functions %', data: points.map(p => (p.coverage || {}).functions_pct ?? null), borderColor: '#74a9ff', tension: 0.2 },
   ]);
+  // One colour per QEMU variant; dashed = the variant's baseline driver,
+  // solid = ipu4-patches.
+  const variantColors = { ipu4: '#5ec27e', ipu4p: '#b48ee0', ipu6: '#74a9ff' };
+  const legs = [];
+  points.forEach(p => Object.keys(p.ladder_coverage || {}).forEach(l => {
+    if (!legs.includes(l)) legs.push(l);
+  }));
+  legs.sort((a, b) => a.split('/')[1].localeCompare(b.split('/')[1]) ||
+    a.startsWith('ipu4-patches/') - b.startsWith('ipu4-patches/'));
+  lineCfg('ladder-coverage-trend', legs.map(l => ({
+    label: l,
+    data: points.map(p => (p.ladder_coverage || {})[l] ?? null),
+    borderColor: variantColors[l.split('/')[1]] || '#d8c46a',
+    borderDash: l.startsWith('ipu4-patches/') ? [] : [5, 4],
+    spanGaps: true,
+    tension: 0.2,
+  })));
   lineCfg('mmio-trend', [
     { label: 'unimplemented', data: points.map(p => (p.mmio || {}).unimplemented ?? null), borderColor: '#e08e6e', tension: 0.2 },
     { label: 'value mismatch', data: points.map(p => (p.mmio || {}).value_mismatch ?? null), borderColor: '#d8c46a', tension: 0.2 },

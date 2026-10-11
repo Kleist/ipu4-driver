@@ -216,3 +216,13 @@ def test_base_series_labelled():
 def test_base_series_missing_in_old_results():
     out = parse_ladder.build({"ipu4-patches/ipu4": _results()})
     assert out["primary"]["base_series"] == []
+
+
+def test_build_legs_carry_coverage():
+    cov = {"lines": {"pct": 63.9, "hit": 2220, "total": 3472}}
+    out = parse_ladder.build({"ipu4-patches/ipu4": _results(coverage=cov),
+                              "ipu6/ipu6": _results(leg="ipu6/ipu6")})
+    by_name = {v["name"]: v for v in out["legs"]}
+    assert by_name["ipu4-patches/ipu4"]["coverage"] == cov
+    assert by_name["ipu6/ipu6"]["coverage"] is None
+    assert by_name["ipu4p/ipu4p"]["coverage"] is None

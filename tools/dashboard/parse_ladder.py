@@ -119,8 +119,8 @@ def build(by_leg: dict[str, dict], fallback_tests: list[str] | None = None) -> d
 
     Returns ``{legs, tests, primary, has_data}`` where ``legs`` is a
     list of ``{name, has_data, summary, generated_at, run_url,
-    commit_sha, pin, series_count, base_series}``, ``tests`` a list of ``{name,
-    cells}`` with one cell per leg (``None`` when that leg has no data
+    commit_sha, pin, series_count, base_series, coverage}``, ``tests``
+    a list of ``{name, cells}`` with one cell per leg (``None`` when that leg has no data
     for the test), and ``primary`` the results whose pin and series the
     section shows (``PRIMARY`` when present, else the first leg with data).
     """
@@ -140,6 +140,8 @@ def build(by_leg: dict[str, dict], fallback_tests: list[str] | None = None) -> d
             "pin": (res or {}).get("pin"),
             "series_count": ((res or {}).get("series") or {}).get("count"),
             "base_series": _base_series(res or {}),
+            # tools/coverage/ladder.sh summary; None without IPU4_GCOV=1.
+            "coverage": (res or {}).get("coverage"),
         })
 
     tests = []
