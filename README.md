@@ -9,7 +9,7 @@ The driver does not work on any publicly available hardware as-is: at minimum th
 ## Two forms of the driver
 
 - **Out-of-tree module** (`kernel/ipu4/`): the IPU6 driver with IPU4 differences behind `#ifdef IPU6` (never defined; marks the upstream code) or in parallel `ipu4_*` functions. Builds `intel-ipu4.ko` and `intel-ipu4-isys.ko` against 6.6 – 7.3 via the shims in `ipu4-compat.h`. Known to work on silicon.
-- **Upstreamable patch series** (`patches/ipu6-ipu4/`): IPU4 support added to the upstream `ipu6` driver as mailable patches, on top of Ruslan Bay's IPU4P series (`tools/ipu6/pin`, v7.3-rc4). Work in progress.
+- **Upstreamable patch series** (`patches/ipu6-ipu4/`): IPU4 support added to the upstream `ipu6` driver as mailable patches. They apply on mainline (`tools/ipu6/pin`, v7.3-rc4, bumped weekly) after two series not yet in mainline: the IPU7 series (`patches/ipu6-ipu7/`) and Ruslan Bay's IPU4P series (`patches/ipu6-ipu4p/`, from [ruslanbay/linux `ipu4p-upstream`](https://github.com/ruslanbay/linux/tree/ipu4p-upstream)). Work in progress.
 
 ## Testing
 
@@ -24,9 +24,9 @@ Each run is one *leg*: a driver under a QEMU model *variant* (`ipu4`, `ipu4p`, `
 | Driver (`IPU4_DRIVER`) | Tree | Variants run |
 |---|---|---|
 | `ipu4-out-of-tree` | `kernel/ipu4/` built against v7.3-rc4 | `ipu4` |
-| `ipu4p` | Ruslan's IPU4P tree, no series | `ipu4p` |
-| `ipu6` | unmodified mainline v7.3-rc4 | `ipu6` |
-| `ipu4-patches` (default) | Ruslan's tree + `patches/ipu6-ipu4/` | `ipu4`, `ipu4p`, `ipu6` |
+| `ipu4p` | mainline + IPU7 + IPU4P series | `ipu4p` |
+| `ipu6` | unmodified mainline | `ipu6` |
+| `ipu4-patches` (default) | the `ipu4p` tree + `patches/ipu6-ipu4/` | `ipu4`, `ipu4p`, `ipu6` |
 
 The first three are baselines that tests and QEMU models are developed against; `ipu4-out-of-tree` is known to work, so a failure there points at the test or model. `ipu4-patches` must eventually pass everywhere its baselines do. Every test runs on every leg, but a leg only fails on tests listed in its `tools/tests/ipu6/enabled-tests.<driver>.<variant>`.
 
