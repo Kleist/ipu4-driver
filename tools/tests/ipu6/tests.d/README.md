@@ -17,6 +17,10 @@ editing the same list.
   boot, `boot_probe_vm`, `probe_log_ok`, `$PROBE_LOG`, `$PROBE_WRITES`).
   The guest side of each probe test is its own snippet under
   `tools/rootfs/init.ipu6-probe.d/` (see the README there).
+  `../stream-boot.sh` is the stream tests' shared VM boot
+  (`boot_stream_vm`, `stream_log_ok`, `$STREAM_LOG`, `$STREAM_WRITES`):
+  `tools/rootfs/init.ipu6-stream` captures one frame from CSI-2 port 0
+  with `streamon` and the tests read its markers and driver output.
 - **Variants:** a test that differs per QEMU model variant reads
   `$IPU4_VARIANT` (ipu4 | ipu4p | ipu6). Which tests gate a variant is that
   variant's `enabled-tests[.<variant>]` file, owned by that variant's track.

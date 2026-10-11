@@ -1,0 +1,108 @@
+#!/bin/sh
+# Guest init for the ipu6 ladder's stream tests (fw-open onwards,
+# tools/tests/ipu6/ladder.sh): load the modules as init.ipu6-probe does,
+# capture one frame from CSI-2 port 0 (the virt-sensor) with
+# /bin/streamon (tools/tests/streamon.c), unbind, unload and scan dmesg.
+# The stream tests share this boot (tools/tests/ipu6/stream-boot.sh); it
+# is separate from the probe boot so that the probe tests' register
+# write checks do not see the stream's writes.
+#
+# Markers, parsed by the ladder on the host:
+#   STREAMVM:ok|fail <what>   module load/unload, finding the nodes;
+#                             any STREAMVM:fail fails every stream test
+#   STREAM:<step>             streamon's progress (STREAM:fail step=...
+#                             on the first failing step), SUBDEV:s_fmt
+#   STREAMVM:oops none|found  kernel log free of oops/BUG/WARNING
+#   STREAMVM: DONE            the init ran to the end
+# The driver's debug output (firmware responses, "start stream: ...")
+# is in the dmesg dump between "=== dmesg" and "=== end dmesg".
+
+PATH=/bin:/sbin
+export PATH
+
+mount -t proc     none /proc
+mount -t sysfs    none /sys
+mount -t devtmpfs none /dev 2>/dev/null || true
+
+say() {
+	echo "STREAMVM:$*"
+}
+
+# The IPU's PCI ID: the QEMU model variant's, which tools/run-vm.sh may
+# pass as ipu_pci_id= (8086:5a88, IPU4, when absent).
+want=0x5a88
+read -r cmdline < /proc/cmdline
+for arg in $cmdline; do
+	case "$arg" in
+	ipu_pci_id=*) want=${arg#ipu_pci_id=} ;;
+	esac
+done
+
+for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
+	virt-sensor intel-ipu6 intel-ipu6-isys; do
+	# As in init.ipu6-probe: keep ipu6-mmu.c's per-page debug output
+	# out of the log (probe runs inside the insmod).
+	case "$m" in
+	videobuf2-*) args= ;;
+	intel-ipu6) args='dyndbg="+p;file ipu6-mmu.c -p"' ;;
+	virt-sensor) args="dyndbg=+p device=$want" ;;
+	*) args=dyndbg=+p ;;
+	esac
+	# shellcheck disable=SC2086 # $args is empty or one word
+	if insmod "/lib/modules/$m.ko" $args; then
+		say "ok insmod $m"
+	else
+		say "fail insmod $m"
+	fi
+done
+
+ipu=
+for dev in /sys/bus/pci/devices/*; do
+	if [ "$(cat "$dev/vendor")" = 0x8086 ] &&
+	   [ "$(cat "$dev/device")" = "$want" ]; then
+		ipu=${dev##*/}
+	fi
+done
+[ -n "$ipu" ] || say "fail no 8086:$want PCI device"
+
+# CSI-2 port 0 (the virt-sensor's) and its first capture node, by name.
+node_by_name() {
+	for n in /sys/class/video4linux/*; do
+		[ "$(cat "$n/name" 2>/dev/null)" = "$1" ] || continue
+		echo "/dev/${n##*/}"
+		return 0
+	done
+	return 1
+}
+if subdev=$(node_by_name "Intel IPU6 CSI2 0") &&
+   video=$(node_by_name "Intel IPU6 ISYS Capture 0"); then
+	say "ok nodes $video $subdev"
+	streamon "$video" /dev/media0 "$subdev"
+	say "info streamon exit $?"
+else
+	say "fail no CSI2 0 subdev or capture node"
+fi
+
+echo "=== dmesg (intel-ipu6 $ipu) ==="
+dmesg | grep -E "$ipu|intel_ipu6|intel-ipu6"
+echo "=== end dmesg ==="
+
+if [ -e "/sys/bus/pci/devices/$ipu/driver" ]; then
+	echo "$ipu" > /sys/bus/pci/drivers/intel-ipu6/unbind
+fi
+for m in intel_ipu6_isys intel_ipu6 virt_sensor; do
+	if rmmod "$m"; then
+		say "ok rmmod $m"
+	else
+		say "fail rmmod $m"
+	fi
+done
+
+if dmesg | grep -E 'Oops|BUG:|WARNING:|Call Trace'; then
+	say "oops found"
+else
+	say "oops none"
+fi
+
+echo "STREAMVM: DONE"
+poweroff -f

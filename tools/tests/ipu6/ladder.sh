@@ -74,6 +74,8 @@ ladder_test() {
 # Helpers shared by several tests.
 # shellcheck source=tools/tests/ipu6/probe-boot.sh
 . "$HERE/probe-boot.sh"
+# shellcheck source=tools/tests/ipu6/stream-boot.sh
+. "$HERE/stream-boot.sh"
 
 for f in "$HERE"/tests.d/[0-9]*.sh; do
 	# shellcheck source=/dev/null
@@ -117,7 +119,7 @@ else
 fi
 
 mkdir -p "$OUT"
-rm -f "$PROBE_STAMP"
+rm -f "$PROBE_STAMP" "$STREAM_STAMP"
 for r in "${ORDER[@]}"; do
 	[[ -z "${WANT[$r]:-}" ]] && continue
 	dep="${DEP[$r]:-}"
