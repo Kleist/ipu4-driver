@@ -1,0 +1,206 @@
+From e161b383f2dc9c70436d54bd73471e3d963d9193 Mon Sep 17 00:00:00 2001
+From: Antti Laakso <antti.laakso@linux.intel.com>
+Date: Mon, 7 Sep 2026 14:29:57 +0300
+Subject: [PATCH 38/45] media: ipu6: Make fw mapping function reusable
+
+Make ipu6_map_fw_region reusable as for ipu7 we want to map other
+buffers too, not only firmware. Also add DMA data direction and mapping
+attributes as arguments as these are different for ipu7.
+
+Signed-off-by: Antti Laakso <antti.laakso@linux.intel.com>
+Signed-off-by: Sakari Ailus <sakari.ailus@linux.intel.com>
+---
+ drivers/media/pci/intel/ipu6/ipu6-buttress.c | 40 ++++++++++----------
+ drivers/media/pci/intel/ipu6/ipu6-buttress.h | 10 ++---
+ drivers/media/pci/intel/ipu6/ipu6-isys.c     |  7 ++--
+ drivers/media/pci/intel/ipu6/ipu6.c          |  8 ++--
+ 4 files changed, 33 insertions(+), 32 deletions(-)
+
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-buttress.c b/drivers/media/pci/intel/ipu6/ipu6-buttress.c
+index 13fd7a083b..74db0a3756 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-buttress.c
++++ b/drivers/media/pci/intel/ipu6/ipu6-buttress.c
+@@ -676,55 +676,55 @@ int ipu6_buttress_reset_authentication(struct ipu6_device *isp)
+ 	return 0;
+ }
+ 
+-int ipu6_buttress_map_fw_image(struct ipu6_bus_device *sys,
+-			       const struct firmware *fw, struct sg_table *sgt)
++int ipu6_map_fw_region(struct ipu6_bus_device *sys, const void *data,
++		       size_t size, enum dma_data_direction dir,
++		       unsigned long attrs)
+ {
+-	bool is_vmalloc = is_vmalloc_addr(fw->data);
++	bool is_vmalloc = is_vmalloc_addr(data);
+ 	struct pci_dev *pdev = sys->isp->pdev;
++	struct sg_table *sgt = &sys->fw_sgt;
+ 	struct page **pages;
+-	const void *addr;
+ 	unsigned long n_pages;
+ 	unsigned int i;
+ 	int ret;
+ 
+-	if (!is_vmalloc && !virt_addr_valid(fw->data))
++	if (!is_vmalloc && !virt_addr_valid(data))
+ 		return -EDOM;
+ 
+-	n_pages = PFN_UP(fw->size);
++	n_pages = PFN_UP(size);
+ 
+ 	pages = kmalloc_objs(*pages, n_pages);
+ 	if (!pages)
+ 		return -ENOMEM;
+ 
+-	addr = fw->data;
+ 	for (i = 0; i < n_pages; i++) {
+ 		struct page *p = is_vmalloc ?
+-			vmalloc_to_page(addr) : virt_to_page(addr);
++			vmalloc_to_page(data) : virt_to_page(data);
+ 
+ 		if (!p) {
+ 			ret = -ENOMEM;
+ 			goto out;
+ 		}
+ 		pages[i] = p;
+-		addr += PAGE_SIZE;
++		data += PAGE_SIZE;
+ 	}
+ 
+-	ret = sg_alloc_table_from_pages(sgt, pages, n_pages, 0, fw->size,
++	ret = sg_alloc_table_from_pages(sgt, pages, n_pages, 0, size,
+ 					GFP_KERNEL);
+ 	if (ret) {
+ 		ret = -ENOMEM;
+ 		goto out;
+ 	}
+ 
+-	ret = dma_map_sgtable(&pdev->dev, sgt, DMA_TO_DEVICE, 0);
++	ret = dma_map_sgtable(&pdev->dev, sgt, dir, 0);
+ 	if (ret) {
+ 		sg_free_table(sgt);
+ 		goto out;
+ 	}
+ 
+-	ret = ipu6_dma_map_sgtable(sys, sgt, DMA_TO_DEVICE, 0);
++	ret = ipu6_dma_map_sgtable(sys, sgt, dir, attrs);
+ 	if (ret) {
+-		dma_unmap_sgtable(&pdev->dev, sgt, DMA_TO_DEVICE, 0);
++		dma_unmap_sgtable(&pdev->dev, sgt, dir, 0);
+ 		sg_free_table(sgt);
+ 		goto out;
+ 	}
+@@ -736,18 +736,18 @@ int ipu6_buttress_map_fw_image(struct ipu6_bus_device *sys,
+ 
+ 	return ret;
+ }
+-EXPORT_SYMBOL_NS_GPL(ipu6_buttress_map_fw_image, "INTEL_IPU6");
++EXPORT_SYMBOL_NS_GPL(ipu6_map_fw_region, "INTEL_IPU6");
+ 
+-void ipu6_buttress_unmap_fw_image(struct ipu6_bus_device *sys,
+-				  struct sg_table *sgt)
++void ipu6_unmap_fw_region(struct ipu6_bus_device *sys,
++			  enum dma_data_direction dir)
+ {
+ 	struct pci_dev *pdev = sys->isp->pdev;
+ 
+-	ipu6_dma_unmap_sgtable(sys, sgt, DMA_TO_DEVICE, 0);
+-	dma_unmap_sgtable(&pdev->dev, sgt, DMA_TO_DEVICE, 0);
+-	sg_free_table(sgt);
++	ipu6_dma_unmap_sgtable(sys, &sys->fw_sgt, dir, 0);
++	dma_unmap_sgtable(&pdev->dev, &sys->fw_sgt, dir, 0);
++	sg_free_table(&sys->fw_sgt);
+ }
+-EXPORT_SYMBOL_NS_GPL(ipu6_buttress_unmap_fw_image, "INTEL_IPU6");
++EXPORT_SYMBOL_NS_GPL(ipu6_unmap_fw_region, "INTEL_IPU6");
+ 
+ int ipu6_buttress_authenticate(struct ipu6_device *isp)
+ {
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-buttress.h b/drivers/media/pci/intel/ipu6/ipu6-buttress.h
+index 47a49e9619..79d8f58936 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-buttress.h
++++ b/drivers/media/pci/intel/ipu6/ipu6-buttress.h
+@@ -84,11 +84,11 @@ struct ipu6_ipc_buttress_bulk_msg {
+ };
+ 
+ int ipu6_buttress_ipc_reset(struct ipu6_device *isp);
+-int ipu6_buttress_map_fw_image(struct ipu6_bus_device *sys,
+-			       const struct firmware *fw,
+-			       struct sg_table *sgt);
+-void ipu6_buttress_unmap_fw_image(struct ipu6_bus_device *sys,
+-				  struct sg_table *sgt);
++int ipu6_map_fw_region(struct ipu6_bus_device *sys, const void *data,
++		       size_t size, enum dma_data_direction dir,
++		       unsigned long attrs);
++void ipu6_unmap_fw_region(struct ipu6_bus_device *sys,
++			  enum dma_data_direction dir);
+ int ipu6_buttress_power(struct device *dev,
+ 			const struct ipu6_buttress_ctrl *ctrl, bool on);
+ bool ipu6_buttress_get_secure_mode(struct ipu6_device *isp);
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys.c b/drivers/media/pci/intel/ipu6/ipu6-isys.c
+index 5a3ba50072..459121e6c1 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-isys.c
++++ b/drivers/media/pci/intel/ipu6/ipu6-isys.c
+@@ -1042,7 +1042,8 @@ static int isys_probe(struct auxiliary_device *auxdev,
+ 
+ 	if (!isp->secure_mode) {
+ 		fw = isp->cpd_fw;
+-		ret = ipu6_buttress_map_fw_image(adev, fw, &adev->fw_sgt);
++		ret = ipu6_map_fw_region(adev, fw->data, fw->size,
++					 DMA_TO_DEVICE, 0);
+ 		if (ret)
+ 			goto release_firmware;
+ 
+@@ -1082,7 +1083,7 @@ static int isys_probe(struct auxiliary_device *auxdev,
+ 		ipu6_cpd_free_pkg_dir(adev);
+ remove_shared_buffer:
+ 	if (!isp->secure_mode)
+-		ipu6_buttress_unmap_fw_image(adev, &adev->fw_sgt);
++		ipu6_unmap_fw_region(adev, DMA_TO_DEVICE);
+ release_firmware:
+ 	if (!isp->secure_mode)
+ 		release_firmware(adev->fw);
+@@ -1112,7 +1113,7 @@ static void isys_remove(struct auxiliary_device *auxdev)
+ 
+ 	if (!isp->secure_mode) {
+ 		ipu6_cpd_free_pkg_dir(adev);
+-		ipu6_buttress_unmap_fw_image(adev, &adev->fw_sgt);
++		ipu6_unmap_fw_region(adev, DMA_TO_DEVICE);
+ 		release_firmware(adev->fw);
+ 	}
+ 
+diff --git a/drivers/media/pci/intel/ipu6/ipu6.c b/drivers/media/pci/intel/ipu6/ipu6.c
+index 428ad046e2..af5581da71 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6.c
++++ b/drivers/media/pci/intel/ipu6/ipu6.c
+@@ -624,8 +624,8 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+ 		goto out_ipu6_rpm_put;
+ 	}
+ 
+-	ret = ipu6_buttress_map_fw_image(isp->psys, isp->cpd_fw,
+-					 &isp->psys->fw_sgt);
++	ret = ipu6_map_fw_region(isp->psys, isp->cpd_fw->data,
++				 isp->cpd_fw->size, DMA_TO_DEVICE, 0);
+ 	if (ret) {
+ 		dev_err_probe(&isp->pdev->dev, ret, "failed to map fw image\n");
+ 		goto out_ipu6_rpm_put;
+@@ -679,7 +679,7 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+ out_ipu6_bus_del_devices:
+ 	if (!IS_ERR_OR_NULL(isp->psys)) {
+ 		ipu6_cpd_free_pkg_dir(isp->psys);
+-		ipu6_buttress_unmap_fw_image(isp->psys, &isp->psys->fw_sgt);
++		ipu6_unmap_fw_region(isp->psys, DMA_TO_DEVICE);
+ 	}
+ 	if (!IS_ERR_OR_NULL(isp->psys) && !IS_ERR_OR_NULL(isp->psys->mmu))
+ 		ipu6_mmu_cleanup(isp->psys->mmu);
+@@ -702,7 +702,7 @@ static void ipu6_pci_remove(struct pci_dev *pdev)
+ 	devm_free_irq(&pdev->dev, pdev->irq, isp);
+ 	ipu6_cpd_free_pkg_dir(isp->psys);
+ 
+-	ipu6_buttress_unmap_fw_image(isp->psys, &isp->psys->fw_sgt);
++	ipu6_unmap_fw_region(isp->psys, DMA_TO_DEVICE);
+ 	ipu6_buttress_exit(isp);
+ 
+ 	ipu6_bus_del_devices(pdev);
+-- 
+2.43.0
+

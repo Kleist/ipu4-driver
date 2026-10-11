@@ -1,0 +1,43 @@
+From 52afe236930d003ad8adc4f5956570d91e7c53d8 Mon Sep 17 00:00:00 2001
+From: Antti Laakso <antti.laakso@linux.intel.com>
+Date: Mon, 7 Sep 2026 14:29:24 +0300
+Subject: [PATCH 05/45] media: ipu6: Remove unused ipu6 firmware struct
+
+The struct ipu6_fw_proxy_write_queue_token is not used anywhere,
+remove it.
+
+Signed-off-by: Antti Laakso <antti.laakso@linux.intel.com>
+Signed-off-by: Sakari Ailus <sakari.ailus@linux.intel.com>
+---
+ drivers/media/pci/intel/ipu6/ipu6-fw-isys.h | 15 ---------------
+ 1 file changed, 15 deletions(-)
+
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-fw-isys.h b/drivers/media/pci/intel/ipu6/ipu6-fw-isys.h
+index b60f02076d..393245a633 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-fw-isys.h
++++ b/drivers/media/pci/intel/ipu6/ipu6-fw-isys.h
+@@ -511,21 +511,6 @@ struct ipu6_fw_isys_proxy_resp_info_abi {
+ 	struct ipu6_fw_isys_proxy_error_info_abi error_info;
+ };
+ 
+-/**
+- * struct ipu6_fw_proxy_write_queue_token - ISYS proxy write queue token
+- * @request_id: update id for the specific proxy write request
+- * @region_index: Region id for the proxy write request
+- * @offset: Offset of the write request according to the base address
+- *	    of the region
+- * @value: Value that is requested to be written with the proxy write request
+- */
+-struct ipu6_fw_proxy_write_queue_token {
+-	u32 request_id;
+-	u32 region_index;
+-	u32 offset;
+-	u32 value;
+-};
+-
+ /**
+  * struct ipu6_fw_resp_queue_token - ISYS response queue token
+  * @resp_info: response info
+-- 
+2.43.0
+

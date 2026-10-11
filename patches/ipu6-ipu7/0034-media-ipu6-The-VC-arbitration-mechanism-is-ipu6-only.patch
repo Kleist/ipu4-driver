@@ -1,0 +1,35 @@
+From 2e3d8608903f931b9647065b0e45a63412e8e6fa Mon Sep 17 00:00:00 2001
+From: Antti Laakso <antti.laakso@linux.intel.com>
+Date: Mon, 7 Sep 2026 14:29:53 +0300
+Subject: [PATCH 34/45] media: ipu6: The VC arbitration mechanism is ipu6 only
+
+The ipu7 doesn't support the VC arbitration mechanism that exist in
+ipu6.
+
+Signed-off-by: Antti Laakso <antti.laakso@linux.intel.com>
+Signed-off-by: Sakari Ailus <sakari.ailus@linux.intel.com>
+---
+ drivers/media/pci/intel/ipu6/ipu6.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/media/pci/intel/ipu6/ipu6.c b/drivers/media/pci/intel/ipu6/ipu6.c
+index cb11450804..7d1c3713a6 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6.c
++++ b/drivers/media/pci/intel/ipu6/ipu6.c
+@@ -447,7 +447,12 @@ static int ipu6_pci_config_setup(struct pci_dev *dev)
+ 
+ static void ipu6_configure_vc_mechanism(struct ipu6_device *isp)
+ {
+-	u32 val = readl(isp->base + BUTTRESS_REG_BTRS_CTRL);
++	u32 val;
++
++	if (IS_IPU7(isp))
++		return;
++
++	val = readl(isp->base + BUTTRESS_REG_BTRS_CTRL);
+ 
+ 	if (IPU6_BTRS_ARB_STALL_MODE_VC0 == IPU6_BTRS_ARB_MODE_TYPE_STALL)
+ 		val |= BUTTRESS_REG_BTRS_CTRL_STALL_MODE_VC0;
+-- 
+2.43.0
+

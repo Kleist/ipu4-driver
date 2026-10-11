@@ -1,10 +1,11 @@
 # shellcheck shell=bash
-# Pinned base tree for the ipu6 flavor (IPU4_FLAVOR=ipu6). Sourced by
-# tools/ipu6/*.sh. A pin bump is a one-line change to IPU6_LINUX_SHA here
-# (plus the "Base" table in tools/notes/ipu6-ipu4-plan.md).
+# Pinned base tree for the ipu6 flavor (IPU4_FLAVOR=ipu6): a mainline tag.
+# Sourced by tools/ipu6/*.sh. patches/ipu6-ipu7/, patches/ipu6-ipu4p/
+# and patches/ipu6-ipu4/ are applied on top. Bumped weekly to the
+# newest mainline tag by tools/ipu6/bump-pin.sh.
 #
-# Ruslan Bay's IPU4P series on v7.3-rc4, branch ipu4p-upstream, commit
-# "media: ipu6: Enable IPU4P PCI device". The repository's default branch
-# is unrelated, so bootstrap fetches this SHA directly.
-IPU6_LINUX_URL="${IPU4_IPU6_LINUX_URL:-https://github.com/ruslanbay/linux.git}"
-IPU6_LINUX_SHA="${IPU4_IPU6_LINUX_SHA:-340985596f38c6a4cb93a451ce5e6ec436b805e4}"
+# The GitHub mirror, as kernel.org is not reachable from CI. SHA is the
+# tag's commit.
+IPU6_LINUX_URL="${IPU4_IPU6_LINUX_URL:-https://github.com/torvalds/linux.git}"
+IPU6_LINUX_TAG="v7.3-rc4"
+IPU6_LINUX_SHA="${IPU4_IPU6_LINUX_SHA:-93f51579e7df248780214094418f205253383cc5}"
