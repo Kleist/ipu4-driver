@@ -545,6 +545,8 @@ struct Ipu4State {
      * latched value with READY forced on / START forced off so
      * `query_sp()` succeeds on the first poll. */
     uint32_t is_spc_status_ctrl;
+    /* ipu6 variant: CSI_REG_HUB_GPREG_PHY_CTL of the two MCD PHYs. */
+    uint32_t ipu6v_phy_ctl[2];
     uint32_t ps_spc_status_ctrl;
 
     /* ISYS / PSYS MMU page-table programming windows. */
@@ -1266,6 +1268,11 @@ static uint32_t ipu4pv_pwr_state(Ipu4State *s)
 #define IPU6V_IS_UNISPART_IRQ_STATUS    0x27c008
 #define IPU6V_IS_UNISPART_IRQ_CLEAR     0x27c00c
 #define IPU6V_UNISPART_IRQ_SW           (1u << 22)
+/* MCD PHY power: STATUS acks PWR_EN with POWER_ACK and RESET with READY. */
+#define IPU6V_PHY_CTL(id)               (0x238008 + (id) * 8)
+#define IPU6V_PHY_STATUS(id)            (0x23800c + (id) * 8)
+#define IPU6V_PHY_CTL_PWR_EN            (1u << 0)
+#define IPU6V_PHY_CTL_RESET             (1u << 4)
 
 static bool ipu6v_is_dmem(hwaddr addr, unsigned int *reg)
 {
@@ -1323,6 +1330,15 @@ static bool ipu6v_mmio_read(Ipu4State *s, hwaddr addr, uint64_t *val)
         *val = s->is_unispart_irq_status & ISYS_UNISPART_IRQ_SW ?
                IPU6V_UNISPART_IRQ_SW : 0;
         return true;
+    case IPU6V_PHY_CTL(0):
+    case IPU6V_PHY_CTL(1):
+        *val = s->ipu6v_phy_ctl[(addr - IPU6V_PHY_CTL(0)) / 8];
+        return true;
+    case IPU6V_PHY_STATUS(0):
+    case IPU6V_PHY_STATUS(1):
+        *val = s->ipu6v_phy_ctl[(addr - IPU6V_PHY_STATUS(0)) / 8] &
+               (IPU6V_PHY_CTL_PWR_EN | IPU6V_PHY_CTL_RESET);
+        return true;
     }
     if (!ipu6v_is_dmem(addr, &reg)) {
         return false;
@@ -1365,6 +1381,10 @@ static bool ipu6v_mmio_write(Ipu4State *s, hwaddr addr, uint64_t val)
         if (val & IPU6V_UNISPART_IRQ_SW) {
             s->is_unispart_irq_status &= ~ISYS_UNISPART_IRQ_SW;
         }
+        return true;
+    case IPU6V_PHY_CTL(0):
+    case IPU6V_PHY_CTL(1):
+        s->ipu6v_phy_ctl[(addr - IPU6V_PHY_CTL(0)) / 8] = val;
         return true;
     }
     if (!ipu6v_is_dmem(addr, &reg)) {
@@ -1916,6 +1936,7 @@ static void ipu4_reset(DeviceState *dev)
     memset(s->is_mmu, 0, sizeof(s->is_mmu));
     memset(s->ps_mmu, 0, sizeof(s->ps_mmu));
     s->is_spc_status_ctrl = 0;
+    memset(s->ipu6v_phy_ctl, 0, sizeof(s->ipu6v_phy_ctl));
     s->ps_spc_status_ctrl = 0;
     s->is_mmu_l1_pfn = 0;
     s->syscom_config_iova = 0;
@@ -1959,7 +1980,7 @@ static const VMStateDescription vmstate_ipu4_csi2_port = {
 
 static const VMStateDescription vmstate_ipu4 = {
     .name = "ipu4",
-    .version_id = 10,
+    .version_id = 11,
     .minimum_version_id = 1,
     .fields = (const VMStateField[]) {
         VMSTATE_PCI_DEVICE(parent_obj, Ipu4State),
@@ -1997,6 +2018,7 @@ static const VMStateDescription vmstate_ipu4 = {
                                IPU4_MAX_MSG_STREAMS, 8),
         VMSTATE_BOOL_V(is_powered, Ipu4State, 9),
         VMSTATE_BOOL_V(ps_powered, Ipu4State, 9),
+        VMSTATE_UINT32_ARRAY_V(ipu6v_phy_ctl, Ipu4State, 2, 11),
         VMSTATE_END_OF_LIST()
     }
 };

@@ -53,7 +53,8 @@ shown not to break the other variants of the shared driver.
   | V5b | gate `probe-buttress` for ipu6 | ipu6: `probe-buttress` | merged (#133) |
   | V6 | QEMU: TSC-sync HH status at IPU6's bits 12:11 in `ipu6v_pwr_state()`; new variant-neutral `isys-resume` test | ipu6: `isys-resume` | merged (#136) |
   | V7 | `probe-mmu` / `isys-irq` for ipu6: expected writes computed from the upstream driver's IPU6 tables (`tools/tests/ipu6/upstream_writes.py`) instead of the IPU4 silicon trace | ipu6: `probe-mmu`, `isys-irq` | merged (#143) |
-  | V8 | QEMU `ipu6v_mmio_*()`: IPU6 ISYS firmware interface (SPC 0x210000, DMEM SysCom 0x200000, config/state in buttress boot params, MMU0 L1 0x2e0004, UNISPART SW IRQ BIT(22)), iwake proxy answers, IPU6 48-byte responses; ipu6 `fw-open` vs upstream writes | ipu6: `fw-open` | in review |
+  | V8 | QEMU `ipu6v_mmio_*()`: IPU6 ISYS firmware interface (SPC 0x210000, DMEM SysCom 0x200000, config/state in buttress boot params, MMU0 L1 0x2e0004, UNISPART SW IRQ BIT(22)), iwake proxy answers, IPU6 48-byte responses; ipu6 `fw-open` vs upstream writes | ipu6: `fw-open` | merged (#146) |
+  | V9 | QEMU: MCD PHY power handshake (`ipu6v_phy_ctl`); virt-sensor presents 2 lanes on 9a19; ipu6 `stream-on` vs upstream CSI-2/PHY writes | ipu6: `stream-on` | in review |
 
 - **Dashboard hook (Pages PR):** the Pages "IPU4 port" matrix already
   has `ipu4`, `ipu4p` and `ipu6` columns. A variant lights up once its
@@ -187,3 +188,10 @@ shown not to break the other variants of the shared driver.
   gave. With those, one frame is delivered (STREAM_OPEN_DONE through
   PIN_DATA_READY); `stream-on` then fails at the CSI-2 PHY power-up
   ("PHY0 powerup ack timeout"), the next step.
+- (V9) Upstream's MCD PHY rejects a 4-lane sensor on driver port 0
+  (`ipu6_isys_driver_port_to_phy_port()`: 4 lanes only on PHY ports 0
+  and 2, and driver port 0 is PHY port 1), so the virt-sensor presents 2
+  lanes on 9a19. With the PHY power/ready handshake modelled, the frame
+  streams end to end (`STREAM:pattern_ok`). `upstream_writes.py` reads
+  the PHY tables from the pinned upstream source instead of copying
+  them.
