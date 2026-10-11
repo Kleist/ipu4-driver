@@ -29,3 +29,9 @@ probe-buttress
 
 # Forced ISYS runtime resume with ISYS bound (ipu4p plan P6).
 isys-resume
+
+# MMU init and ISYS resume writes match the IPU4P series' tables; the
+# ISYS firmware opens over IPU4P's SysCom layout (ipu4p plan P7).
+probe-mmu
+isys-irq
+fw-open
