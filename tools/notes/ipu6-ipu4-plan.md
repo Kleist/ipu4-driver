@@ -133,7 +133,6 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | `probe-buttress` | buttress init + ISYS/PSYS power-up succeed |
 | `probe-mmu` | the PSYS MMU init at probe writes the IPU4 stream tables: the guest's writes to INFO and the L1/L2 stream start registers of the three PSYS MMUs (BAR + `0x4b0000`) equal, in order, the ones in `data/trace.txt` (QEMU write log, `tools/trace/check_writes.py`) |
 | `isys-irq` | a forced ISYS runtime resume (probe init, `power/control`) succeeds and writes what silicon's second ISYS resume writes (`data/trace.txt` lines 487–599): ISYS MMU stream tables, no LTR/DID (`0x68`), one TSC sync request (`0x88`), the UNISPART interrupt setup (`0x17c000`, `0x40001878`) |
-| `probe-fw` | firmware (`ipu4_fw.bin`, synthesized) is mapped and authenticated (`ipu6_buttress_authenticate()`) (passes under the model since PR 7; its step, PR 10, was folded into PR 11) |
 | `fw-open` | syscom open + `STREAM_OPEN_DONE` round trip: on the stream boot (`stream-boot.sh`, `init.ipu6-stream`), the driver gets `STREAM_OPEN_DONE` for stream 0 and completes the open, and the boot's ISYS DMEM writes start with silicon's from the firmware open to that response (`data/trace.txt` lines 600–622, `check_writes.py --prefix`) |
 | `stream-on` | on the stream boot, `VIDIOC_STREAMON` succeeds and a frame is dequeued (`STREAM:streamon`, `STREAM:dqbuf`), the boot's oops scan is clean, and its writes to the port 0 CSI-2 receiver's enable/config (BAR + `0x164000`/`0x164008`), LTR/DID (`0x68`) and the ISYS proxy send queue (`0x108018/0x10801c`) equal silicon's stream (`data/trace.txt` lines 600–1113: receiver on, then off; no iWake), and its CSIRX error interrupt setup starts with silicon's (lines 651–668, `--prefix`) |
 | `stream-pattern` | the stream boot's first frame holds the QEMU model's test pattern (`STREAM:pattern_ok`, `STREAM:done`) |
@@ -900,5 +899,6 @@ last; each entry names the PR that found it.
   mainline (it checks IPU4 silicon values).
 - (After PR 13) The `probe-complete` placeholder was deleted: it passes
   under the model from PR 7, so no step could gate on it, and
-  `fw-open`/`stream-on` already need what it would check. `probe-fw`
-  stays for the IPU6 variant's firmware step.
+  `fw-open`/`stream-on` already need what it would check. The
+  `probe-fw` placeholder followed once the IPU6 variant's `fw-open`
+  covered its firmware step (variant plan V8).
