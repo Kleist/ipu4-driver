@@ -6,10 +6,11 @@
  * behavior required to keep ipu6_pci_probe() moving forward, and logs
  * every unknown MMIO access so the M3 fuzzing loop has a target list.
  *
- * The "variant" property (ipu4 | ipu6, default ipu4) selects which IPU
- * the device presents, so the upstream ipu6 driver's test ladder can run
- * against other variants of the shared driver (tools/notes/
- * ipu6-variant-plan.md). Besides the PCI device ID it switches the
+ * The "variant" property (ipu4 | ipu4p | ipu6, default ipu4) selects
+ * which IPU the device presents, so the upstream ipu6 driver's test
+ * ladder can run against other variants of the shared driver
+ * (tools/notes/ipu6-variant-plan.md, tools/notes/ipu4p-variant-plan.md).
+ * ipu4p only changes the PCI device ID so far. Besides the PCI device ID it switches the
  * registers the upstream driver reads differently on that variant, each
  * in its own ipu6v_*() helper; everything else is IPU4's model.
  *
@@ -40,6 +41,8 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define IPU4_PCI_DEVICE_ID  0x5a88
 /* Tiger Lake IPU6 (PCI_DEVICE_ID_INTEL_IPU6 in the upstream driver). */
 #define IPU6_PCI_DEVICE_ID  0x9a19
+/* Ice Lake IPU4P (PCI_DEVICE_ID_INTEL_IPU4P in Ruslan Bay's driver). */
+#define IPU4P_PCI_DEVICE_ID 0x8a19
 #define IPU4_BAR_SIZE       (16 * MiB)
 
 /* Buttress registers (from kernel/ipu4/ipu6-platform-buttress-regs.h).
@@ -471,6 +474,7 @@ static const hwaddr ipu4_csi2_port_base[IPU4_CSI2_NUM_PORTS] = {
 typedef enum Ipu4Variant {
     IPU4_VARIANT_IPU4,
     IPU4_VARIANT_IPU6,
+    IPU4_VARIANT_IPU4P,
 } Ipu4Variant;
 
 struct Ipu4State {
@@ -1631,8 +1635,12 @@ static void ipu4_realize(PCIDevice *pdev, Error **errp)
     } else if (!strcmp(s->variant_name, "ipu6")) {
         s->variant = IPU4_VARIANT_IPU6;
         pci_config_set_device_id(pdev->config, IPU6_PCI_DEVICE_ID);
+    } else if (!strcmp(s->variant_name, "ipu4p")) {
+        s->variant = IPU4_VARIANT_IPU4P;
+        pci_config_set_device_id(pdev->config, IPU4P_PCI_DEVICE_ID);
     } else {
-        error_setg(errp, "unknown variant '%s' (expected ipu4 or ipu6)",
+        error_setg(errp,
+                   "unknown variant '%s' (expected ipu4, ipu4p or ipu6)",
                    s->variant_name);
         return;
     }
