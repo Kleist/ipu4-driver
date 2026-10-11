@@ -35,3 +35,8 @@ isys-resume
 probe-mmu
 isys-irq
 fw-open
+
+# Port 0's receiver programmed as the IPU4P series does; frames carry the
+# model's pattern (ipu4p plan P8).
+stream-on
+stream-pattern
