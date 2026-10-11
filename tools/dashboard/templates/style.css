@@ -69,30 +69,6 @@ code {
 .kpi.conf-inferred .kpi-value { color: var(--accent); }
 .kpi.conf-guess .kpi-value { color: var(--warn); }
 
-.ci-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.6rem;
-}
-.ci-tile {
-  display: block;
-  padding: 0.65rem 0.85rem;
-  border-radius: 5px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--fg);
-}
-.ci-tile:hover { text-decoration: none; border-color: var(--accent); }
-.ci-name { font-weight: 600; }
-.ci-conclusion { font-size: 0.95em; }
-.ci-meta { color: var(--muted); font-size: 0.82em; }
-.ci-tile.state-success .ci-conclusion { color: var(--good); }
-.ci-tile.state-failure .ci-conclusion,
-.ci-tile.state-cancelled .ci-conclusion,
-.ci-tile.state-timed_out .ci-conclusion { color: var(--bad); }
-.ci-tile.state-unknown .ci-conclusion { color: var(--muted); }
-.streamon-marker { color: var(--muted); margin-top: 0.75rem; }
-
 .reg-table {
   width: 100%;
   border-collapse: collapse;
