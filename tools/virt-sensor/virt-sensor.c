@@ -7,9 +7,9 @@
  * hook in the IPU driver:
  *
  *  - It builds a software-node graph shaped like the one ipu-bridge
- *    creates (IPU node with port@0/endpoint@0, sensor node with
- *    port@0/endpoint@0, data-lanes, link-frequencies, remote-endpoint
- *    references) and makes the IPU node the secondary fwnode of the IPU
+ *    creates (IPU node with port@0/endpoint@0, port@3 on IPU4P, sensor
+ *    node with port@0/endpoint@0, data-lanes, link-frequencies,
+ *    remote-endpoint references) and makes the IPU node the secondary fwnode of the IPU
  *    PCI device. isys_notifier_init() walks that graph, and
  *    ipu_bridge_init() returns early because a graph already exists.
  *
@@ -85,6 +85,12 @@ static unsigned int virt_sensor_nlanes(void)
 {
 	return device == 0x9a19 ? 2 : VIRT_SENSOR_LANES;
 }
+/* IPU4P's first CSI-2 port is firmware port 3 (its ports are 3, 6..12). */
+static unsigned int virt_sensor_port(void)
+{
+	return device == 0x8a19 ? 3 : 0;
+}
+
 static const u64 virt_sensor_link_freqs[] = { VIRT_SENSOR_LINK_FREQ };
 static const s64 virt_sensor_link_freq_menu[] = { VIRT_SENSOR_LINK_FREQ };
 
@@ -210,7 +216,9 @@ static void virt_sensor_init_swnodes(struct virt_sensor *vs)
 					 virt_sensor_link_freqs);
 
 	n[SWNODE_IPU] = SOFTWARE_NODE(VIRT_SENSOR_IPU_NODE, NULL, NULL);
-	n[SWNODE_IPU_PORT] = SOFTWARE_NODE("port@0", NULL, &n[SWNODE_IPU]);
+	n[SWNODE_IPU_PORT] = SOFTWARE_NODE(virt_sensor_port() ? "port@3" :
+							   "port@0",
+					   NULL, &n[SWNODE_IPU]);
 	n[SWNODE_IPU_ENDPOINT] = SOFTWARE_NODE("endpoint@0", vs->ipu_ep_props,
 					       &n[SWNODE_IPU_PORT]);
 	n[SWNODE_SENSOR] = SOFTWARE_NODE(VIRT_SENSOR_NAME, NULL, NULL);
@@ -337,8 +345,9 @@ static int __init virt_sensor_init(void)
 
 	ipu_fwnode = software_node_fwnode(&vs->nodes[SWNODE_IPU]);
 	set_secondary_fwnode(dev, ipu_fwnode);
-	dev_info(dev, "%s: fwnode graph attached (port 0, %u lanes, %llu Hz)\n",
-		 VIRT_SENSOR_NAME, virt_sensor_nlanes(), VIRT_SENSOR_LINK_FREQ);
+	dev_info(dev, "%s: fwnode graph attached (port %u, %u lanes, %llu Hz)\n",
+		 VIRT_SENSOR_NAME, virt_sensor_port(), virt_sensor_nlanes(),
+		 VIRT_SENSOR_LINK_FREQ);
 
 	ret = virt_sensor_init_subdev(vs);
 	if (ret) {
