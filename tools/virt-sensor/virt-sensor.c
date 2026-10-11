@@ -79,6 +79,12 @@ struct virt_sensor {
 };
 
 static const u32 virt_sensor_data_lanes[VIRT_SENSOR_LANES] = { 1, 2, 3, 4 };
+
+/* IPU6's MCD PHY takes at most 2 lanes on port 0 (port A). */
+static unsigned int virt_sensor_nlanes(void)
+{
+	return device == 0x9a19 ? 2 : VIRT_SENSOR_LANES;
+}
 static const u64 virt_sensor_link_freqs[] = { VIRT_SENSOR_LINK_FREQ };
 static const s64 virt_sensor_link_freq_menu[] = { VIRT_SENSOR_LINK_FREQ };
 
@@ -188,7 +194,7 @@ static void virt_sensor_init_swnodes(struct virt_sensor *vs)
 
 	vs->ipu_ep_props[0] =
 		PROPERTY_ENTRY_U32_ARRAY_LEN("data-lanes", virt_sensor_data_lanes,
-					     VIRT_SENSOR_LANES);
+					     virt_sensor_nlanes());
 	vs->ipu_ep_props[1] =
 		PROPERTY_ENTRY_REF_ARRAY("remote-endpoint", vs->ipu_remote);
 
@@ -196,7 +202,7 @@ static void virt_sensor_init_swnodes(struct virt_sensor *vs)
 		PROPERTY_ENTRY_U32("bus-type", V4L2_FWNODE_BUS_TYPE_CSI2_DPHY);
 	vs->sensor_ep_props[1] =
 		PROPERTY_ENTRY_U32_ARRAY_LEN("data-lanes", virt_sensor_data_lanes,
-					     VIRT_SENSOR_LANES);
+					     virt_sensor_nlanes());
 	vs->sensor_ep_props[2] =
 		PROPERTY_ENTRY_REF_ARRAY("remote-endpoint", vs->sensor_remote);
 	vs->sensor_ep_props[3] =
@@ -332,7 +338,7 @@ static int __init virt_sensor_init(void)
 	ipu_fwnode = software_node_fwnode(&vs->nodes[SWNODE_IPU]);
 	set_secondary_fwnode(dev, ipu_fwnode);
 	dev_info(dev, "%s: fwnode graph attached (port 0, %u lanes, %llu Hz)\n",
-		 VIRT_SENSOR_NAME, VIRT_SENSOR_LANES, VIRT_SENSOR_LINK_FREQ);
+		 VIRT_SENSOR_NAME, virt_sensor_nlanes(), VIRT_SENSOR_LINK_FREQ);
 
 	ret = virt_sensor_init_subdev(vs);
 	if (ret) {
