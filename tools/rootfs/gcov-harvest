@@ -1,0 +1,40 @@
+#!/bin/sh
+# gcov-harvest NAME: copy the guest's gcov counters to the 9p share as
+# /mnt/tests/gcov-NAME.tar (tools/coverage/ladder.sh reads it). A no-op
+# without CONFIG_GCOV_KERNEL or instrumented code. Run it after rmmod:
+# gcov_persist (default on) keeps an unloaded module's counters.
+#
+# debugfs's .gcda files report size 0 to stat(), so tar would store them
+# empty; cat them into a scratch tree first.
+
+name=$1
+mkdir -p /sys/kernel/debug /mnt/tests
+grep -q ' /sys/kernel/debug ' /proc/mounts ||
+	mount -t debugfs none /sys/kernel/debug 2>/dev/null
+grep -q ' /mnt/tests ' /proc/mounts ||
+	mount -t 9p -o trans=virtio tests /mnt/tests 2>/dev/null
+
+gcov=/sys/kernel/debug/gcov
+if [ ! -d "$gcov" ] || ! grep -q ' /mnt/tests ' /proc/mounts; then
+	echo "GCOV:skipped (no $gcov or /mnt/tests)"
+	exit 0
+fi
+
+n=0
+rm -rf /tmp/gcov
+mkdir -p /tmp/gcov
+cd "$gcov" || exit 0
+find . -name '*.gcda' > /tmp/gcov.list
+while read -r gcda; do
+	mkdir -p "/tmp/gcov/${gcda%/*}"
+	cat "$gcda" > "/tmp/gcov/$gcda"
+	n=$((n + 1))
+done < /tmp/gcov.list
+cd /
+if [ "$n" -eq 0 ]; then
+	echo "GCOV:skipped (no .gcda)"
+elif tar -cf "/mnt/tests/gcov-$name.tar" -C /tmp/gcov .; then
+	echo "GCOV:harvested $n gcda to gcov-$name.tar"
+else
+	echo "GCOV:fail tar"
+fi

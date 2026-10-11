@@ -141,5 +141,7 @@ else
 	say "oops none"
 fi
 
+gcov-harvest ipu6-probe
+
 echo "PROBE: DONE"
 poweroff -f
