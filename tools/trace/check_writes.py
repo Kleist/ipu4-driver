@@ -30,9 +30,15 @@ on those lines (1-based, inclusive) of the expected file, for registers
 that silicon writes again later in the trace (a second resume, an
 interrupt handler) where the capture under test writes them once.
 
+``--prefix`` passes when the capture's writes start with the expected
+ones, for a capture that goes on after the expected window (silicon
+streams on while the guest stops, or the other way round): the writes
+after the first ``len(expected)`` are not compared.
+
 Usage:
   check_writes.py --expected data/trace.txt --actual capture.log \\
-      [--expected-lines 487-599] 0x4b0008-0x4b0090 0x4b0108-0x4b0190
+      [--expected-lines 487-599] [--prefix] \\
+      0x4b0008-0x4b0090 0x4b0108-0x4b0190
 
 Exit status: 0 when the sequences match, 1 when they differ or the
 expected side has no writes in the ranges, 2 on usage errors.
@@ -110,13 +116,23 @@ def fmt(write):
     return f"+0x{write[0]:06x} = 0x{write[1]:x}"
 
 
-def compare(expected, actual, out):
-    """Print the comparison to ``out``; return True when it passes."""
+def compare(expected, actual, out, prefix=False):
+    """Print the comparison to ``out``; return True when it passes.
+
+    With ``prefix``, only the first ``len(expected)`` actual writes are
+    compared.
+    """
     if not expected:
         print("no expected writes in the ranges; check the ranges", file=out)
         return False
+    more = 0
+    if prefix and len(actual) > len(expected):
+        more = len(actual) - len(expected)
+        actual = actual[:len(expected)]
     if expected == actual:
         print(f"PASS: all {len(expected)} writes match", file=out)
+        if more:
+            print(f"({more} later writes not compared, --prefix)", file=out)
         return True
     print(f"FAIL: expected {len(expected)} writes, got {len(actual)}",
           file=out)
@@ -138,6 +154,9 @@ def main(argv=None):
     ap.add_argument("--expected-lines", type=parse_lines, metavar="FIRST-LAST",
                     help="only count the expected file's writes on these "
                          "lines (1-based, inclusive)")
+    ap.add_argument("--prefix", action="store_true",
+                    help="only compare the capture's first writes, as many "
+                         "as expected (the capture may go on)")
     ap.add_argument("--region", default="ipu4-bar0",
                     help="QEMU memory region name of the IPU BAR")
     ap.add_argument("ranges", nargs="+", type=parse_range,
@@ -150,7 +169,7 @@ def main(argv=None):
                              args.ranges)
     with open(args.actual, errors="replace") as f:
         actual = in_ranges(read_writes(f, args.region), args.ranges)
-    return 0 if compare(expected, actual, sys.stdout) else 1
+    return 0 if compare(expected, actual, sys.stdout, args.prefix) else 1
 
 
 if __name__ == "__main__":
