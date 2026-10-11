@@ -17,6 +17,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 EXTRA_KOS=()
+FW_EXTRA_NAMES=()
 case "${IPU4_FLAVOR:-fork}" in
 fork)
 	LINUX_DIR="$ROOT/tools/linux"
@@ -33,6 +34,10 @@ ipu6)
 	EXTRA_KOS=("$ROOT/tools/virt-sensor/out/virt-sensor.ko")
 	# IPU4_FIRMWARE_NAME in patches/ipu6-ipu4/.
 	FW_NAME="intel/ipu/ipu4_fw.bin"
+	# Same blob under the name upstream requests for the IPU6 the ipu6
+	# QEMU variant presents (IPU6_FIRMWARE_NAME, 8086:9a19); it passes
+	# ipu6_cpd_validate_cpd_file() there too. Same directory as FW_NAME.
+	FW_EXTRA_NAMES=("intel/ipu/ipu6_fw.bin")
 	;;
 *) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork or ipu6)" >&2; exit 1 ;;
 esac
@@ -170,6 +175,9 @@ for part in "${fw_parts[@]}"; do
 	echo "dir  $fw_dir           0755 0 0" >> "$LIST"
 done
 echo "file /lib/firmware/$FW_NAME  $FW_BLOB 0644 0 0" >> "$LIST"
+for name in "${FW_EXTRA_NAMES[@]}"; do
+	echo "file /lib/firmware/$name  $FW_BLOB 0644 0 0" >> "$LIST"
+done
 
 if [[ -x "$STREAMON_BIN" ]]; then
 	echo "file /bin/streamon  $STREAMON_BIN 0755 0 0" >> "$LIST"
