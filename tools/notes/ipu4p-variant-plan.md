@@ -78,9 +78,9 @@ commit, first in the step's PR.
 | P1 | `vm-ipu6.yml` matrix leg `ipu4p` and `enabled-tests.ipu4p` with the static tests | `series-applies`, `build`, `checkpatch` | merged (#139) |
 | P2 | QEMU `variant=ipu4p` (PCI ID `8a19`); `run-vm.sh` maps the variant to `ipu_pci_id=` | `vm-boot`, `module-load` | merged (#142) |
 | P3 | `module-load` for the variant (virt-sensor on the variant's device, as the IPU6 variant's V3 does) | `module-load` | folded into P2 |
-| P4 | Stage `intel/ipu/ipu4p_fw.bin`; `probe-identify` expects that file for `8a19` | `probe-identify` | in review |
-| P4b | Baseline leg `ipu4p / ipu4p` (Ruslan's tree without the series); P1–P4 move to it, `ipu4-patches / ipu4p` keeps them for the series | `series-applies`, `build`, `checkpatch`, `vm-boot`, `module-load`, `probe-identify` | in review (with the ladder's six legs) |
-| P5 | Model: IPU4P PWR_STATE FSM and FREQ_CTL | `probe-buttress` | |
+| P4 | Stage `intel/ipu/ipu4p_fw.bin`; `probe-identify` expects that file for `8a19` | `probe-identify` | merged (#144) |
+| P4b | Baseline leg `ipu4p / ipu4p` (Ruslan's tree without the series); P1–P4 move to it, `ipu4-patches / ipu4p` keeps them for the series | `series-applies`, `build`, `checkpatch`, `vm-boot`, `module-load`, `probe-identify` | merged (with the ladder's six legs) |
+| P5 | Model: IPU4P PWR_STATE FSM and FREQ_CTL | `probe-buttress` | in review |
 | P6 | ISYS runtime resume on IPU4P: UNISPART SW IRQ bit 22, SIP0/SIP1 windows. Needs the IPU4 port's forced ISYS resume (its PR 9) | an IPU4P resume test (driver-observable, not trace-based) | |
 | P7 | Model: SysCom queue base register 8 | `fw-open` | |
 | P8 | Model: 8 CSI-2 ports, port ↔ source map, PHY sideband latches | `stream-on`, `stream-pattern` | |
@@ -121,3 +121,12 @@ commit, first in the step's PR.
   same as IPU4's" above needs checking before P7; the model's syscom
   emulation may need IPU4P-specific token sizes.
 - (P4b) BASELINE_LEARNING
+- (P5) FREQ_CTL needed no model change: IPU4P still powers an island on
+  with START (BIT(31)), which the model already tracks; only the ratio
+  and override bits move. PWR_STATE got `ipu4pv_pwr_state()`.
+- (P5) Past power-up, `intel-ipu6-isys` fails probe with `invalid csi2
+  port 0`: virt-sensor attaches to firmware port 0, which IPU4P's port
+  map `{3, 6..12}` doesn't have. Needs a per-variant virt-sensor port
+  (P8, or earlier if a resume test needs ISYS bound).
+- (P5) `isys-resume` passes on ipu4p even with ISYS unbound, so it is
+  not gated here; revisit once ISYS binds.
