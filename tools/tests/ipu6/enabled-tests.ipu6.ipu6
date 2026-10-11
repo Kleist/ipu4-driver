@@ -51,3 +51,7 @@ stream-on
 # The delivered frame carries the model's pattern (plan "Parallel track",
 # V10).
 stream-pattern
+
+# CSI-2 port 0 error IRQ through the ISR (sync IRQs stay masked upstream)
+# (plan "Parallel track", V11).
+csi2-sof-irq

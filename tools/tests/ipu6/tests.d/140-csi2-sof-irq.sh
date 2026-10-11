@@ -42,10 +42,36 @@ sys.exit(1)
 PY
 }
 
+# Upstream IPU6 keeps the CSI-2 sync IRQs masked and takes frame starts
+# from the firmware, so the ipu6 variant covers the port's error IRQ
+# instead: the model reports a corrected packet header error with each
+# frame. Passes when the ISR dispatched port 0 (writes 0x3 to CTRL0
+# CLEAR), the driver logs the error, and the sync MASK is only written 0.
 test_csi2-sof-irq() {
 	boot_stream_vm || return 1
 	stream_log_ok || return 1
 	local rc=0
+	if [[ "$IPU4_VARIANT" == ipu6 ]]; then
+		local up="$ROOT/tools/tests/ipu6/upstream_writes.py" ranges
+		grep -q 'csi2-0 error: Single packet header error corrected' \
+			"$STREAM_LOG" || {
+			echo "!!! no CSI-2 receiver error reported on port 0"
+			rc=1
+		}
+		python3 - "$ROOT/tools/trace" "$STREAM_WRITES" <<-'PY' || rc=1
+			import sys
+			sys.path.insert(0, sys.argv[1])
+			from check_writes import read_writes
+			with open(sys.argv[2]) as f:
+			    if (0x23820c, 0x3) not in read_writes(f):
+			        sys.exit("!!! ISR never cleared port 0 in CTRL0")
+		PY
+		read -ra ranges < <(python3 "$up" --ranges csi2-sof-irq)
+		python3 "$ROOT/tools/trace/check_writes.py" \
+			--expected <(python3 "$up" csi2-sof-irq) \
+			--actual "$STREAM_WRITES" "${ranges[@]}" || rc=1
+		return "$rc"
+	fi
 	if [[ "$FLAVOR" == out-of-tree ]]; then
 		csi2_fs_acked || {
 			echo "!!! no CSI-2 frame start interrupt acknowledged on port 0"

@@ -14,7 +14,7 @@ Usage:
                                     (tools/trace/check_writes.py --expected)
   upstream_writes.py --ranges SET   the BAR ranges they cover
 
-SET is probe-mmu, isys-irq, fw-open or stream-on. stream-on reads the PHY
+SET is probe-mmu, isys-irq, fw-open, stream-on or csi2-sof-irq. stream-on reads the PHY
 tables from the upstream source in $IPU4_IPU6_LINUX_DIR (default
 tools/linux-ipu6-upstream).
 """
@@ -210,13 +210,21 @@ def stream_on():
                (irq + clear, err), (sync + enable, 0),
                (sync + clear, 0xffffffff), (phy_ctl, 0), (fw(0), 0),
                (drv(0), 0)]
-    # The IRQ handler also writes the error CLEAR register, at times that
-    # depend on interrupt timing: leave it out.
-    writes = [w for w in writes if w[0] != irq + clear]
-    ranges = [(port, irq + clear), (irq + clear + 4, port + 0x1000),
+    # The IRQ handler also writes both CLEAR registers, at times that
+    # depend on interrupt timing: leave them out.
+    writes = [w for w in writes if w[0] not in (irq + clear, sync + clear)]
+    ranges = [(port, irq + clear), (irq + clear + 4, sync + clear),
+              (sync + clear + 4, port + 0x1000),
               (phy_base, phy_base + 0x8000), (fw(0), fw(8)),
               (phy_ctl, phy_ctl + 4), (drv(0), drv(8))]
     return writes, ranges
+
+
+def csi2_sync_masked():
+    """The CSI-2 sync (FS/FE) IRQs stay masked: their MASK is written once,
+    0, at stream on; frame starts come as the firmware's FRAME_SOF."""
+    sync_mask = 0x220000 + 0xa0 + 0x4
+    return [(sync_mask, 0)], [(sync_mask, sync_mask + 4)]
 
 
 SETS = {
@@ -226,6 +234,7 @@ SETS = {
     "isys-irq": isys_resume,
     "fw-open": fw_open,
     "stream-on": stream_on,
+    "csi2-sof-irq": csi2_sync_masked,
 }
 
 
