@@ -68,12 +68,12 @@ handshakes, firmware round trips and frames.
 One PR per ladder test for the variant, top of the table first. One open
 PR at a time, from `main` (`CLAUDE.md`); the next step waits on a local
 branch until it merges. Independent of the other tracks. A step that needs a shared-core change (`ladder.sh`, `run-vm.sh`,
-the `init.ipu6-*` frames, `vm-ipu6.yml`) puts that change in its own small
-PR first.
+the `init.ipu6-*` frames, `vm-ipu6.yml`) puts that change in its own
+commit, first in the step's PR.
 
 | PR | Content | `enabled-tests.ipu4p` gains | State |
 |---|---|---|---|
-| P1 | `vm-ipu6.yml` matrix leg `ipu4p` and `enabled-tests.ipu4p` with the static tests | `series-applies`, `build`, `checkpatch` | |
+| P1 | `vm-ipu6.yml` matrix leg `ipu4p` and `enabled-tests.ipu4p` with the static tests | `series-applies`, `build`, `checkpatch` || in review |
 | P2 | QEMU `variant=ipu4p` (PCI ID `8a19`); `run-vm.sh` maps the variant to `ipu_pci_id=` | `vm-boot` | |
 | P3 | `module-load` for the variant (virt-sensor on the variant's device, as the IPU6 variant's V3 does) | `module-load` | |
 | P4 | Stage `intel/ipu/ipu4p_fw.bin`; `probe-identify` expects that file for `8a19` | `probe-identify` | |
@@ -92,4 +92,12 @@ PR first.
 
 ## Learnings
 
-(None yet.)
+- (P1) The ipu4p leg reuses the ipu4 leg's `matrix.include` fields
+  (`tools/linux-ipu6`, `tools/ipu6/pin`, cache `linux-ipu6`), so both legs
+  restore the same tree cache. Whichever leg finishes first saves it; the
+  other's save is a no-op. `ladder.sh` already mapped `ipu4p` to that tree
+  and `enabled-tests.ipu4p`, and the dashboard already had the column, so
+  P1 needed no shared-script change beyond the matrix leg.
+- (P1) Until P2 the VM tests fail on this leg (`run-vm.sh` rejects
+  `IPU4_VARIANT=ipu4p` and the model has no `variant=ipu4p`). They are
+  not gated, so the leg stays green.
