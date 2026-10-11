@@ -29,3 +29,7 @@ probe-mmu
 # Forced ISYS runtime resume: ISYS MMU, TSC sync and UNISPART interrupt
 # setup write what silicon writes (plan PR 9).
 isys-irq
+
+# The ISYS firmware opens over IPU4's SysCom layout and answers the first
+# STREAM_OPEN; the SysCom writes match silicon's (plan PR 11).
+fw-open
