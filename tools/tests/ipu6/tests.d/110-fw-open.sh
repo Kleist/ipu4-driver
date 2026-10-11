@@ -25,6 +25,10 @@ ladder_test fw-open isys-irq
 #    the SysCom config address (+0x004, an IOVA) and the proxy send
 #    queue's pointers (+0x018/+0x01c), where the guest sends two iwake
 #    proxy tokens that silicon never sends (plan, PR 11 learnings).
+# The ipu6 variant checks the same markers and compares the open's writes
+# with the upstream driver's (SPC start, SysCom state in the buttress boot
+# parameters, iwake proxy writes, stream 0's queue cursors in DMEM at
+# BAR + 0x200000; ../upstream_writes.py).
 # What happens after the open (stream start, CSI-2 receiver, frames, a
 # kernel warning when stream-on fails) is for the later stream tests.
 test_fw-open() {
@@ -33,10 +37,19 @@ test_fw-open() {
 	if grep -E 'stream open (time out|error)' "$STREAM_LOG"; then
 		return 1
 	fi
-	grep -q 'FW resp 00 STREAM_OPEN_DONE, stream 0,' "$STREAM_LOG" &&
-		grep -q 'start stream: open complete' "$STREAM_LOG" &&
+	grep -q 'FW resp 00 STREAM_OPEN_DONE, stream 0,' "$STREAM_LOG" ||
+		return 1
+	grep -q 'start stream: open complete' "$STREAM_LOG" || return 1
+	if [[ "$IPU4_VARIANT" == ipu6 ]]; then
+		local up="$ROOT/tools/tests/ipu6/upstream_writes.py" ranges
+		read -ra ranges < <(python3 "$up" --ranges fw-open)
 		python3 "$ROOT/tools/trace/check_writes.py" \
-			--expected "$ROOT/data/trace.txt" --expected-lines 600-622 \
-			--prefix --actual "$STREAM_WRITES" \
-			0x108000-0x108004 0x108008-0x108018 0x108020-0x108100
+			--expected <(python3 "$up" fw-open) \
+			--prefix --actual "$STREAM_WRITES" "${ranges[@]}"
+		return
+	fi
+	python3 "$ROOT/tools/trace/check_writes.py" \
+		--expected "$ROOT/data/trace.txt" --expected-lines 600-622 \
+		--prefix --actual "$STREAM_WRITES" \
+		0x108000-0x108004 0x108008-0x108018 0x108020-0x108100
 }
