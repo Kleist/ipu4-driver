@@ -28,6 +28,7 @@ Do not restructure or "clean up" IPU6 code. Do not rename `ipu6_*` symbols. Keep
 - Every commit must pass CI on its own, not just the tip of the PR. Don't leave "fix previous commit" commits in a PR; fold them into the commit they fix before review.
 - The same applies to kernel patches in `patches/`: each patch in the series must build and pass the checks on its own.
 - Changes go through PRs from short-lived branches into `main`; never commit directly to `main`.
+- Be brief. Commit messages: a subject line plus at most a few lines on why; no restating the diff. PR descriptions: a few bullets, no headings or test logs unless asked. Code comments: only where the code isn't self-explanatory, one or two lines, no history or investigation notes.
 - One open PR at a time per line of work, never stacked. Prepare the next step on a local branch while the current PR is in review, but push it and open its PR only after the current one has merged (rebased onto the new `main`); review feedback then never has to be carried forward through a stack.
 
 ## Local prerequisites
