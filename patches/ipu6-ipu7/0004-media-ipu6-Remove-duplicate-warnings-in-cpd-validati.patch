@@ -1,0 +1,82 @@
+From 709c9a913f06e14ee2459330b58744618a3d7bf9 Mon Sep 17 00:00:00 2001
+From: Antti Laakso <antti.laakso@linux.intel.com>
+Date: Mon, 7 Sep 2026 14:29:23 +0300
+Subject: [PATCH 04/45] media: ipu6: Remove duplicate warnings in cpd
+ validation
+
+Some of the error paths printed same or similar errors twice,
+once is enough.
+
+Signed-off-by: Antti Laakso <antti.laakso@linux.intel.com>
+Signed-off-by: Sakari Ailus <sakari.ailus@linux.intel.com>
+---
+ drivers/media/pci/intel/ipu6/ipu6-cpd.c | 29 ++++++-------------------
+ 1 file changed, 7 insertions(+), 22 deletions(-)
+
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-cpd.c b/drivers/media/pci/intel/ipu6/ipu6-cpd.c
+index b7013f6524..966a16a300 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-cpd.c
++++ b/drivers/media/pci/intel/ipu6/ipu6-cpd.c
+@@ -266,7 +266,6 @@ static int ipu6_cpd_validate_moduledata(struct ipu6_device *isp,
+ 					u32 moduledata_size)
+ {
+ 	const struct ipu6_cpd_module_data_hdr *mod_hdr = moduledata;
+-	int ret;
+ 
+ 	/* Ensure moduledata hdr is within moduledata */
+ 	if (moduledata_size < sizeof(*mod_hdr) ||
+@@ -276,15 +275,9 @@ static int ipu6_cpd_validate_moduledata(struct ipu6_device *isp,
+ 	}
+ 
+ 	dev_dbg(&isp->pdev->dev, "FW version: %x\n", mod_hdr->fw_pkg_date);
+-	ret = ipu6_cpd_validate_cpd(isp, moduledata + mod_hdr->hdr_len,
+-				    moduledata_size - mod_hdr->hdr_len,
+-				    moduledata_size);
+-	if (ret) {
+-		dev_err(&isp->pdev->dev, "Invalid CPD in moduledata\n");
+-		return ret;
+-	}
+-
+-	return 0;
++	return ipu6_cpd_validate_cpd(isp, moduledata + mod_hdr->hdr_len,
++				     moduledata_size - mod_hdr->hdr_len,
++				     moduledata_size);
+ }
+ 
+ static int ipu6_cpd_validate_metadata(struct ipu6_device *isp,
+@@ -325,10 +318,8 @@ int ipu6_cpd_validate_cpd_file(struct ipu6_device *isp, const void *cpd_file,
+ 
+ 	ret = ipu6_cpd_validate_cpd(isp, cpd_file, cpd_file_size,
+ 				    cpd_file_size);
+-	if (ret) {
+-		dev_err(&isp->pdev->dev, "Invalid CPD in file\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	/* Check for CPD file marker */
+ 	if (hdr->hdr_mark != CPD_HDR_MARK) {
+@@ -346,17 +337,11 @@ int ipu6_cpd_validate_cpd_file(struct ipu6_device *isp, const void *cpd_file,
+ 	/* Validate metadata */
+ 	ent = ipu6_cpd_get_metadata(cpd_file);
+ 	ret = ipu6_cpd_validate_metadata(isp, cpd_file + ent->offset, ent->len);
+-	if (ret) {
+-		dev_err(&isp->pdev->dev, "Invalid CPD metadata\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	/* Validate moduledata */
+ 	ent = ipu6_cpd_get_moduledata(cpd_file);
+-	ret = ipu6_cpd_validate_moduledata(isp, cpd_file + ent->offset,
+-					   ent->len);
+-	if (ret)
+-		dev_err(&isp->pdev->dev, "Invalid CPD moduledata\n");
+-
+-	return ret;
++	return ipu6_cpd_validate_moduledata(isp, cpd_file + ent->offset,
++					    ent->len);
+ }
+-- 
+2.43.0
+

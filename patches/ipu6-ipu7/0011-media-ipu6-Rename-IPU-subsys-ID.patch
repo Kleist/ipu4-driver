@@ -1,0 +1,70 @@
+From 78bc6332a8d4ffbc8c8f6211c538bd84c0f11b6b Mon Sep 17 00:00:00 2001
+From: Antti Laakso <antti.laakso@linux.intel.com>
+Date: Mon, 7 Sep 2026 14:29:30 +0300
+Subject: [PATCH 11/45] media: ipu6: Rename IPU subsys ID
+
+We will need subsys ID later elsewhere, so move it to
+common header too.
+
+Signed-off-by: Antti Laakso <antti.laakso@linux.intel.com>
+Signed-off-by: Sakari Ailus <sakari.ailus@linux.intel.com>
+---
+ drivers/media/pci/intel/ipu6/ipu6-mmu.h | 3 ---
+ drivers/media/pci/intel/ipu6/ipu6.c     | 5 ++---
+ drivers/media/pci/intel/ipu6/ipu6.h     | 3 +++
+ 3 files changed, 5 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-mmu.h b/drivers/media/pci/intel/ipu6/ipu6-mmu.h
+index 8e40b4a66d..35cac80d2d 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-mmu.h
++++ b/drivers/media/pci/intel/ipu6/ipu6-mmu.h
+@@ -4,9 +4,6 @@
+ #ifndef IPU6_MMU_H
+ #define IPU6_MMU_H
+ 
+-#define ISYS_MMID 1
+-#define PSYS_MMID 0
+-
+ #include <linux/list.h>
+ #include <linux/spinlock_types.h>
+ #include <linux/types.h>
+diff --git a/drivers/media/pci/intel/ipu6/ipu6.c b/drivers/media/pci/intel/ipu6/ipu6.c
+index 7ac9c92744..c24e18520d 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6.c
++++ b/drivers/media/pci/intel/ipu6/ipu6.c
+@@ -424,8 +424,7 @@ ipu6_isys_init(struct pci_dev *pdev, struct device *parent,
+ 				"ipu6_bus_initialize_device isys failed\n");
+ 	}
+ 
+-	isys_adev->mmu = ipu6_mmu_init(dev, base, ISYS_MMID,
+-				       &ipdata->hw_variant);
++	isys_adev->mmu = ipu6_mmu_init(dev, base, IPU_ISYS, &ipdata->hw_variant);
+ 	if (IS_ERR(isys_adev->mmu)) {
+ 		put_device(&isys_adev->auxdev.dev);
+ 		return dev_err_cast_probe(dev, isys_adev->mmu,
+@@ -465,7 +464,7 @@ ipu6_psys_init(struct pci_dev *pdev, struct device *parent,
+ 				"ipu6_bus_initialize_device psys failed\n");
+ 	}
+ 
+-	psys_adev->mmu = ipu6_mmu_init(&pdev->dev, base, PSYS_MMID,
++	psys_adev->mmu = ipu6_mmu_init(&pdev->dev, base, IPU_PSYS,
+ 				       &ipdata->hw_variant);
+ 	if (IS_ERR(psys_adev->mmu)) {
+ 		put_device(&psys_adev->auxdev.dev);
+diff --git a/drivers/media/pci/intel/ipu6/ipu6.h b/drivers/media/pci/intel/ipu6/ipu6.h
+index ebae876058..dc98a78761 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6.h
++++ b/drivers/media/pci/intel/ipu6/ipu6.h
+@@ -70,6 +70,9 @@ struct ipu6_device {
+ 	bool bus_ready_to_probe;
+ };
+ 
++#define IPU_PSYS	0
++#define IPU_ISYS	1
++
+ #define IPU6_ISYS_NAME "isys"
+ #define IPU6_PSYS_NAME "psys"
+ 
+-- 
+2.43.0
+
