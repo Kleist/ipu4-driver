@@ -88,11 +88,12 @@ silicon trace in `data/trace.txt`):
 | MMU L1 stream block sizes | IPU4P tables | IPU4 tables (`kernel/ipu4/ipu6.c`) |
 | UNISPART software IRQ | BIT(22) | BIT(30) |
 | CSI-2 port IRQ in UNISPART | SIP0/SIP1 scheme | `0x8 << port` (0–3), `0x800 << (port - 4)` (4–5) |
-| CSI-2 ports | 8, IRQ controllers in separate windows | 6 at `0x64000 0x65000 0x66000 0x67000 0x6c000 0x6c800`; IRQ trios at port base + `0x400/0x500/0x600` |
+| CSI-2 ports | 8, IRQ controllers in separate windows | 6 at `0x64000 0x65000 0x66000 0x67000 0x6c000 0x6c800` from the ISYS base (port 0 at BAR + `0x164000`); IRQ trios at port base + `0x400/0x500/0x600` |
 | CSI-2 receiver registers | `IPU4P_CSI2_RX_*` | same layout (reused) |
 | PHY sideband setup | required | none |
 | CSI-2 port ↔ firmware source | `{3, 6..12}` | identity |
 | CSI-RX error bits | 16 | 17 (adds "inter-frame long packet discarded") |
+| CSI-2 frame interrupts | not reported (firmware SOF/EOF only) | CSI2PART FS/FE of VC 0–3 (`0x3333`) enabled and logged at `dev_dbg` (decision 3); firmware SOF/EOF still drive the events |
 | Buttress IRQ status register | `BUTTRESS_REG_ISR_STATUS` (`ipu6_buttress_regs`) | `BUTTRESS_REG_ISR_ENABLED_STATUS` (`0x94`, fork: `isp->buttress.reg_irq_sts`) |
 
 ## Testing approach
@@ -136,7 +137,7 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | `fw-open` | syscom open + `STREAM_OPEN_DONE` round trip: on the stream boot (`stream-boot.sh`, `init.ipu6-stream`), the driver gets `STREAM_OPEN_DONE` for stream 0 and completes the open, and the boot's ISYS DMEM writes start with silicon's from the firmware open to that response (`data/trace.txt` lines 600–622, `check_writes.py --prefix`) |
 | `stream-on` | on the stream boot, `VIDIOC_STREAMON` succeeds and a frame is dequeued (`STREAM:streamon`, `STREAM:dqbuf`), the boot's oops scan is clean, and its writes to the port 0 CSI-2 receiver's enable/config (BAR + `0x164000`/`0x164008`), LTR/DID (`0x68`) and the ISYS proxy send queue (`0x108018/0x10801c`) equal silicon's stream (`data/trace.txt` lines 600–1113: receiver on, then off; no iWake), and its CSIRX error interrupt setup starts with silicon's (lines 651–668, `--prefix`) |
 | `stream-pattern` | the stream boot's first frame holds the QEMU model's test pattern (`STREAM:pattern_ok`, `STREAM:done`) |
-| `csi2-sof-irq` | CSI-2 FS IRQ observed on port 0 |
+| `csi2-sof-irq` | CSI-2 FS IRQ observed on port 0: on the stream boot, the driver logs a CSI2PART frame start interrupt of port 0, VC 0 (`csi2-0: frame start, vc 0`, isys dyndbg), and its writes to port 0's CSI2PART EDGE/MASK/ENABLE/LEVEL_NOT_PULSE (BAR + `0x164400..0x164414`, without CLEAR) and CSI2S2M (`0x164600..0x164614`) equal silicon's stream (`data/trace.txt` lines 600–1113: `0x3333` on at lines 664–668, CSI2S2M and CSI2PART off at 1078–1081) |
 
 ## PR sequence
 
@@ -154,9 +155,9 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | 9 | `media: ipu6: Support the IPU4 TSC sync handshake` + `media: ipu6: Add IPU4 ISYS and CSI-2 register definitions` + `media: ipu6: Add IPU4 ISYS interrupt handling` (wire-up in ISYS, 6 CSI-2 ports); probe init forces an ISYS runtime resume (was PR 10, swapped with the pdata step) | `isys-irq` (was `probe-complete`) | merged (#125) |
 | 10 | ~~Internal pdata (`media: ipu6: Add IPU4 platform data`)~~; the firmware name landed in PR 6, the ISYS/PSYS/SPC/DMEM offsets in PR 8, the CSI-2 port count in PR 9, the stream limits in PR 11 | — (was `probe-fw`) | folded into PR 11 |
 | 11 | `media: ipu6: Add the IPU4 ISYS stream limits` (the rest of the pdata, old PR 10) + `media: ipu6: Support the IPU4 SysCom queue layout`; before it, a shared-core PR adds the stream boot (`stream-boot.sh`, `init.ipu6-stream`, `streamon` subdev format) | `fw-open` | merged (#135) |
-| 12 | `media: ipu6: Run IPU4 without iWake` + `media: ipu6: Add IPU4 CSI-2 receiver support` | `stream-on`, `stream-pattern` | in review |
-| 13 | CSI-2 frame interrupts (decision 3) | `csi2-sof-irq` | |
-| 14 | ~~`media: ipu6: Enable IPU4 PCI device`~~ | — | moved to PR 8a |
+| 12 | `media: ipu6: Run IPU4 without iWake` + `media: ipu6: Add IPU4 CSI-2 receiver support` | `stream-on`, `stream-pattern` | merged (#138) |
+| 13 | `media: ipu6: Handle the IPU4 CSI-2 frame interrupts` (decision 3); before it, a shared-core PR puts the QEMU model's CSI-2 ports at the ISYS base (`ipu6-ipu4/core-csi2-irq`) | `csi2-sof-irq` | in review (core fix #140 merged) |
+| 14 | ~~`media: ipu6: Enable IPU4 PCI device`~~ | — | moved to PR 8a (after PR 13 the only step left is PR 15) |
 | 15 | Cover letter draft + `get_maintainer.pl` output | — | |
 | Pages | Dashboard section "IPU4 port (upstream ipu6)": `ladder.sh` writes `results.json`, `vm-ipu6` uploads it per variant, Pages shows a test × variant matrix | — | merged (#109) |
 
@@ -830,3 +831,57 @@ last; each entry names the PR that found it.
   47 s incl. the kernel rebuild for the new patches, `fw-open` 8 s
   incl. the stream boot, `stream-on`/`stream-pattern` 0 s on the shared
   boot); `ladder.sh stream-pattern` alone ~20 s.
+- (PR 13) **The QEMU model decoded the CSI-2 ports at the wrong
+  offset**: its port table had the ISYS-relative offsets (`0x64000` ..
+  `0x6c800`) as BAR offsets, while the driver (both flavors) and silicon
+  use ISYS base + offset (port 0 at BAR + `0x164000`, `data/trace.txt`
+  lines 651–668). Every receiver register was therefore unimplemented
+  (writes dropped, reads 0), including the CSI2PART status in which the
+  model latches FS_VC0 per delivered frame, so no test could see a
+  CSI-2 frame interrupt. Fixed in a shared-core PR before this step
+  (branch `ipu6-ipu4/core-csi2-irq`: `IS_CSI2_BASE` added to the
+  model's port table, `tools/notes/registers.md` rows moved). No
+  existing test changes: the ipu6 ladder (ipu4 and ipu6 variants) and
+  the fork's vm-smoke/probe-smoke/streamon-smoke/mmiotrace pass with the
+  same writes; the fork's `RX_CONFIG` reads now match silicon's
+  (`0x0`/`0x3`), which drops one row from the compare-mmio report, so
+  its baseline is refreshed in that PR. PR 12's note that the model
+  accepts any receiver write still holds: it now latches them, but
+  nothing depends on their values.
+- (PR 13) Kernel patch `0011-media-ipu6-Handle-the-IPU4-CSI-2-frame-interrupts`
+  (PCI ID patch now 0012). Decision 3 as written: the IPU4 receiver
+  enable also enables the port's CSI2PART frame start/end interrupts of
+  VC 0–3 (`IPU4_CSI2_CSI2PART_NR_OF_VC` = 4, mask `0x3333`; EDGE,
+  LEVEL_NOT_PULSE 0, CLEAR, MASK, ENABLE, silicon lines 664–668, after
+  CSIRX) and `ipu4_isys_csi2_isr()` logs them with `dev_dbg()`
+  (`csi2-<port>: frame start|end, vc <n>`). They are not turned into
+  V4L2 events: the firmware's SOF/EOF responses already queue
+  `V4L2_EVENT_FRAME_SYNC` and advance the sequence (as on IPU4P, whose
+  ISR drops the CSI frame events for the same reason). The fork looks
+  up the stream per FS/FE and sends nothing (`#ifdef IPU6`), so a debug
+  log is all it did too. At stop the patch writes 0 to CSI2S2M
+  MASK/ENABLE and CSI2PART MASK/ENABLE (silicon lines 1078–1081, the
+  fork's order) after the CSIRX mask from PR 12; the driver never
+  enables CSI2S2M, it only masks it as the reference driver does.
+- (PR 13) `csi2-sof-irq` (dependency `stream-on`) passes on the
+  `csi2-0: frame start, vc 0` line in the stream boot's dmesg dump and
+  on a write check of CSI2PART EDGE/MASK/ENABLE/LEVEL_NOT_PULSE
+  (`0x164400-0x164408 0x164410-0x164418`) plus all of CSI2S2M
+  (`0x164600-0x164618`) against silicon lines 600–1113 (8 writes, whole
+  sequence). CSI2PART CLEAR is out: the ISR writes it per interrupt,
+  and the model also raises port 0's UNISPART bit for the first frame,
+  which it delivers on STREAM_START_AND_CAPTURE, i.e. before the CSI-2
+  subdev's `enable_streams` (upstream starts the firmware stream first),
+  so the guest writes CLEAR 0 there; silicon cannot see a frame before
+  the receiver is on. The second buffer's STREAM_CAPTURE comes after
+  the enable, which is the FS the test sees (one per boot; the model
+  never raises FE).
+- (PR 13) Gate check: without 0011 `csi2-sof-irq` FAILs (no frame start
+  line, `expected 8 writes, got 0`); with 0011 on the model from before
+  the core fix, the writes match but the FS line is missing (the status
+  read at BAR + `0x164408` returned 0). The other tests are unchanged
+  in both runs. Timings (4 cores, TCG, warm): full ladder ~110 s
+  (`vm-boot` 49 s incl. the kernel rebuild), `csi2-sof-irq` 0 s on the
+  shared stream boot.
+- (PR 13) After this step the remaining step is the cover letter
+  (PR 15): the PCI ID step (PR 14) moved to PR 8a.
