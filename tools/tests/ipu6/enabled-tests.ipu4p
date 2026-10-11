@@ -18,3 +18,7 @@ vm-boot
 # and stops at the missing intel/ipu/ipu4p_fw.bin until P4 (plan P2,
 # which also covers P3).
 module-load
+
+# Probe identifies 8a19 as IPU4P (requests intel/ipu/ipu4p_fw.bin)
+# (plan P4).
+probe-identify

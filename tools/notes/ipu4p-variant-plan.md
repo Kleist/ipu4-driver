@@ -74,9 +74,9 @@ commit, first in the step's PR.
 | PR | Content | `enabled-tests.ipu4p` gains | State |
 |---|---|---|---|
 | P1 | `vm-ipu6.yml` matrix leg `ipu4p` and `enabled-tests.ipu4p` with the static tests | `series-applies`, `build`, `checkpatch` | merged (#139) |
-| P2 | QEMU `variant=ipu4p` (PCI ID `8a19`); `run-vm.sh` maps the variant to `ipu_pci_id=` | `vm-boot`, `module-load` | in review |
+| P2 | QEMU `variant=ipu4p` (PCI ID `8a19`); `run-vm.sh` maps the variant to `ipu_pci_id=` | `vm-boot`, `module-load` | merged (#142) |
 | P3 | `module-load` for the variant (virt-sensor on the variant's device, as the IPU6 variant's V3 does) | `module-load` | folded into P2 |
-| P4 | Stage `intel/ipu/ipu4p_fw.bin`; `probe-identify` expects that file for `8a19` | `probe-identify` | |
+| P4 | Stage `intel/ipu/ipu4p_fw.bin`; `probe-identify` expects that file for `8a19` | `probe-identify` | in review |
 | P5 | Model: IPU4P PWR_STATE FSM and FREQ_CTL | `probe-buttress` | |
 | P6 | ISYS runtime resume on IPU4P: UNISPART SW IRQ bit 22, SIP0/SIP1 windows. Needs the IPU4 port's forced ISYS resume (its PR 9) | an IPU4P resume test (driver-observable, not trace-based) | |
 | P7 | Model: SysCom queue base register 8 | `fw-open` | |
@@ -109,3 +109,11 @@ commit, first in the step's PR.
 - (P2) First full-ladder run on ipu4p (TCG): `probe-identify` fails only
   because `ipu4p_fw.bin` isn't staged in the rootfs yet (P4); everything
   after it is SKIP.
+- (P4) The synthesized IPU4 blob loads and validates as `ipu4p_fw.bin`
+  unchanged. Probe then stops at the power-up: `Change power status
+  timeout with 0xa02003`, the model still reporting IPU4's PWR_STATE
+  layout (P5).
+- (P4) Ruslan's driver has its own `ipu4p-fw-isys.c` (separate
+  `ipu4p_fw_isys_*` send/proxy tokens), so "the ISYS firmware ABI is the
+  same as IPU4's" above needs checking before P7; the model's syscom
+  emulation may need IPU4P-specific token sizes.
