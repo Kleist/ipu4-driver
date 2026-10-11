@@ -12,7 +12,7 @@ Usage:
                                  memory_region_ops_write log line each
   ipu4p_writes.py --ranges SET   the BAR ranges they cover
 
-SET is probe-mmu or isys-irq.
+SET is probe-mmu, isys-irq or stream-on.
 """
 
 import sys
@@ -88,11 +88,44 @@ def isys_resume():
     return writes, ranges
 
 
+def stream_on():
+    """Receiver writes of ipu4p_isys_phy_set_power() on port 0.
+
+    CSI-2 port 0 at ISYS + ipu4p_port_offsets[0] (0x64300), its IRQ
+    controls at ISYS + IPU4P_ISYS_CSI_IRQ_CTRL{,0}_BASE(0) (0x66300,
+    0x66400). Left out: the timing and lane count (they follow the
+    sensor), the IRQ CLEAR registers (the ISR writes them per interrupt)
+    and the LTR/DID writes (0x68; set_iwake_ltrdid() derives them at run
+    time).
+    """
+    rx = 0x164300
+    ctrl, ctrl0 = 0x166300, 0x166400
+    active, errors = 1, 0xffff  # CSI_IRQ_ACTIVE, CSI_ERROR_MASK
+    # Stream on: RX_CONFIG |= DISABLE_BYTE_CLK_GATING | RELEASE_LP11
+    # (read back as 0), RX_ENABLE = 0, ipu4p_isys_csi_irq_enable() (EDGE,
+    # LEVEL_NOT_PULSE, MASK, ENABLE per block), then RX_ENABLE = 1.
+    writes = [(rx + 0x08, 0x3), (rx, 0)]
+    for base, mask in ((ctrl, active), (ctrl0, errors)):
+        writes += [(base, mask), (base + 0x14, 0), (base + 0x04, mask),
+                   (base + 0x10, mask)]
+    writes.append((rx, 1))
+    # Stream off: RX_CONFIG cleared, RX_ENABLE = 0,
+    # ipu4p_isys_csi_irq_disable() (MASK, ENABLE per block).
+    writes += [(rx + 0x08, 0), (rx, 0)]
+    for base in (ctrl, ctrl0):
+        writes += [(base + 0x04, 0), (base + 0x10, 0)]
+    ranges = [(rx, rx + 0x04), (rx + 0x08, rx + 0x0c)]
+    for base in (ctrl, ctrl0):
+        ranges += [(base, base + 0x0c), (base + 0x10, base + 0x18)]
+    return writes, ranges
+
+
 SETS = {
     # Probe: only the PSYS MMUs are initialised; the ISYS ones wait for
     # the ISYS resume.
     "probe-mmu": lambda: mmu_hw_init(PSYS_MMUS),
     "isys-irq": isys_resume,
+    "stream-on": stream_on,
 }
 
 
