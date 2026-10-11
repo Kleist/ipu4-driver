@@ -1,78 +1,65 @@
 # Intel IPU4 Kernel Driver
 
-Project state at a glance: <https://kleist.github.io/ipu4-driver/> — code coverage, MMIO divergence, register coverage, milestones, and latest CI status, refreshed on every push to `main` and after each `vm-smoke` run.
+Project state at a glance: <https://kleist.github.io/ipu4-driver/> — ladder results, code coverage, MMIO divergence and CI status.
 
-This repository contains an out of tree Linux kernel driver for IPU4. It is based on the upstream IPU6 driver which was upstreamed in 6.10. To make future synchronization and upstreaming possible, the code is kept as close as possible to the latest synchronized upstream IPU6 driver.
+A Linux driver for the Intel IPU4 (PCI `8086:5a88`), based on the upstream IPU6 driver (`drivers/media/pci/intel/ipu6/`, mainline since 6.10). The goal is upstream IPU4 support; there is no timeline.
 
-It is the intention over time to follow upstream kernel development, and submit this driver upstream as well, but there is no timeline for when this will happen.
+The driver does not work on any publicly available hardware as-is: at minimum the `ambu_ipu_bridge_*` calls must be replaced.
 
-## Caveats
-The driver currently does not work with any publicly available hardware. As a bare minimum, you need to change `ambu_ipu_bridge_*` calls to something else.
+## Two forms of the driver
 
-## How the IPU4 support is implemented
-Whenever there is a diffference between IPU4 and IPU6, it is either handled with `#ifdef IPU6` or with new functions that are named ipu4 instead of ipu6. The `IPU6` define It is not intended to be ever set, it is only there to minimize conflicts when backporting upstream changes. If you need a driver for IPU6, use the one in the kernel.
+- **Out-of-tree module** (`kernel/ipu4/`): the IPU6 driver with IPU4 differences behind `#ifdef IPU6` (never defined; marks the upstream code) or in parallel `ipu4_*` functions. Builds `intel-ipu4.ko` and `intel-ipu4-isys.ko` against 6.6 – 7.3 via the shims in `ipu4-compat.h`. Known to work on silicon.
+- **Upstreamable patch series** (`patches/ipu6-ipu4/`): IPU4 support added to the upstream `ipu6` driver as mailable patches, on top of Ruslan Bay's IPU4P series (`tools/ipu6/pin`, v7.3-rc4). Work in progress.
 
-## Supported Devices
-| IPU Version | PCI Device ID | Description |
-|-------------|---------------|-------------|
-| IPU4        | 0x5a88        | 4th Generation IPU |
+## Testing
 
-The driver currently only supports IPU4, not IPU4P.
+Everything runs in software: a patched QEMU (`tools/qemu-patches/`) emulates the IPU, a virtual sensor (`tools/virt-sensor/`) feeds it a test pattern, and register traffic is compared against a trace from real silicon (`data/trace.txt`).
 
-## Tested kernel versions
-* 6.6.111
-* 6.12.47
+### Test ladder (`vm-ipu6.yml`)
 
-## History
-This driver has it's origin in two different drivers:
-* The IPU6 driver which was upstreamed by Intel, see https://lore.kernel.org/all/?q=s:%22media:+ipu6:%22 and https://github.com/torvalds/linux/tree/master/drivers/media/pci/intel/ipu6 .
-* The IPU4 driver which was part of clear linux https://github.com/clearlinux-pkgs/linux-iot-lts2018
+`tools/tests/ipu6/ladder.sh` runs a fixed sequence of tests, each depending on the previous: series applies, build, checkpatch, VM boot, module load, probe (identify, buttress power-up, MMU, ISYS resume/IRQ), firmware open, stream on, captured pattern, CSI-2 frame-start IRQ. One file per test in `tools/tests/ipu6/tests.d/`.
 
-IPU4 support was hacked onto the IPU6 driver to work with 6.6 by @Kleist. See https://lore.kernel.org/all/e136389011517dbc65b30f6bf0b1a9c49ab4e599.camel@gmail.com/ for more information about this work. This work was shared in https://github.com/Kleist/linux/tree/kleist-v6.6-ipu4-hacks-1 .
+Each run is one *leg*: a driver under a QEMU model *variant* (`ipu4`, `ipu4p`, `ipu6`):
 
-It was recently updated to work as an out-of-tree module on 6.6 and 6.12 (and possibly working on some intermediate versions).
+| Driver (`IPU4_DRIVER`) | Tree | Variants run |
+|---|---|---|
+| `ipu4-out-of-tree` | `kernel/ipu4/` built against v7.3-rc4 | `ipu4` |
+| `ipu4p` | Ruslan's IPU4P tree, no series | `ipu4p` |
+| `ipu6` | unmodified mainline v7.3-rc4 | `ipu6` |
+| `ipu4-patches` (default) | Ruslan's tree + `patches/ipu6-ipu4/` | `ipu4`, `ipu4p`, `ipu6` |
 
-## Development & test harness
-
-A QEMU-based dev/test harness lives under `tools/`. It clones Linux at `v6.12` and QEMU at `v9.1.0`, seeds the driver into an in-tree path, and provides KUnit + full-VM smoke tests that run entirely in software.
-
-* [CLAUDE.md](CLAUDE.md) — the entry point: prerequisite apt packages, build/test commands, the upstream-IPU6 discipline, and the QEMU device-model workflow. Read this first when picking up the repo.
-* [STATUS.md](STATUS.md) — milestone state, layout, and the canonical "Running the harness" recipe.
-
-Quickstart on a fresh Ubuntu 24.04 / Debian box:
+The first three are baselines that tests and QEMU models are developed against; `ipu4-out-of-tree` is known to work, so a failure there points at the test or model. `ipu4-patches` must eventually pass everywhere its baselines do. Every test runs on every leg, but a leg only fails on tests listed in its `tools/tests/ipu6/enabled-tests.<driver>.<variant>`.
 
 ```bash
-sudo apt-get install -y \
-  build-essential bc bison flex libelf-dev libssl-dev kmod \
-  python3 python3-pip lcov qemu-system-x86 \
-  ninja-build pkg-config libglib2.0-dev libpixman-1-dev \
-  meson python3-venv busybox-static cpio gzip
-tools/bootstrap.sh
-tools/build.sh && tools/tests/kunit.sh
-tools/build-qemu.sh && tools/build-kernel.sh && tools/rootfs/build.sh
-IPU4_ACCEL=tcg tools/tests/streamon-smoke.sh    # full v4l2 capture-API walk
+tools/tests/ipu6/ladder.sh                                    # default leg
+IPU4_DRIVER=ipu6 IPU4_VARIANT=ipu6 tools/tests/ipu6/ladder.sh  # another leg
 ```
 
-## Upstream sync tooling
-* [tools/upstream/diff.sh](tools/upstream/diff.sh): regenerate `tools/notes/upstream-diff/summary.md`, a file-by-file divergence report against upstream `drivers/media/pci/intel/ipu6/` at the pinned tag — input for incrementally retiring `#ifdef IPU6` hunks.
-* [tools/upstream/watch.sh](tools/upstream/watch.sh): runs daily in CI (`.github/workflows/upstream-watch.yml`) — detects new upstream IPU6 commits on `linux-6.12.y` and `master`, tries cherry-picks, opens a triage PR.
+Plans: `tools/notes/ipu6-ipu4-plan.md` (the series), `ipu4-out-of-tree-plan.md`, `ipu4p-variant-plan.md`, `ipu6-variant-plan.md`.
 
-## Scripts
-The scripts added will not work out of the box, but should be seen as a source of inspiration for how one could work with porting this to other devices, or e.g. add IPU4P support.
+### Out-of-tree harness (`ci.yml`, `vm-smoke.yml`)
 
-For the scripts to work, the kernel should be configured with kernel/configs/mmiotrace.config (from the kernel tree)
+For `kernel/ipu4/` across stable kernels (`.github/kernel-pins/`: 6.12, 6.18, 7.3):
 
-* [trace_ipu4.sh](trace_ipu4.sh): Setup a stream with media-ctl and capture some frames using gstreamer or yavta
-* [trace_functions.sh](trace_functions.sh): Helper functions for trace_ipu4.sh
-* [split_trace.sh](split_trace.sh): Split a trace based on the markers inserted by trace_ipu4.sh
-* [postprocess_trace.py](postprocess_trace.py): Convert register addresses to register names
+- **Build + KUnit** on every pin: `tools/bootstrap.sh && tools/build.sh && tools/tests/kunit.sh`.
+- **VM smoke** (6.12 per PR, others weekly): boots the VM, walks the V4L2 capture API end to end (`streamon-smoke.sh`), records an mmiotrace and diffs it against silicon (`compare-mmio.sh`).
+- **pytest** (`tests/`) for the harness's own Python tooling.
 
-## Module Structure
+See [CLAUDE.md](CLAUDE.md) for prerequisites, all commands and CI details, and [STATUS.md](STATUS.md) for milestones.
 
-- **intel-ipu4**: Core driver module handling device discovery, initialization, and hardware management
-- **intel-ipu4-isys**: Input System module for camera interface and V4L2 video device support
-- **ambu-ipu-bridge**: Loads a proprietary driver for a tc358748 Toshiba MIPI Bridge driver.
+## Upstream sync
+
+- `tools/upstream/diff.sh` reports the divergence of `kernel/ipu4/` from upstream IPU6.
+- `tools/upstream/watch.sh` runs daily in CI and opens a PR with cherry-picks of new upstream IPU6 commits.
+
+## Hardware trace scripts
+
+`trace_ipu4.sh`, `trace_functions.sh`, `split_trace.sh` and `postprocess_trace.py` capture and annotate mmiotraces on real hardware (kernel built with `kernel/configs/mmiotrace.config`). They won't run as-is elsewhere; treat them as a reference.
+
+## History
+
+Derived from the upstream IPU6 driver and the IPU4 driver in Clear Linux ([linux-iot-lts2018](https://github.com/clearlinux-pkgs/linux-iot-lts2018)). IPU4 support was first hacked onto IPU6 on 6.6 ([lore](https://lore.kernel.org/all/e136389011517dbc65b30f6bf0b1a9c49ab4e599.camel@gmail.com/), [branch](https://github.com/Kleist/linux/tree/kleist-v6.6-ipu4-hacks-1)), then turned into this out-of-tree module.
 
 ## License
 
-This project is licensed under the GNU General Public License v2.0 (GPL-2.0-only). See the [LICENSE](LICENSE) file for details.
+GPL-2.0-only. See [LICENSE](LICENSE).
