@@ -209,3 +209,5 @@ shown not to break the other variants of the shared driver.
   also checks the sync MASK is only written 0. Both CLEAR registers are
   now written by the ISR at IRQ-dependent times, so `stream-on` leaves
   them out.
+- (After V11) The `probe-fw` placeholder was deleted: no variant implemented
+  it, and `fw-open` exercises the firmware load and open on every leg.
