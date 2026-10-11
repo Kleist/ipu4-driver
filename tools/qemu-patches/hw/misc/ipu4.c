@@ -11,8 +11,8 @@
  * ladder can run against other variants of the shared driver
  * (tools/notes/ipu6-variant-plan.md, tools/notes/ipu4p-variant-plan.md).
  * Besides the PCI device ID it switches the registers the driver reads
- * differently on that variant, each in its own ipu6v_*() / ipu4pv_*()
- * helper; everything else is IPU4's model.
+ * differently on that variant through the hooks in its ipu4_variants[]
+ * entry; everything else is IPU4's model.
  *
  * Register semantics are documented in tools/notes/registers.md as they
  * are inferred from the driver. Do not extend this file without adding
@@ -424,6 +424,7 @@ typedef struct QEMU_PACKED Ipu6vFwIsysRespInfo {
 } Ipu6vFwIsysRespInfo;
 
 QEMU_BUILD_BUG_ON(sizeof(Ipu4FwIsysRespInfo) != 64);
+QEMU_BUILD_BUG_ON(sizeof(Ipu6vFwIsysRespInfo) > sizeof(Ipu4FwIsysRespInfo));
 
 /* Mirror of ipu6_fw_syscom_config (kernel/ipu4/ipu6-fw-com.c:61). The
  * driver writes the IPU IOVA of an instance of this struct into
@@ -487,19 +488,33 @@ static const hwaddr ipu4_csi2_port_base[IPU4_CSI2_NUM_PORTS] = {
     IS_CSI2_BASE + 0x6c000, IS_CSI2_BASE + 0x6c800,
 };
 
-typedef enum Ipu4Variant {
-    IPU4_VARIANT_IPU4,
-    IPU4_VARIANT_IPU6,
-    IPU4_VARIANT_IPU4P,
-} Ipu4Variant;
+/* What a variant does differently from IPU4; one entry in ipu4_variants[]. */
+typedef struct Ipu4VariantInfo {
+    const char *name;
+    uint16_t device_id;
+    uint32_t (*pwr_state)(Ipu4State *s);
+    /* Lay out `resp` in the variant's response ABI; returns its size. */
+    size_t (*encode_resp)(const Ipu4FwIsysRespInfo *resp, void *out);
+    /* Optional: claim an access before the IPU4 register map sees it. */
+    bool (*mmio_read)(Ipu4State *s, hwaddr addr, uint64_t *val);
+    bool (*mmio_write)(Ipu4State *s, hwaddr addr, uint64_t val);
+    /* Optional: raise variant-only IRQ state for a delivered frame. */
+    void (*frame_irq)(Ipu4State *s);
+    /* DMEM register of the first SysCom queue pointer pair. */
+    unsigned int syscom_qpr_base;
+    /* UNISPART bit the firmware IRQ is raised on. */
+    uint32_t unispart_sw_irq;
+    /* The IPU4 DMEM window answers iwake proxy tokens. */
+    bool dmem_proxy;
+} Ipu4VariantInfo;
 
 struct Ipu4State {
     PCIDevice parent_obj;
     MemoryRegion bar0;
 
-    /* "variant" property; parsed into `variant` at realize. */
+    /* "variant" property; looked up in ipu4_variants[] at realize. */
     char *variant_name;
-    Ipu4Variant variant;
+    const Ipu4VariantInfo *v;
 
     /* Latched registers. */
     uint32_t btrs_ctrl;
@@ -739,10 +754,7 @@ static bool ipu4_load_queue_desc(Ipu4State *s, uint32_t array_iova,
 /* DMEM reg of stream 0's msg-send wr cursor (its rd cursor follows). */
 static unsigned int ipu4_msg_send_reg(Ipu4State *s)
 {
-    unsigned int base = s->variant == IPU4_VARIANT_IPU4P ?
-                        IPU4PV_SYSCOM_QPR_BASE_REG : SYSCOM_QPR_BASE_REG;
-
-    return base + 2 * IPU4_BASE_MSG_SEND_QUEUES;
+    return s->v->syscom_qpr_base + 2 * IPU4_BASE_MSG_SEND_QUEUES;
 }
 
 static Ipu4FwSysQueue *ipu4_get_send_queue(Ipu4State *s, unsigned int stream)
@@ -834,7 +846,13 @@ static bool ipu4_post_token(Ipu4State *s, Ipu4FwSysQueue *q,
     return true;
 }
 
-static Ipu6vFwIsysRespInfo ipu6v_resp_info(const Ipu4FwIsysRespInfo *resp)
+static size_t ipu4_encode_resp(const Ipu4FwIsysRespInfo *resp, void *out)
+{
+    memcpy(out, resp, sizeof(*resp));
+    return sizeof(*resp);
+}
+
+static size_t ipu6v_encode_resp(const Ipu4FwIsysRespInfo *resp, void *out)
 {
     Ipu6vFwIsysRespInfo r = {
         .buf_id = resp->buf_handle,
@@ -846,7 +864,8 @@ static Ipu6vFwIsysRespInfo ipu6v_resp_info(const Ipu4FwIsysRespInfo *resp)
         .pin_id = resp->pin_id,
     };
 
-    return r;
+    memcpy(out, &r, sizeof(r));
+    return sizeof(r);
 }
 
 /* Post a pre-filled response token on the msg-recv queue and raise
@@ -863,16 +882,10 @@ static void ipu4_post_response_full(Ipu4State *s,
                                     const Ipu4FwIsysRespInfo *resp)
 {
     Ipu4FwSysQueue *rq = ipu4_get_recv_queue(s);
-    bool posted;
+    uint8_t tok[sizeof(Ipu4FwIsysRespInfo)];
+    size_t len = s->v->encode_resp(resp, tok);
 
-    if (s->variant == IPU4_VARIANT_IPU6) {
-        Ipu6vFwIsysRespInfo r6 = ipu6v_resp_info(resp);
-
-        posted = ipu4_post_token(s, rq, &r6, sizeof(r6));
-    } else {
-        posted = ipu4_post_token(s, rq, resp, sizeof(*resp));
-    }
-    if (!posted) {
+    if (!ipu4_post_token(s, rq, tok, len)) {
         qemu_log_mask(LOG_UNIMP,
                       "ipu4: cannot post FW response type=%u stream=%u\n",
                       resp->type, resp->stream_handle);
@@ -885,8 +898,7 @@ static void ipu4_post_response_full(Ipu4State *s,
      * was called in realize() and pci_alloc_irq_vectors() runs at
      * driver probe, so msi_enabled() is reliably true by the time
      * the first response posts. */
-    s->is_unispart_irq_status |= s->variant == IPU4_VARIANT_IPU4P ?
-                                 IPU4PV_UNISPART_IRQ_SW : ISYS_UNISPART_IRQ_SW;
+    s->is_unispart_irq_status |= s->v->unispart_sw_irq;
     s->isr_status |= BTRS_ISR_IS_IRQ;
 
     if (msi_enabled(&s->parent_obj)) {
@@ -979,8 +991,8 @@ static void ipu4_deliver_frame(Ipu4State *s, uint8_t stream,
      * delivers a single frame, so a periodic QEMUTimer would only
      * add lifecycle complexity for the same observable behaviour. */
     s->csi2[0].part_status |= CSI2_PART_IRQ_FS_VC0;
-    if (s->variant == IPU4_VARIANT_IPU6) {
-        s->ipu6v_csi_err |= 1u << 0;    /* see IPU6V_CSI0_IRQ_STATUS */
+    if (s->v->frame_irq) {
+        s->v->frame_irq(s);
     }
     s->is_unispart_irq_status |= ISYS_UNISPART_IRQ_CSI2_PORT0;
 
@@ -1225,6 +1237,21 @@ static bool ipu4_csi2_port_write(Ipu4Csi2Port *p, hwaddr reg_off,
     return false;
 }
 
+/* PWR_RDY and HH_DONE are tied high: the buttress and TSC-sync FSMs
+ * are not modelled. */
+static uint32_t ipu4_pwr_state(Ipu4State *s)
+{
+    uint32_t val = BTRS_PWR_STATE_PWR_RDY | BTRS_PWR_STATE_HH_DONE;
+
+    if (s->is_powered) {
+        val |= BTRS_PWR_STATE_IS_RDY;
+    }
+    if (s->ps_powered) {
+        val |= BTRS_PWR_STATE_PS_PWR_UP;
+    }
+    return val;
+}
+
 /*
  * ipu6 variant: the upstream driver polls PWR_STATE for a 2-bit power
  * status per island instead of IPU4's FSM fields
@@ -1296,6 +1323,11 @@ static uint32_t ipu4pv_pwr_state(Ipu4State *s)
 #define IPU6V_CSI0_IRQ_STATUS           0x220088
 #define IPU6V_CSI0_IRQ_CLEAR            0x22008c
 #define IPU6V_CSI_CTRL0_IRQ_STATUS      0x238208
+
+static void ipu6v_frame_irq(Ipu4State *s)
+{
+    s->ipu6v_csi_err |= 1u << 0;    /* see IPU6V_CSI0_IRQ_STATUS */
+}
 
 static bool ipu6v_is_dmem(hwaddr addr, unsigned int *reg)
 {
@@ -1437,12 +1469,44 @@ static bool ipu6v_mmio_write(Ipu4State *s, hwaddr addr, uint64_t val)
     return true;
 }
 
+static const Ipu4VariantInfo ipu4_variants[] = {
+    {
+        .name = "ipu4",
+        .device_id = IPU4_PCI_DEVICE_ID,
+        .pwr_state = ipu4_pwr_state,
+        .encode_resp = ipu4_encode_resp,
+        .syscom_qpr_base = SYSCOM_QPR_BASE_REG,
+        .unispart_sw_irq = ISYS_UNISPART_IRQ_SW,
+    },
+    {
+        .name = "ipu4p",
+        .device_id = IPU4P_PCI_DEVICE_ID,
+        .pwr_state = ipu4pv_pwr_state,
+        .encode_resp = ipu4_encode_resp,
+        .syscom_qpr_base = IPU4PV_SYSCOM_QPR_BASE_REG,
+        .unispart_sw_irq = IPU4PV_UNISPART_IRQ_SW,
+        .dmem_proxy = true,
+    },
+    {
+        .name = "ipu6",
+        .device_id = IPU6_PCI_DEVICE_ID,
+        .pwr_state = ipu6v_pwr_state,
+        .encode_resp = ipu6v_encode_resp,
+        .mmio_read = ipu6v_mmio_read,
+        .mmio_write = ipu6v_mmio_write,
+        .frame_irq = ipu6v_frame_irq,
+        /* IPU4 values; IPU6's own SysCom and IRQ live in ipu6v_mmio_*(). */
+        .syscom_qpr_base = SYSCOM_QPR_BASE_REG,
+        .unispart_sw_irq = ISYS_UNISPART_IRQ_SW,
+    },
+};
+
 static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
 {
     Ipu4State *s = IPU4(opaque);
     uint64_t val = 0;
 
-    if (s->variant == IPU4_VARIANT_IPU6 && ipu6v_mmio_read(s, addr, &val)) {
+    if (s->v->mmio_read && s->v->mmio_read(s, addr, &val)) {
         return val;
     }
 
@@ -1466,27 +1530,7 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
         val = s->fw_reset_ctl;
         break;
     case BTRS_REG_PWR_STATE:
-        if (s->variant == IPU4_VARIANT_IPU6) {
-            val = ipu6v_pwr_state(s);
-            s->pwr_state = val;
-            break;
-        }
-        if (s->variant == IPU4_VARIANT_IPU4P) {
-            val = ipu4pv_pwr_state(s);
-            s->pwr_state = val;
-            break;
-        }
-        /* Compose the PWR_STATE word from the per-island FSM flags
-         * (Step 5). PWR_RDY and HH_DONE are tied high — buttress
-         * itself and TSC-sync are always considered ready since we
-         * don't model their respective FSMs. */
-        val = BTRS_PWR_STATE_PWR_RDY | BTRS_PWR_STATE_HH_DONE;
-        if (s->is_powered) {
-            val |= BTRS_PWR_STATE_IS_RDY;
-        }
-        if (s->ps_powered) {
-            val |= BTRS_PWR_STATE_PS_PWR_UP;
-        }
+        val = s->v->pwr_state(s);
         s->pwr_state = val;
         break;
     case BTRS_REG_ISR_STATUS:
@@ -1635,7 +1679,7 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 {
     Ipu4State *s = IPU4(opaque);
 
-    if (s->variant == IPU4_VARIANT_IPU6 && ipu6v_mmio_write(s, addr, val)) {
+    if (s->v->mmio_write && s->v->mmio_write(s, addr, val)) {
         return;
     }
 
@@ -1823,8 +1867,7 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
             s->is_dmem[reg] = val;
 
             /* ipu4p's driver also sends iwake proxy tokens. */
-            if (s->variant == IPU4_VARIANT_IPU4P &&
-                ipu6v_proxy_send(s, reg, val)) {
+            if (s->v->dmem_proxy && ipu6v_proxy_send(s, reg, val)) {
                 break;
             }
 
@@ -1890,21 +1933,22 @@ static const MemoryRegionOps ipu4_mmio_ops = {
 static void ipu4_realize(PCIDevice *pdev, Error **errp)
 {
     Ipu4State *s = IPU4(pdev);
+    const char *name = s->variant_name ? s->variant_name : "ipu4";
+    unsigned int i;
 
-    if (!s->variant_name || !strcmp(s->variant_name, "ipu4")) {
-        s->variant = IPU4_VARIANT_IPU4;
-    } else if (!strcmp(s->variant_name, "ipu6")) {
-        s->variant = IPU4_VARIANT_IPU6;
-        pci_config_set_device_id(pdev->config, IPU6_PCI_DEVICE_ID);
-    } else if (!strcmp(s->variant_name, "ipu4p")) {
-        s->variant = IPU4_VARIANT_IPU4P;
-        pci_config_set_device_id(pdev->config, IPU4P_PCI_DEVICE_ID);
-    } else {
+    s->v = NULL;
+    for (i = 0; i < ARRAY_SIZE(ipu4_variants); i++) {
+        if (!strcmp(name, ipu4_variants[i].name)) {
+            s->v = &ipu4_variants[i];
+        }
+    }
+    if (!s->v) {
         error_setg(errp,
                    "unknown variant '%s' (expected ipu4, ipu4p or ipu6)",
-                   s->variant_name);
+                   name);
         return;
     }
+    pci_config_set_device_id(pdev->config, s->v->device_id);
 
     pci_config_set_interrupt_pin(pdev->config, 1);
 
