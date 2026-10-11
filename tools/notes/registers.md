@@ -16,6 +16,12 @@ Columns:
   `inferred` (deduced from driver code), `guess` (best effort, flagged
   for hardware validation).
 
+Each variant lists its register blocks and their offsets
+(`ipu4_blocks[]` for ipu4 and ipu4p, `ipu6v_blocks[]` for ipu6). An address
+outside every block of the variant's map, or one its block doesn't handle,
+is logged as unimplemented and reads 0; the ipu6 variant shares only the
+buttress with IPU4.
+
 | Offset | Block    | Driver caller                           | Model behavior                                              | Confidence |
 |--------|----------|-----------------------------------------|-------------------------------------------------------------|------------|
 | 0x008  | Buttress | `ipu6-buttress.c` WDT kick              | Write: ignored (watchdog kick). Read: `0xfff0fff` (silicon's constant from data/trace.txt). | inferred   |
@@ -42,12 +48,12 @@ Columns:
 | 0x308  | CSE IPC  | `ipu6-buttress.c` CSE2IUDATA0           | CSE→IU response data slot. Latched; only set when the model synthesises a fake CSE response (currently never, since auth is short-circuited). | inferred |
 | 0x30c  | CSE IPC  | `ipu6-buttress.c` CSE2IUCSR             | CSR_IN. Reads return the model-driven CSE response tokens (set in the CSR_OUT write handler — see 0x108). Driver writes are W1C: each bit the driver writes a 1 to is cleared. | inferred |
 | 0x314  | Buttress | `ipu6-buttress.c` SKU                   | Read: 0 (unfused).                                          | guess      |
-| 0x4000 | Buttress | `ipu6-fw-com.c` FW boot param SYSCOM_CONFIG_ID (ipu6 variant) | `ipu6v_mmio_write()`: latches the SysCom config IOVA (IPU4 has it in DMEM[1]) and drops the cached queue descriptors. | inferred (ipu6: driver-derived) |
+| 0x4000 | Buttress | `ipu6-fw-com.c` FW boot param SYSCOM_CONFIG_ID (ipu6 variant) | `ipu6v_boot_write()`: latches the SysCom config IOVA (IPU4 has it in DMEM[1]) and drops the cached queue descriptors. | inferred (ipu6: driver-derived) |
 | 0x4004 | Buttress | `ipu6-fw-com.c` FW boot param SYSCOM_STATE_ID (ipu6 variant) | Read: always SYSCOM_STATE_READY. Write UNINIT resets the send-cursor tracking (IPU4: DMEM[2]). | inferred (ipu6: driver-derived) |
 | 0x17c000 | ISYS   | `ipu6-isys.c` unispart IRQ_EDGE         | R/W latched.                                                | inferred   |
 | 0x17c004 | ISYS   | `ipu6-isys.c` unispart IRQ_MASK         | R/W latched.                                                | inferred   |
 | 0x17c008 | ISYS   | `ipu6-isys.c` unispart IRQ_STATUS       | Read: `status & enable`. `status` stays 0 without a backing ISYS frame generator; silicon cycles 0/0x40000000 as real IRQs fire, which compare.py will flag as a legitimate value_mismatch until the ISYS simulator lands. A posted FW response sets the SW bit: BIT(30) on IPU4, BIT(22) on the ipu4p variant. | inferred   |
-| 0x166308 | ISYS (ipu4p variant) | `ipu4p-isys-csi2-regs.h` CSI port 0 IRQ CTRL STATUS | Read: ACTIVE (bit 0) while a port 0 receiver error is pending (`ipu4pv_mmio_read()`); other CTRL writes absorbed. | inferred (ipu4p: driver-derived) |
+| 0x166308 | ISYS (ipu4p variant) | `ipu4p-isys-csi2-regs.h` CSI port 0 IRQ CTRL STATUS | Read: ACTIVE (bit 0) while a port 0 receiver error is pending (`ipu4pv_csi_err_read()`, listed ahead of IPU4's port 2 block in `ipu4p_blocks[]`); other CTRL writes absorbed by the port 2 block. | inferred (ipu4p: driver-derived) |
 | 0x166408-0x16640c | ISYS (ipu4p variant) | `ipu4p-isys-csi2-regs.h` CSI port 0 IRQ CTRL0 STATUS/CLEAR | Status: the pending receiver errors; each delivered frame sets bit 0 (corrected packet header error), CLEAR is write-1-to-clear. | inferred (ipu4p: driver-derived) |
 | 0x166d08 | ISYS (ipu4p variant) | `ipu4p-isys-csi2-regs.h` SIP0 IRQ STATUS | Read: SIP0_CSI2_IRQ (bit 3) while a port 0 receiver error is pending, so `ipu4p_isys_isr()` dispatches port 0. | inferred (ipu4p: driver-derived) |
 | 0x17c00c | ISYS   | `ipu6-isys.c` unispart IRQ_CLEAR        | Write-1-to-clear bits of `status`.                          | inferred   |
@@ -66,7 +72,7 @@ Columns:
 | 0x400000 | PSYS    | `ipu6-fw-isys.c` PSYS SPC_STATUS_CTRL    | Same shape as the ISYS SPC reg above. Touched by the PSYS firmware-init path mirror. | inferred |
 | 0x1e0000-0x1e04ff | MMU | `ipu6-mmu.c` ISYS MMU page-table window | Flat `uint32_t[0x140]` array, plain R/W latches, plus Step 2 latches sub-block 0's `REG_L1_PHYS` (BAR+0x1e0004) into `is_mmu_l1_pfn` so the syscom command parser can walk IOVA → host-phys for `pci_dma_read` / `pci_dma_write`. Silicon does 208 writes here during FW bringup (page directory + L1/L2 entries + invalidate bits) and no reads. Streaming (Step 4 onwards) may need `pci_dma_rw()` off the PDE writes for frame buffers. | inferred |
 | 0x4b0000-0x4b09ff | MMU | `ipu6-mmu.c` PSYS MMU page-table window | Same shape as the ISYS MMU — flat `uint32_t[0x280]` latch. 200 silicon writes, no reads. | inferred |
-| 0x200000-0x2000ff | ISYS DMEM (ipu6 variant) | `ipu6-fw-com.c` SysCom registers | `ipu6v_mmio_*()` → the shared `ipu4_syscom_*()`: PKG_DIR, TUNIT_CFG, COMMAND, IRQ, then queue cursor pairs from register 4; each queue is found by its descriptor's wr_reg/rd_reg. A stream send queue's rd cursor reads as its wr cursor; a write to the proxy send queue's wr cursor (input queue 0) is consumed and answered on proxy output queue 0 (request_id, no error); a stream send queue bump goes to the IPU4 token handler. Responses are written in IPU6's 48-byte `ipu6_fw_isys_resp_info_abi` layout. | inferred (ipu6: driver-derived) |
+| 0x200000-0x2000ff | ISYS DMEM (ipu6 variant) | `ipu6-fw-com.c` SysCom registers | `ipu6v_dmem_*()` → the shared `ipu4_syscom_*()`: PKG_DIR, TUNIT_CFG, COMMAND, IRQ, then queue cursor pairs from register 4; each queue is found by its descriptor's wr_reg/rd_reg. A stream send queue's rd cursor reads as its wr cursor; a write to the proxy send queue's wr cursor (input queue 0) is consumed and answered on proxy output queue 0 (request_id, no error); a stream send queue bump goes to the IPU4 token handler. Responses are written in IPU6's 48-byte `ipu6_fw_isys_resp_info_abi` layout. | inferred (ipu6: driver-derived) |
 | 0x210000 | ISYS SPC (ipu6 variant) | `ipu6-fw-isys.c` query_sp / start_sp | As IPU4's 0x100000: latched; reads READY set, START clear. | inferred (ipu6: driver-derived) |
 | 0x220088 / 0x22008c, 0x238208 | CSI-2 port 0 / CSI top (ipu6 variant) | `ipu6-isys.c` isys_isr, `ipu6-isys-csi2.c` ipu6_isys_register_errors | Port 0 IRQ_CSI STATUS latches bit 0 (corrected packet header error) with each delivered frame, CLEAR is W1C; CTRL0 STATUS reads port 0's bits (0x3) while it is set. Covers upstream's CSI-2 error IRQ path. | inferred (ipu6: driver-derived) |
 | 0x238008 / 0x23800c (+8 per PHY) | CSI-2 hub (ipu6 variant) | `ipu6-isys-mcd-phy.c` GPREG_PHY_CTL / PHY_STATUS | CTL latched per MCD PHY; STATUS reads POWER_ACK (bit 0) while CTL PWR_EN (bit 0) is set and READY (bit 4) while CTL RESET (bit 4) is set. | inferred (ipu6: driver-derived) |

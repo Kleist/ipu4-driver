@@ -96,8 +96,9 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
  * device, not a handler bug.
  */
 #define IS_UNISPART_BASE                 0x17c000
-#define IS_UNISPART_SW_IRQ               (IS_UNISPART_BASE + 0x414)
-#define IS_UNISPART_SW_IRQ_MUX           (IS_UNISPART_BASE + 0x418)
+#define IS_UNISPART_SIZE                 0x41c
+#define UNISPART_REG_SW_IRQ              0x414
+#define UNISPART_REG_SW_IRQ_MUX          0x418
 
 /* CSI2 ports. Each of the 6 ports has the same register layout
  * (kernel/ipu4/ipu4-platform-isys-csi2-reg.h:19-56) but lives at an
@@ -156,7 +157,8 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
  */
 #define IS_DMEM_BASE                     0x108000
 #define IS_DMEM_SIZE                     0x100
-#define IS_DMEM_SYSCOM_STATE             (IS_DMEM_BASE + 0x008)
+#define DMEM_REG_SYSCOM_CONFIG           1
+#define DMEM_REG_SYSCOM_STATE            2
 
 /* SYSCOM_STATE values (kernel/ipu4/ipu6-fw-com.c:44). The driver
  * writes UNINIT and polls SYSCOM_STATE until it reads READY before
@@ -184,6 +186,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
  */
 #define IS_SPC_STATUS_CTRL               0x100000
 #define PS_SPC_STATUS_CTRL               0x400000
+#define SPC_SIZE                         0x100
 #define SPC_STATUS_START                 (1u << 1)
 #define SPC_STATUS_READY                 (1u << 5)
 
@@ -257,7 +260,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
  * stored in the syscom config (DMEM[1]) and the queue descriptor table
  * into host physical addresses for `pci_dma_read` / `pci_dma_write`.
  */
-#define IS_MMU_SUB0_REG_L1_PHYS          (IS_MMU_BASE + 0x004)
+#define MMU_REG_L1_PHYS                  0x004
 #define ISP_PADDR_SHIFT                  12
 #define ISP_PAGE_MASK                    0xfffu
 #define ISP_L1PT_SHIFT                   22
@@ -437,16 +440,24 @@ typedef struct Ipu4Csi2Port {
     Ipu4IrqCtrl part, rx, s2m;
 } Ipu4Csi2Port;
 
-/* CSI2 port BAR offsets (ISYS base + port offset) — irregular because
- * ports 4 and 5 share a 0x1000 block (ports 0..3 are spaced 0x1000
- * apart, ports 4 and 5 are spaced 0x800). Order matches
- * IPU_CSI_PORT_NUM in kernel/ipu4/ipu6-isys-csi2.c. */
-#define IS_CSI2_BASE                     0x100000
-static const hwaddr ipu4_csi2_port_base[IPU4_CSI2_NUM_PORTS] = {
-    IS_CSI2_BASE + 0x64000, IS_CSI2_BASE + 0x65000,
-    IS_CSI2_BASE + 0x66000, IS_CSI2_BASE + 0x67000,
-    IS_CSI2_BASE + 0x6c000, IS_CSI2_BASE + 0x6c800,
-};
+/*
+ * BAR layout: each variant lists its register blocks and their offsets,
+ * and a block's handlers see block-relative offsets. An access no block
+ * claims, or one its handler doesn't implement, is logged as unimplemented
+ * and reads 0. The BAR stays one MemoryRegion so the ladder's write checks
+ * find every access as 'ipu4-bar0' in the memory_region_ops_write trace.
+ */
+typedef struct Ipu4BlockOps {
+    const char *name;
+    bool (*read)(Ipu4State *s, unsigned int idx, hwaddr off, uint64_t *val);
+    bool (*write)(Ipu4State *s, unsigned int idx, hwaddr off, uint64_t val);
+} Ipu4BlockOps;
+
+typedef struct Ipu4BlockMap {
+    const Ipu4BlockOps *ops;
+    hwaddr base, size;
+    unsigned int idx;   /* instance: CSI-2 port, or 0 ISYS / 1 PSYS */
+} Ipu4BlockMap;     /* blocks may overlap; the first one listed wins */
 
 /* What a variant does differently from IPU4; one entry in ipu4_variants[]. */
 typedef struct Ipu4VariantInfo {
@@ -455,9 +466,8 @@ typedef struct Ipu4VariantInfo {
     uint32_t (*pwr_state)(Ipu4State *s);
     /* Lay out `resp` in the variant's response ABI; returns its size. */
     size_t (*encode_resp)(const Ipu4FwIsysRespInfo *resp, void *out);
-    /* Optional: claim an access before the IPU4 register map sees it. */
-    bool (*mmio_read)(Ipu4State *s, hwaddr addr, uint64_t *val);
-    bool (*mmio_write)(Ipu4State *s, hwaddr addr, uint64_t val);
+    const Ipu4BlockMap *blocks;
+    unsigned int n_blocks;
     /* Optional: raise variant-only IRQ state for a delivered frame. */
     void (*frame_irq)(Ipu4State *s);
     /* UNISPART bit the firmware IRQ is raised on. */
@@ -1170,28 +1180,6 @@ static void ipu4_syscom_write(Ipu4State *s, unsigned int reg, uint32_t val)
     }
 }
 
-/* Resolve a BAR-relative address into (port_index, register_offset)
- * for the CSI2 region. Returns -1 if the address isn't within any
- * port's 0x1000 / 0x800 window. */
-static int ipu4_csi2_resolve(hwaddr addr, hwaddr *out_offset)
-{
-    /* Ports 0..3 each cover a 0x1000 window; ports 4 and 5 split a
-     * 0x1000 window into two 0x800 halves. */
-    static const hwaddr port_size[IPU4_CSI2_NUM_PORTS] = {
-        0x1000, 0x1000, 0x1000, 0x1000, 0x800, 0x800,
-    };
-    unsigned int i;
-
-    for (i = 0; i < IPU4_CSI2_NUM_PORTS; i++) {
-        hwaddr base = ipu4_csi2_port_base[i];
-        if (addr >= base && addr < base + port_size[i]) {
-            *out_offset = addr - base;
-            return (int)i;
-        }
-    }
-    return -1;
-}
-
 /* `masked`: STATUS reads as status & enable (CSI-2) instead of the raw
  * status (UNISPART). CLEAR is write-1-to-clear; the rest latch. */
 static bool ipu4_irq_read(const Ipu4IrqCtrl *c, hwaddr off, bool masked,
@@ -1347,243 +1335,276 @@ static uint32_t ipu4pv_pwr_state(Ipu4State *s)
 
 /* ipu6 variant: the ISYS firmware interface at IPU6's addresses; see
  * tools/notes/registers.md. Queues are found by their descriptors. */
-#define IPU6V_BTRS_SYSCOM_CONFIG        0x4000
-#define IPU6V_BTRS_SYSCOM_STATE         0x4004
+#define IPU6V_BOOT_BASE                 0x4000    /* buttress boot params */
+#define IPU6V_BOOT_SYSCOM_CONFIG        0x0
+#define IPU6V_BOOT_SYSCOM_STATE         0x4
 #define IPU6V_IS_DMEM_BASE              0x200000
 #define IPU6V_IS_SPC_STATUS_CTRL        0x210000
-#define IPU6V_IS_MMU0_L1_PHYS           0x2e0004
-#define IPU6V_IS_UNISPART_IRQ_STATUS    0x27c008
-#define IPU6V_IS_UNISPART_IRQ_CLEAR     0x27c00c
+#define IPU6V_IS_MMU0_BASE              0x2e0000
+#define IPU6V_IS_UNISPART_BASE          0x27c000
 #define IPU6V_UNISPART_IRQ_SW           (1u << 22)
 /* MCD PHY power: STATUS acks PWR_EN with POWER_ACK and RESET with READY. */
-#define IPU6V_PHY_CTL(id)               (0x238008 + (id) * 8)
-#define IPU6V_PHY_STATUS(id)            (0x23800c + (id) * 8)
+#define IPU6V_PHY_BASE                  0x238000
+#define IPU6V_PHY_CTL(id)               (0x008 + (id) * 8)
+#define IPU6V_PHY_STATUS(id)            (0x00c + (id) * 8)
 #define IPU6V_PHY_CTL_PWR_EN            (1u << 0)
 #define IPU6V_PHY_CTL_RESET             (1u << 4)
 /* CSI-2 port 0 IRQ_CSI status/clear and the CSI top CTRL0 status; each
  * delivered frame reports a corrected packet header error (bit 0). */
-#define IPU6V_CSI0_IRQ_STATUS           0x220088
-#define IPU6V_CSI0_IRQ_CLEAR            0x22008c
-#define IPU6V_CSI_CTRL0_IRQ_STATUS      0x238208
+#define IPU6V_CSI0_IRQ_BASE             0x220088
+#define IPU6V_CSI0_IRQ_STATUS           0x0
+#define IPU6V_CSI0_IRQ_CLEAR            0x4
+#define IPU6V_CSI_CTRL0_IRQ_STATUS      0x208     /* in the PHY block */
 
 static void ipu6v_frame_irq(Ipu4State *s)
 {
     s->ipu6v_csi_err |= 1u << 0;    /* see IPU6V_CSI0_IRQ_STATUS */
 }
 
-static bool ipu6v_is_dmem(hwaddr addr, unsigned int *reg)
+static bool ipu6v_boot_read(Ipu4State *s, unsigned int idx, hwaddr off,
+                            uint64_t *val)
 {
-    if (addr < IPU6V_IS_DMEM_BASE ||
-        addr >= IPU6V_IS_DMEM_BASE + IS_DMEM_SIZE) {
-        return false;
+    switch (off) {
+    case IPU6V_BOOT_SYSCOM_CONFIG:
+        *val = s->syscom_config_iova;
+        return true;
+    case IPU6V_BOOT_SYSCOM_STATE:
+        *val = SYSCOM_STATE_READY;
+        return true;
     }
-    *reg = (addr - IPU6V_IS_DMEM_BASE) / 4;
+    return false;
+}
+
+static bool ipu6v_boot_write(Ipu4State *s, unsigned int idx, hwaddr off,
+                             uint64_t val)
+{
+    switch (off) {
+    case IPU6V_BOOT_SYSCOM_CONFIG:
+        ipu4_syscom_set_config(s, val);
+        return true;
+    case IPU6V_BOOT_SYSCOM_STATE:
+        ipu4_syscom_set_state(s, val);
+        return true;
+    }
+    return false;
+}
+
+static bool ipu6v_dmem_read(Ipu4State *s, unsigned int idx, hwaddr off,
+                            uint64_t *val)
+{
+    *val = ipu4_syscom_read(s, off / 4);
     return true;
 }
 
-static bool ipu6v_mmio_read(Ipu4State *s, hwaddr addr, uint64_t *val)
+static bool ipu6v_dmem_write(Ipu4State *s, unsigned int idx, hwaddr off,
+                             uint64_t val)
 {
-    unsigned int reg;
+    ipu4_syscom_write(s, off / 4, val);
+    return true;
+}
 
-    switch (addr) {
-    case IPU6V_BTRS_SYSCOM_CONFIG:
-        *val = s->syscom_config_iova;
-        return true;
-    case IPU6V_BTRS_SYSCOM_STATE:
-        *val = SYSCOM_STATE_READY;
-        return true;
-    case IPU6V_IS_SPC_STATUS_CTRL:
-        *val = (s->is_spc_status_ctrl & ~SPC_STATUS_START) | SPC_STATUS_READY;
-        return true;
-    case IPU6V_IS_UNISPART_IRQ_STATUS:
-        *val = s->unispart.status & ISYS_UNISPART_IRQ_SW ?
-               IPU6V_UNISPART_IRQ_SW : 0;
-        return true;
+static bool ipu6v_csi0_irq_read(Ipu4State *s, unsigned int idx, hwaddr off,
+                                uint64_t *val)
+{
+    if (off != IPU6V_CSI0_IRQ_STATUS) {
+        return false;
+    }
+    *val = s->ipu6v_csi_err;
+    return true;
+}
+
+static bool ipu6v_csi0_irq_write(Ipu4State *s, unsigned int idx, hwaddr off,
+                                 uint64_t val)
+{
+    if (off != IPU6V_CSI0_IRQ_CLEAR) {
+        return false;
+    }
+    s->ipu6v_csi_err &= ~(uint32_t)val;
+    return true;
+}
+
+static bool ipu6v_phy_read(Ipu4State *s, unsigned int idx, hwaddr off,
+                           uint64_t *val)
+{
+    switch (off) {
     case IPU6V_PHY_CTL(0):
     case IPU6V_PHY_CTL(1):
-        *val = s->ipu6v_phy_ctl[(addr - IPU6V_PHY_CTL(0)) / 8];
+        *val = s->ipu6v_phy_ctl[(off - IPU6V_PHY_CTL(0)) / 8];
         return true;
     case IPU6V_PHY_STATUS(0):
     case IPU6V_PHY_STATUS(1):
-        *val = s->ipu6v_phy_ctl[(addr - IPU6V_PHY_STATUS(0)) / 8] &
+        *val = s->ipu6v_phy_ctl[(off - IPU6V_PHY_STATUS(0)) / 8] &
                (IPU6V_PHY_CTL_PWR_EN | IPU6V_PHY_CTL_RESET);
-        return true;
-    case IPU6V_CSI0_IRQ_STATUS:
-        *val = s->ipu6v_csi_err;
         return true;
     case IPU6V_CSI_CTRL0_IRQ_STATUS:
         *val = s->ipu6v_csi_err ? 0x3 : 0;   /* port 0's two bits */
         return true;
     }
-    if (!ipu6v_is_dmem(addr, &reg)) {
-        return false;
-    }
-    *val = ipu4_syscom_read(s, reg);
-    return true;
+    return false;
 }
 
-static bool ipu6v_mmio_write(Ipu4State *s, hwaddr addr, uint64_t val)
+static bool ipu6v_phy_write(Ipu4State *s, unsigned int idx, hwaddr off,
+                            uint64_t val)
 {
-    unsigned int reg;
-
-    switch (addr) {
-    case IPU6V_BTRS_SYSCOM_CONFIG:
-        ipu4_syscom_set_config(s, val);
-        return true;
-    case IPU6V_BTRS_SYSCOM_STATE:
-        ipu4_syscom_set_state(s, val);
-        return true;
-    case IPU6V_IS_SPC_STATUS_CTRL:
-        s->is_spc_status_ctrl = val;
-        return true;
-    case IPU6V_IS_MMU0_L1_PHYS:
-        s->is_mmu_l1_pfn = val;
-        return true;
-    case IPU6V_IS_UNISPART_IRQ_CLEAR:
-        if (val & IPU6V_UNISPART_IRQ_SW) {
-            s->unispart.status &= ~ISYS_UNISPART_IRQ_SW;
-        }
-        return true;
+    switch (off) {
     case IPU6V_PHY_CTL(0):
     case IPU6V_PHY_CTL(1):
-        s->ipu6v_phy_ctl[(addr - IPU6V_PHY_CTL(0)) / 8] = val;
-        return true;
-    case IPU6V_CSI0_IRQ_CLEAR:
-        s->ipu6v_csi_err &= ~(uint32_t)val;
+        s->ipu6v_phy_ctl[(off - IPU6V_PHY_CTL(0)) / 8] = val;
         return true;
     }
-    if (!ipu6v_is_dmem(addr, &reg)) {
+    return false;
+}
+
+/* The model raises the firmware IRQ on IPU4's bit; IPU6 reports BIT(22). */
+static bool ipu6v_unispart_read(Ipu4State *s, unsigned int idx, hwaddr off,
+                                uint64_t *val)
+{
+    if (off != IPU4_IRQ_STATUS) {
         return false;
     }
-    ipu4_syscom_write(s, reg, val);
+    *val = s->unispart.status & ISYS_UNISPART_IRQ_SW ?
+           IPU6V_UNISPART_IRQ_SW : 0;
     return true;
 }
+
+static bool ipu6v_unispart_write(Ipu4State *s, unsigned int idx, hwaddr off,
+                                 uint64_t val)
+{
+    if (off != IPU4_IRQ_CLEAR) {
+        return false;
+    }
+    if (val & IPU6V_UNISPART_IRQ_SW) {
+        s->unispart.status &= ~ISYS_UNISPART_IRQ_SW;
+    }
+    return true;
+}
+
+/* Only the L1 page-table pfn is needed, for the IOVA walker. */
+static bool ipu6v_mmu_write(Ipu4State *s, unsigned int idx, hwaddr off,
+                            uint64_t val)
+{
+    if (off != MMU_REG_L1_PHYS) {
+        return false;
+    }
+    s->is_mmu_l1_pfn = val;
+    return true;
+}
+
+static const Ipu4BlockOps ipu6v_boot_ops = {
+    "boot-params", ipu6v_boot_read, ipu6v_boot_write,
+};
+static const Ipu4BlockOps ipu6v_dmem_ops = {
+    "isys-dmem", ipu6v_dmem_read, ipu6v_dmem_write,
+};
+static const Ipu4BlockOps ipu6v_csi0_irq_ops = {
+    "csi2-0-irq", ipu6v_csi0_irq_read, ipu6v_csi0_irq_write,
+};
+static const Ipu4BlockOps ipu6v_phy_ops = {
+    "csi2-phy", ipu6v_phy_read, ipu6v_phy_write,
+};
+static const Ipu4BlockOps ipu6v_unispart_ops = {
+    "isys-unispart", ipu6v_unispart_read, ipu6v_unispart_write,
+};
+static const Ipu4BlockOps ipu6v_mmu_ops = {
+    "isys-mmu", NULL, ipu6v_mmu_write,
+};
 
 /*
  * ipu4p variant: port 0's receiver errors reach the driver through the
  * SIP0 IRQ window (IPU4P_ISYS_SIP0_CSI2_IRQ) and port 0's CSI IRQ
  * controls (ACTIVE in CTRL, the error bits in CTRL0), from
- * ipu4p-isys-csi2-regs.h. Other writes to these windows are absorbed by
- * the generic handlers.
+ * ipu4p-isys-csi2-regs.h. These sit inside IPU4's CSI-2 port 2 window,
+ * which handles the rest of it.
  */
 #define IPU4PV_SIP0_IRQ_STATUS          0x166d08
 #define IPU4PV_SIP0_CSI2_IRQ            (1u << 3)
 #define IPU4PV_CSI0_IRQ_CTRL_STATUS     0x166308
-#define IPU4PV_CSI0_IRQ_CTRL0_STATUS    0x166408
-#define IPU4PV_CSI0_IRQ_CTRL0_CLEAR     0x16640c
+#define IPU4PV_CSI0_IRQ_CTRL0           0x166408  /* STATUS, then CLEAR */
 
-static bool ipu4pv_mmio_read(Ipu4State *s, hwaddr addr, uint64_t *val)
+enum { IPU4PV_SIP0, IPU4PV_CSI0_CTRL, IPU4PV_CSI0_CTRL0 };
+
+static bool ipu4pv_csi_err_read(Ipu4State *s, unsigned int idx, hwaddr off,
+                                uint64_t *val)
 {
-    switch (addr) {
-    case IPU4PV_SIP0_IRQ_STATUS:
+    if (off != 0) {
+        return false;
+    }
+    switch (idx) {
+    case IPU4PV_SIP0:
         *val = s->ipu6v_csi_err ? IPU4PV_SIP0_CSI2_IRQ : 0;
         return true;
-    case IPU4PV_CSI0_IRQ_CTRL_STATUS:
+    case IPU4PV_CSI0_CTRL:
         *val = s->ipu6v_csi_err ? 1 : 0;
         return true;
-    case IPU4PV_CSI0_IRQ_CTRL0_STATUS:
+    case IPU4PV_CSI0_CTRL0:
         *val = s->ipu6v_csi_err;
         return true;
     }
     return false;
 }
 
-static bool ipu4pv_mmio_write(Ipu4State *s, hwaddr addr, uint64_t val)
+static bool ipu4pv_csi_err_write(Ipu4State *s, unsigned int idx, hwaddr off,
+                                 uint64_t val)
 {
-    if (addr == IPU4PV_CSI0_IRQ_CTRL0_CLEAR) {
-        s->ipu6v_csi_err &= ~(uint32_t)val;
-        return true;
+    if (idx != IPU4PV_CSI0_CTRL0 || off != 4) {
+        return false;
     }
-    return false;
+    s->ipu6v_csi_err &= ~(uint32_t)val;
+    return true;
 }
 
-static const Ipu4VariantInfo ipu4_variants[] = {
-    {
-        .name = "ipu4",
-        .device_id = IPU4_PCI_DEVICE_ID,
-        .pwr_state = ipu4_pwr_state,
-        .encode_resp = ipu4_encode_resp,
-        .unispart_sw_irq = ISYS_UNISPART_IRQ_SW,
-    },
-    {
-        .name = "ipu4p",
-        .device_id = IPU4P_PCI_DEVICE_ID,
-        .pwr_state = ipu4pv_pwr_state,
-        .encode_resp = ipu4_encode_resp,
-        .mmio_read = ipu4pv_mmio_read,
-        .mmio_write = ipu4pv_mmio_write,
-        .frame_irq = ipu6v_frame_irq,   /* the same port 0 error */
-        .unispart_sw_irq = IPU4PV_UNISPART_IRQ_SW,
-        .answers_proxy = true,
-    },
-    {
-        .name = "ipu6",
-        .device_id = IPU6_PCI_DEVICE_ID,
-        .pwr_state = ipu6v_pwr_state,
-        .encode_resp = ipu6v_encode_resp,
-        .mmio_read = ipu6v_mmio_read,
-        .mmio_write = ipu6v_mmio_write,
-        .frame_irq = ipu6v_frame_irq,
-        /* IPU4's bit; ipu6v_mmio_*() map it to IPU6's BIT(22). */
-        .unispart_sw_irq = ISYS_UNISPART_IRQ_SW,
-        .answers_proxy = true,
-    },
+static const Ipu4BlockOps ipu4pv_csi_err_ops = {
+    "csi2-0-err", ipu4pv_csi_err_read, ipu4pv_csi_err_write,
 };
 
-static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
+static bool ipu4_btrs_read(Ipu4State *s, unsigned int idx, hwaddr off,
+                           uint64_t *val)
 {
-    Ipu4State *s = IPU4(opaque);
-    uint64_t val = 0;
-
-    if (s->v->mmio_read && s->v->mmio_read(s, addr, &val)) {
-        return val;
-    }
-
-    switch (addr) {
+    switch (off) {
     case BTRS_REG_WDT:
         /* Silicon returns 0xfff0fff on reads (likely a timeout/fuse
          * constant; value lifted verbatim from data/trace.txt). The
          * driver doesn't write it back, so a fixed return is enough.
          * Writes are still absorbed as watchdog kicks in the write
          * handler below. */
-        val = 0xfff0fff;
-        break;
+        *val = 0xfff0fff;
+        return true;
     case BTRS_REG_BTRS_CTRL:
-        val = s->btrs_ctrl;
-        break;
+        *val = s->btrs_ctrl;
+        return true;
     case BTRS_REG_FW_RESET_CTL:
         /* Once the driver kicks START, latch DONE so the poll terminates. */
         if (s->fw_reset_ctl & BTRS_FW_RESET_CTL_START) {
             s->fw_reset_ctl |= BTRS_FW_RESET_CTL_DONE;
         }
-        val = s->fw_reset_ctl;
-        break;
+        *val = s->fw_reset_ctl;
+        return true;
     case BTRS_REG_PWR_STATE:
-        val = s->v->pwr_state(s);
-        s->pwr_state = val;
-        break;
+        *val = s->v->pwr_state(s);
+        s->pwr_state = *val;
+        return true;
     case BTRS_REG_ISR_STATUS:
     case BTRS_REG_ISR_ENABLED_STATUS:
-        val = s->isr_status & s->isr_enable;
-        break;
+        *val = s->isr_status & s->isr_enable;
+        return true;
     case BTRS_REG_ISR_ENABLE:
-        val = s->isr_enable;
-        break;
+        *val = s->isr_enable;
+        return true;
     case BTRS_REG_SECURITY_CTL:
-        val = s->security_ctl;
-        break;
+        *val = s->security_ctl;
+        return true;
     case BTRS_REG_IU2CSECSR:
-        val = s->iu2cse_csr;
-        break;
+        *val = s->iu2cse_csr;
+        return true;
     case BTRS_REG_CSE2IUCSR:
-        val = s->cse2iu_csr;
-        break;
+        *val = s->cse2iu_csr;
+        return true;
     case BTRS_REG_CSE2IUDATA0:
-        val = s->cse2iu_data0;
-        break;
+        *val = s->cse2iu_data0;
+        return true;
     case BTRS_REG_SKU:
-        val = 0; /* unfused */
-        break;
+        *val = 0; /* unfused */
+        return true;
     case BTRS_REG_TSC_LO:
     case BTRS_REG_TSC_HI: {
         /* 64-bit free-running timestamp counter. data/trace.txt shows
@@ -1595,107 +1616,26 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
          * between two adjacent MMIO accesses in the same vcpu thread
          * is effectively nil — the driver's retry path stays cold. */
         uint64_t tsc = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
-        val = (addr == BTRS_REG_TSC_HI) ? (tsc >> 32) : (uint32_t)tsc;
-        break;
+        *val = (off == BTRS_REG_TSC_HI) ? (tsc >> 32) : (uint32_t)tsc;
+        return true;
     }
-    case IS_UNISPART_SW_IRQ_MUX:
-        val = s->is_unispart_sw_irq_mux;
-        break;
-
-
-    case IS_SPC_STATUS_CTRL:
-        /* See the bit-map comment near the constant: force READY on,
-         * START off so query_sp() reads "SPC is idle and ready"
-         * regardless of what the driver kicked into the latch. */
-        val = (s->is_spc_status_ctrl & ~SPC_STATUS_START) | SPC_STATUS_READY;
-        break;
-    case PS_SPC_STATUS_CTRL:
-        val = (s->ps_spc_status_ctrl & ~SPC_STATUS_START) | SPC_STATUS_READY;
-        break;
-
-    default:
-        if (addr >= IS_UNISPART_BASE &&
-            addr < IS_UNISPART_BASE + IPU4_IRQ_SIZE &&
-            /* STATUS is raw: the driver's ipu4_isys_isr() doesn't AND it
-             * with ENABLE, and masking would drop the firmware IRQ raised
-             * before isys_setup_hw() programs ENABLE. */
-            ipu4_irq_read(&s->unispart, addr - IS_UNISPART_BASE, false,
-                          &val)) {
-            break;
-        }
-        if (addr >= IS_DMEM_BASE && addr < IS_DMEM_BASE + IS_DMEM_SIZE) {
-            /* SYSCOM_STATE reads READY so ipu6_fw_com_ready()'s poll
-             * ends on the first read; the SPC handshake isn't modelled. */
-            if (addr == IS_DMEM_SYSCOM_STATE) {
-                val = SYSCOM_STATE_READY;
-            } else {
-                val = ipu4_syscom_read(s, (addr - IS_DMEM_BASE) / 4);
-            }
-            break;
-        }
-        if (addr >= IS_MMU_BASE && addr < IS_MMU_BASE + IS_MMU_SIZE) {
-            /* data/trace.txt does 208 writes into this window during
-             * FW bringup and zero reads. If the driver reads here,
-             * our "write-only latch" assumption breaks — a real DMA
-             * path would need pci_dma_rw() off the stored PDEs and
-             * returning the raw latched value could hide that. */
-            qemu_log_mask(LOG_UNIMP,
-                          "ipu4: ISYS MMU read +0x%06" HWADDR_PRIx
-                          " — model's write-only-latch assumption "
-                          "broken; DMA backing is unmodelled.\n", addr);
-            val = s->is_mmu[(addr - IS_MMU_BASE) / 4];
-            break;
-        }
-        if (addr >= PS_MMU_BASE && addr < PS_MMU_BASE + PS_MMU_SIZE) {
-            qemu_log_mask(LOG_UNIMP,
-                          "ipu4: PSYS MMU read +0x%06" HWADDR_PRIx
-                          " — model's write-only-latch assumption "
-                          "broken; DMA backing is unmodelled.\n", addr);
-            val = s->ps_mmu[(addr - PS_MMU_BASE) / 4];
-            break;
-        }
-        {
-            hwaddr csi2_off;
-            int csi2_port = ipu4_csi2_resolve(addr, &csi2_off);
-            if (csi2_port >= 0) {
-                if (ipu4_csi2_port_read(&s->csi2[csi2_port], csi2_off,
-                                        &val)) {
-                    break;
-                }
-                qemu_log_mask(LOG_UNIMP,
-                              "ipu4: CSI2 port %d read unimpl +0x%03"
-                              HWADDR_PRIx "\n", csi2_port, csi2_off);
-                return 0;
-            }
-        }
-        qemu_log_mask(LOG_UNIMP,
-                      "ipu4: read unimpl +0x%06" HWADDR_PRIx
-                      " size=%u\n", addr, size);
-        return 0;
     }
-
-    return val;
+    return false;
 }
 
-static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
-                            unsigned size)
+static bool ipu4_btrs_write(Ipu4State *s, unsigned int idx, hwaddr off,
+                            uint64_t val)
 {
-    Ipu4State *s = IPU4(opaque);
-
-    if (s->v->mmio_write && s->v->mmio_write(s, addr, val)) {
-        return;
-    }
-
-    switch (addr) {
+    switch (off) {
     case BTRS_REG_BTRS_CTRL:
         s->btrs_ctrl = val;
-        break;
+        return true;
     case BTRS_REG_WDT:
         /* Watchdog kick; ignore. */
-        break;
+        return true;
     case BTRS_REG_FW_RESET_CTL:
         s->fw_reset_ctl = val;
-        break;
+        return true;
     case BTRS_REG_IS_FREQ_CTL:
         /* Driver writes the BUTTRESS_FREQ_CTL_START bit (BIT(31))
          * along with the divisor / QoS-floor / ICCMAX fields to
@@ -1707,36 +1647,36 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
          * recovery strands isys->power == 0. */
         s->is_freq_ctl = val;
         s->is_powered = (val & BTRS_FREQ_CTL_START) != 0;
-        break;
+        return true;
     case BTRS_REG_PS_FREQ_CTL:
         s->ps_freq_ctl = val;
         s->ps_powered = (val & BTRS_FREQ_CTL_START) != 0;
-        break;
+        return true;
     case BTRS_REG_FABRIC_CMD:
         /* Single-shot fabric command write (data/trace.txt shows one
          * write of 0x1 during init). No driver readback; latch and
          * move on. */
         s->fabric_cmd = val;
-        break;
+        return true;
     case BTRS_REG_FW_SOURCE_BASE_LO:
         s->fw_src_lo = val;
-        break;
+        return true;
     case BTRS_REG_FW_SOURCE_BASE_HI:
         s->fw_src_hi = val;
-        break;
+        return true;
     case BTRS_REG_FW_SOURCE_SIZE:
         s->fw_src_size = val;
-        break;
+        return true;
     case BTRS_REG_ISR_ENABLE:
         s->isr_enable = val;
-        break;
+        return true;
     case BTRS_REG_ISR_CLEAR:
         /* Write-1-to-clear. */
         s->isr_status &= ~val;
-        break;
+        return true;
     case BTRS_REG_SECURITY_CTL:
         s->security_ctl = val;
-        break;
+        return true;
     case BTRS_REG_IU2CSEDATA0:
         /* Driver-to-CSE command word. Step-1-followup secure-mode
          * model leaves the actual command unchecked because
@@ -1744,12 +1684,12 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
          * AUTH_DONE bit we pre-set in SECURITY_CTL — no BOOT_LOAD /
          * AUTH_RUN ever ships. Latch for completeness. */
         s->iu2cse_csr = val;
-        break;
+        return true;
     case BTRS_REG_IU2CSEDB0:
         /* IU2CSEDB0 with BUSY (BIT(31)) is the "command ready" trigger.
          * In a full secure-mode model we'd drive the CSE-side response
          * dance here; auth_done short-circuits keep it as a latch. */
-        break;
+        return true;
     case BTRS_REG_IU2CSECSR:
         /* CSR_OUT — driver writes ENTRY/EXIT/QUERY/VALID-REQ tokens
          * to step the IPC reset state machine
@@ -1773,18 +1713,90 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
         if (val & BUTTRESS_IU2CSECSR_ASSERTED_REG_VALID_REQ) {
             s->cse2iu_csr |= BUTTRESS_IU2CSECSR_ACKED_REG_VALID;
         }
-        break;
+        return true;
     case BTRS_REG_CSE2IUCSR:
         /* CSR_IN is W1C from the driver's side: every bit the driver
          * writes a 1 to is cleared. */
         s->cse2iu_csr &= ~(uint32_t)val;
-        break;
+        return true;
     case BTRS_REG_CSE2IUDB0:
         /* Driver clears the incoming doorbell after consuming a
          * response. Latched only — no behaviour. */
         s->cse2iu_data0 = 0;
-        break;
-    case IS_UNISPART_SW_IRQ:
+        return true;
+    }
+    return false;
+}
+
+/* START reads clear and READY set, so query_sp() sees an idle SPC
+ * whatever the driver kicked into the latch. */
+static uint32_t *ipu4_spc_ctrl(Ipu4State *s, unsigned int idx)
+{
+    return idx ? &s->ps_spc_status_ctrl : &s->is_spc_status_ctrl;
+}
+
+static bool ipu4_spc_read(Ipu4State *s, unsigned int idx, hwaddr off,
+                          uint64_t *val)
+{
+    if (off != 0) {
+        return false;
+    }
+    *val = (*ipu4_spc_ctrl(s, idx) & ~SPC_STATUS_START) | SPC_STATUS_READY;
+    return true;
+}
+
+static bool ipu4_spc_write(Ipu4State *s, unsigned int idx, hwaddr off,
+                           uint64_t val)
+{
+    if (off != 0) {
+        return false;
+    }
+    *ipu4_spc_ctrl(s, idx) = val;
+    return true;
+}
+
+static bool ipu4_dmem_read(Ipu4State *s, unsigned int idx, hwaddr off,
+                           uint64_t *val)
+{
+    /* SYSCOM_STATE reads READY so ipu6_fw_com_ready()'s poll ends on the
+     * first read; the SPC handshake isn't modelled. */
+    *val = off / 4 == DMEM_REG_SYSCOM_STATE ? SYSCOM_STATE_READY :
+           ipu4_syscom_read(s, off / 4);
+    return true;
+}
+
+static bool ipu4_dmem_write(Ipu4State *s, unsigned int idx, hwaddr off,
+                            uint64_t val)
+{
+    /* SYSCOM_CONFIG_REG / SYSCOM_STATE_REG (kernel/ipu4/ipu6-fw-com.c);
+     * IPU6 has them in the buttress boot params. */
+    if (off / 4 == DMEM_REG_SYSCOM_CONFIG) {
+        ipu4_syscom_set_config(s, val);
+    } else if (off / 4 == DMEM_REG_SYSCOM_STATE) {
+        ipu4_syscom_set_state(s, val);
+    }
+    ipu4_syscom_write(s, off / 4, val);
+    return true;
+}
+
+static bool ipu4_unispart_read(Ipu4State *s, unsigned int idx, hwaddr off,
+                               uint64_t *val)
+{
+    if (off == UNISPART_REG_SW_IRQ_MUX) {
+        *val = s->is_unispart_sw_irq_mux;
+        return true;
+    }
+    /* STATUS is raw: the driver's ipu4_isys_isr() doesn't AND it with
+     * ENABLE, and masking would drop the firmware IRQ raised before
+     * isys_setup_hw() programs ENABLE. */
+    return ipu4_irq_read(&s->unispart, off, false, val);
+}
+
+static bool ipu4_unispart_write(Ipu4State *s, unsigned int idx, hwaddr off,
+                                uint64_t val)
+{
+    switch (off) {
+    case UNISPART_REG_SW_IRQ:
         /* Silicon writes 0 here on every path (51 accesses, all 0x0).
          * On real hardware this is presumably a trigger that raises
          * the bits in SW_IRQ_MUX into IRQ_STATUS, but with value 0
@@ -1798,73 +1810,196 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
                           "unmodelled. See tools/notes/registers.md "
                           "(0x17c414).\n", val);
         }
-        break;
-    case IS_UNISPART_SW_IRQ_MUX:
+        return true;
+    case UNISPART_REG_SW_IRQ_MUX:
         s->is_unispart_sw_irq_mux = val;
-        break;
+        return true;
+    }
+    return ipu4_irq_write(&s->unispart, off, val);
+}
 
+static bool ipu4_csi2_read(Ipu4State *s, unsigned int idx, hwaddr off,
+                           uint64_t *val)
+{
+    return ipu4_csi2_port_read(&s->csi2[idx], off, val);
+}
 
-    case IS_SPC_STATUS_CTRL:
-        s->is_spc_status_ctrl = val;
-        break;
-    case PS_SPC_STATUS_CTRL:
-        s->ps_spc_status_ctrl = val;
-        break;
+static bool ipu4_csi2_write(Ipu4State *s, unsigned int idx, hwaddr off,
+                            uint64_t val)
+{
+    return ipu4_csi2_port_write(&s->csi2[idx], off, val);
+}
 
-    default:
-        if (addr >= IS_UNISPART_BASE &&
-            addr < IS_UNISPART_BASE + IPU4_IRQ_SIZE &&
-            ipu4_irq_write(&s->unispart, addr - IS_UNISPART_BASE, val)) {
-            break;
-        }
-        if (addr >= IS_DMEM_BASE && addr < IS_DMEM_BASE + IS_DMEM_SIZE) {
-            uint32_t reg = (addr - IS_DMEM_BASE) / 4;
+/* data/trace.txt only writes the MMU windows (page directory, L1/L2
+ * entries, invalidate bits), so they are latched; a read means DMA backing
+ * the model doesn't have may matter. */
+static uint32_t *ipu4_mmu_reg(Ipu4State *s, unsigned int idx, hwaddr off)
+{
+    return idx ? &s->ps_mmu[off / 4] : &s->is_mmu[off / 4];
+}
 
-            /* DMEM[1] and [2] are SYSCOM_CONFIG_REG / SYSCOM_STATE_REG
-             * (kernel/ipu4/ipu6-fw-com.c); IPU6 has them in the buttress. */
-            if (reg == 1) {
-                ipu4_syscom_set_config(s, val);
-            } else if (reg == 2) {
-                ipu4_syscom_set_state(s, val);
-            }
-            ipu4_syscom_write(s, reg, val);
-            break;
+static bool ipu4_mmu_read(Ipu4State *s, unsigned int idx, hwaddr off,
+                          uint64_t *val)
+{
+    qemu_log_mask(LOG_UNIMP,
+                  "ipu4: %s MMU read +0x%03" HWADDR_PRIx " — model's "
+                  "write-only-latch assumption broken; DMA backing is "
+                  "unmodelled.\n", idx ? "PSYS" : "ISYS", off);
+    *val = *ipu4_mmu_reg(s, idx, off);
+    return true;
+}
+
+static bool ipu4_mmu_write(Ipu4State *s, unsigned int idx, hwaddr off,
+                           uint64_t val)
+{
+    /* Both ISYS MMU sub-blocks mirror the same L1 root, so sub-block 0's
+     * is enough for the IOVA walker (kernel/ipu4/ipu6-mmu.c). */
+    if (idx == 0 && off == MMU_REG_L1_PHYS) {
+        s->is_mmu_l1_pfn = val;
+    }
+    *ipu4_mmu_reg(s, idx, off) = val;
+    return true;
+}
+
+static const Ipu4BlockOps ipu4_btrs_ops = {
+    "buttress", ipu4_btrs_read, ipu4_btrs_write,
+};
+static const Ipu4BlockOps ipu4_spc_ops = {
+    "spc", ipu4_spc_read, ipu4_spc_write,
+};
+static const Ipu4BlockOps ipu4_dmem_ops = {
+    "isys-dmem", ipu4_dmem_read, ipu4_dmem_write,
+};
+static const Ipu4BlockOps ipu4_unispart_ops = {
+    "isys-unispart", ipu4_unispart_read, ipu4_unispart_write,
+};
+static const Ipu4BlockOps ipu4_csi2_ops = {
+    "csi2", ipu4_csi2_read, ipu4_csi2_write,
+};
+static const Ipu4BlockOps ipu4_mmu_ops = {
+    "mmu", ipu4_mmu_read, ipu4_mmu_write,
+};
+
+#define BTRS_SIZE 0x1000
+
+/* CSI-2 ports 4 and 5 split one 0x1000 window (IPU_CSI_PORT_NUM order,
+ * kernel/ipu4/ipu6-isys-csi2.c). */
+#define IPU4_BLOCKS                                                         \
+    { &ipu4_btrs_ops,     0x000000,           BTRS_SIZE },                  \
+    { &ipu4_spc_ops,      IS_SPC_STATUS_CTRL, SPC_SIZE,         0 },        \
+    { &ipu4_dmem_ops,     IS_DMEM_BASE,       IS_DMEM_SIZE },               \
+    { &ipu4_csi2_ops,     0x164000,           0x1000,           0 },        \
+    { &ipu4_csi2_ops,     0x165000,           0x1000,           1 },        \
+    { &ipu4_csi2_ops,     0x166000,           0x1000,           2 },        \
+    { &ipu4_csi2_ops,     0x167000,           0x1000,           3 },        \
+    { &ipu4_csi2_ops,     0x16c000,           0x800,            4 },        \
+    { &ipu4_csi2_ops,     0x16c800,           0x800,            5 },        \
+    { &ipu4_unispart_ops, IS_UNISPART_BASE,   IS_UNISPART_SIZE },           \
+    { &ipu4_mmu_ops,      IS_MMU_BASE,        IS_MMU_SIZE,      0 },        \
+    { &ipu4_spc_ops,      PS_SPC_STATUS_CTRL, SPC_SIZE,         1 },        \
+    { &ipu4_mmu_ops,      PS_MMU_BASE,        PS_MMU_SIZE,      1 },
+
+static const Ipu4BlockMap ipu4_blocks[] = {
+    IPU4_BLOCKS
+};
+
+/* IPU4P keeps IPU4's layout; its own registers come first, as they sit
+ * inside IPU4 blocks. */
+static const Ipu4BlockMap ipu4p_blocks[] = {
+    { &ipu4pv_csi_err_ops, IPU4PV_SIP0_IRQ_STATUS,      4, IPU4PV_SIP0 },
+    { &ipu4pv_csi_err_ops, IPU4PV_CSI0_IRQ_CTRL_STATUS, 4, IPU4PV_CSI0_CTRL },
+    { &ipu4pv_csi_err_ops, IPU4PV_CSI0_IRQ_CTRL0,       8, IPU4PV_CSI0_CTRL0 },
+    IPU4_BLOCKS
+};
+
+static const Ipu4BlockMap ipu6v_blocks[] = {
+    { &ipu4_btrs_ops,       0x000000,                 BTRS_SIZE },
+    { &ipu6v_boot_ops,      IPU6V_BOOT_BASE,          0x8 },
+    { &ipu6v_dmem_ops,      IPU6V_IS_DMEM_BASE,       IS_DMEM_SIZE },
+    { &ipu4_spc_ops,        IPU6V_IS_SPC_STATUS_CTRL, SPC_SIZE,      0 },
+    { &ipu6v_csi0_irq_ops,  IPU6V_CSI0_IRQ_BASE,      0x8 },
+    { &ipu6v_phy_ops,       IPU6V_PHY_BASE,           0x20c },
+    { &ipu6v_unispart_ops,  IPU6V_IS_UNISPART_BASE,   IPU4_IRQ_SIZE },
+    { &ipu6v_mmu_ops,       IPU6V_IS_MMU0_BASE,       0x8 },
+};
+
+static const Ipu4VariantInfo ipu4_variants[] = {
+    {
+        .name = "ipu4",
+        .device_id = IPU4_PCI_DEVICE_ID,
+        .pwr_state = ipu4_pwr_state,
+        .encode_resp = ipu4_encode_resp,
+        .blocks = ipu4_blocks,
+        .n_blocks = ARRAY_SIZE(ipu4_blocks),
+        .unispart_sw_irq = ISYS_UNISPART_IRQ_SW,
+    },
+    {
+        .name = "ipu4p",
+        .device_id = IPU4P_PCI_DEVICE_ID,
+        .pwr_state = ipu4pv_pwr_state,
+        .encode_resp = ipu4_encode_resp,
+        .blocks = ipu4p_blocks,
+        .n_blocks = ARRAY_SIZE(ipu4p_blocks),
+        .frame_irq = ipu6v_frame_irq,   /* the same port 0 error */
+        .unispart_sw_irq = IPU4PV_UNISPART_IRQ_SW,
+        .answers_proxy = true,
+    },
+    {
+        .name = "ipu6",
+        .device_id = IPU6_PCI_DEVICE_ID,
+        .pwr_state = ipu6v_pwr_state,
+        .encode_resp = ipu6v_encode_resp,
+        .blocks = ipu6v_blocks,
+        .n_blocks = ARRAY_SIZE(ipu6v_blocks),
+        .frame_irq = ipu6v_frame_irq,
+        /* IPU4's bit; ipu6v_unispart_read() reports it as BIT(22). */
+        .unispart_sw_irq = ISYS_UNISPART_IRQ_SW,
+        .answers_proxy = true,
+    },
+};
+
+/* The block of the variant's map containing `*off`, made block-relative. */
+static const Ipu4BlockMap *ipu4_find_block(Ipu4State *s, hwaddr *off)
+{
+    unsigned int i;
+
+    for (i = 0; i < s->v->n_blocks; i++) {
+        const Ipu4BlockMap *m = &s->v->blocks[i];
+
+        if (*off >= m->base && *off - m->base < m->size) {
+            *off -= m->base;
+            return m;
         }
-        if (addr >= IS_MMU_BASE && addr < IS_MMU_BASE + IS_MMU_SIZE) {
-            if (addr == IS_MMU_SUB0_REG_L1_PHYS) {
-                /* Latch the L1 PT base pfn so the syscom DMA helpers
-                 * can walk IOVAs. Both ISYS MMU sub-blocks mirror the
-                 * same L1 root, so capturing sub-block 0 is sufficient
-                 * (kernel/ipu4/ipu6-mmu.c:546-563). */
-                s->is_mmu_l1_pfn = val;
-            }
-            s->is_mmu[(addr - IS_MMU_BASE) / 4] = val;
-            break;
-        }
-        if (addr >= PS_MMU_BASE && addr < PS_MMU_BASE + PS_MMU_SIZE) {
-            s->ps_mmu[(addr - PS_MMU_BASE) / 4] = val;
-            break;
-        }
-        {
-            hwaddr csi2_off;
-            int csi2_port = ipu4_csi2_resolve(addr, &csi2_off);
-            if (csi2_port >= 0) {
-                if (ipu4_csi2_port_write(&s->csi2[csi2_port], csi2_off,
-                                         val)) {
-                    break;
-                }
-                qemu_log_mask(LOG_UNIMP,
-                              "ipu4: CSI2 port %d write unimpl +0x%03"
-                              HWADDR_PRIx " val=0x%" PRIx64 "\n",
-                              csi2_port, csi2_off, val);
-                break;
-            }
-        }
-        qemu_log_mask(LOG_UNIMP,
-                      "ipu4: write unimpl +0x%06" HWADDR_PRIx
+    }
+    return NULL;
+}
+
+static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
+{
+    Ipu4State *s = IPU4(opaque);
+    hwaddr off = addr;
+    const Ipu4BlockMap *m = ipu4_find_block(s, &off);
+    uint64_t val = 0;
+
+    if (!m || !m->ops->read || !m->ops->read(s, m->idx, off, &val)) {
+        qemu_log_mask(LOG_UNIMP, "ipu4: %s read unimpl +0x%06" HWADDR_PRIx
+                      " size=%u\n", m ? m->ops->name : "bar", addr, size);
+        return 0;
+    }
+    return val;
+}
+
+static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
+                            unsigned size)
+{
+    Ipu4State *s = IPU4(opaque);
+    hwaddr off = addr;
+    const Ipu4BlockMap *m = ipu4_find_block(s, &off);
+
+    if (!m || !m->ops->write || !m->ops->write(s, m->idx, off, val)) {
+        qemu_log_mask(LOG_UNIMP, "ipu4: %s write unimpl +0x%06" HWADDR_PRIx
                       " val=0x%" PRIx64 " size=%u\n",
-                      addr, val, size);
-        break;
+                      m ? m->ops->name : "bar", addr, val, size);
     }
 }
 
