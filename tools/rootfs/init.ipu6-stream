@@ -86,8 +86,15 @@ node_by_name() {
 if subdev=$(node_by_name "$IPU_ENTITY CSI2 0") &&
    video=$(node_by_name "$IPU_ENTITY ISYS Capture 0"); then
 	say "ok nodes $video $subdev"
+	# Keep kernel messages (a driver's dev_info per frame) off the console
+	# while streamon prints its markers, or they land mid-line; they stay
+	# in the dmesg dump below.
+	read -r printk < /proc/sys/kernel/printk
+	echo 1 > /proc/sys/kernel/printk
 	streamon "$video" /dev/media0 "$subdev"
-	say "info streamon exit $?"
+	rc=$?
+	echo "$printk" > /proc/sys/kernel/printk
+	say "info streamon exit $rc"
 else
 	say "fail no CSI2 0 subdev or capture node"
 fi
