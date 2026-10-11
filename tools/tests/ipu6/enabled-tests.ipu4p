@@ -10,3 +10,11 @@
 series-applies
 build
 checkpatch
+
+# Guest boot with the model presenting 8086:8a19 (plan P2).
+vm-boot
+
+# virt-sensor + intel-ipu6* load/unload; intel-ipu6 probes 8a19 on load
+# and stops at the missing intel/ipu/ipu4p_fw.bin until P4 (plan P2,
+# which also covers P3).
+module-load
