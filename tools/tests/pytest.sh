@@ -25,7 +25,7 @@ exec pytest tests/ \
 	--cov=check_writes \
 	--cov=normalize_report \
 	--cov=parse_registers \
-	--cov=parse_status \
+	--cov=parse_kernels \
 	--cov=parse_ladder \
 	--cov-report=term-missing \
 	--cov-fail-under=90 \

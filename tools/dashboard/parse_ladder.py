@@ -5,7 +5,7 @@
 it as ``ipu6-ladder-results-<leg>``; pages.yml downloads every such
 artifact of the latest vm-ipu6 run into one directory. This module
 finds those files, keeps the newest per leg and lays them out for
-the "IPU4 port (upstream ipu6)" section of the dashboard.
+the "Test ladder" section of the dashboard.
 
 Legs in ``LEGS`` always get a column, so a leg its track has not wired
 up yet renders as "not run yet" instead of being hidden. Unknown legs
