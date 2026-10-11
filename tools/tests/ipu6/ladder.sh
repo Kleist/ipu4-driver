@@ -244,10 +244,15 @@ write_results_json() {
 	  LADDER_ROWS="$rows" LADDER_STATUS="$1" LADDER_ROOT="$ROOT" \
 	  LADDER_PATCH_DIR="$PATCH_DIR" LADDER_ENABLED_FILE="$ENABLED_FILE" \
 	  LADDER_PIN_URL="$IPU6_LINUX_URL" LADDER_PIN_SHA="$IPU6_LINUX_SHA" \
+	  LADDER_PIN_TAG="${IPU6_LINUX_TAG:-}" LADDER_BASE_DIRS="$BASE_PATCH_PATH" \
 	  python3 - > "$OUT/results.json" <<'PY'
 import datetime, email.parser, glob, json, os, re, subprocess, sys
 e = os.environ
 root = e["LADDER_ROOT"]
+base_series = [
+    {"dir": os.path.relpath(d, root),
+     "count": len(glob.glob(os.path.join(d, "*.patch")))}
+    for d in e["LADDER_BASE_DIRS"].split(":") if d]
 patches = []
 pdir = e["LADDER_PATCH_DIR"]
 for p in sorted(glob.glob(os.path.join(pdir, "*.patch")) if pdir else []):
@@ -282,7 +287,9 @@ json.dump({
     "commit_sha": e.get("GITHUB_SHA") or sha,
     "run_id": run_id,
     "run_url": run_url,
-    "pin": {"url": e["LADDER_PIN_URL"], "sha": e["LADDER_PIN_SHA"]},
+    "pin": {"url": e["LADDER_PIN_URL"], "sha": e["LADDER_PIN_SHA"],
+            "tag": e["LADDER_PIN_TAG"] or None},
+    "base_series": base_series,
     "series": {"count": len(patches), "patches": patches},
     "enabled_tests": enabled_file,
     "exit_status": int(e["LADDER_STATUS"]),
