@@ -52,13 +52,12 @@ alignment fix) are picked up by an explicit pin-bump PR, not automatically.
   column, any change to the PR → test mapping, and new facts in
   "Learnings" below. A PR that learned nothing says so in its
   description.
-- **Steps are pipelined.** As soon as a step's PR is up, the next step
-  starts on a branch stacked on it while the previous PR is in review.
-  The stacked PR targets the previous step's branch and is retargeted
-  to `main` once that merges. Review feedback on an earlier PR is merged
-  forward into the stacked branches. At most 3 unmerged PRs may be
-  stacked (see `CLAUDE.md`); when the stack is full, the next step waits
-  for the bottom PR to merge.
+- **Steps are pipelined, PRs are not.** As soon as a step's PR is up,
+  the next step starts on a local branch on top of it while the PR is in
+  review. That branch is pushed and its PR opened only once the previous
+  PR has merged, rebased onto the new `main` (and re-tested). So the
+  track has at most one open PR (see `CLAUDE.md`), and review feedback
+  is folded into the local branch on its rebase.
 - **Stay in this track's files.** Other tracks (QEMU variants) run in
   parallel with their own plans; see "Tracks and file ownership" below
   for which files each owns and how shared files are changed.
@@ -168,7 +167,7 @@ the PR is split rather than enabling nothing.
 ## Tracks and file ownership
 
 Three tracks work on the ipu6 flavor in parallel, each with its own plan
-and its own PR stack from `main` (at most 3 stacked, `CLAUDE.md`):
+and at most one open PR at a time, from `main` (`CLAUDE.md`):
 
 | Track | Plan | Owns |
 |---|---|---|

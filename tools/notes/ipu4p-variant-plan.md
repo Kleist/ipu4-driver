@@ -65,9 +65,9 @@ handshakes, firmware round trips and frames.
 
 ## PR sequence
 
-One PR per ladder test for the variant, top of the table first. At most
-3 PRs are stacked (`CLAUDE.md`), and the stack is independent of the other
-tracks. A step that needs a shared-core change (`ladder.sh`, `run-vm.sh`,
+One PR per ladder test for the variant, top of the table first. One open
+PR at a time, from `main` (`CLAUDE.md`); the next step waits on a local
+branch until it merges. Independent of the other tracks. A step that needs a shared-core change (`ladder.sh`, `run-vm.sh`,
 the `init.ipu6-*` frames, `vm-ipu6.yml`) puts that change in its own small
 PR first.
 
