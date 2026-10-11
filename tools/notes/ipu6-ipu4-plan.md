@@ -131,9 +131,9 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | `probe-buttress` | buttress init + ISYS/PSYS power-up succeed |
 | `probe-mmu` | the PSYS MMU init at probe writes the IPU4 stream tables: the guest's writes to INFO and the L1/L2 stream start registers of the three PSYS MMUs (BAR + `0x4b0000`) equal, in order, the ones in `data/trace.txt` (QEMU write log, `tools/trace/check_writes.py`) |
 | `isys-irq` | a forced ISYS runtime resume (probe init, `power/control`) succeeds and writes what silicon's second ISYS resume writes (`data/trace.txt` lines 487–599): ISYS MMU stream tables, no LTR/DID (`0x68`), one TSC sync request (`0x88`), the UNISPART interrupt setup (`0x17c000`, `0x40001878`) |
-| `probe-fw` | firmware (`ipu4_fw.bin`, synthesized) is mapped and authenticated (`ipu6_buttress_authenticate()`) |
+| `probe-fw` | firmware (`ipu4_fw.bin`, synthesized) is mapped and authenticated (`ipu6_buttress_authenticate()`) (passes under the model since PR 7, like `probe-complete`; its step, PR 10, was folded into PR 11) |
 | `probe-complete` | ISYS probe finishes, `/dev/video*` and media graph appear (passes under the model since PR 7, so it gates nothing in the IPU4 sequence; kept for the IPU6 variant, see "Parallel track") |
-| `fw-open` | syscom open + `STREAM_OPEN_DONE` round trip |
+| `fw-open` | syscom open + `STREAM_OPEN_DONE` round trip: on the stream boot (`stream-boot.sh`, `init.ipu6-stream`), the driver gets `STREAM_OPEN_DONE` for stream 0 and completes the open, and the boot's ISYS DMEM writes start with silicon's from the firmware open to that response (`data/trace.txt` lines 600–622, `check_writes.py --prefix`) |
 | `stream-on` | `streamon-smoke` reaches `STREAM:streamon` |
 | `stream-pattern` | `streamon-smoke` reaches `STREAM:pattern_ok` |
 | `csi2-sof-irq` | CSI-2 FS IRQ observed on port 0 |
@@ -151,9 +151,9 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | 7 | `media: ipu6: Add IPU4 buttress support` + harness stages a synthesized `intel/ipu/ipu4_fw.bin` (see PR 6 learnings) | `probe-buttress` | merged (#117) |
 | 8 | `media: ipu6: Add IPU4 MMU support` (MMU tables + the IPU4P subsystem offsets they hang off) + harness logs the probe boot's MMIO writes | `probe-mmu` | merged (#121) |
 | 8a | Carry `media: ipu6: Enable IPU4 PCI device` as the always-last patch; drop the harness's `new_id` binding (was PR 14) | — (`probe-identify` now binds natively; `native-bind` dropped) | merged (#122) |
-| 9 | `media: ipu6: Support the IPU4 TSC sync handshake` + `media: ipu6: Add IPU4 ISYS and CSI-2 register definitions` + `media: ipu6: Add IPU4 ISYS interrupt handling` (wire-up in ISYS, 6 CSI-2 ports); probe init forces an ISYS runtime resume (was PR 10, swapped with the pdata step) | `isys-irq` (was `probe-complete`) | in review |
-| 10 | Internal pdata (`media: ipu6: Add IPU4 platform data`); the firmware name landed in PR 6, the ISYS/PSYS/SPC/DMEM offsets in PR 8, the CSI-2 port count in PR 9 (was PR 9) | `probe-fw` | |
-| 11 | `media: ipu6: Support the IPU4 SysCom queue layout` | `fw-open` | |
+| 9 | `media: ipu6: Support the IPU4 TSC sync handshake` + `media: ipu6: Add IPU4 ISYS and CSI-2 register definitions` + `media: ipu6: Add IPU4 ISYS interrupt handling` (wire-up in ISYS, 6 CSI-2 ports); probe init forces an ISYS runtime resume (was PR 10, swapped with the pdata step) | `isys-irq` (was `probe-complete`) | merged (#125) |
+| 10 | ~~Internal pdata (`media: ipu6: Add IPU4 platform data`)~~; the firmware name landed in PR 6, the ISYS/PSYS/SPC/DMEM offsets in PR 8, the CSI-2 port count in PR 9, the stream limits in PR 11 | — (was `probe-fw`) | folded into PR 11 |
+| 11 | `media: ipu6: Add the IPU4 ISYS stream limits` (the rest of the pdata, old PR 10) + `media: ipu6: Support the IPU4 SysCom queue layout`; before it, a shared-core PR adds the stream boot (`stream-boot.sh`, `init.ipu6-stream`, `streamon` subdev format) | `fw-open` | in review |
 | 12 | `media: ipu6: Add IPU4 CSI-2 receiver support` | `stream-on`, `stream-pattern` | |
 | 13 | CSI-2 frame interrupts (decision 3) | `csi2-sof-irq` | |
 | 14 | ~~`media: ipu6: Enable IPU4 PCI device`~~ | — | moved to PR 8a |
@@ -189,8 +189,9 @@ To keep the tracks from conflicting:
   its variant does so with a `$IPU4_VARIANT` / `$want` case in that file,
   in a PR of its own.
 - **Shared core changes go first, alone.** `ladder.sh`, `probe-boot.sh`,
-  the `init.ipu6-*` frames, `tools/run-vm.sh`, `tools/rootfs/build.sh` and
-  `vm-ipu6.yml` are shared. A change to them is its own small PR, merged
+  `stream-boot.sh`, the `init.ipu6-*` frames, `tools/tests/streamon.c`,
+  `tools/run-vm.sh`, `tools/rootfs/build.sh` and `vm-ipu6.yml` are
+  shared. A change to them is its own small PR, merged
   before the feature PR that needs it; feature PRs don't carry core
   changes.
 - **Own plan only.** A track's PR edits its own plan file; facts another
@@ -673,3 +674,82 @@ last; each entry names the PR that found it.
   and rmmod stay clean. Timings (4 cores, TCG, warm): full ladder ~65 s
   (`vm-boot` 34 s incl. the kernel rebuild), `isys-irq` 0 s on the shared
   boot; the forced resume adds well under a second to it.
+- (PR 11) **PR 10 folded into PR 11** (user decision): the remaining
+  internal pdata has no effect before the ISYS firmware is opened, so it
+  went into this step as its own patch, `0007-media-ipu6-Add-the-IPU4-ISYS-stream-limits`,
+  before `0008-media-ipu6-Support-the-IPU4-SysCom-queue-layout` (PCI ID
+  patch now 0009). IPU4 had the IPU6 limits (12 parallel streams = 12
+  message send queues, 16-entry device send queue); it now takes IPU4P's
+  (`IPU4P_ISYS_MAX_STREAMS`, `IPU4P_NOF_SRAM_BLOCKS_MAX`,
+  `IPU4P_DEV_SEND_QUEUE_SIZE`, all 8), which are the fork's
+  (`IPU4_STREAM_ID_MAX`, `IPU4_ISYS_MAX_STREAMS`). Silicon confirms the
+  8 message queues: the message receive queue's pointers are DMEM
+  registers 28/29 (`0x108070/0x108074`, `data/trace.txt` lines
+  619–622) = 6 + 2 × (1 proxy + 1 device + 8 message send queues + 1
+  proxy receive queue). Left at the values IPU4P inherits from IPU6, on
+  purpose: the SRAM granularity/size (iwake watermark only; the fork
+  leaves them 0), `max_send_queues` and the sensor types (IPU6 firmware
+  ABI only), `csi2.irq_mask` (IPU4 uses the IPU4P error table).
+- (PR 11) The SysCom patch: `ipu6_fw_com_prepare()` starts the queue
+  pointers at DMEM register 6 (`IPU4_SYSCOM_QPR_BASE_REG`, next to
+  Ruslan's `ipu4p_regmem_id`) for a DMEM SysCom on IPU4 (`IS_IPU4(adev->isp)`),
+  8 on IPU4P. Registers 0–5 are the same on both (fork
+  `kernel/ipu4/ipu6-fw-com.c`; silicon lines 602–607: pkg dir `0x40`
+  at reg 0, state/command UNINIT at regs 2/3, config IOVA at reg 1,
+  then SPC start). Silicon line 613 writes the stream 0 send queue's
+  write pointer at reg 10 (`0x108028`) = 6 + 2 × 2.
+- (PR 11) **Stream boot** (shared-core PR before this step): the probe
+  boot cannot stream, because `probe-mmu` and `isys-irq` compare all of
+  its ISYS writes with silicon and a stream adds a second ISYS resume
+  and ISR writes. `tools/rootfs/init.ipu6-stream` loads the modules as
+  the probe init does, finds "Intel IPU6 CSI2 0" and "Intel IPU6 ISYS
+  Capture 0" in `/sys/class/video4linux/*/name` and runs
+  `streamon <video> /dev/media0 <subdev>`; the new optional subdev
+  argument sets the CSI-2 sink pad to 800x800 `RGB888_1X24`
+  (`VIDIOC_SUBDEV_S_FMT`, propagated to the source pads by the routing),
+  as the PR 5 learnings asked. `boot_stream_vm` (`tools/tests/ipu6/stream-boot.sh`)
+  runs it once per ladder run: serial log `tools/tests/out/ipu6-stream.serial`,
+  IPU BAR writes `tools/tests/out/ipu6-stream.mmio-writes`. Markers
+  `STREAMVM:ok|fail|oops|DONE` plus streamon's `SUBDEV:`/`MEDIA:`/`STREAM:`.
+  `stream_log_ok` does not require `STREAMVM:oops none`; each stream test
+  decides (see below). The boot adds ~7 s to the ladder.
+- (PR 11) `fw-open` (dependency `isys-irq`; `probe-complete` stays a
+  NOT-IMPLEMENTED placeholder) passes on `FW resp 00 STREAM_OPEN_DONE,
+  stream 0` + `start stream: open complete` (isys dyndbg) and on the
+  DMEM write check: ranges `0x108000-0x108004 0x108008-0x108018
+  0x108020-0x108100` against silicon lines 600–622 with the new
+  `check_writes.py --prefix` (the guest's first 5 writes there must be
+  silicon's; it streams differently afterwards). Left out: SPC
+  STATUS_CTRL (`0x100000`; the driver ORs bits into what it reads and the
+  model reads `0x20` where silicon reads `0xa0`, so the guest writes
+  `0x1020` instead of `0x10a0`), the config IOVA (`0x108004`) and the
+  proxy send queue (`0x108018/0x10801c`, see below). Gate check: without
+  0008 the model sees the open on the register pair it maps to stream 1,
+  answers for stream 1 ("stream of stream_handle 1 is unused") and the
+  driver times out ("stream open time out"); without 0007 the open works
+  but the receive queue's read pointer is written at `0x108094` (12
+  message queues) instead of `0x108074`, so the write check FAILs. The
+  model alone does not see the queue count (it reads the receive queue's
+  registers from the queue descriptor).
+- (PR 11) Seen on the stream boot, for later steps:
+  - Before the stream open, `update_watermark_setting()` sends two iwake
+    proxy tokens (`ipu4p_fw_isys_set_iwake_register`, GDA threshold and
+    enable) on the proxy queue; the model never answers the proxy queue
+    (PR 1 learnings), so each times out after ~180 ms ("write 2 failed
+    -110", "write 1 failed -110"), and it writes LTR/DID (`ltr: value
+    112 ...`) and REG_PKGC_PMON_CFG. Silicon's trace has no proxy queue
+    writes at all, and the fork does no iwake on IPU4. Non-fatal; decide
+    with `stream-on` (skip iwake on IPU4, as the fork, or answer the
+    proxy in the model).
+  - After the open, STREAM_START_AND_CAPTURE, a frame (SOF,
+    PIN_DATA_READY) and the flush/close round trips all work, but the
+    CSI-2 receiver enable takes the IPU6 path ("PHY0 powerup ack
+    timeout", `stream on Intel IPU6 CSI2 0 failed with -110`), so
+    VIDIOC_STREAMON fails with ETIMEDOUT. The failure path then trips
+    vb2's `WARN_ON` in `vb2_start_streaming()` (videobuf2-core.c:1821:
+    a buffer handed to the firmware is not returned), so the stream boot
+    reports `STREAMVM:oops found`. That is PR 12's (`stream-on`), and
+    the warning on the error path is worth a look then (possibly
+    upstream).
+  - The probe boot still never opens the firmware, so its
+    `isys-irq`/`probe-mmu` write checks are unchanged.
