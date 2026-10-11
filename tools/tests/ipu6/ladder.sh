@@ -87,6 +87,10 @@ LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$LINUX_DIR}"
 export IPU4_DRIVER="$DRIVER" IPU4_FLAVOR="$FLAVOR" IPU4_VARIANT="$VARIANT"
 export IPU4_IPU6_LINUX_DIR="$LINUX_DIR"
 export IPU4_IPU6_PIN="$PIN" IPU4_IPU6_PATCH_DIR="$PATCH_DIR"
+# The driver's module, device and node names (IPU_*), as the guest sees
+# them (tools/rootfs/build.sh stages the same file).
+# shellcheck source=tools/rootfs/ipu-driver.ipu6.conf
+. "$ROOT/tools/rootfs/ipu-driver.$FLAVOR.conf"
 OUT="$ROOT/tools/tests/out/ipu6-ladder"
 
 # The tests. Each one lives in its own file, tools/tests/ipu6/tests.d/

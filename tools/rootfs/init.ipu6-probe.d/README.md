@@ -20,4 +20,7 @@ or `PROBE:info ...`); the matching ladder test greps for them. Do not print
 `PROBE:fail`: that marker fails every probe test. Variables: `$ipu` (the
 IPU's PCI address, e.g. `0000:00:04.0`) and `$want` (its PCI device ID,
 `0x5a88` for IPU4, or the QEMU model variant's from `ipu_pci_id=` on the
-kernel command line). Snippets are POSIX sh (busybox).
+kernel command line), and the driver's names from
+`/etc/ipu-driver.conf` (`tools/rootfs/ipu-driver.<flavor>.conf`:
+`$IPU_MODNAME`, `$IPU_PCI_DRIVER`, `$IPU_FW_IPU4`, ...), so a check works
+for every driver. Snippets are POSIX sh (busybox).

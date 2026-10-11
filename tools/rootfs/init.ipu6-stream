@@ -24,6 +24,15 @@ mount -t proc     none /proc
 mount -t sysfs    none /sys
 mount -t devtmpfs none /dev 2>/dev/null || true
 
+# The driver's module, device and node names (IPU_*): staged by
+# tools/rootfs/build.sh from tools/rootfs/ipu-driver.<flavor>.conf.
+. /etc/ipu-driver.conf
+# Unload order: the driver's modules in reverse, then the sensor.
+rmmods=
+for m in $IPU_SENSOR_MODULE $IPU_MODULES; do
+	rmmods="$(echo "$m" | sed 's/-/_/g') $rmmods"
+done
+
 say() {
 	echo "STREAMVM:$*"
 }
@@ -39,12 +48,12 @@ for arg in $cmdline; do
 done
 
 for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
-	virt-sensor intel-ipu6 intel-ipu6-isys; do
+	$IPU_SENSOR_MODULE $IPU_MODULES; do
 	# As in init.ipu6-probe: keep ipu6-mmu.c's per-page debug output
 	# out of the log (probe runs inside the insmod).
 	case "$m" in
 	videobuf2-*) args= ;;
-	intel-ipu6) args='dyndbg="+p;file ipu6-mmu.c -p"' ;;
+	"$IPU_PCI_DRIVER") args='dyndbg="+p;file ipu6-mmu.c -p"' ;;
 	virt-sensor) args="dyndbg=+p device=$want" ;;
 	*) args=dyndbg=+p ;;
 	esac
@@ -74,8 +83,8 @@ node_by_name() {
 	done
 	return 1
 }
-if subdev=$(node_by_name "Intel IPU6 CSI2 0") &&
-   video=$(node_by_name "Intel IPU6 ISYS Capture 0"); then
+if subdev=$(node_by_name "$IPU_ENTITY CSI2 0") &&
+   video=$(node_by_name "$IPU_ENTITY ISYS Capture 0"); then
 	say "ok nodes $video $subdev"
 	streamon "$video" /dev/media0 "$subdev"
 	say "info streamon exit $?"
@@ -83,14 +92,14 @@ else
 	say "fail no CSI2 0 subdev or capture node"
 fi
 
-echo "=== dmesg (intel-ipu6 $ipu) ==="
-dmesg | grep -E "$ipu|intel_ipu6|intel-ipu6"
+echo "=== dmesg ($IPU_PCI_DRIVER $ipu) ==="
+dmesg | grep -E "$ipu|$IPU_MODNAME|$IPU_PCI_DRIVER"
 echo "=== end dmesg ==="
 
 if [ -e "/sys/bus/pci/devices/$ipu/driver" ]; then
-	echo "$ipu" > /sys/bus/pci/drivers/intel-ipu6/unbind
+	echo "$ipu" > "/sys/bus/pci/drivers/$IPU_PCI_DRIVER/unbind"
 fi
-for m in intel_ipu6_isys intel_ipu6 virt_sensor; do
+for m in $rmmods; do
 	if rmmod "$m"; then
 		say "ok rmmod $m"
 	else

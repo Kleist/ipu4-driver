@@ -40,7 +40,7 @@ boot_probe_vm() {
 # Common checks of the probe boot: the init ran to the end without
 # PROBE:fail markers (module load, unload) or an oops.
 probe_log_ok() {
-	grep -E '^PROBE:|intel-ipu6|intel_ipu6|virt-sensor' "$PROBE_LOG" |
+	grep -E "^PROBE:|$IPU_PCI_DRIVER|$IPU_MODNAME|virt-sensor" "$PROBE_LOG" |
 		grep -vE 'dma_alloc|dmamap|mapping entry'
 	if grep -q '^PROBE:fail' "$PROBE_LOG"; then
 		echo "!!! PROBE:fail markers (see above)"
