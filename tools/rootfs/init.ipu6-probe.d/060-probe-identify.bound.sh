@@ -7,13 +7,15 @@
 # the ID ("Unsupported IPU6 device <id>") or picks the variant's
 # settings, among them the firmware file: ipu4_fw.bin for the IPU4
 # (5a88, through the series), ipu6_fw.bin for the IPU6 the ipu6 QEMU
-# variant presents (9a19, upstream). probe requests that file right
-# after buttress init, and the firmware loader logs its name whether the
+# variant presents (9a19, upstream), ipu4p_fw.bin for the ipu4p
+# variant's IPU4P (8a19). probe requests that file right after buttress
+# init, and the firmware loader logs its name whether the
 # file exists ("Loading firmware from .../<fw>", dyndbg) or not ("Direct
 # firmware load for <fw> failed"). So this check also needs probe to get
 # through buttress init, which it does for IPU4 from the first patch of
 # the series on.
 case "$want" in
+0x8a19) fw=intel/ipu/ipu4p_fw.bin ;;
 0x9a19) fw=intel/ipu/ipu6_fw.bin ;;
 *) fw=intel/ipu/ipu4_fw.bin ;;
 esac
