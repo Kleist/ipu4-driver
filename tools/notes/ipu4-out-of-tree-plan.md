@@ -25,45 +25,42 @@ in-tree into `tools/linux/`, `vm-smoke`).
   `tools/ipu6/bootstrap.sh` with no series into `tools/linux-ipu4-oot/`.
 - **Build:** `tools/out-of-tree/build.sh`: kconfig pass shared with the
   guest kernel, `modules_prepare`, then the `M=kernel/ipu4` build its
-  Makefile's `all` target runs. `intel-ipu4.ko`, `intel-ipu4-isys.ko` and
-  `ambu-ipu-bridge.ko` land in `kernel/ipu4/`.
+  Makefile's `all` target runs, with the built-in virt sensor
+  (`CONFIG_VIDEO_IPU4_VIRT_SENSOR`, as the fork harness builds it).
+  `intel-ipu4.ko`, `intel-ipu4-isys.ko` and `ambu-ipu-bridge.ko` land in
+  `kernel/ipu4/`.
 - **Gating:** `tools/tests/ipu6/enabled-tests.ipu4-out-of-tree.ipu4`, owned
-  by this track.
+  by this track. The driver is known to work, so every implemented test is
+  gated; a failure points at the test, the harness or the model.
 - **CI:** the `vm-ipu6.yml` leg `ipu4-out-of-tree / ipu4`, tree cache
   `linux-ipu4-oot`; `kernel/ipu4/*` changes select it (`tools/ci/changes.sh`).
 
 ## What differs from the ipu6 legs
 
+`tools/rootfs/ipu-driver.<flavor>.conf` names the driver for the guest
+inits and the host checks:
+
 | Area | ipu6 legs | out-of-tree |
 |---|---|---|
-| Modules | `intel-ipu6`, `intel-ipu6-isys` | `intel-ipu4`, `intel-ipu4-isys`, `ambu-ipu-bridge` |
+| Modules | `intel-ipu6`, `intel-ipu6-isys` | `intel-ipu4`, `intel-ipu4-isys` |
 | Auxiliary devices | `intel_ipu6.isys.*`, `intel_ipu6.psys.*` | `intel_ipu4.*` |
-| Sensor | `tools/virt-sensor/` module | built-in virt sensor (`CONFIG_VIDEO_IPU4_VIRT_SENSOR`, no Kconfig in an out-of-tree build) or the ambu bridge |
-| Firmware | `intel/ipu/ipu4_fw.bin` | `ipu4_cpd_b0.bin` (what the fork harness stages) |
-| Log strings | upstream ipu6 | the fork's (e.g. not "Unsupported IPU6 device") |
+| Entities | `Intel IPU6 ...` | `Intel IPU4 ...` |
+| Sensor | `tools/virt-sensor/` module | built into `intel-ipu4` |
+| Firmware | `intel/ipu/ipu4_fw.bin` | `ipu4_cpd_b0.bin` |
 
-The guest inits (`init.ipu6-*`, shared core) name the ipu6 modules, so every
-VM test past `vm-boot` needs them parametrised by flavor first.
+Two tests check the out-of-tree driver differently (a `$FLAVOR` case):
+`isys-irq` compares with silicon from line 269, since the driver, like
+silicon, also initialises the ISYS MMU at probe; `csi2-sof-irq` looks for
+the handler's CSI2PART CLEAR of the frame start bit, since it logs
+nothing.
 
 ## PR sequence
 
 | PR | Content | `enabled-tests.ipu4-out-of-tree.ipu4` gains | State |
 |---|---|---|---|
-| O1 | Six ladder legs (baselines + `ipu4-patches`), `IPU4_FLAVOR=out-of-tree` | `series-applies`, `build`, `vm-boot` | in review |
-| O2 | Fix the W=1 warnings in `kernel/ipu4/`; `build` at W=1 like the ipu6 legs | — | |
-| O3 | `make checkpatch` clean | `checkpatch` | |
-| O4 | Shared core: guest inits take module names per flavor; then `module-load` | `module-load` | |
-| O5 | Sensor for the out-of-tree build (see open questions); `probe-identify` expects `ipu4_cpd_b0.bin` | `probe-identify` | |
-| O6 | `probe-buttress`, `probe-mmu`, `isys-resume`, `isys-irq` (trace checks apply as for ipu4-patches) | one per PR | |
-| O7 | `fw-open`, `stream-on`, `stream-pattern` | one per PR | |
-
-## Open questions
-
-- **Sensor:** build the fork's own virt sensor into the out-of-tree module
-  (`-DCONFIG_VIDEO_IPU4_VIRT_SENSOR=1` plus the object), or use the
-  harness's `tools/virt-sensor/` module, which needs
-  `ambu_ipu_bridge_init()` to leave an existing graph alone? The second
-  keeps the module as a user builds it.
+| O1 | Six ladder legs (baselines + `ipu4-patches`), `IPU4_FLAVOR=out-of-tree` | `series-applies`, `build`, `vm-boot` | merged (#145) |
+| O2 | Driver names per flavor for the guest inits; built-in virt sensor; tests adapted to the driver | every implemented test | in review |
+| O3 | Fix the W=1 warnings in `kernel/ipu4/`; `build` at W=1 like the ipu6 legs | — | |
 
 ## Learnings
 
@@ -82,3 +79,19 @@ VM test past `vm-boot` needs them parametrised by flavor first.
   IPU4 model and sees `8086:5a88`. `module-load` boots too (the harness's
   `tools/virt-sensor/` builds on v7.3-rc4, not on v6.12) and fails on the
   guest init loading the `intel-ipu6` modules (O4).
+- (O2) With the harness's `tools/virt-sensor/` module, probe uses its
+  fwnode graph and never calls `ambu_ipu_bridge_init()`, but remove still
+  calls `ambu_ipu_bridge_uninit()`, which dereferences the bridge that was
+  never set up (NULL pointer oops at `rmmod intel_ipu4`). On hardware the
+  bridge always initialises, so the ladder uses the built-in virt sensor,
+  whose install and remove pair up.
+- (O2) The stock config has nothing selecting vb2, so the in-tree
+  `VIDEO_INTEL_IPU6` is built as a module for its dependencies; the guest
+  never loads it.
+- (O2) `checkpatch` checks a series; like the other baselines this driver
+  has none, so it passes with nothing to check. `make checkpatch` on the
+  whole module (11 warnings, 30 checks) is not a ladder test.
+- (O2) The driver's probe and stream writes equal silicon's in every
+  compared range: PSYS MMU (`probe-mmu`), the ISYS MMU at probe and resume
+  plus UNISPART (`isys-irq`, 76 writes), SysCom, CSI-2 receiver and
+  CSI2PART (`fw-open`, `stream-on`, `csi2-sof-irq`).

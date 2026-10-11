@@ -34,10 +34,10 @@ fi
 
 # Media core as for the other flavors (tools/build.sh explains
 # MEDIA_SUPPORT / MEDIA_SUPPORT_FILTER). The module needs no Kconfig
-# symbol of its own; vb2 and the v4l2 helpers it uses are built as
-# modules so the guest loads them as on a distribution kernel. The
-# in-tree ipu6 driver stays off so only the module is a candidate for
-# the IPU.
+# symbol of its own. Its vb2 dependencies are hidden symbols, so the
+# in-tree ipu6 driver is built as a module to select them, as on a
+# distribution kernel; the guest never loads it (tools/rootfs/build.sh
+# stages only kernel/ipu4/'s modules).
 ./scripts/config \
 	--enable MEDIA_SUPPORT \
 	--disable MEDIA_SUPPORT_FILTER \
@@ -45,15 +45,11 @@ fi
 	--enable MEDIA_CONTROLLER \
 	--enable VIDEO_V4L2_SUBDEV_API \
 	--enable VIDEO_DEV \
-	--module VIDEOBUF2_V4L2 \
-	--module VIDEOBUF2_DMA_SG \
-	--module VIDEOBUF2_DMA_CONTIG \
-	--module V4L2_FWNODE \
 	--enable ACPI \
 	--enable PCI \
 	--enable PCI_MSI \
 	--enable DYNAMIC_DEBUG \
-	--disable VIDEO_INTEL_IPU6
+	--module VIDEO_INTEL_IPU6
 "$ROOT/tools/vm-kconfig.sh"
 # As in tools/ipu6/build.sh: the `build` test gates on warnings in the
 # module build log, so the guest kernel does not need -Werror.
@@ -75,9 +71,13 @@ fi
 # because `all` passes its own -j, which drops the jobserver ("make:
 # warning: -j0 forced in submake") and so would trip the build test's
 # warning scan. KBUILD_MODPOST_WARN: no vmlinux here, see
-# tools/ipu6/build.sh.
+# tools/ipu6/build.sh. The QEMU model has no sensor, so the module gets
+# its built-in virt sensor, as CONFIG_VIDEO_IPU4_VIRT_SENSOR=y does in
+# the fork harness's in-tree build (tools/build.sh).
 build() {
 	make -j"$JOBS" M="$DRV_DIR" KBUILD_MODPOST_WARN=1 \
+		CONFIG_VIDEO_IPU4_VIRT_SENSOR=y \
+		KCFLAGS=-DCONFIG_VIDEO_IPU4_VIRT_SENSOR=1 \
 		${IPU4_IPU6_W:+W="$IPU4_IPU6_W"}
 }
 if [[ -n "${IPU4_IPU6_BUILD_LOG:-}" ]]; then
