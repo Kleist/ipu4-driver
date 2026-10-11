@@ -24,15 +24,19 @@ ladder_test isys-irq probe-mmu
 # The ipu6 variant compares with the writes the upstream driver's
 # isys_runtime_pm_resume() and the suspend after it make on 9a19
 # (ISYS MMUs, TSC sync, CSI-2 and UNISPART interrupts, CDC thresholds,
-# LTR/DID; ../upstream_writes.py).
+# LTR/DID; ../upstream_writes.py). The ipu4p variant likewise compares
+# with the IPU4P series' writes (ISYS MMUs, TSC sync, UNISPART and SIP
+# interrupts; ../ipu4p_writes.py).
 #
 # The out-of-tree driver also initialises the ISYS MMU at probe, as
 # silicon does at lines 269-369, so its writes are compared with lines
 # 269-599.
 test_isys-irq() {
 	boot_probe_vm || return 1
-	if [[ "$IPU4_VARIANT" == ipu6 ]]; then
+	if [[ "$IPU4_VARIANT" == ipu6 || "$IPU4_VARIANT" == ipu4p ]]; then
 		local up="$ROOT/tools/tests/ipu6/upstream_writes.py" ranges
+		[[ "$IPU4_VARIANT" == ipu4p ]] &&
+			up="$ROOT/tools/tests/ipu6/ipu4p_writes.py"
 		read -ra ranges < <(python3 "$up" --ranges isys-irq)
 		probe_log_ok &&
 			grep -q '^PROBE:isys-resume ok' "$PROBE_LOG" &&
