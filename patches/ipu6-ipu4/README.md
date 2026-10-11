@@ -9,7 +9,8 @@ the base tree and the PR sequence are in
 
 - Plain `git format-patch` output, one file per commit, named
   `NNNN-<subject>.patch` so that the shell glob order is the series order.
-- Applied with `git am` on top of the pinned tree (`tools/ipu6/pin`) by
+- Applied with `git am` on top of the pinned tree (`tools/ipu6/pin`) and
+  the base series (`patches/ipu6-ipu7/`, `patches/ipu6-ipu4p/`) by
   `tools/ipu6/bootstrap.sh` (or `IPU4_FLAVOR=ipu6 tools/bootstrap.sh`).
   Every bootstrap resets the tree to the pin first, so the files here are
   the only source of truth.
@@ -31,8 +32,7 @@ the base tree and the PR sequence are in
 ```bash
 tools/ipu6/bootstrap.sh                   # tools/linux-ipu6 = pin + this series
 # ... commit changes in tools/linux-ipu6 ...
-git -C tools/linux-ipu6 format-patch -o "$PWD/patches/ipu6-ipu4" \
-    "$(. tools/ipu6/pin; echo "$IPU6_LINUX_SHA")"
+git -C tools/linux-ipu6 format-patch -o "$PWD/patches/ipu6-ipu4" series-base
 tools/tests/ipu6/ladder.sh                # series-applies, build, checkpatch, ...
 ```
 

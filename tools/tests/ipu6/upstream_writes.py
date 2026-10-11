@@ -14,9 +14,13 @@ Usage:
                                     (tools/trace/check_writes.py --expected)
   upstream_writes.py --ranges SET   the BAR ranges they cover
 
-SET is probe-mmu or isys-irq.
+SET is probe-mmu, isys-irq, fw-open or stream-on. stream-on reads the PHY
+tables from the upstream source in $IPU4_IPU6_LINUX_DIR (default
+tools/linux-ipu6-upstream).
 """
 
+import os
+import re
 import sys
 
 # ipu6-mmu.c: REG_INFO; ipu6-platform-regs.h: IPU6_MMU_L1/L2_STREAM_ID_
@@ -106,11 +110,122 @@ def isys_resume():
     return writes, ranges
 
 
+def fw_open():
+    """Writes from the ISYS firmware open to the STREAM_OPEN_DONE handling.
+
+    Compared as a prefix: the stream start follows.
+    """
+    spc = 0x210000           # IPU6_ISYS_SPC_OFFSET, SPC_STATUS_CTRL at +0
+    dmem = 0x200000          # IPU6_ISYS_DMEM_OFFSET, 4-byte registers
+    boot = 0x4000            # BUTTRESS_FW_BOOT_PARAMS_0, ISYS offset 0
+    ready, start, run = 1 << 5, 1 << 1, 1 << 3
+    icache_invalidate = 1 << 12
+    writes = [
+        # ipu6_configure_spc(): SPC_STATUS_CTRL |= ICACHE_INVALIDATE on
+        # an idle SPC (READY); secure mode: DMEM[0] =
+        # IPU6_PKG_DIR_IMR_OFFSET.
+        (spc, ready | icache_invalidate),
+        (dmem + 0x0, 0x40),
+        # ipu6_fw_com_open(): TUNIT_CFG_DWR_REG = TUNIT_MAGIC_PATTERN,
+        # SYSCOM_COMMAND_REG = SYSCOM_COMMAND_UNINIT, boot param
+        # SYSCOM_STATE_ID = SYSCOM_STATE_UNINIT (SYSCOM_CONFIG_ID, an
+        # IOVA, is not compared), start_sp(): START | RUN |
+        # ICACHE_INVALIDATE (no prefetch on 9a19).
+        (dmem + 0x4, 0x5a5a5a5a),
+        (dmem + 0x8, 0x57a7f000),
+        (boot + 0x4, 0x57a7e000),
+        (spc, start | run | icache_invalidate),
+    ]
+    # ipu6_fw_com_prepare() hands out cursor registers from
+    # SYSCOM_QPR_BASE_REG (4), a write/read pair per queue: input queues
+    # proxy, dev, then one per stream (IPU6_ISYS_NUM_STREAMS = 12), then
+    # output queues proxy, msg.
+    proxy_send_wr = 4
+    stream0_send_wr = 4 + 2 * 2
+    proxy_recv_rd = 4 + 2 * (2 + 12) + 1
+    msg_recv_rd = proxy_recv_rd + 2
+    # Stream on: three iwake proxy writes (GDA_ENABLE_IWAKE_INDEX,
+    # GDA_IWAKE_THRESHOLD_INDEX, GDA_IRQ_CRITICAL_THRESHOLD_INDEX), each
+    # one token sent and its answer consumed.
+    for n in range(1, 4):
+        writes += [(dmem + 4 * proxy_send_wr, n),
+                   (dmem + 4 * proxy_recv_rd, n)]
+    # STREAM_OPEN on stream 0's queue, then STREAM_OPEN_DONE consumed.
+    writes += [(dmem + 4 * stream0_send_wr, 1),
+               (dmem + 4 * msg_recv_rd, 1)]
+    ranges = [(boot + 0x4, boot + 0x8), (dmem, dmem + 0x100),
+              (spc, spc + 0x4)]
+    return writes, ranges
+
+
+def phy_table(name):
+    """The {reg, val} entries of a phy_reg table in ipu6-isys-mcd-phy.c."""
+    root = os.path.join(os.path.dirname(__file__), "..", "..", "..")
+    linux = os.environ.get("IPU4_IPU6_LINUX_DIR",
+                           os.path.join(root, "tools", "linux-ipu6-upstream"))
+    with open(os.path.join(linux, "drivers/media/pci/intel/ipu6",
+                           "ipu6-isys-mcd-phy.c")) as f:
+        src = f.read()
+    body = re.search(r"phy_reg %s\[\] = \{(.*?)\n\};" % name, src, re.S)
+    return [(int(r, 16), int(v, 16)) for r, v in
+            re.findall(r"\{(0x[0-9a-f]+), (0x[0-9a-f]+)\}", body.group(1))
+            if int(r, 16)]
+
+
+def stream_on():
+    """Writes of one stream on and off on CSI-2 port 0, 2 lanes."""
+    port = 0x220000          # CSI_REG_PORT_BASE(0)
+    irq, sync = port + 0x80, port + 0xa0  # CSI_PORT_REG_BASE_IRQ_CSI(_SYNC)
+    status, mask, clear, enable, lnp = 0x8, 0x4, 0xc, 0x10, 0x14
+    drv = lambda i: 0x238018 + 4 * i     # CSI_REG_HUB_DRV_ACCESS_PORT
+    fw = lambda i: 0x237000 + 4 * i      # .._FW_ACCESS_PORT, ofs 0x17000
+    phy_ctl, phy_base = 0x238008, 0x10000  # PHY 0
+    pwr_en, reset = 1 << 0, 1 << 4
+    err = 0xfffff            # IPU6_CSI_RX_ERROR_IRQ_MASK
+    nlanes = 2               # virt-sensor on 9a19
+    # ipu6_isys_csi2_set_stream(on): port reset, port clocks of all 8
+    # ports, error IRQs, sync IRQs, FE and PPI2CSI.
+    writes = [(port, 1), (port, 0)]
+    for i in range(8):
+        writes += [(drv(i), 1), (fw(i), 1)]
+    writes += [(irq + status, err), (irq + mask, err), (irq + clear, err),
+               (irq + lnp, err), (irq + enable, err),
+               (sync + status, 0xffffffff), (sync + mask, 0),
+               (sync + clear, 0xffffffff), (sync + lnp, 0),
+               (sync + enable, 0xffffffff),
+               (port + 0x284, 0),           # FE_MODE
+               (port + 0x288, 0),           # FE_MUX_CTRL = CSI_SENSOR_INPUT
+               (port + 0x290, 0x3),         # SYNC_CNTR_SEL: LINE | FRAME
+               (port + 0x204, (nlanes - 1) << 3),  # PPI_INTF lanes
+               (port + 0x200, 1), (port + 0x280, 1)]
+    # ipu6_isys_mcd_phy_set_power(on): PWR_EN, reset deasserted,
+    # common_init_regs, the 2-lane table of PHY port 1 (driver port 0 is
+    # PHY port 1), reset asserted.
+    writes += [(phy_ctl, pwr_en), (phy_ctl, pwr_en)]
+    writes += [(phy_base + r, v) for r, v in phy_table("common_init_regs")]
+    writes += [(phy_base + r, v) for r, v in phy_table("x2_port1_config_regs")]
+    writes += [(phy_ctl, pwr_en | reset)]
+    # ipu6_isys_csi2_set_stream(off), PHY power off, port clocks off.
+    writes += [(port + 0x280, 0), (port + 0x200, 0), (irq + enable, 0),
+               (irq + clear, err), (sync + enable, 0),
+               (sync + clear, 0xffffffff), (phy_ctl, 0), (fw(0), 0),
+               (drv(0), 0)]
+    # The IRQ handler also writes the error CLEAR register, at times that
+    # depend on interrupt timing: leave it out.
+    writes = [w for w in writes if w[0] != irq + clear]
+    ranges = [(port, irq + clear), (irq + clear + 4, port + 0x1000),
+              (phy_base, phy_base + 0x8000), (fw(0), fw(8)),
+              (phy_ctl, phy_ctl + 4), (drv(0), drv(8))]
+    return writes, ranges
+
+
 SETS = {
     # Probe: only the PSYS MMUs are initialised (ipu6_pci_probe ->
     # ipu6_mmu_hw_init(psys)); the ISYS ones wait for the ISYS resume.
     "probe-mmu": lambda: mmu_hw_init(PSYS_MMUS),
     "isys-irq": isys_resume,
+    "fw-open": fw_open,
+    "stream-on": stream_on,
 }
 
 

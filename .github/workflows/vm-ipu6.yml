@@ -68,7 +68,8 @@ jobs:
           - driver: ipu6
             variant: ipu6
             linux-dir: tools/linux-ipu6-upstream
-            pin: tools/ipu6/pin.upstream
+            # pin.upstream sources pin; key the cache on the tag itself.
+            pin: tools/ipu6/pin
             cache: linux-ipu6-upstream
           - driver: ipu4-patches
             variant: ipu4
@@ -136,7 +137,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ matrix.linux-dir }}
-          key: ${{ matrix.cache }}-${{ hashFiles(matrix.pin) }}-${{ hashFiles('patches/ipu6-ipu4/**', 'tools/ipu6/*.sh', 'tools/out-of-tree/*.sh', 'tools/build-kernel.sh', 'tools/vm-kconfig.sh') }}
+          key: ${{ matrix.cache }}-${{ hashFiles(matrix.pin) }}-${{ hashFiles('patches/ipu6-ipu7/**', 'patches/ipu6-ipu4p/**', 'patches/ipu6-ipu4/**', 'tools/ipu6/*.sh', 'tools/out-of-tree/*.sh', 'tools/build-kernel.sh', 'tools/vm-kconfig.sh') }}
           restore-keys: |
             ${{ matrix.cache }}-${{ hashFiles(matrix.pin) }}-
 

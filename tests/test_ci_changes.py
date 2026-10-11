@@ -40,6 +40,8 @@ def classify(*paths):
         ("data/trace.txt", {"vm_smoke", "ipu6"}),
         ("tools/bootstrap.sh", {"kunit", "vm_smoke", "ipu6"}),
         ("patches/ipu6-ipu4/0001-x.patch", {"ipu6"}),
+        ("patches/ipu6-ipu4p/0001-x.patch", {"ipu6"}),
+        ("patches/ipu6-ipu7/0001-x.patch", {"ipu6"}),
         ("tools/tests/ipu6/ladder.sh", {"ipu6"}),
         ("tools/tests/compare-mmio-baseline.txt", {"vm_smoke"}),
         ("tools/trace/compare.py", {"pytest", "vm_smoke"}),

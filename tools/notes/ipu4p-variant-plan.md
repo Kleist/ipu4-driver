@@ -21,8 +21,10 @@ shows two things:
 
 ## Base and harness
 
-- **Kernel:** the baseline driver `ipu4p`: `tools/ipu6/pin` (Ruslan's
-  `ipu4p-upstream`) without the series, in `tools/linux-ipu6-ruslan/`
+- **Kernel:** the baseline driver `ipu4p`: the mainline pin
+  `tools/ipu6/pin` (bumped weekly) plus `patches/ipu6-ipu7/` (Antti's
+  IPU7 series) and `patches/ipu6-ipu4p/` (Ruslan's IPU4P series), exported from his
+  `ipu4p-upstream` branch), in `tools/linux-ipu6-ruslan/`
   (`IPU4_DRIVER=ipu4p`). The patched tree (`IPU4_DRIVER=ipu4-patches
   IPU4_VARIANT=ipu4p`) is gated by the IPU4 port in
   `enabled-tests.ipu4-patches.ipu4p`, which gains a test once it passes
@@ -80,7 +82,8 @@ commit, first in the step's PR.
 | P3 | `module-load` for the variant (virt-sensor on the variant's device, as the IPU6 variant's V3 does) | `module-load` | folded into P2 |
 | P4 | Stage `intel/ipu/ipu4p_fw.bin`; `probe-identify` expects that file for `8a19` | `probe-identify` | merged (#144) |
 | P4b | Baseline leg `ipu4p / ipu4p` (Ruslan's tree without the series); P1–P4 move to it, `ipu4-patches / ipu4p` keeps them for the series | `series-applies`, `build`, `checkpatch`, `vm-boot`, `module-load`, `probe-identify` | merged (with the ladder's six legs) |
-| P5 | Model: IPU4P PWR_STATE FSM and FREQ_CTL | `probe-buttress` | in review |
+| P5 | Model: IPU4P PWR_STATE FSM and FREQ_CTL | `probe-buttress` | merged (#147) |
+| P5b | Ruslan's code as a patch series on the mainline pin (`patches/ipu6-ipu7/`, `patches/ipu6-ipu4p/`), pin bumped weekly | — | in review |
 | P6 | ISYS runtime resume on IPU4P: UNISPART SW IRQ bit 22, SIP0/SIP1 windows. Needs the IPU4 port's forced ISYS resume (its PR 9) | an IPU4P resume test (driver-observable, not trace-based) | |
 | P7 | Model: SysCom queue base register 8 | `fw-open` | |
 | P8 | Model: 8 CSI-2 ports, port ↔ source map, PHY sideband latches | `stream-on`, `stream-pattern` | |
@@ -130,3 +133,9 @@ commit, first in the step's PR.
   (P8, or earlier if a resume test needs ISYS bound).
 - (P5) `isys-resume` passes on ipu4p even with ISYS unbound, so it is
   not gated here; revisit once ISYS binds.
+- (P5b) Ruslan's pin was 116 commits on v7.3-rc4: 60 for his downstream
+  `intel/ipu4` driver, which the ipu6 flavor never builds, then Antti's 45
+  IPU7 patches and his 11 IPU4P patches. The 56 `ipu6/` patches
+  cherry-pick cleanly onto v7.3-rc4 and give a byte-identical `ipu6/` and
+  `staging/media/ipu7/`, so they alone became `patches/ipu6-ipu7/` (45)
+  and `patches/ipu6-ipu4p/` (11).
