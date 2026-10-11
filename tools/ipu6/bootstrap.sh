@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 # Bootstrap the ipu6 flavor: fetch the pinned kernel tree into
-# tools/linux-ipu6/, reset it to the pin and `git am` every
-# patches/ipu6-ipu4/*.patch in order.
+# tools/linux-ipu6/, reset it to the pin and `git am` the base series
+# (IPU4_IPU6_BASE_PATCH_DIRS, if any) followed by every
+# patches/ipu6-ipu4/*.patch, in order.
 #
 # Idempotent: every run starts again from the pin, so the tree always
 # equals pin + current series. Files the series does not touch keep their
 # mtimes, so a cached build only recompiles what the series changes.
 #
-# IPU4_IPU6_PIN (default tools/ipu6/pin) and IPU4_IPU6_PATCH_DIR (default
-# patches/ipu6-ipu4; empty for no series) select another base, together
-# with IPU4_IPU6_LINUX_DIR; tools/tests/ipu6/ladder.sh sets all three per
+# IPU4_IPU6_PIN (default tools/ipu6/pin), IPU4_IPU6_BASE_PATCH_DIRS
+# (colon-separated, applied in order; default none) and IPU4_IPU6_PATCH_DIR (default patches/ipu6-ipu4;
+# empty for no series) select another base, together with
+# IPU4_IPU6_LINUX_DIR; tools/tests/ipu6/ladder.sh sets all three per
 # QEMU model variant (the ipu6 variant runs on unpatched mainline).
 #
 # Exit codes: 0 ok, 1 harness/fetch error, 3 the series does not apply.
@@ -21,6 +23,7 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 . "${IPU4_IPU6_PIN:-$HERE/pin}"
 
 LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$ROOT/tools/linux-ipu6}"
+IFS=: read -ra BASE_PATCH_DIRS <<< "${IPU4_IPU6_BASE_PATCH_DIRS:-}"
 PATCH_DIR="${IPU4_IPU6_PATCH_DIR-$ROOT/patches/ipu6-ipu4}"
 BRANCH="ipu6-ipu4"
 
@@ -59,26 +62,37 @@ git -C "$LINUX_DIR" checkout -q -f -B "$BRANCH" "$IPU6_LINUX_SHA"
 # .config) stay.
 git -C "$LINUX_DIR" clean -q -fd
 
-patches=()
-if [[ -n "$PATCH_DIR" ]]; then
+# Apply every *.patch in $1, in order; exit 3 if one does not apply.
+apply_series() {
+	local dir="$1" series
 	shopt -s nullglob
-	patches=("$PATCH_DIR"/*.patch)
+	series=("$dir"/*.patch)
 	shopt -u nullglob
-fi
-
-if [[ -z "$PATCH_DIR" ]]; then
-	echo ">>> no series for this base; tree is the bare pin"
-elif (( ${#patches[@]} == 0 )); then
-	echo ">>> no patches in ${PATCH_DIR#"$ROOT"/}; tree is the bare pin"
-else
-	echo ">>> applying ${#patches[@]} patch(es) from ${PATCH_DIR#"$ROOT"/}"
-	if ! git -C "$LINUX_DIR" am -q "${patches[@]}"; then
-		echo "!!! series does not apply on $IPU6_LINUX_SHA" >&2
+	if (( ${#series[@]} == 0 )); then
+		echo ">>> no patches in ${dir#"$ROOT"/}"
+		return
+	fi
+	echo ">>> applying ${#series[@]} patch(es) from ${dir#"$ROOT"/}"
+	if ! git -C "$LINUX_DIR" am -q "${series[@]}"; then
+		echo "!!! ${dir#"$ROOT"/} does not apply on $IPU6_LINUX_SHA" >&2
 		git -C "$LINUX_DIR" am --show-current-patch=diff >&2 || true
 		git -C "$LINUX_DIR" am --abort || true
 		exit 3
 	fi
+	applied=$(( applied + ${#series[@]} ))
+}
+
+applied=0
+for dir in "${BASE_PATCH_DIRS[@]}"; do
+	apply_series "$dir"
+done
+# Where patches/ipu6-ipu4/ starts: `git format-patch series-base`.
+git -C "$LINUX_DIR" tag -f series-base > /dev/null
+if [[ -n "$PATCH_DIR" ]]; then
+	apply_series "$PATCH_DIR"
+else
+	echo ">>> no series for this base"
 fi
 
 echo ">>> bootstrap (ipu6 flavor) complete"
-git -C "$LINUX_DIR" log --oneline -n $(( ${#patches[@]} + 1 ))
+git -C "$LINUX_DIR" log --oneline -n $(( applied + 1 ))

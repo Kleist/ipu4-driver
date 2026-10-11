@@ -76,7 +76,7 @@ classify() {
 		HIT[pytest]=true; HIT[vm_smoke]=true; HIT[ipu6]=true ;;
 
 	# ipu6 and out-of-tree flavors (the ladder).
-	patches/ipu6-ipu4/* | tools/ipu6/* | tools/out-of-tree/* | \
+	patches/ipu6-ipu4/* | patches/ipu6-ipu7/* | patches/ipu6-ipu4p/* | tools/ipu6/* | tools/out-of-tree/* | \
 	tools/tests/ipu6/* | tools/virt-sensor/*)
 		HIT[ipu6]=true ;;
 
