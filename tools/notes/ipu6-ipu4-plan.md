@@ -14,13 +14,13 @@ repo's QEMU IPU4 model on every PR.
 
 | What | Value |
 |---|---|
-| Tree | `https://github.com/ruslanbay/linux.git` |
-| Ref | `340985596` (`ipu4p-upstream`, "media: ipu6: Enable IPU4P PCI device") |
-| Upstream base | v7.3-rc4 + Antti Laakso's IPU7-in-ipu6 series ([lore][antti]) + Ruslan's 11 IPU4P patches ([lore][ruslan]) |
+| Tree | mainline (`https://github.com/torvalds/linux.git`), tag in `tools/ipu6/pin`, bumped weekly by `tools/ipu6/bump-pin.sh` |
+| Base series | `patches/ipu6-ipu7/`: Antti Laakso's IPU7-in-ipu6 series ([lore][antti]); `patches/ipu6-ipu4p/`: Ruslan's 11 IPU4P patches ([lore][ruslan]) |
 
-The pin is the SHA referenced from Ruslan's lore mail. His later
+The base series was exported from Ruslan's `ipu4p-upstream` branch
+(`340985596`, the SHA referenced from his lore mail). His later
 `work/ipu4p-upstream-series-rebuild-*` branches (e.g. the 64-bit firmware-ABI
-alignment fix) are picked up by an explicit pin-bump PR, not automatically.
+alignment fix) are picked up by re-exporting it, not automatically.
 
 [antti]: https://lore.kernel.org/all/20260907113004.2489993-1-sakari.ailus@linux.intel.com/
 [ruslan]: https://lore.kernel.org/all/aedlbUANNY6QvZ_mrVqU9aH15j76MKgYxxwkpmayED7tFEDztNQN8A-vDuLUIRpb9At6QpBp4gg9RAOA6gvD-LpCOUpFm8aVDJ5IK87tpPg=@proton.me/
@@ -176,9 +176,9 @@ driver and under `ipu4-patches`. A track owns its driver's gate files,
 | Track | Plan | Driver | Owns |
 |---|---|---|---|
 | IPU4 (out-of-tree baseline) | [`tools/notes/ipu4-out-of-tree-plan.md`](ipu4-out-of-tree-plan.md) | `ipu4-out-of-tree`: `kernel/ipu4/` on v7.3-rc4 | `enabled-tests.ipu4-out-of-tree.*` |
-| IPU4P variant (baseline) | [`tools/notes/ipu4p-variant-plan.md`](ipu4p-variant-plan.md) | `ipu4p`: Ruslan's tree (`tools/ipu6/pin`), no series | `enabled-tests.ipu4p.*` |
-| IPU6 variant (baseline) | [`tools/notes/ipu6-variant-plan.md`](ipu6-variant-plan.md) | `ipu6`: mainline (`tools/ipu6/pin.upstream`) | `enabled-tests.ipu6.*` |
-| IPU4 port (this plan) | `tools/notes/ipu6-ipu4-plan.md` | `ipu4-patches`: Ruslan's tree + the series | `patches/ipu6-ipu4/`, `enabled-tests.ipu4-patches.*` |
+| IPU4P variant (baseline) | [`tools/notes/ipu4p-variant-plan.md`](ipu4p-variant-plan.md) | `ipu4p`: mainline pin + `patches/ipu6-ipu7/` + `patches/ipu6-ipu4p/` | `enabled-tests.ipu4p.*` |
+| IPU6 variant (baseline) | [`tools/notes/ipu6-variant-plan.md`](ipu6-variant-plan.md) | `ipu6`: mainline pin, no series (`tools/ipu6/pin.upstream`) | `enabled-tests.ipu6.*` |
+| IPU4 port (this plan) | `tools/notes/ipu6-ipu4-plan.md` | `ipu4-patches`: the `ipu4p` tree + the series | `patches/ipu6-ipu4/`, `enabled-tests.ipu4-patches.*` |
 
 The three unmodified drivers are the baselines tests are developed
 against: a model or test change for one IPU is first shown on its own
