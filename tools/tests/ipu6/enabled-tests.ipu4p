@@ -1,0 +1,12 @@
+# Ladder tests gated in CI for the ipu4p variant of the QEMU model
+# (IPU4_VARIANT=ipu4p; plan tools/notes/ipu4p-variant-plan.md). Same
+# format as enabled-tests (the ipu4 list): one test name per line, '#'
+# starts a comment. This variant runs on the IPU4 port's tree
+# (tools/ipu6/pin + patches/ipu6-ipu4/), which carries both IPU4P and
+# IPU4; each step of the plan enables at least one more test here.
+
+# Static tests (plan P1). Same tree as the ipu4 leg, so these show the
+# series still applies and builds on the base that carries IPU4P.
+series-applies
+build
+checkpatch
