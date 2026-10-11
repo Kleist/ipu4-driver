@@ -52,8 +52,9 @@ APPEND+=" mitigations=off tsc=reliable"
 # kernel hands the unknown parameter to /init, whose checks read it.
 case "${IPU4_VARIANT:-ipu4}" in
 ipu4) APPEND+=" ipu_pci_id=0x5a88" ;;
+ipu4p) APPEND+=" ipu_pci_id=0x8a19" ;;
 ipu6) APPEND+=" ipu_pci_id=0x9a19" ;;
-*) echo "unknown IPU4_VARIANT '${IPU4_VARIANT}' (expected ipu4 or ipu6)" >&2; exit 1 ;;
+*) echo "unknown IPU4_VARIANT '${IPU4_VARIANT}' (expected ipu4, ipu4p or ipu6)" >&2; exit 1 ;;
 esac
 if [[ "${IPU4_MMIOTRACE:-0}" == 1 ]]; then
 	# Pre-size the ftrace ring buffer so a full probe-capture fits
