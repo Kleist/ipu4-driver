@@ -85,8 +85,9 @@ commit, first in the step's PR.
 | P5 | Model: IPU4P PWR_STATE FSM and FREQ_CTL | `probe-buttress` | merged (#147) |
 | P5b | Ruslan's code as a patch series on the mainline pin (`patches/ipu6-ipu7/`, `patches/ipu6-ipu4p/`), pin bumped weekly | — | merged (#148) |
 | P6 | ISYS binds on IPU4P: virt-sensor on firmware port 3; the forced ISYS resume then runs with ISYS bound | `isys-resume` | merged (#156) |
-| P7 | Model: SysCom queue base register 8, UNISPART SW IRQ bit 22, proxy tokens; `probe-mmu` / `isys-irq` against the series' writes (`ipu4p_writes.py`) | `probe-mmu`, `isys-irq`, `fw-open` | in review |
-| P8 | Model: 8 CSI-2 ports, port ↔ source map, PHY sideband latches | `stream-on`, `stream-pattern` | |
+| P7 | Model: SysCom queue base register 8, UNISPART SW IRQ bit 22, proxy tokens; `probe-mmu` / `isys-irq` against the series' writes (`ipu4p_writes.py`) | `probe-mmu`, `isys-irq`, `fw-open` | merged (#159) |
+| P8 | `stream-on` against the series' receiver writes (`ipu4p_writes.py`); no model change | `stream-on`, `stream-pattern` | in review |
+| P8b | Model: SIP0 window and port 0's CSI IRQ controls, a receiver error per frame (as the ipu6 variant's V11) | `csi2-sof-irq` | |
 
 ## Open questions
 
@@ -157,3 +158,13 @@ commit, first in the step's PR.
 - (P7) The model has no handler for the SIP0/SIP1 IRQ windows yet: the
   writes are absorbed and the model never raises a CSI-2 IRQ through
   them (P8, `csi2-sof-irq`).
+- (P8) `stream-on` and `stream-pattern` needed no model change: the model
+  accepts the IPU4P receiver writes (port 0 at 0x164300, IRQ controls at
+  0x166300/0x166400) and delivers frames regardless. The PHY sideband
+  writes at resume are absorbed without readback. The LTR/DID writes
+  (0x68) are left out of the comparison: the driver computes them from
+  the stream at run time.
+- (P8) Ruslan's ISR takes frame events from the firmware and uses the
+  CSI-2 IRQ path only to collect receiver errors, like upstream IPU6. So
+  `csi2-sof-irq` on ipu4p follows the ipu6 variant: the model must report
+  an error through SIP0 (bit 3) and port 0's CTRL0 status (P8b).
