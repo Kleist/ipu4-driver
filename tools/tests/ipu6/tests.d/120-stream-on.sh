@@ -28,6 +28,9 @@ ladder_test stream-on fw-open
 # The receiver timing (+0x2c..) and lane count (+0x04) follow the
 # sensor (silicon: one lane at 320 MHz, the virt-sensor: four at
 # 450 MHz) and are not compared.
+# The ipu6 variant checks the same markers and compares the CSI-2 port 0
+# stream on/off and MCD PHY power-up writes with the upstream driver's
+# (../upstream_writes.py; the PHY tables are read from the upstream source).
 test_stream-on() {
 	boot_stream_vm || return 1
 	stream_log_ok || return 1
@@ -44,6 +47,14 @@ test_stream-on() {
 		echo "!!! kernel oops/warning in the stream boot"
 		rc=1
 	}
+	if [[ "$IPU4_VARIANT" == ipu6 ]]; then
+		local up="$ROOT/tools/tests/ipu6/upstream_writes.py" ranges
+		read -ra ranges < <(python3 "$up" --ranges stream-on)
+		python3 "$ROOT/tools/trace/check_writes.py" \
+			--expected <(python3 "$up" stream-on) \
+			--actual "$STREAM_WRITES" "${ranges[@]}" || rc=1
+		return "$rc"
+	fi
 	python3 "$ROOT/tools/trace/check_writes.py" \
 		--expected "$ROOT/data/trace.txt" --expected-lines 600-1113 \
 		--actual "$STREAM_WRITES" \
