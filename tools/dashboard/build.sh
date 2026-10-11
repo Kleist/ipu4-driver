@@ -6,7 +6,6 @@
 #   tools/coverage/html/                        ($COV_DIR/html/)  → site/coverage/
 #   tools/tests/out/compare-mmio/report.json    ($MMIO_DIR/report.json)
 #   tools/tests/out/compare-mmio/report.txt     ($MMIO_DIR/report.txt) → site/mmio/
-#   tools/tests/out/streamon.summary            ($STREAMON_SUMMARY)
 #   tools/tests/out/ipu6-ladder-results/**/results.json  ($IPU6_LADDER_DIR,
 #                                               vm-ipu6 artifacts) and
 #   tools/tests/out/ipu6-ladder/results.json    (a local ladder.sh run)
@@ -14,7 +13,7 @@
 #   tools/notes/upstream-watch-state.json
 #   tools/notes/upstream-diff/summary.md        (regenerated if missing)
 #   .github/kernel-pins/*.json
-#   GitHub Actions API (gh) — workflow run status
+#   GitHub Actions API (gh) — latest ci run, for the kernel tracks
 #
 # Writes:
 #   $OUT_DIR/index.html            single-page dashboard
@@ -34,7 +33,6 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 OUT_DIR="${OUT_DIR:-$ROOT/site}"
 COV_DIR="${COV_DIR:-$ROOT/tools/coverage}"
 MMIO_DIR="${MMIO_DIR:-$ROOT/tools/tests/out/compare-mmio}"
-STREAMON_SUMMARY="${STREAMON_SUMMARY:-$ROOT/tools/tests/out/streamon.summary}"
 REPO_SLUG="${REPO_SLUG:-Kleist/ipu4-driver}"
 VM_SMOKE_RUN_ID="${VM_SMOKE_RUN_ID:-}"
 IPU6_LADDER_DIR="${IPU6_LADDER_DIR:-$ROOT/tools/tests/out/ipu6-ladder-results}"
@@ -51,7 +49,6 @@ python3 "$HERE/build_payload.py" \
   --out-dir "$OUT_DIR" \
   --cov-dir "$COV_DIR" \
   --mmio-dir "$MMIO_DIR" \
-  --streamon-summary "$STREAMON_SUMMARY" \
   --repo "$REPO_SLUG" \
   ${VM_SMOKE_RUN_ID:+--vm-smoke-run-id "$VM_SMOKE_RUN_ID"} \
   --ipu6-ladder-dir "$IPU6_LADDER_DIR" \

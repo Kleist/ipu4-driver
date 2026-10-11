@@ -117,26 +117,6 @@
   {% endif %}
 </section>
 
-<section class="card">
-  <h2>CI status</h2>
-  {% if ci.workflows %}
-  <div class="ci-grid">
-    {% for wf in ci.workflows %}
-    <a class="ci-tile state-{{ wf.conclusion or 'unknown' }}" href="{{ wf.url }}">
-      <div class="ci-name">{{ wf.name }}</div>
-      <div class="ci-conclusion">{{ wf.conclusion or 'pending' }}</div>
-      <div class="ci-meta">{{ wf.relative or '' }}{% if wf.duration %} · {{ wf.duration }}{% endif %}</div>
-    </a>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="empty">No workflow runs found.</p>
-  {% endif %}
-  {% if streamon_marker %}
-  <p class="streamon-marker">Latest streamon-smoke marker: <code>{{ streamon_marker }}</code></p>
-  {% endif %}
-</section>
-
 <details class="card" id="harness">
   <summary><h2>Out-of-tree QEMU harness (vm-smoke)</h2></summary>
   <p class="meta">Coverage and silicon-vs-QEMU MMIO divergence of <code>kernel/ipu4/</code> on 6.12, register handlers of the IPU4 model and upstream divergence.</p>

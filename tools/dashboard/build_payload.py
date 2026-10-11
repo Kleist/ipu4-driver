@@ -48,13 +48,6 @@ def _commit_sha(root: Path) -> str | None:
         return None
 
 
-def _read_streamon_marker(path: Path) -> str | None:
-    if not path.is_file():
-        return None
-    text = path.read_text().strip()
-    return text or None
-
-
 _DIFF_TOTAL_RE = re.compile(
     r"^\|\s*\*\*total\*\*\s*\|\s*\*\*(?P<hunks>\d+)\*\*\s*\|"
     r"\s*\*\*(?P<plus>\d+)\*\*\s*\|\s*\*\*(?P<minus>\d+)\*\*",
@@ -83,61 +76,6 @@ def _parse_upstream_diff(summary_md: Path) -> dict | None:
         "plus": int(total.group("plus")),
         "minus": int(total.group("minus")),
     }
-
-
-# Workflows whose status is uninteresting on the front dashboard:
-# - reusable workflows (workflow_call only) just mirror their caller's conclusion.
-# - pages is what builds this dashboard, so a red row here is self-referential.
-# - bump-kernel-pins / upstream-watch are PR-opener bots, not driver-quality gates.
-_DASHBOARD_WORKFLOW_DENYLIST = frozenset({
-    "build-and-kunit (reusable)",
-    "vm-smoke (reusable)",
-    "pages",
-    "pages-preview",
-    "bump-kernel-pins",
-    "upstream-watch",
-})
-
-
-def _gh_workflows(root: Path, repo: str) -> list[dict]:
-    """Best-effort: query GitHub for the latest run of every workflow.
-
-    Returns an empty list if `gh` is unavailable or unauthenticated —
-    the dashboard renders an "no runs found" placeholder in that case.
-    Each workflow shows the most recent run regardless of conclusion;
-    failed runs are visually distinguished in the template. Workflows
-    in _DASHBOARD_WORKFLOW_DENYLIST, and workflows with no file in this
-    checkout (deleted ones, GitHub's dynamic pages-build-deployment),
-    are dropped before rendering.
-    """
-    if not _have("gh"):
-        return []
-    workflows = _gh_json(
-        ["api", f"repos/{repo}/actions/workflows", "--jq", ".workflows"]
-    ) or []
-    out = []
-    for wf in workflows:
-        if wf["name"] in _DASHBOARD_WORKFLOW_DENYLIST:
-            continue
-        if not (root / wf.get("path", "")).is_file():
-            continue
-        runs = _gh_json([
-            "api",
-            f"repos/{repo}/actions/workflows/{wf['id']}/runs?per_page=1",
-            "--jq", ".workflow_runs",
-        ]) or []
-        if not runs:
-            continue
-        run = runs[0]
-        out.append({
-            "name": wf["name"],
-            "url": run.get("html_url"),
-            "conclusion": run.get("conclusion") or run.get("status"),
-            "created_at": run.get("created_at"),
-            "relative": _relative_time(run.get("created_at")),
-            "duration": _duration(run.get("created_at"), run.get("updated_at")),
-        })
-    return out
 
 
 def _ci_jobs(repo: str) -> tuple[list[dict] | None, str | None]:
@@ -181,39 +119,6 @@ def _gh_json(args: list[str]):
         return json.loads(out)
     except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError):
         return None
-
-
-def _relative_time(ts: str | None) -> str | None:
-    if not ts:
-        return None
-    try:
-        when = _dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    delta = _dt.datetime.now(_dt.timezone.utc) - when
-    if delta.days >= 1:
-        return f"{delta.days}d ago"
-    hours = delta.seconds // 3600
-    if hours:
-        return f"{hours}h ago"
-    minutes = max(1, delta.seconds // 60)
-    return f"{minutes}m ago"
-
-
-def _duration(start: str | None, end: str | None) -> str | None:
-    if not (start and end):
-        return None
-    try:
-        a = _dt.datetime.fromisoformat(start.replace("Z", "+00:00"))
-        b = _dt.datetime.fromisoformat(end.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    secs = int((b - a).total_seconds())
-    if secs < 0:
-        return None
-    if secs < 60:
-        return f"{secs}s"
-    return f"{secs // 60}m{secs % 60:02d}s"
 
 
 def _ladder_tests(root: Path) -> list[str]:
@@ -296,7 +201,6 @@ def main(argv=None):
     p.add_argument("--out-dir", required=True, help="dashboard output dir (for prior history)")
     p.add_argument("--cov-dir", required=True, help="tools/coverage/ dir")
     p.add_argument("--mmio-dir", required=True, help="tools/tests/out/compare-mmio/ dir")
-    p.add_argument("--streamon-summary", required=True, help="streamon.summary file")
     p.add_argument("--repo", required=True, help="GitHub owner/name slug")
     p.add_argument("--vm-smoke-run-id", default=None)
     p.add_argument("--ipu6-ladder-dir", action="append", default=[],
@@ -324,8 +228,6 @@ def main(argv=None):
         "generated_at": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "commit_sha": _commit_sha(root),
         "repo": args.repo,
-        "streamon_marker": _read_streamon_marker(Path(args.streamon_summary)),
-        "ci": {"workflows": _gh_workflows(root, args.repo)},
         "coverage": {"summary": coverage_summary},
         "mmio": {"report": mmio_report},
         "registers": registers,

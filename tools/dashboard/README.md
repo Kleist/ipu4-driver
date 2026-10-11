@@ -2,7 +2,7 @@
 
 Renders a single-page GitHub Pages site with the project's current
 state: the test ladder per leg, the supported kernel tracks with their
-latest build + KUnit result, latest CI runs and, collapsed, the
+latest build + KUnit result and, collapsed, the
 out-of-tree harness's coverage, MMIO divergence, register coverage and
 upstream divergence.
 
@@ -68,7 +68,6 @@ The dashboard is a contract over files already produced elsewhere:
 | `tools/coverage/html/` | `tools/coverage/collect.sh` (genhtml) | optional |
 | `tools/tests/out/compare-mmio/report.json` | `tools/tests/compare-mmio.sh` | optional |
 | `tools/tests/out/compare-mmio/report.txt` | same | optional |
-| `tools/tests/out/streamon.summary` | `tools/tests/streamon-smoke.sh` | optional |
 | `tools/tests/out/ipu6-ladder-results/**/results.json` (`$IPU6_LADDER_DIR`) | `tools/tests/ipu6/ladder.sh`, via the `ipu6-ladder-results-<leg>` artifacts of `vm-ipu6` | optional (matrix renders "not run yet") |
 | `tools/tests/out/ipu6-ladder/results.json` | a local `tools/tests/ipu6/ladder.sh` run | optional |
 | `tools/tests/ipu6/ladder.sh --list` | committed | optional (row names before any results exist) |
