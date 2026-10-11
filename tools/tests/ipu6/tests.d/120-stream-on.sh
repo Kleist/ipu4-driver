@@ -31,6 +31,8 @@ ladder_test stream-on fw-open
 # The ipu6 variant checks the same markers and compares the CSI-2 port 0
 # stream on/off and MCD PHY power-up writes with the upstream driver's
 # (../upstream_writes.py; the PHY tables are read from the upstream source).
+# The ipu4p variant likewise compares port 0's receiver enable, config and
+# IRQ control writes with the IPU4P series' (../ipu4p_writes.py).
 test_stream-on() {
 	boot_stream_vm || return 1
 	stream_log_ok || return 1
@@ -47,8 +49,10 @@ test_stream-on() {
 		echo "!!! kernel oops/warning in the stream boot"
 		rc=1
 	}
-	if [[ "$IPU4_VARIANT" == ipu6 ]]; then
+	if [[ "$IPU4_VARIANT" == ipu6 || "$IPU4_VARIANT" == ipu4p ]]; then
 		local up="$ROOT/tools/tests/ipu6/upstream_writes.py" ranges
+		[[ "$IPU4_VARIANT" == ipu4p ]] &&
+			up="$ROOT/tools/tests/ipu6/ipu4p_writes.py"
 		read -ra ranges < <(python3 "$up" --ranges stream-on)
 		python3 "$ROOT/tools/trace/check_writes.py" \
 			--expected <(python3 "$up" stream-on) \
