@@ -1,0 +1,23 @@
+# Gate of the ipu4-patches / ipu4p leg: the upstreamable driver under the
+# IPU4P QEMU model. Owned by the IPU4 port; gains a test once it passes on
+# the IPU4P baseline (enabled-tests.ipu4p.ipu4p) and here.
+#
+# One test name per line; '#' starts a comment. Every known test runs on
+# every PR, but only the tests listed here fail the job; run
+# `tools/tests/ipu6/ladder.sh --list` for the names.
+
+# Static tests: the same tree as ipu4-patches / ipu4.
+series-applies
+build
+checkpatch
+
+# Guest boot with the model presenting 8086:8a19 (ipu4p plan P2).
+vm-boot
+
+# virt-sensor + intel-ipu6* load/unload; intel-ipu6 probes 8a19 on load
+# (ipu4p plan P2, which also covers P3).
+module-load
+
+# Probe identifies 8a19 as IPU4P (requests intel/ipu/ipu4p_fw.bin)
+# (ipu4p plan P4).
+probe-identify

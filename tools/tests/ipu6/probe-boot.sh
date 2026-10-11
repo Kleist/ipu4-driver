@@ -21,16 +21,16 @@ boot_probe_vm() {
 		return 0
 	fi
 	if [[ -z "${WANT[vm-boot]:-}" ]]; then
-		IPU4_FLAVOR=ipu6 "$ROOT/tools/build-kernel.sh" || return 1
+		"$ROOT/tools/build-kernel.sh" || return 1
 	fi
 	"$ROOT/tools/virt-sensor/build.sh" || return 1
-	IPU4_FLAVOR=ipu6 IPU4_INIT=ipu6-probe "$ROOT/tools/rootfs/build.sh" ||
+	IPU4_INIT=ipu6-probe "$ROOT/tools/rootfs/build.sh" ||
 		return 1
 	rm -f "$PROBE_LOG" "$PROBE_WRITES"
 	# The raw log has every region's writes (~15 MB, mostly serial and
 	# VGA); keep only the IPU BAR's.
 	timeout --preserve-status "${IPU4_SMOKE_TIMEOUT:-90}" \
-		env IPU4_FLAVOR=ipu6 IPU4_MMIO_WRITE_LOG="$PROBE_WRITES.all" \
+		env IPU4_MMIO_WRITE_LOG="$PROBE_WRITES.all" \
 		"$ROOT/tools/run-vm.sh" > "$PROBE_LOG" 2>&1
 	grep -F "name 'ipu4-bar0'" "$PROBE_WRITES.all" > "$PROBE_WRITES"
 	rm -f "$PROBE_WRITES.all"

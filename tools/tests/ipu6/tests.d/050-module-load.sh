@@ -13,14 +13,14 @@ ladder_test module-load vm-boot
 test_module-load() {
 	local log="$ROOT/tools/tests/out/ipu6-module-load.serial"
 	if [[ -z "${WANT[vm-boot]:-}" ]]; then
-		IPU4_FLAVOR=ipu6 "$ROOT/tools/build-kernel.sh" || return 1
+		"$ROOT/tools/build-kernel.sh" || return 1
 	fi
 	"$ROOT/tools/virt-sensor/build.sh" || return 1
-	IPU4_FLAVOR=ipu6 IPU4_INIT=ipu6-modules "$ROOT/tools/rootfs/build.sh" ||
+	IPU4_INIT=ipu6-modules "$ROOT/tools/rootfs/build.sh" ||
 		return 1
 	rm -f "$log"
 	timeout --preserve-status "${IPU4_SMOKE_TIMEOUT:-90}" \
-		env IPU4_FLAVOR=ipu6 "$ROOT/tools/run-vm.sh" > "$log" 2>&1
+		"$ROOT/tools/run-vm.sh" > "$log" 2>&1
 	grep -E '^MODLOAD:|virt-sensor|ipu6' "$log"
 	grep -q '^MODLOAD: PASS' "$log"
 }

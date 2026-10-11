@@ -50,7 +50,7 @@
   <p class="empty">No ladder results yet — the first <code>vm-ipu6</code> run on the default branch populates this.</p>
   {% endif %}
   <div class="kpi-row">
-    {% for v in ipu6_port.variants %}
+    {% for v in ipu6_port.legs %}
     {% if v.has_data %}
     <div class="kpi ladder-variant {{ 'ladder-ok' if v.summary.ok else 'ladder-bad' }}">
       <div class="kpi-label">{{ v.name }}</div>
@@ -72,7 +72,7 @@
   {% if ipu6_port.tests %}
   <div class="table-scroll">
   <table class="reg-table ladder-table">
-    <thead><tr><th>Test</th>{% for v in ipu6_port.variants %}<th>{{ v.name }}</th>{% endfor %}</tr></thead>
+    <thead><tr><th>Test</th>{% for v in ipu6_port.legs %}<th>{{ v.name }}</th>{% endfor %}</tr></thead>
     <tbody>
     {% for test in ipu6_port.tests %}
     <tr>
@@ -81,7 +81,7 @@
       {% if cell %}
       <td class="ladder-cell res-{{ cell.css }}">{{ cell.result | lower | replace('-', ' ') }}{% if cell.enabled %} <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span>{% endif %}{% if cell.duration_s %} <span class="dur">{{ cell.duration_s }}s</span>{% endif %}</td>
       {% else %}
-      <td class="ladder-cell res-none">{{ 'not run yet' if not ipu6_port.variants[loop.index0].has_data else '—' }}</td>
+      <td class="ladder-cell res-none">{{ 'not run yet' if not ipu6_port.legs[loop.index0].has_data else '—' }}</td>
       {% endif %}
       {% endfor %}
     </tr>
@@ -92,7 +92,7 @@
   {% endif %}
   {% if ipu6_port.primary %}
   {% set pr = ipu6_port.primary %}
-  <h3>Pin and series ({{ pr.variant }} run)</h3>
+  <h3>Pin and series ({{ pr.leg or pr.variant }} run)</h3>
   <p>
     Base: <code>{{ pr.pin.url | replace('https://github.com/', '') | replace('.git', '') }}</code>
     @ {% if pr.pin.url.startswith('https://github.com/') %}<a href="{{ pr.pin.url | replace('.git', '') }}/commit/{{ pr.pin.sha }}"><code>{{ pr.pin.sha[:12] }}</code></a>{% else %}<code>{{ pr.pin.sha[:12] }}</code>{% endif %}

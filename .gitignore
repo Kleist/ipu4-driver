@@ -12,12 +12,16 @@ htmlcov/
 tools/linux/
 tools/linux-ipu6/
 tools/linux-ipu6-upstream/
+tools/linux-ipu6-ruslan/
 tools/linux-ipu4-oot/
 tools/qemu/
 tools/rootfs/out/
 tools/rootfs/out-ipu6/
 tools/rootfs/out-out-of-tree/
 tools/virt-sensor/out/
+tools/virt-sensor/.*.cmd
+tools/virt-sensor/*.o.d
+tools/virt-sensor/*.mod
 tools/tests/out/
 tools/coverage/html/
 tools/coverage/summary.json

@@ -101,7 +101,8 @@ silicon trace in `data/trace.txt`):
 A new CI workflow, `vm-ipu6.yml`, runs on every PR: bootstrap the pinned
 tree, `git am` the series, build kernel + QEMU, boot the VM and run a
 **test ladder**. Which tests are gated is controlled by a checked-in list,
-`tools/tests/ipu6/enabled-tests`, one test name per line. The workflow runs
+`tools/tests/ipu6/enabled-tests.ipu4-patches.ipu4` (the `ipu4-patches`
+driver under the IPU4 model), one test name per line. The workflow runs
 every test but only fails on the enabled ones, so later tests are visible as
 "expected fail" before they are switched on. **It starts with every test
 disabled; each PR enables (at least) one more.**
@@ -115,9 +116,9 @@ harness-only binding. (PRs 5–8 used a `new_id` write instead.)
 The runner is `tools/tests/ipu6/ladder.sh` (`--list` prints the names).
 Each test ends PASS, FAIL, NOT-IMPLEMENTED (not written yet) or SKIP (a test
 it depends on, run in the same invocation, did not pass); an enabled test
-must PASS, and an unknown name in `enabled-tests` fails the job.
+must PASS, and an unknown name in the list fails the job.
 
-Planned tests (names are what goes into `enabled-tests`). Big tests are
+Planned tests (names are what goes into the list). Big tests are
 split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 `IPU4_STREAM_REQUIRED`), so every test is small enough to turn on alone:
 
@@ -167,18 +168,26 @@ the PR is split rather than enabling nothing.
 
 ## Tracks and file ownership
 
-Three tracks work on the ipu6 flavor in parallel, each with its own plan
-and at most one open PR at a time, from `main` (`CLAUDE.md`):
+Four tracks work in parallel, each with its own plan and at most one open
+PR at a time, from `main` (`CLAUDE.md`). The ladder (`vm-ipu6.yml`,
+`ladder.sh`) runs six legs: each QEMU model variant under its baseline
+driver and under `ipu4-patches`. A track owns its driver's gate files,
+`tools/tests/ipu6/enabled-tests.<driver>.<variant>`:
 
-| Track | Plan | Owns |
-|---|---|---|
-| IPU4 port (this plan) | `tools/notes/ipu6-ipu4-plan.md` | `patches/ipu6-ipu4/`, `tools/tests/ipu6/enabled-tests` |
-| IPU6 variant | [`tools/notes/ipu6-variant-plan.md`](ipu6-variant-plan.md) | `tools/tests/ipu6/enabled-tests.ipu6` |
-| IPU4P variant | [`tools/notes/ipu4p-variant-plan.md`](ipu4p-variant-plan.md) | `tools/tests/ipu6/enabled-tests.ipu4p` |
+| Track | Plan | Driver | Owns |
+|---|---|---|---|
+| IPU4 (out-of-tree baseline) | [`tools/notes/ipu4-out-of-tree-plan.md`](ipu4-out-of-tree-plan.md) | `ipu4-out-of-tree`: `kernel/ipu4/` on v7.3-rc4 | `enabled-tests.ipu4-out-of-tree.*` |
+| IPU4P variant (baseline) | [`tools/notes/ipu4p-variant-plan.md`](ipu4p-variant-plan.md) | `ipu4p`: Ruslan's tree (`tools/ipu6/pin`), no series | `enabled-tests.ipu4p.*` |
+| IPU6 variant (baseline) | [`tools/notes/ipu6-variant-plan.md`](ipu6-variant-plan.md) | `ipu6`: mainline (`tools/ipu6/pin.upstream`) | `enabled-tests.ipu6.*` |
+| IPU4 port (this plan) | `tools/notes/ipu6-ipu4-plan.md` | `ipu4-patches`: Ruslan's tree + the series | `patches/ipu6-ipu4/`, `enabled-tests.ipu4-patches.*` |
 
-Goal of the variant tracks: run the same ladder against the other variants
-of the shared driver, so the IPU4 patches are shown not to break them. They
-run interleaved with this plan's sequence and never block it.
+The three unmodified drivers are the baselines tests are developed
+against: a model or test change for one IPU is first shown on its own
+baseline (IPU4 on the out-of-tree driver, IPU4P on Ruslan's tree, IPU6 on
+mainline). `ipu4-patches` is the upstreamable version; it must pass under
+all three variants what the baselines pass, which shows the IPU4 patches
+break neither IPU4P nor IPU6. The variant tracks never block this plan's
+sequence.
 
 To keep the tracks from conflicting:
 
@@ -187,7 +196,7 @@ To keep the tracks from conflicting:
   `tools/rootfs/init.ipu6-probe.d/NNN-<test>.{bound,unloaded}.sh` (READMEs
   there). A track adding a test adds files; it does not edit a shared list.
   A test belongs to the track that added it; another track adapting it to
-  its variant does so with a `$IPU4_VARIANT` / `$want` case in that file,
+  its leg does so with a `$DRIVER` / `$FLAVOR` / `$IPU4_VARIANT` / `$want` case in that file,
   in a PR of its own.
 - **Shared core changes go first, alone.** `ladder.sh`, `probe-boot.sh`,
   `stream-boot.sh`, the `init.ipu6-*` frames, `tools/tests/streamon.c`,
@@ -885,3 +894,8 @@ last; each entry names the PR that found it.
   shared stream boot.
 - (PR 13) After this step the remaining step is the cover letter
   (PR 15): the PCI ID step (PR 14) moved to PR 8a.
+- (Six-legs PR) The series under the IPU6 model (`ipu4-patches / ipu6`)
+  passes what mainline passes there: `vm-boot`, `module-load`,
+  `probe-identify`, `probe-buttress`, `isys-resume`; gated in
+  `enabled-tests.ipu4-patches.ipu6`. `probe-mmu` fails there as it does on
+  mainline (it checks IPU4 silicon values).

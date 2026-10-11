@@ -16,8 +16,11 @@ shown not to break the other variants of the shared driver.
 
 - **Mechanism:** a `variant=` property on the QEMU device
   (`-device ipu4,variant=ipu4|ipu4p|ipu6`) that switches PCI ID and the
-  per-variant register behaviour; a matrix job in `vm-ipu6.yml`, with one
-  `enabled-tests` list per variant.
+  per-variant register behaviour. This track develops against its
+  baseline driver `ipu6` (unpatched mainline), leg `ipu6 / ipu6` in
+  `vm-ipu6.yml`, and owns `enabled-tests.ipu6.ipu6`, which the V steps
+  below fill. The upstreamable driver
+  under this variant is the IPU4 port's `enabled-tests.ipu4-patches.ipu6`.
 - **IPU6 — feasible for probe-level tests, streaming is a larger project.**
   IPU6 keeps syscom state in buttress boot-parameter registers, uses a
   different firmware ABI, CSE authentication/secure mode and different MMU

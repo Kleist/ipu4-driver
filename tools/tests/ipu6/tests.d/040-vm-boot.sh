@@ -14,6 +14,6 @@ test_vm-boot() {
 			"tools/build-qemu.sh"
 		return 1
 	fi
-	IPU4_FLAVOR=ipu6 "$ROOT/tools/build-kernel.sh" || return 1
-	IPU4_FLAVOR=ipu6 "$ROOT/tools/tests/vm-smoke.sh"
+	"$ROOT/tools/build-kernel.sh" || return 1
+	"$ROOT/tools/tests/vm-smoke.sh"
 }
