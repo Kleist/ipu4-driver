@@ -134,8 +134,8 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | `probe-fw` | firmware (`ipu4_fw.bin`, synthesized) is mapped and authenticated (`ipu6_buttress_authenticate()`) (passes under the model since PR 7, like `probe-complete`; its step, PR 10, was folded into PR 11) |
 | `probe-complete` | ISYS probe finishes, `/dev/video*` and media graph appear (passes under the model since PR 7, so it gates nothing in the IPU4 sequence; kept for the IPU6 variant, see "Parallel track") |
 | `fw-open` | syscom open + `STREAM_OPEN_DONE` round trip: on the stream boot (`stream-boot.sh`, `init.ipu6-stream`), the driver gets `STREAM_OPEN_DONE` for stream 0 and completes the open, and the boot's ISYS DMEM writes start with silicon's from the firmware open to that response (`data/trace.txt` lines 600–622, `check_writes.py --prefix`) |
-| `stream-on` | `streamon-smoke` reaches `STREAM:streamon` |
-| `stream-pattern` | `streamon-smoke` reaches `STREAM:pattern_ok` |
+| `stream-on` | on the stream boot, `VIDIOC_STREAMON` succeeds and a frame is dequeued (`STREAM:streamon`, `STREAM:dqbuf`), the boot's oops scan is clean, and its writes to the port 0 CSI-2 receiver's enable/config (BAR + `0x164000`/`0x164008`), LTR/DID (`0x68`) and the ISYS proxy send queue (`0x108018/0x10801c`) equal silicon's stream (`data/trace.txt` lines 600–1113: receiver on, then off; no iWake), and its CSIRX error interrupt setup starts with silicon's (lines 651–668, `--prefix`) |
+| `stream-pattern` | the stream boot's first frame holds the QEMU model's test pattern (`STREAM:pattern_ok`, `STREAM:done`) |
 | `csi2-sof-irq` | CSI-2 FS IRQ observed on port 0 |
 
 ## PR sequence
@@ -153,8 +153,8 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | 8a | Carry `media: ipu6: Enable IPU4 PCI device` as the always-last patch; drop the harness's `new_id` binding (was PR 14) | — (`probe-identify` now binds natively; `native-bind` dropped) | merged (#122) |
 | 9 | `media: ipu6: Support the IPU4 TSC sync handshake` + `media: ipu6: Add IPU4 ISYS and CSI-2 register definitions` + `media: ipu6: Add IPU4 ISYS interrupt handling` (wire-up in ISYS, 6 CSI-2 ports); probe init forces an ISYS runtime resume (was PR 10, swapped with the pdata step) | `isys-irq` (was `probe-complete`) | merged (#125) |
 | 10 | ~~Internal pdata (`media: ipu6: Add IPU4 platform data`)~~; the firmware name landed in PR 6, the ISYS/PSYS/SPC/DMEM offsets in PR 8, the CSI-2 port count in PR 9, the stream limits in PR 11 | — (was `probe-fw`) | folded into PR 11 |
-| 11 | `media: ipu6: Add the IPU4 ISYS stream limits` (the rest of the pdata, old PR 10) + `media: ipu6: Support the IPU4 SysCom queue layout`; before it, a shared-core PR adds the stream boot (`stream-boot.sh`, `init.ipu6-stream`, `streamon` subdev format) | `fw-open` | in review |
-| 12 | `media: ipu6: Add IPU4 CSI-2 receiver support` | `stream-on`, `stream-pattern` | |
+| 11 | `media: ipu6: Add the IPU4 ISYS stream limits` (the rest of the pdata, old PR 10) + `media: ipu6: Support the IPU4 SysCom queue layout`; before it, a shared-core PR adds the stream boot (`stream-boot.sh`, `init.ipu6-stream`, `streamon` subdev format) | `fw-open` | merged (#135) |
+| 12 | `media: ipu6: Run IPU4 without iWake` + `media: ipu6: Add IPU4 CSI-2 receiver support` | `stream-on`, `stream-pattern` | in review |
 | 13 | CSI-2 frame interrupts (decision 3) | `csi2-sof-irq` | |
 | 14 | ~~`media: ipu6: Enable IPU4 PCI device`~~ | — | moved to PR 8a |
 | 15 | Cover letter draft + `get_maintainer.pl` output | — | |
@@ -753,3 +753,80 @@ last; each entry names the PR that found it.
     upstream).
   - The probe boot still never opens the firmware, so its
     `isys-irq`/`probe-mmu` write checks are unchanged.
+- (PR 12) Two kernel patches, `0009-media-ipu6-Run-IPU4-without-iWake`
+  and `0010-media-ipu6-Add-IPU4-CSI-2-receiver-support` (PCI ID patch
+  now 0011). **iWake is skipped on IPU4** (decision of this step):
+  `ipu6_isys_update_stream_watermark()` returns early for `IS_IPU4()`
+  as for IPU7, so stream start/stop send no proxy tokens and write no
+  LTR/DID. Silicon's stream (`data/trace.txt` lines 600–1113) has no
+  proxy send queue writes (DMEM `0x108018/0x10801c`) and no `0x68`
+  write, and the fork compiles the watermark calls out for IPU4
+  (`#ifdef IPU6` in its `ipu6-isys-queue.c`); PR 9 already skips
+  `set_iwake_ltrdid()` at suspend. Answering the proxy in the model was
+  the alternative; it would have kept a path silicon never takes. The
+  stream boot no longer waits ~2 × 200 ms on the two tokens.
+- (PR 12) The CSI-2 receiver patch: on IPU4,
+  `ipu6_isys_csi2_stream_enable()` calls `ipu4_isys_csi2_stream_enable()`
+  after the timing calculation instead of the IPU6 front end / port hub
+  / MCD PHY path, and the disable likewise. Writes (fork
+  `kernel/ipu4/ipu6-isys-csi2.c`, IPU4 branch of `set_stream`; silicon
+  lines 651–663 for port 0 at BAR + `0x164000`): clock lane TERMEN/SETTLE
+  (`+0x2c/+0x30`), per data lane TERMEN/SETTLE (`+0x34/+0x38 + 8n`),
+  RX_CONFIG |= `RELEASE_LP11 | DISABLE_BYTE_CLK_GATING` (`0x3`), lane
+  count (`+0x04`), RX_ENABLE 1; then CSIRX EDGE, LEVEL_NOT_PULSE (0),
+  CLEAR, MASK, ENABLE with the 17 error bits (`0x1ffff`, lines 659–663).
+  Stop (lines 1073–1077): CSIRX status read + clear
+  (`ipu6_isys_csi2_error()`), RX_CONFIG bits cleared, RX_ENABLE 0; the
+  patch also masks CSIRX again (silicon leaves it on). All defines
+  existed (`IPU4P_CSI2_RX_*`, `IPU4_CSI2_CSIRX_*` from PR 9), so the
+  patch is code only. `isys->phy_set_power` stays the MCD one for IPU4
+  but is no longer called. Upstream's `calc_timing()` reproduces
+  silicon's values: silicon's sensor (one lane, 320 MHz) gives csettle
+  660 / dsettle 655 (`0x294`/`0x28f`), the virt-sensor (four lanes,
+  450 MHz) 689 / 663.
+- (PR 12) Not in this step: the CSI2PART frame interrupts silicon
+  enables right after CSIRX (`0x3333` = FS/FE of VC 0–3 at port +
+  `0x400..0x414`, lines 664–668) and disables at stop together with
+  CSI2S2M (lines 1078–1081). They are PR 13's (decision 3,
+  `csi2-sof-irq`); the CSI2PART summary bit 16 (CSIRX) that the PR 9 ISR
+  looks at is not among silicon's enabled bits.
+- (PR 12) `stream-on` (dependency `fw-open`) passes on `STREAM:streamon`,
+  `STREAM:dqbuf`, `STREAMVM:oops none` and two write checks on the
+  stream boot: (1) ranges `0x68`, `0x108018-0x108020`, `0x164000`,
+  `0x164008` against silicon lines 600–1113, whole sequence (4 writes:
+  RX_CONFIG 3, RX_ENABLE 1, RX_CONFIG 0, RX_ENABLE 0); (2) CSIRX
+  `0x164500-0x164508 0x164510-0x164518` against lines 651–668 with
+  `--prefix` (4 writes; the guest's stop-time mask/enable writes are
+  after them). CSIRX status/clear are out (the PIN_DATA_READY handler
+  reads/clears them per frame), and so are the timing and lane count
+  (sensor-dependent). The serial log has CRLF line ends, so marker
+  greps must not anchor on `$` right after the marker.
+  `stream-pattern` (dependency `stream-on`) passes on
+  `STREAM:pattern_ok` + `STREAM:done`: the model DMA-writes
+  `byte[k] = k & 0xff` into the first 64 KiB of each buffer through
+  the ISYS MMU before PIN_DATA_READY, and streamon checks it.
+- (PR 12) Gate check: without 0010 (with 0009) `stream-on` FAILs
+  (`STREAM:fail step=streamon errno=110`, "PHY0 powerup ack timeout",
+  vb2 WARNING, write check 1 `expected 4 writes, got 2`: the IPU6 path
+  writes `+0x000` 1/0 but never RX_CONFIG; check 2 `got 0`) and
+  `stream-pattern` FAILs alone (SKIP in the full ladder); without 0009
+  (with 0010) streaming works but `stream-on` FAILs on write check 1
+  (`expected 4 writes, got 8`: two proxy tokens at `0x108018` and two
+  `0x68` LTR/DID writes). With both, the full ladder passes. The model
+  delivers frames whether or not the receiver is enabled, so the
+  receiver programming is only visible through the write checks.
+- (PR 12) The vb2 warning of the failing STREAMON (PR 11 learnings) is
+  `WARN_ON(!list_empty(&q->done_list))` (videobuf2-core.c:1821 on the
+  pin): the model delivered a frame (PIN_DATA_READY completes the
+  buffer as DONE) while `start_streaming()` was still waiting on the
+  CSI-2 enable, which then failed. vb2 requires every buffer back in
+  QUEUED state when `start_streaming()` fails; upstream ipu6 has no
+  guard against completions that race a failing stream start. On
+  hardware a frame can hardly arrive before the receiver is up, so it
+  needs a model that streams without the receiver to show; a separate
+  upstream fix may be warranted, not part of this series. The IPU4
+  success path does not hit it (oops scan clean).
+- (PR 12) Timings (4 cores, TCG, warm): full ladder ~100 s (`vm-boot`
+  47 s incl. the kernel rebuild for the new patches, `fw-open` 8 s
+  incl. the stream boot, `stream-on`/`stream-pattern` 0 s on the shared
+  boot); `ladder.sh stream-pattern` alone ~20 s.
