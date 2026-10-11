@@ -29,6 +29,9 @@ ladder_test fw-open isys-irq
 # with the upstream driver's (SPC start, SysCom state in the buttress boot
 # parameters, iwake proxy writes, stream 0's queue cursors in DMEM at
 # BAR + 0x200000; ../upstream_writes.py).
+# The ipu4p variant has no silicon trace: it checks the markers only. The
+# model answers STREAM_OPEN only on IPU4P's queue registers (base 8), so
+# the markers already show the driver used IPU4P's SysCom layout.
 # What happens after the open (stream start, CSI-2 receiver, frames, a
 # kernel warning when stream-on fails) is for the later stream tests.
 test_fw-open() {
@@ -40,6 +43,7 @@ test_fw-open() {
 	grep -q 'FW resp 00 STREAM_OPEN_DONE, stream 0,' "$STREAM_LOG" ||
 		return 1
 	grep -q 'start stream: open complete' "$STREAM_LOG" || return 1
+	[[ "$IPU4_VARIANT" == ipu4p ]] && return 0
 	if [[ "$IPU4_VARIANT" == ipu6 ]]; then
 		local up="$ROOT/tools/tests/ipu6/upstream_writes.py" ranges
 		read -ra ranges < <(python3 "$up" --ranges fw-open)
