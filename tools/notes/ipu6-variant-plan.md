@@ -47,7 +47,8 @@ shown not to break the other variants of the shared driver.
   | V4 | `probe-identify` for ipu6: virt-sensor gets the variant's ID (core PR #127), `060-probe-identify.bound.sh` expects the variant's firmware | ipu6: `probe-identify` | merged (#123) |
   | V5a | QEMU `ipu6v_pwr_state()`: IPU6 PWR_STATE layout for the ipu6 variant (no test yet; prerequisite for staging `ipu6_fw.bin`) | — | merged (#128) |
   | core | stage the synthesized CPD as `intel/ipu/ipu6_fw.bin` in the ipu6 initramfs (`tools/rootfs/build.sh`) | — | merged (#132) |
-  | V5b | gate `probe-buttress` for ipu6 | ipu6: `probe-buttress` | in review (#133) |
+  | V5b | gate `probe-buttress` for ipu6 | ipu6: `probe-buttress` | merged (#133) |
+  | V6 | QEMU: TSC-sync HH status at IPU6's bits 12:11 in `ipu6v_pwr_state()`; new variant-neutral `isys-resume` test | ipu6: `isys-resume` | in review |
 
 - **Dashboard hook (Pages PR):** the Pages "IPU4 port" matrix already
   has `ipu4`, `ipu4p` and `ipu6` columns. A variant lights up once its
@@ -152,3 +153,12 @@ shown not to break the other variants of the shared driver.
   although the branch existed; #132 went up as a draft on `main` until
   #128 merged. Stacking #133 on #132's branch worked, so that was not a
   standing rule.
+- (V6) After `probe-buttress`, the first ISYS runtime resume on the ipu6
+  variant timed out in `ipu6_buttress_start_tsc_sync()`: IPU6 reads the
+  TSC-sync handshake status (`BUTTRESS_PWR_STATE_HH_STATUS_MASK`) at
+  PWR_STATE bits 12:11, IPU4 at 13:12, and `ipu6v_pwr_state()` had
+  copied IPU4's HH_DONE. With DONE (2) at bits 12:11 the resume passes
+  (`PROBE:isys-resume ok`). `isys-irq` cannot gate this for ipu6 (it
+  compares the IPU4 resume's writes with the silicon trace), so V6 adds
+  `tests.d/082-isys-resume.sh`, which only checks the guest's
+  `PROBE:isys-resume` marker; it also passes on ipu4 (ungated there).
