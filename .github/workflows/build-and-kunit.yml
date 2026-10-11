@@ -54,7 +54,7 @@ jobs:
       # /sys/kernel/debug/gcov/. The vm-smoke workflow downloads this
       # artifact and merges it with its streamon-smoke gcov tar via
       # tools/coverage/collect.sh --kunit-tar. Per-leg name so the 6.12
-      # / 6.18 / 7.0 vm-smoke callers each pick up the matching kunit
+      # / 6.18 / 7.3 vm-smoke callers each pick up the matching kunit
       # data; vm-smoke today only runs on the 6.12 leg, but emitting
       # one artifact per leg keeps the future-weekly path working.
       - name: Upload KUnit gcov artifact
