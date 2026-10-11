@@ -83,9 +83,9 @@ commit, first in the step's PR.
 | P4 | Stage `intel/ipu/ipu4p_fw.bin`; `probe-identify` expects that file for `8a19` | `probe-identify` | merged (#144) |
 | P4b | Baseline leg `ipu4p / ipu4p` (Ruslan's tree without the series); P1–P4 move to it, `ipu4-patches / ipu4p` keeps them for the series | `series-applies`, `build`, `checkpatch`, `vm-boot`, `module-load`, `probe-identify` | merged (with the ladder's six legs) |
 | P5 | Model: IPU4P PWR_STATE FSM and FREQ_CTL | `probe-buttress` | merged (#147) |
-| P5b | Ruslan's code as a patch series on the mainline pin (`patches/ipu6-ipu7/`, `patches/ipu6-ipu4p/`), pin bumped weekly | — | in review |
-| P6 | ISYS runtime resume on IPU4P: UNISPART SW IRQ bit 22, SIP0/SIP1 windows. Needs the IPU4 port's forced ISYS resume (its PR 9) | an IPU4P resume test (driver-observable, not trace-based) | |
-| P7 | Model: SysCom queue base register 8 | `fw-open` | |
+| P5b | Ruslan's code as a patch series on the mainline pin (`patches/ipu6-ipu7/`, `patches/ipu6-ipu4p/`), pin bumped weekly | — | merged (#148) |
+| P6 | ISYS binds on IPU4P: virt-sensor on firmware port 3; the forced ISYS resume then runs with ISYS bound | `isys-resume` | in review |
+| P7 | Model: SysCom queue base register 8, UNISPART SW IRQ bit 22, SIP0/SIP1 IRQ windows | `fw-open` | |
 | P8 | Model: 8 CSI-2 ports, port ↔ source map, PHY sideband latches | `stream-on`, `stream-pattern` | |
 
 ## Open questions
@@ -139,3 +139,7 @@ commit, first in the step's PR.
   cherry-pick cleanly onto v7.3-rc4 and give a byte-identical `ipu6/` and
   `staging/media/ipu7/`, so they alone became `patches/ipu6-ipu7/` (45)
   and `patches/ipu6-ipu4p/` (11).
+- (P6) With virt-sensor on firmware port 3 (IPU4P's CSI-2 port 0),
+  `intel-ipu6-isys` binds (64 video nodes) and the forced resume passes
+  with no model change: UNISPART bit 22 and the SIP IRQ windows only
+  matter once the firmware raises interrupts, so they moved to P7.

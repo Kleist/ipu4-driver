@@ -26,3 +26,6 @@ probe-identify
 
 # ISYS/PSYS power-up through IPU4P's PWR_STATE layout (ipu4p plan P5).
 probe-buttress
+
+# Forced ISYS runtime resume with ISYS bound (ipu4p plan P6).
+isys-resume
