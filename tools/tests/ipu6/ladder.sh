@@ -22,11 +22,13 @@
 #   ipu4-out-of-tree  IPU4   out-of-tree  kernel/ipu4/ built against
 #                                         tools/out-of-tree/pin (v7.3-rc4)
 #                                         in tools/linux-ipu4-oot/
-#   ipu4p             IPU4P  ipu6         tools/ipu6/pin (Ruslan's tree),
-#                                         no series, in tools/linux-ipu6-ruslan/
+#   ipu4p             IPU4P  ipu6         tools/ipu6/pin + the base series
+#                                         patches/ipu6-ipu7/ and
+#                                         patches/ipu6-ipu4p/ (when present),
+#                                         in tools/linux-ipu6-ruslan/
 #   ipu6              IPU6   ipu6         tools/ipu6/pin.upstream (mainline),
 #                                         in tools/linux-ipu6-upstream/
-#   ipu4-patches      all    ipu6         tools/ipu6/pin + patches/ipu6-ipu4/
+#   ipu4-patches      all    ipu6         the ipu4p tree + patches/ipu6-ipu4/
 #   (default)                             in tools/linux-ipu6/
 #
 # IPU4_VARIANT defaults to the driver's IPU (ipu4 for ipu4-patches).
@@ -44,6 +46,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
 DRIVER="${IPU4_DRIVER:-ipu4-patches}"
 FLAVOR=ipu6
+BASE_PATCH_DIRS=()
 PATCH_DIR=
 case "$DRIVER" in
 ipu4-out-of-tree)
@@ -55,6 +58,7 @@ ipu4-out-of-tree)
 ipu4p)
 	LINUX_DIR="$ROOT/tools/linux-ipu6-ruslan"
 	PIN="$ROOT/tools/ipu6/pin"
+	BASE_PATCH_DIRS=(ipu6-ipu7 ipu6-ipu4p)
 	VARIANT=ipu4p
 	;;
 ipu6)
@@ -65,6 +69,7 @@ ipu6)
 ipu4-patches)
 	LINUX_DIR="$ROOT/tools/linux-ipu6"
 	PIN="$ROOT/tools/ipu6/pin"
+	BASE_PATCH_DIRS=(ipu6-ipu7 ipu6-ipu4p)
 	PATCH_DIR="$ROOT/patches/ipu6-ipu4"
 	VARIANT=ipu4
 	;;
@@ -74,6 +79,10 @@ ipu4-patches)
 	exit 2
 	;;
 esac
+BASE_PATCH_PATH=
+for d in "${BASE_PATCH_DIRS[@]}"; do
+	[[ -d "$ROOT/patches/$d" ]] && BASE_PATCH_PATH+="${BASE_PATCH_PATH:+:}$ROOT/patches/$d"
+done
 VARIANT="${IPU4_VARIANT:-$VARIANT}"
 case "$VARIANT" in
 ipu4 | ipu4p | ipu6) ;;
@@ -87,6 +96,7 @@ LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$LINUX_DIR}"
 export IPU4_DRIVER="$DRIVER" IPU4_FLAVOR="$FLAVOR" IPU4_VARIANT="$VARIANT"
 export IPU4_IPU6_LINUX_DIR="$LINUX_DIR"
 export IPU4_IPU6_PIN="$PIN" IPU4_IPU6_PATCH_DIR="$PATCH_DIR"
+export IPU4_IPU6_BASE_PATCH_DIRS="$BASE_PATCH_PATH"
 # The driver's module, device and node names (IPU_*), as the guest sees
 # them (tools/rootfs/build.sh stages the same file).
 # shellcheck source=tools/rootfs/ipu-driver.ipu6.conf
