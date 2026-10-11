@@ -40,7 +40,7 @@
       <div class="kpi-sub">tests passing · gated {{ v.summary.enabled_passing }} / {{ v.summary.enabled }} pass</div>
       {% if v.summary.enabled_failing %}<div class="kpi-sub ladder-failing">failing: {{ v.summary.enabled_failing | join(', ') }}</div>{% endif %}
       <div class="kpi-sub">{% if v.run_url %}<a href="{{ v.run_url }}">{% endif %}{{ (v.generated_at or '')[:16] | replace('T', ' ') }}{% if v.run_url %}</a>{% endif %}{% if v.commit_sha %} · <code>{{ v.commit_sha[:7] }}</code>{% endif %}</div>
-      {% if v.pin and v.pin.url %}<div class="kpi-sub">base <code>{{ v.pin.url | replace('https://github.com/', '') | replace('.git', '') }}@{{ (v.pin.sha or '')[:7] }}</code> + {{ v.series_count or 0 }} patch{{ '' if v.series_count == 1 else 'es' }}</div>{% endif %}
+      {% if v.pin and v.pin.url %}<div class="kpi-sub">base <code>{{ v.pin.tag or (v.pin.url | replace('https://github.com/', '') | replace('.git', '')) ~ '@' ~ (v.pin.sha or '')[:7] }}</code>{% for b in v.base_series %} + {{ b.label }} ({{ b.count }}){% endfor %}{% if v.series_count %} + {{ v.series_count }} IPU4 patch{{ '' if v.series_count == 1 else 'es' }}{% endif %}</div>{% endif %}
     </div>
     {% else %}
     <div class="kpi ladder-variant ladder-none">
@@ -74,12 +74,15 @@
   {% endif %}
   {% if ipu6_port.primary %}
   {% set pr = ipu6_port.primary %}
-  <h3>Pin and series ({{ pr.leg or pr.variant }} run)</h3>
-  <p>
-    Base: <code>{{ pr.pin.url | replace('https://github.com/', '') | replace('.git', '') }}</code>
-    @ {% if pr.pin.url.startswith('https://github.com/') %}<a href="{{ pr.pin.url | replace('.git', '') }}/commit/{{ pr.pin.sha }}"><code>{{ pr.pin.sha[:12] }}</code></a>{% else %}<code>{{ pr.pin.sha[:12] }}</code>{% endif %}
-    · {{ pr.series.count }} patch{{ '' if pr.series.count == 1 else 'es' }} in <a href="https://github.com/{{ repo }}/tree/main/patches/ipu6-ipu4"><code>patches/ipu6-ipu4/</code></a>
-  </p>
+  <h3>Base and series ({{ pr.leg or pr.variant }} run)</h3>
+  <ul class="series">
+    <li>Mainline <code>{{ pr.pin.url | replace('https://github.com/', '') | replace('.git', '') }}</code>
+    {% if pr.pin.tag %}<code>{{ pr.pin.tag }}</code> {% endif %}@ {% if pr.pin.url.startswith('https://github.com/') %}<a href="{{ pr.pin.url | replace('.git', '') }}/commit/{{ pr.pin.sha }}"><code>{{ pr.pin.sha[:12] }}</code></a>{% else %}<code>{{ pr.pin.sha[:12] }}</code>{% endif %}</li>
+    {% for b in pr.base_series %}
+    <li>+ {{ b.label }}{% if b.source %} ({% if b.url %}<a href="{{ b.url }}">{{ b.source }}</a>{% else %}{{ b.source }}{% endif %}){% endif %}: {{ b.count }} patch{{ '' if b.count == 1 else 'es' }} in <a href="https://github.com/{{ repo }}/tree/main/{{ b.dir }}"><code>{{ b.dir }}/</code></a></li>
+    {% endfor %}
+    <li>+ IPU4 series: {{ pr.series.count }} patch{{ '' if pr.series.count == 1 else 'es' }} in <a href="https://github.com/{{ repo }}/tree/main/patches/ipu6-ipu4"><code>patches/ipu6-ipu4/</code></a></li>
+  </ul>
   {% if pr.series.patches %}
   <ol class="series">
     {% for p in pr.series.patches %}

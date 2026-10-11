@@ -91,7 +91,9 @@ at the end of every run (schema 1):
   "variant": "ipu4",              // $IPU4_VARIANT (QEMU model): ipu4 | ipu4p | ipu6
   "generated_at": "2026-10-10T12:14:40Z",
   "commit_sha": "…", "run_id": "…", "run_url": "…",   // null outside CI
-  "pin": {"url": "https://github.com/ruslanbay/linux.git", "sha": "…"},
+  "pin": {"url": "https://github.com/torvalds/linux.git", "sha": "…", "tag": "v7.3-rc4"},
+  "base_series": [{"dir": "patches/ipu6-ipu7", "count": 45},   // applied before `series`
+                  {"dir": "patches/ipu6-ipu4p", "count": 11}],
   "series": {"count": 1, "patches": [{"file": "0001-….patch", "subject": "media: ipu6: …"}]},
   "enabled_tests": "tools/tests/ipu6/enabled-tests.ipu4-patches.ipu4",
   "exit_status": 0,
@@ -107,7 +109,8 @@ at the end of every run (schema 1):
 listed in the leg's `enabled-tests.<driver>.<variant>` and gates CI.
 `parse_ladder.py` keeps the newest file per `leg` and always shows one
 column per leg (each IPU under its baseline and under ipu4-patches,
-six), so a leg without data reads "not run yet"; the pin and series block describes `ipu4-patches/ipu4`. Files
+six), so a leg without data reads "not run yet"; the base and series block describes `ipu4-patches/ipu4`, labelling
+the base series via `BASE_SERIES` in `parse_ladder.py`. Files
 without `leg` (written before legs existed) count by their `variant`:
 `ipu4` as `ipu4-patches/ipu4`, `ipu6` as `ipu6/ipu6`.
 
