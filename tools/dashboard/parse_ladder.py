@@ -29,6 +29,17 @@ PRIMARY = "ipu4-patches/ipu4"
 # results.json written before legs existed only name the QEMU variant.
 _OLD_VARIANT_LEG = {"ipu4": "ipu4-patches/ipu4", "ipu6": "ipu6/ipu6"}
 
+# The not-yet-mainline series the ipu4p and ipu4-patches trees apply on
+# the mainline pin before patches/ipu6-ipu4/.
+BASE_SERIES = {
+    "patches/ipu6-ipu7": (
+        "IPU7 series", "lore",
+        "https://lore.kernel.org/all/20260907113004.2489993-1-sakari.ailus@linux.intel.com/"),
+    "patches/ipu6-ipu4p": (
+        "IPU4P series", "ruslanbay/linux ipu4p-upstream",
+        "https://github.com/ruslanbay/linux/tree/ipu4p-upstream"),
+}
+
 RESULTS = ("PASS", "FAIL", "SKIP", "NOT-IMPLEMENTED", "NOT-RUN")
 
 
@@ -95,12 +106,20 @@ def _summary(res: dict) -> dict:
     }
 
 
+def _base_series(res: dict) -> list[dict]:
+    out = []
+    for b in res.get("base_series") or []:
+        label, source, url = BASE_SERIES.get(b.get("dir"), (b.get("dir"), None, None))
+        out.append({**b, "label": label, "source": source, "url": url})
+    return out
+
+
 def build(by_leg: dict[str, dict], fallback_tests: list[str] | None = None) -> dict:
     """Shape the per-leg results for the template.
 
     Returns ``{legs, tests, primary, has_data}`` where ``legs`` is a
     list of ``{name, has_data, summary, generated_at, run_url,
-    commit_sha, pin, series_count}``, ``tests`` a list of ``{name,
+    commit_sha, pin, series_count, base_series}``, ``tests`` a list of ``{name,
     cells}`` with one cell per leg (``None`` when that leg has no data
     for the test), and ``primary`` the results whose pin and series the
     section shows (``PRIMARY`` when present, else the first leg with data).
@@ -120,6 +139,7 @@ def build(by_leg: dict[str, dict], fallback_tests: list[str] | None = None) -> d
             # ipu4-out-of-tree on stock v7.3-rc4), so each card names its own.
             "pin": (res or {}).get("pin"),
             "series_count": ((res or {}).get("series") or {}).get("count"),
+            "base_series": _base_series(res or {}),
         })
 
     tests = []
@@ -146,6 +166,8 @@ def build(by_leg: dict[str, dict], fallback_tests: list[str] | None = None) -> d
     primary = by_leg.get(PRIMARY) or next(
         (by_leg[v] for v in names if v in by_leg), None
     )
+    if primary is not None:
+        primary = {**primary, "base_series": _base_series(primary)}
     return {
         "legs": legs,
         "tests": tests,

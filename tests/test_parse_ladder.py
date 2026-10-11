@@ -196,3 +196,23 @@ def test_build_legs_carry_their_own_base():
     # The pin/series block describes ipu4-patches/ipu4 although ipu6/ipu6
     # comes first.
     assert out["primary"]["leg"] == "ipu4-patches/ipu4"
+
+
+def test_base_series_labelled():
+    res = _results(base_series=[
+        {"dir": "patches/ipu6-ipu7", "count": 45},
+        {"dir": "patches/ipu6-ipu4p", "count": 11},
+        {"dir": "patches/other", "count": 1},
+    ])
+    out = parse_ladder.build({"ipu4-patches/ipu4": res})
+    base = out["primary"]["base_series"]
+    assert [b["label"] for b in base] == ["IPU7 series", "IPU4P series", "patches/other"]
+    assert base[1]["source"] == "ruslanbay/linux ipu4p-upstream"
+    assert "ruslanbay/linux" in base[1]["url"] and base[2]["url"] is None
+    leg = next(v for v in out["legs"] if v["name"] == "ipu4-patches/ipu4")
+    assert leg["base_series"] == base
+
+
+def test_base_series_missing_in_old_results():
+    out = parse_ladder.build({"ipu4-patches/ipu4": _results()})
+    assert out["primary"]["base_series"] == []
