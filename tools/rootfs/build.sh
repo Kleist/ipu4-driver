@@ -37,7 +37,8 @@ ipu6)
 	# Same blob under the name upstream requests for the IPU6 the ipu6
 	# QEMU variant presents (IPU6_FIRMWARE_NAME, 8086:9a19); it passes
 	# ipu6_cpd_validate_cpd_file() there too. Same directory as FW_NAME.
-	FW_EXTRA_NAMES=("intel/ipu/ipu6_fw.bin")
+	# Likewise for the ipu4p variant's IPU4P (8086:8a19).
+	FW_EXTRA_NAMES=("intel/ipu/ipu6_fw.bin" "intel/ipu/ipu4p_fw.bin")
 	;;
 *) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork or ipu6)" >&2; exit 1 ;;
 esac
