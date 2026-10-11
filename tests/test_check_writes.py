@@ -106,6 +106,23 @@ def test_compare_pass_fail_and_empty():
     assert "no expected writes" in out.getvalue()
 
 
+def test_compare_prefix():
+    out = io.StringIO()
+    assert not check_writes.compare([(8, 1)], [(8, 1), (0xc, 2)], out)
+    out = io.StringIO()
+    assert check_writes.compare([(8, 1)], [(8, 1), (0xc, 2)], out,
+                                prefix=True)
+    assert "1 later writes not compared" in out.getvalue()
+    # The prefix must match, and a short capture still fails.
+    out = io.StringIO()
+    assert not check_writes.compare([(8, 1)], [(0xc, 2), (8, 1)], out,
+                                    prefix=True)
+    out = io.StringIO()
+    assert not check_writes.compare([(8, 1), (0xc, 2)], [(8, 1)], out,
+                                    prefix=True)
+    assert "expected 2 writes, got 1" in out.getvalue()
+
+
 def test_main(tmp_path, capsys):
     silicon = tmp_path / "trace.txt"
     silicon.write_text(MMIOTRACE)
@@ -125,3 +142,5 @@ def test_main(tmp_path, capsys):
     args += ["--expected-lines", "7-7", "--actual", str(good)]
     assert check_writes.main(args) == 1
     assert "expected 1 writes, got 2" in capsys.readouterr().out
+    # ... which --prefix accepts.
+    assert check_writes.main(args + ["--prefix"]) == 0
