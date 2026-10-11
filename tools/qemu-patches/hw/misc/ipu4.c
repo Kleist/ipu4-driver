@@ -1163,16 +1163,19 @@ static bool ipu4_csi2_port_write(Ipu4Csi2Port *p, hwaddr reg_off,
  * ipu6-platform-buttress-regs.h): IS at bits 4:3, PS at bits 7:6, UP_DONE
  * (3) once FREQ_CTL START powered the island up, DN_DONE (0) after it
  * was cleared. The model switches instantly, so the transitional
- * UP/DN_PROCESS values never show. PWR_RDY and HH_DONE are tied high as
- * for IPU4.
+ * UP/DN_PROCESS values never show. PWR_RDY is tied high as for IPU4.
+ * The TSC-sync handshake status (HH, BUTTRESS_PWR_STATE_HH_STATUS_MASK)
+ * sits at bits 12:11 on IPU6 instead of IPU4's 13:12; it reads DONE (2)
+ * so ipu6_buttress_start_tsc_sync() completes on ISYS resume.
  */
 #define IPU6V_PWR_STATE_IS_SHIFT    3
 #define IPU6V_PWR_STATE_PS_SHIFT    6
 #define IPU6V_PWR_STATE_UP_DONE     0x3
+#define IPU6V_PWR_STATE_HH_DONE     (2u << 11)
 
 static uint32_t ipu6v_pwr_state(Ipu4State *s)
 {
-    uint32_t val = BTRS_PWR_STATE_PWR_RDY | BTRS_PWR_STATE_HH_DONE;
+    uint32_t val = BTRS_PWR_STATE_PWR_RDY | IPU6V_PWR_STATE_HH_DONE;
 
     if (s->is_powered) {
         val |= IPU6V_PWR_STATE_UP_DONE << IPU6V_PWR_STATE_IS_SHIFT;
