@@ -1,0 +1,102 @@
+From 89c9defd68768fac72af47d655b4f623becb2935 Mon Sep 17 00:00:00 2001
+From: Andreas Helbech Kleist <andreaskleist@gmail.com>
+Date: Sun, 11 Oct 2026 06:06:46 +0000
+Subject: [PATCH] media: ipu6: Handle the IPU4 CSI-2 frame interrupts
+
+The IPU4 CSI-2 receiver raises frame start and frame end interrupts for
+virtual channels 0 to 3 on the port's CSI2PART interrupt controller.
+They are of no use for the frame sync events and the sequence numbers,
+which come from the firmware's SOF/EOF responses as on IPU4P, but they
+show whether frames reach the port at all, which is what one wants to
+know when a new sensor does not stream.
+
+Enable them after the receiver errors at stream start and log them in
+the port's interrupt handler with dev_dbg(). At stream stop, mask them
+again together with the port's CSI2S2M interrupts. The registers,
+values and order are those of the IPU4 reference driver.
+
+Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
+---
+ .../pci/intel/ipu6/ipu4p-isys-csi2-regs.h     |  1 +
+ drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c | 32 +++++++++++++++++--
+ 2 files changed, 31 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h b/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
+index 6a13f35e2..098d59f1c 100644
+--- a/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
++++ b/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
+@@ -210,6 +210,7 @@
+ #define IPU4_CSI2_CSI2PART_IRQ_CLEAR			0x40c
+ #define IPU4_CSI2_CSI2PART_IRQ_ENABLE			0x410
+ #define IPU4_CSI2_CSI2PART_IRQ_LEVEL_NOT_PULSE		0x414
++#define IPU4_CSI2_CSI2PART_NR_OF_VC			4
+ #define IPU4_CSI2_CSI2PART_IRQ_FS_VC(vc)		BIT((vc) * 4)
+ #define IPU4_CSI2_CSI2PART_IRQ_FE_VC(vc)		BIT(1 + (vc) * 4)
+ #define IPU4_CSI2_CSI2PART_IRQ_CSIRX			BIT(16)
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
+index 99c4ef0ee..0f658a036 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
++++ b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
+@@ -243,15 +243,28 @@ static void ipu4_isys_register_errors(struct ipu6_isys_csi2 *csi2)
+ 
+ void ipu4_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
+ {
++	struct device *dev = &csi2->isys->adev->auxdev.dev;
+ 	u32 status;
+ 
+ 	status = readl(csi2->base + IPU4_CSI2_CSI2PART_IRQ_STATUS);
+ 	writel(status, csi2->base + IPU4_CSI2_CSI2PART_IRQ_CLEAR);
+ 
+ 	/*
+-	 * As on IPU4P, the firmware reports SOF/EOF; only collect the
+-	 * receiver errors here for ipu6_isys_csi2_error().
++	 * As on IPU4P, the firmware reports SOF/EOF, which drive the frame
++	 * sync events and the sequence numbers. The receiver's own frame
++	 * interrupts only show that frames arrive at the port, so just log
++	 * them for debugging. The receiver errors are collected for
++	 * ipu6_isys_csi2_error().
+ 	 */
++	for (unsigned int vc = 0; vc < IPU4_CSI2_CSI2PART_NR_OF_VC; vc++) {
++		if (status & IPU4_CSI2_CSI2PART_IRQ_FS_VC(vc))
++			dev_dbg(dev, "csi2-%u: frame start, vc %u\n",
++				csi2->port, vc);
++		if (status & IPU4_CSI2_CSI2PART_IRQ_FE_VC(vc))
++			dev_dbg(dev, "csi2-%u: frame end, vc %u\n",
++				csi2->port, vc);
++	}
++
+ 	if (status & IPU4_CSI2_CSI2PART_IRQ_CSIRX)
+ 		ipu4_isys_register_errors(csi2);
+ }
+@@ -372,6 +385,17 @@ static void ipu4_isys_csi2_stream_enable(struct ipu6_isys_csi2 *csi2,
+ 	writel(mask, base + IPU4_CSI2_CSIRX_IRQ_CLEAR);
+ 	writel(mask, base + IPU4_CSI2_CSIRX_IRQ_MASK);
+ 	writel(mask, base + IPU4_CSI2_CSIRX_IRQ_ENABLE);
++
++	mask = 0;
++	for (unsigned int vc = 0; vc < IPU4_CSI2_CSI2PART_NR_OF_VC; vc++)
++		mask |= IPU4_CSI2_CSI2PART_IRQ_FS_VC(vc) |
++			IPU4_CSI2_CSI2PART_IRQ_FE_VC(vc);
++
++	writel(mask, base + IPU4_CSI2_CSI2PART_IRQ_EDGE);
++	writel(0, base + IPU4_CSI2_CSI2PART_IRQ_LEVEL_NOT_PULSE);
++	writel(mask, base + IPU4_CSI2_CSI2PART_IRQ_CLEAR);
++	writel(mask, base + IPU4_CSI2_CSI2PART_IRQ_MASK);
++	writel(mask, base + IPU4_CSI2_CSI2PART_IRQ_ENABLE);
+ }
+ 
+ static void ipu4_isys_csi2_stream_disable(struct ipu6_isys_csi2 *csi2)
+@@ -390,6 +414,10 @@ static void ipu4_isys_csi2_stream_disable(struct ipu6_isys_csi2 *csi2)
+ 
+ 	writel(0, base + IPU4_CSI2_CSIRX_IRQ_MASK);
+ 	writel(0, base + IPU4_CSI2_CSIRX_IRQ_ENABLE);
++	writel(0, base + IPU4_CSI2_CSI2S2M_IRQ_MASK);
++	writel(0, base + IPU4_CSI2_CSI2S2M_IRQ_ENABLE);
++	writel(0, base + IPU4_CSI2_CSI2PART_IRQ_MASK);
++	writel(0, base + IPU4_CSI2_CSI2PART_IRQ_ENABLE);
+ }
+ 
+ static void ipu6_isys_csi2_stream_disable(struct ipu6_isys_csi2 *csi2)
+-- 
+2.43.0
+
