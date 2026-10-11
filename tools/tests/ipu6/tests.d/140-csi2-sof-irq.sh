@@ -1,5 +1,10 @@
 # shellcheck shell=bash
 # Sourced by tools/tests/ipu6/ladder.sh; see tools/tests/ipu6/tests.d/README.md.
+# IPU4P takes frame starts from the firmware too, so the ipu4p variant
+# also covers the error IRQ: the model reports the same error through
+# SIP0 (bit 3) and port 0's CSI IRQ controls. Passes when the driver logs
+# it and the ISR acknowledged SIP0's port 0 bit and cleared the error in
+# port 0's CTRL0 (+0x66400).
 
 ladder_test csi2-sof-irq stream-on
 
@@ -51,6 +56,25 @@ test_csi2-sof-irq() {
 	boot_stream_vm || return 1
 	stream_log_ok || return 1
 	local rc=0
+	if [[ "$IPU4_VARIANT" == ipu4p ]]; then
+		grep -q 'csi2-0 info: Single packet header error corrected' \
+			"$STREAM_LOG" || {
+			echo "!!! no CSI-2 receiver error reported on port 0"
+			rc=1
+		}
+		python3 - "$ROOT/tools/trace" "$STREAM_WRITES" <<-'PY' || rc=1
+			import sys
+			sys.path.insert(0, sys.argv[1])
+			from check_writes import read_writes
+			with open(sys.argv[2]) as f:
+			    writes = list(read_writes(f))
+			if (0x166d0c, 0x8) not in writes:
+			    sys.exit("!!! ISR never acknowledged port 0 in SIP0")
+			if (0x16640c, 0x1) not in writes:
+			    sys.exit("!!! ISR never cleared port 0's error in CTRL0")
+		PY
+		return "$rc"
+	fi
 	if [[ "$IPU4_VARIANT" == ipu6 ]]; then
 		local up="$ROOT/tools/tests/ipu6/upstream_writes.py" ranges
 		grep -q 'csi2-0 error: Single packet header error corrected' \

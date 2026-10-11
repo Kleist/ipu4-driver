@@ -86,8 +86,8 @@ commit, first in the step's PR.
 | P5b | Ruslan's code as a patch series on the mainline pin (`patches/ipu6-ipu7/`, `patches/ipu6-ipu4p/`), pin bumped weekly | — | merged (#148) |
 | P6 | ISYS binds on IPU4P: virt-sensor on firmware port 3; the forced ISYS resume then runs with ISYS bound | `isys-resume` | merged (#156) |
 | P7 | Model: SysCom queue base register 8, UNISPART SW IRQ bit 22, proxy tokens; `probe-mmu` / `isys-irq` against the series' writes (`ipu4p_writes.py`) | `probe-mmu`, `isys-irq`, `fw-open` | merged (#159) |
-| P8 | `stream-on` against the series' receiver writes (`ipu4p_writes.py`); no model change | `stream-on`, `stream-pattern` | in review |
-| P8b | Model: SIP0 window and port 0's CSI IRQ controls, a receiver error per frame (as the ipu6 variant's V11) | `csi2-sof-irq` | |
+| P8 | `stream-on` against the series' receiver writes (`ipu4p_writes.py`); no model change | `stream-on`, `stream-pattern` | merged (#161) |
+| P8b | Model: SIP0 window and port 0's CSI IRQ controls, a receiver error per frame (as the ipu6 variant's V11) | `csi2-sof-irq` | in review |
 
 ## Open questions
 
@@ -168,3 +168,7 @@ commit, first in the step's PR.
   CSI-2 IRQ path only to collect receiver errors, like upstream IPU6. So
   `csi2-sof-irq` on ipu4p follows the ipu6 variant: the model must report
   an error through SIP0 (bit 3) and port 0's CTRL0 status (P8b).
+- (P8b) With SIP0 and port 0's CTRL/CTRL0 status modelled, the IPU4P ISR
+  dispatches port 0 and the driver logs the corrected header error as
+  info (bit 0 is `is_info_only`). Every ladder test now passes on
+  `ipu4p / ipu4p`.

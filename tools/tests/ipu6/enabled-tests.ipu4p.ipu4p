@@ -40,3 +40,7 @@ fw-open
 # model's pattern (ipu4p plan P8).
 stream-on
 stream-pattern
+
+# Port 0's receiver error IRQ reaches the driver through SIP0 (ipu4p plan
+# P8b).
+csi2-sof-irq

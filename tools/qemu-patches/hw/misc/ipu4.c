@@ -533,7 +533,7 @@ struct Ipu4State {
     uint32_t is_spc_status_ctrl;
     /* ipu6 variant: CSI_REG_HUB_GPREG_PHY_CTL of the two MCD PHYs. */
     uint32_t ipu6v_phy_ctl[2];
-    /* ipu6 variant: CSI-2 port 0 receiver error IRQ status. */
+    /* ipu6 and ipu4p variants: CSI-2 port 0 receiver error IRQ status. */
     uint32_t ipu6v_csi_err;
     uint32_t ps_spc_status_ctrl;
 
@@ -1469,6 +1469,44 @@ static bool ipu6v_mmio_write(Ipu4State *s, hwaddr addr, uint64_t val)
     return true;
 }
 
+/*
+ * ipu4p variant: port 0's receiver errors reach the driver through the
+ * SIP0 IRQ window (IPU4P_ISYS_SIP0_CSI2_IRQ) and port 0's CSI IRQ
+ * controls (ACTIVE in CTRL, the error bits in CTRL0), from
+ * ipu4p-isys-csi2-regs.h. Other writes to these windows are absorbed by
+ * the generic handlers.
+ */
+#define IPU4PV_SIP0_IRQ_STATUS          0x166d08
+#define IPU4PV_SIP0_CSI2_IRQ            (1u << 3)
+#define IPU4PV_CSI0_IRQ_CTRL_STATUS     0x166308
+#define IPU4PV_CSI0_IRQ_CTRL0_STATUS    0x166408
+#define IPU4PV_CSI0_IRQ_CTRL0_CLEAR     0x16640c
+
+static bool ipu4pv_mmio_read(Ipu4State *s, hwaddr addr, uint64_t *val)
+{
+    switch (addr) {
+    case IPU4PV_SIP0_IRQ_STATUS:
+        *val = s->ipu6v_csi_err ? IPU4PV_SIP0_CSI2_IRQ : 0;
+        return true;
+    case IPU4PV_CSI0_IRQ_CTRL_STATUS:
+        *val = s->ipu6v_csi_err ? 1 : 0;
+        return true;
+    case IPU4PV_CSI0_IRQ_CTRL0_STATUS:
+        *val = s->ipu6v_csi_err;
+        return true;
+    }
+    return false;
+}
+
+static bool ipu4pv_mmio_write(Ipu4State *s, hwaddr addr, uint64_t val)
+{
+    if (addr == IPU4PV_CSI0_IRQ_CTRL0_CLEAR) {
+        s->ipu6v_csi_err &= ~(uint32_t)val;
+        return true;
+    }
+    return false;
+}
+
 static const Ipu4VariantInfo ipu4_variants[] = {
     {
         .name = "ipu4",
@@ -1482,6 +1520,9 @@ static const Ipu4VariantInfo ipu4_variants[] = {
         .device_id = IPU4P_PCI_DEVICE_ID,
         .pwr_state = ipu4pv_pwr_state,
         .encode_resp = ipu4_encode_resp,
+        .mmio_read = ipu4pv_mmio_read,
+        .mmio_write = ipu4pv_mmio_write,
+        .frame_irq = ipu6v_frame_irq,   /* the same port 0 error */
         .unispart_sw_irq = IPU4PV_UNISPART_IRQ_SW,
         .answers_proxy = true,
     },

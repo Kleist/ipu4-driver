@@ -47,6 +47,9 @@ Columns:
 | 0x17c000 | ISYS   | `ipu6-isys.c` unispart IRQ_EDGE         | R/W latched.                                                | inferred   |
 | 0x17c004 | ISYS   | `ipu6-isys.c` unispart IRQ_MASK         | R/W latched.                                                | inferred   |
 | 0x17c008 | ISYS   | `ipu6-isys.c` unispart IRQ_STATUS       | Read: `status & enable`. `status` stays 0 without a backing ISYS frame generator; silicon cycles 0/0x40000000 as real IRQs fire, which compare.py will flag as a legitimate value_mismatch until the ISYS simulator lands. A posted FW response sets the SW bit: BIT(30) on IPU4, BIT(22) on the ipu4p variant. | inferred   |
+| 0x166308 | ISYS (ipu4p variant) | `ipu4p-isys-csi2-regs.h` CSI port 0 IRQ CTRL STATUS | Read: ACTIVE (bit 0) while a port 0 receiver error is pending (`ipu4pv_mmio_read()`); other CTRL writes absorbed. | inferred (ipu4p: driver-derived) |
+| 0x166408-0x16640c | ISYS (ipu4p variant) | `ipu4p-isys-csi2-regs.h` CSI port 0 IRQ CTRL0 STATUS/CLEAR | Status: the pending receiver errors; each delivered frame sets bit 0 (corrected packet header error), CLEAR is write-1-to-clear. | inferred (ipu4p: driver-derived) |
+| 0x166d08 | ISYS (ipu4p variant) | `ipu4p-isys-csi2-regs.h` SIP0 IRQ STATUS | Read: SIP0_CSI2_IRQ (bit 3) while a port 0 receiver error is pending, so `ipu4p_isys_isr()` dispatches port 0. | inferred (ipu4p: driver-derived) |
 | 0x17c00c | ISYS   | `ipu6-isys.c` unispart IRQ_CLEAR        | Write-1-to-clear bits of `status`.                          | inferred   |
 | 0x17c010 | ISYS   | `ipu6-isys.c` unispart IRQ_ENABLE       | R/W latched.                                                | inferred   |
 | 0x17c014 | ISYS   | `ipu6-isys.c` unispart IRQ_LEVEL_NOT_PULSE | R/W latched.                                             | inferred   |
