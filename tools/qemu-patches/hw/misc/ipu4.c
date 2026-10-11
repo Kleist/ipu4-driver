@@ -767,6 +767,16 @@ static Ipu4FwSysQueue *ipu4_get_recv_queue(Ipu4State *s)
     return &s->is_recv_q;
 }
 
+/* The model's single MSI vector sits behind the buttress ISR enable. MSI
+ * is edge-triggered: each unmasked event, or unmasking a pending one,
+ * sends one. */
+static void ipu4_raise_irq(Ipu4State *s)
+{
+    if ((s->isr_status & s->isr_enable) && msi_enabled(&s->parent_obj)) {
+        msi_notify(&s->parent_obj, 0);
+    }
+}
+
 /* Write a token at output queue `q`'s wr cursor (DMEM[q->wr_reg]) and
  * advance the cursor. */
 static bool ipu4_post_token(Ipu4State *s, Ipu4FwSysQueue *q,
@@ -850,18 +860,12 @@ static void ipu4_post_response_full(Ipu4State *s,
         return;
     }
 
-    /* Raise the IS-side IRQ. The buttress dispatch + ISYS unispart
-     * SW-IRQ bit are both required for ipu6_buttress_isr →
-     * ipu4_isys_isr → isys_isr_one to drain the response. msi_init()
-     * was called in realize() and pci_alloc_irq_vectors() runs at
-     * driver probe, so msi_enabled() is reliably true by the time
-     * the first response posts. */
+    /* ipu6_buttress_isr → ipu4_isys_isr → isys_isr_one drains the
+     * response only with both the buttress IS bit and the UNISPART
+     * firmware bit set. */
     s->unispart.status |= s->v->unispart_sw_irq;
     s->isr_status |= BTRS_ISR_IS_IRQ;
-
-    if (msi_enabled(&s->parent_obj)) {
-        msi_notify(&s->parent_obj, 0);
-    }
+    ipu4_raise_irq(s);
 }
 
 /* Wrapper for simple ack types (OPEN_DONE, START_*_ACK, FLUSH_ACK,
@@ -1669,6 +1673,7 @@ static bool ipu4_btrs_write(Ipu4State *s, unsigned int idx, hwaddr off,
         return true;
     case BTRS_REG_ISR_ENABLE:
         s->isr_enable = val;
+        ipu4_raise_irq(s);
         return true;
     case BTRS_REG_ISR_CLEAR:
         /* Write-1-to-clear. */
