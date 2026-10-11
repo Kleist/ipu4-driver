@@ -73,9 +73,9 @@ commit, first in the step's PR.
 
 | PR | Content | `enabled-tests.ipu4p` gains | State |
 |---|---|---|---|
-| P1 | `vm-ipu6.yml` matrix leg `ipu4p` and `enabled-tests.ipu4p` with the static tests | `series-applies`, `build`, `checkpatch` || in review |
-| P2 | QEMU `variant=ipu4p` (PCI ID `8a19`); `run-vm.sh` maps the variant to `ipu_pci_id=` | `vm-boot` | |
-| P3 | `module-load` for the variant (virt-sensor on the variant's device, as the IPU6 variant's V3 does) | `module-load` | |
+| P1 | `vm-ipu6.yml` matrix leg `ipu4p` and `enabled-tests.ipu4p` with the static tests | `series-applies`, `build`, `checkpatch` | merged (#139) |
+| P2 | QEMU `variant=ipu4p` (PCI ID `8a19`); `run-vm.sh` maps the variant to `ipu_pci_id=` | `vm-boot`, `module-load` | in review |
+| P3 | `module-load` for the variant (virt-sensor on the variant's device, as the IPU6 variant's V3 does) | `module-load` | folded into P2 |
 | P4 | Stage `intel/ipu/ipu4p_fw.bin`; `probe-identify` expects that file for `8a19` | `probe-identify` | |
 | P5 | Model: IPU4P PWR_STATE FSM and FREQ_CTL | `probe-buttress` | |
 | P6 | ISYS runtime resume on IPU4P: UNISPART SW IRQ bit 22, SIP0/SIP1 windows. Needs the IPU4 port's forced ISYS resume (its PR 9) | an IPU4P resume test (driver-observable, not trace-based) | |
@@ -101,3 +101,11 @@ commit, first in the step's PR.
 - (P1) Until P2 the VM tests fail on this leg (`run-vm.sh` rejects
   `IPU4_VARIANT=ipu4p` and the model has no `variant=ipu4p`). They are
   not gated, so the leg stays green.
+- (P2) `module-load` passed as soon as the model presented `8a19`, with no
+  test change: `init.ipu6-modules` already reads `ipu_pci_id=`, and
+  `intel-ipu6` binds `8a19` on load (Ruslan's driver lists it), then
+  fails probe on the missing `intel/ipu/ipu4p_fw.bin`. Whether probe
+  succeeds is the probe-* tests' job, so P3 was folded into P2.
+- (P2) First full-ladder run on ipu4p (TCG): `probe-identify` fails only
+  because `ipu4p_fw.bin` isn't staged in the rootfs yet (P4); everything
+  after it is SKIP.
