@@ -17,7 +17,7 @@ source = [
     "check_writes",
     "normalize_report",
     "parse_registers",
-    "parse_status",
+    "parse_kernels",
     "parse_ladder",
 ]
 

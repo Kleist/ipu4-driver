@@ -21,8 +21,8 @@ from pathlib import Path
 # Make the parsers importable when this script lives next to them.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import parse_ladder  # noqa: E402
+import parse_kernels  # noqa: E402
 import parse_registers  # noqa: E402
-import parse_status  # noqa: E402
 
 
 HISTORY_CAP = 365  # one year of daily refreshes + per-push events
@@ -93,19 +93,22 @@ _DASHBOARD_WORKFLOW_DENYLIST = frozenset({
     "build-and-kunit (reusable)",
     "vm-smoke (reusable)",
     "pages",
+    "pages-preview",
     "bump-kernel-pins",
     "upstream-watch",
 })
 
 
-def _gh_workflows(repo: str) -> list[dict]:
+def _gh_workflows(root: Path, repo: str) -> list[dict]:
     """Best-effort: query GitHub for the latest run of every workflow.
 
     Returns an empty list if `gh` is unavailable or unauthenticated —
     the dashboard renders an "no runs found" placeholder in that case.
     Each workflow shows the most recent run regardless of conclusion;
     failed runs are visually distinguished in the template. Workflows
-    in _DASHBOARD_WORKFLOW_DENYLIST are dropped before rendering.
+    in _DASHBOARD_WORKFLOW_DENYLIST, and workflows with no file in this
+    checkout (deleted ones, GitHub's dynamic pages-build-deployment),
+    are dropped before rendering.
     """
     if not _have("gh"):
         return []
@@ -115,6 +118,8 @@ def _gh_workflows(repo: str) -> list[dict]:
     out = []
     for wf in workflows:
         if wf["name"] in _DASHBOARD_WORKFLOW_DENYLIST:
+            continue
+        if not (root / wf.get("path", "")).is_file():
             continue
         runs = _gh_json([
             "api",
@@ -133,6 +138,36 @@ def _gh_workflows(repo: str) -> list[dict]:
             "duration": _duration(run.get("created_at"), run.get("updated_at")),
         })
     return out
+
+
+def _ci_jobs(repo: str) -> tuple[list[dict] | None, str | None]:
+    """Jobs and URL of the latest completed ``ci`` run on the default
+    branch, or ``(None, None)`` without ``gh``."""
+    if not _have("gh"):
+        return None, None
+    runs = _gh_json([
+        "api",
+        f"repos/{repo}/actions/workflows/ci.yml/runs?event=push&status=completed&per_page=1",
+        "--jq", ".workflow_runs",
+    ]) or []
+    if not runs:
+        return None, None
+    run = runs[0]
+    jobs = _gh_json([
+        "api", f"repos/{repo}/actions/runs/{run['id']}/jobs?per_page=100",
+        "--jq", ".jobs",
+    ])
+    return jobs, run.get("html_url")
+
+
+def _kernels(root: Path, repo: str) -> dict:
+    jobs, run_url = _ci_jobs(repo)
+    pins = parse_kernels.load_pins(root / ".github" / "kernel-pins")
+    return {
+        "tracks": parse_kernels.build(pins, jobs),
+        "run_url": run_url,
+        "workflow_url": f"https://github.com/{repo}/actions/workflows/ci.yml",
+    }
 
 
 def _have(prog: str) -> bool:
@@ -280,9 +315,6 @@ def main(argv=None):
     registers_md = root / "tools" / "notes" / "registers.md"
     registers = parse_registers.parse(registers_md.read_text()) if registers_md.is_file() else {"rows": [], "counts": {"doc": 0, "inferred": 0, "guess": 0}, "total": 0}
 
-    status_md = root / "STATUS.md"
-    milestones = parse_status.parse(status_md.read_text()) if status_md.is_file() else {"milestones": [], "counts": {}, "total": 0}
-
     upstream_diff = _parse_upstream_diff(root / "tools" / "notes" / "upstream-diff" / "summary.md")
     upstream_watch = _read_json(root / "tools" / "notes" / "upstream-watch-state.json") or {
         "last_seen": {}, "processed_patch_ids": [],
@@ -293,11 +325,11 @@ def main(argv=None):
         "commit_sha": _commit_sha(root),
         "repo": args.repo,
         "streamon_marker": _read_streamon_marker(Path(args.streamon_summary)),
-        "ci": {"workflows": _gh_workflows(args.repo)},
+        "ci": {"workflows": _gh_workflows(root, args.repo)},
         "coverage": {"summary": coverage_summary},
         "mmio": {"report": mmio_report},
         "registers": registers,
-        "milestones": milestones,
+        "kernels": _kernels(root, args.repo),
         "upstream": {"diff": upstream_diff, "watch": upstream_watch},
         "ipu6_port": _ipu6_port(root, args.repo, args.ipu6_ladder_dir, args.vm_ipu6_run_id),
     }

@@ -13,7 +13,7 @@
 #   tools/notes/registers.md
 #   tools/notes/upstream-watch-state.json
 #   tools/notes/upstream-diff/summary.md        (regenerated if missing)
-#   STATUS.md
+#   .github/kernel-pins/*.json
 #   GitHub Actions API (gh) — workflow run status
 #
 # Writes:

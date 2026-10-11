@@ -109,32 +109,18 @@ code {
 .reg-table tr.conf-inferred td:last-child { color: var(--accent); }
 .reg-table tr.conf-guess td:last-child { color: var(--warn); }
 
-.milestones {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 0.4rem;
-}
-.milestones li {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-left-width: 3px;
-  border-radius: 4px;
-  padding: 0.5rem 0.75rem;
-  display: flex;
-  gap: 0.5rem;
-  align-items: baseline;
-  font-size: 0.92em;
-}
-.milestones .ms-id { font-weight: 600; min-width: 4.5em; font-family: ui-monospace, monospace; }
-.milestones .ms-title { flex: 1; }
-.milestones .ms-state { color: var(--muted); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.04em; }
-.milestones li.state-done { border-left-color: var(--good); }
-.milestones li.state-in_progress { border-left-color: var(--warn); }
-.milestones li.state-deferred { border-left-color: var(--muted); }
-.milestones li.state-unknown { border-left-color: var(--bad); }
+.kernel-track { border-left-width: 3px; }
+.kernel-track .kpi-value { font-size: 1.15rem; }
+.kernel-track .kpi-value code { background: none; padding: 0; }
+.kernel-track.state-success { border-left-color: var(--good); }
+.kernel-track.state-failure { border-left-color: var(--bad); }
+.kernel-track.state-in_progress { border-left-color: var(--warn); }
+.kernel-track.state-skipped,
+.kernel-track.state-unknown { border-left-color: var(--muted); }
+
+details.card > summary h2 { display: inline; margin: 0; }
+.sub { border-top: 1px solid var(--border); margin-top: 1rem; padding-top: 0.25rem; }
+.sub h4 { margin: 0.75rem 0 0.25rem; font-size: 0.95rem; color: var(--muted); }
 
 .ladder-variant { border-left-width: 3px; }
 .ladder-variant.ladder-ok { border-left-color: var(--good); }
@@ -151,7 +137,7 @@ code {
 .ladder-cell.res-unknown,
 .ladder-cell.res-none { color: var(--muted); }
 .ladder-cell.res-none { font-style: italic; }
-.ladder-cell .gated {
+.gated {
   display: inline-block;
   margin-left: 0.35em;
   padding: 0 0.4em;
@@ -183,3 +169,5 @@ details > summary {
 details[open] > summary { color: var(--fg); }
 
 canvas { margin-top: 0.75rem; max-height: 180px; }
+
+.kpi-sub code { overflow-wrap: anywhere; }

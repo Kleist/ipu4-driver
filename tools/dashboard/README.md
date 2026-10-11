@@ -1,14 +1,15 @@
 # tools/dashboard/
 
-Renders a single-page GitHub Pages site with the project's "current
-state": code coverage, MMIO divergence, register coverage, upstream
-divergence + watcher state, latest CI runs, STATUS.md milestones, and
-the IPU4-on-upstream-ipu6 port's test ladder per QEMU variant.
+Renders a single-page GitHub Pages site with the project's current
+state: the test ladder per leg, the supported kernel tracks with their
+latest build + KUnit result, latest CI runs and, collapsed, the
+out-of-tree harness's coverage, MMIO divergence, register coverage and
+upstream divergence.
 
 Deployed by `.github/workflows/pages.yml` via `actions/deploy-pages`
 on every push to `main`, every `vm-smoke` / `vm-ipu6` completion, and
 a daily 06:30 UTC cron. Coverage and MMIO data come from the latest
-*successful* `vm-smoke` run on the default branch; the IPU4 port
+*successful* `vm-smoke` run on the default branch; the test
 ladder comes from the latest *completed* `vm-ipu6` run there that has
 `ipu6-ladder-results-*` artifacts, whatever its conclusion (a failing
 gated test is status worth showing). PR previews look at the PR's own
@@ -74,10 +75,10 @@ The dashboard is a contract over files already produced elsewhere:
 | `tools/notes/registers.md` | committed | yes |
 | `tools/notes/upstream-watch-state.json` | `tools/upstream/watch.sh` (committed) | yes |
 | `tools/notes/upstream-diff/summary.md` | `tools/upstream/diff.sh` (regenerated each pages run) | optional |
-| `STATUS.md` | committed | yes |
+| `.github/kernel-pins/*.json` | committed (`bump-kernel-pins.yml`) | optional |
 | GitHub Actions API | `gh api` at build time | optional |
 
-## IPU4 port section (`results.json`)
+## Test ladder section (`results.json`)
 
 `tools/tests/ipu6/ladder.sh` writes `tools/tests/out/ipu6-ladder/results.json`
 at the end of every run (schema 1):
@@ -137,7 +138,7 @@ The script tolerates missing inputs so a checkout without a recent
 | `build_payload.py` | Gathers all inputs into a single JSON dict for the renderer. |
 | `render.py` | Jinja2 → `index.html`, copies CSS, writes `data/history.json`. |
 | `parse_registers.py` | `tools/notes/registers.md` → `{rows, counts}`. Tested. |
-| `parse_status.py` | `STATUS.md` → milestone list with state classification. Tested. |
+| `parse_kernels.py` | `.github/kernel-pins/` + latest `ci` run jobs → kernel tracks with status. Tested. |
 | `parse_ladder.py` | ipu6 ladder `results.json` files → test × variant matrix. Tested. |
 | `templates/index.html.j2` | Single page. Embeds Chart.js from CDN; no JS build step. |
 | `templates/style.css` | Dark-mode CSS, no framework. |
