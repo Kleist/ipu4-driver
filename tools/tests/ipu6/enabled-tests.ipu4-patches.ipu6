@@ -1,0 +1,25 @@
+# Gate of the ipu4-patches / ipu6 leg: the upstreamable driver under the
+# IPU6 QEMU model. Owned by the IPU4 port; gains a test once it passes on
+# the IPU6 baseline (enabled-tests.ipu6.ipu6) and here.
+#
+# One test name per line; '#' starts a comment. Every known test runs on
+# every PR, but only the tests listed here fail the job; run
+# `tools/tests/ipu6/ladder.sh --list` for the names.
+
+# Static tests: the same tree as ipu4-patches / ipu4.
+series-applies
+build
+checkpatch
+
+# What the IPU6 baseline passes: the series does not break IPU6 probe,
+# buttress power-up or the ISYS runtime resume.
+vm-boot
+module-load
+probe-identify
+probe-buttress
+isys-resume
+
+# PSYS MMU init and the ISYS resume's writes against the upstream driver's
+# IPU6 tables, as on the baseline (ipu6 plan V7).
+probe-mmu
+isys-irq

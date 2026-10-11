@@ -68,7 +68,7 @@ The dashboard is a contract over files already produced elsewhere:
 | `tools/tests/out/compare-mmio/report.json` | `tools/tests/compare-mmio.sh` | optional |
 | `tools/tests/out/compare-mmio/report.txt` | same | optional |
 | `tools/tests/out/streamon.summary` | `tools/tests/streamon-smoke.sh` | optional |
-| `tools/tests/out/ipu6-ladder-results/**/results.json` (`$IPU6_LADDER_DIR`) | `tools/tests/ipu6/ladder.sh`, via the `ipu6-ladder-results-<variant>` artifacts of `vm-ipu6` | optional (matrix renders "not run yet") |
+| `tools/tests/out/ipu6-ladder-results/**/results.json` (`$IPU6_LADDER_DIR`) | `tools/tests/ipu6/ladder.sh`, via the `ipu6-ladder-results-<leg>` artifacts of `vm-ipu6` | optional (matrix renders "not run yet") |
 | `tools/tests/out/ipu6-ladder/results.json` | a local `tools/tests/ipu6/ladder.sh` run | optional |
 | `tools/tests/ipu6/ladder.sh --list` | committed | optional (row names before any results exist) |
 | `tools/notes/registers.md` | committed | yes |
@@ -85,12 +85,14 @@ at the end of every run (schema 1):
 ```jsonc
 {
   "schema": 1,
-  "variant": "ipu4",              // $IPU4_VARIANT: ipu4 | ipu4p | ipu6
+  "leg": "ipu4-patches/ipu4",     // "<driver>/<variant>"
+  "driver": "ipu4-patches",       // $IPU4_DRIVER: ipu4-out-of-tree | ipu4p | ipu6 | ipu4-patches
+  "variant": "ipu4",              // $IPU4_VARIANT (QEMU model): ipu4 | ipu4p | ipu6
   "generated_at": "2026-10-10T12:14:40Z",
   "commit_sha": "…", "run_id": "…", "run_url": "…",   // null outside CI
   "pin": {"url": "https://github.com/ruslanbay/linux.git", "sha": "…"},
   "series": {"count": 1, "patches": [{"file": "0001-….patch", "subject": "media: ipu6: …"}]},
-  "enabled_tests": "tools/tests/ipu6/enabled-tests",
+  "enabled_tests": "tools/tests/ipu6/enabled-tests.ipu4-patches.ipu4",
   "exit_status": 0,
   "tests": [
     {"name": "build", "depends_on": "series-applies", "enabled": true,
@@ -101,9 +103,12 @@ at the end of every run (schema 1):
 
 `result` is one of `PASS`, `FAIL`, `SKIP`, `NOT-IMPLEMENTED` or `NOT-RUN`
 (test not selected on the command line); `enabled` means the test is
-listed in the variant's `enabled-tests` and gates CI. `parse_ladder.py`
-keeps the newest file per `variant` and always shows the `ipu4`, `ipu4p`
-and `ipu6` columns, so a variant without data reads "not run yet".
+listed in the leg's `enabled-tests.<driver>.<variant>` and gates CI.
+`parse_ladder.py` keeps the newest file per `leg` and always shows one
+column per leg (each IPU under its baseline and under ipu4-patches,
+six), so a leg without data reads "not run yet"; the pin and series block describes `ipu4-patches/ipu4`. Files
+without `leg` (written before legs existed) count by their `variant`:
+`ipu4` as `ipu4-patches/ipu4`, `ipu6` as `ipu6/ipu6`.
 
 ## Local render
 
@@ -113,7 +118,7 @@ tools/upstream/diff.sh
 
 # Render to /tmp/site/. No vm-smoke artifacts → coverage / mmio
 # sections render as "no data yet" placeholders. A local
-# tools/tests/ipu6/ladder.sh run fills the ipu4 column of the IPU4
+# tools/tests/ipu6/ladder.sh run fills its leg's column of the IPU4
 # port section; IPU6_LADDER_DIR=<dir> points at downloaded
 # ipu6-ladder-results-* artifacts instead.
 OUT_DIR=/tmp/site tools/dashboard/build.sh

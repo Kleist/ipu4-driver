@@ -5,12 +5,14 @@ ladder_test build series-applies
 
 test_build() {
 	local log="$OUT/build.compile.log"
-	IPU4_IPU6_CLEAN=1 IPU4_IPU6_BUILD_LOG="$log" "$ROOT/tools/ipu6/build.sh" ||
+	# tools/<flavor>/build.sh.
+	IPU4_IPU6_CLEAN=1 IPU4_IPU6_BUILD_LOG="$log" "$ROOT/tools/build.sh" ||
 		return 1
-	# "cleanly": no compiler warnings at W=1. modpost's "WARNING:" lines
+	# "cleanly": no compiler warnings (W=1 for the ipu6 flavor, the
+	# module's own level for out-of-tree). modpost's "WARNING:" lines
 	# about unresolved symbols are expected (no vmlinux) and not matched.
 	if grep -E '(warning|error):' "$log"; then
-		echo "!!! compiler warnings in the W=1 build (see above)"
+		echo "!!! compiler warnings in the build (see above)"
 		return 1
 	fi
 }

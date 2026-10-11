@@ -1,36 +1,45 @@
-"""Collect ipu6 test-ladder results into a test x variant matrix.
+"""Collect test-ladder results into a test x leg matrix.
 
 ``tools/tests/ipu6/ladder.sh`` writes one ``results.json`` per run
 (schema 1, see tools/dashboard/README.md). The vm-ipu6 workflow uploads
-it as ``ipu6-ladder-results-<variant>``; pages.yml downloads every such
+it as ``ipu6-ladder-results-<leg>``; pages.yml downloads every such
 artifact of the latest vm-ipu6 run into one directory. This module
-finds those files, keeps the newest per variant and lays them out for
+finds those files, keeps the newest per leg and lays them out for
 the "IPU4 port (upstream ipu6)" section of the dashboard.
 
-Variants in ``VARIANTS`` always get a column, so a variant the parallel
-track has not wired up yet renders as "not run yet" instead of being
-hidden. Unknown variants found in the data are appended after them.
+Legs in ``LEGS`` always get a column, so a leg its track has not wired
+up yet renders as "not run yet" instead of being hidden. Unknown legs
+found in the data are appended after them.
 """
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-# Column order: IPU4 (the port), then the variants of the shared driver
-# it must not break (plan "Tracks and file ownership").
+# A leg is "<driver>/<variant>": each IPU under its unmodified baseline,
+# then under the upstreamable ipu4-patches (plan "Tracks and file
+# ownership").
 VARIANTS = ("ipu4", "ipu4p", "ipu6")
+BASELINES = {"ipu4": "ipu4-out-of-tree", "ipu4p": "ipu4p", "ipu6": "ipu6"}
+LEGS = tuple(f"{BASELINES[v]}/{v}" for v in VARIANTS) + tuple(
+    f"ipu4-patches/{v}" for v in VARIANTS)
+# The section's pin and series block describes this leg's run.
+PRIMARY = "ipu4-patches/ipu4"
+
+# results.json written before legs existed only name the QEMU variant.
+_OLD_VARIANT_LEG = {"ipu4": "ipu4-patches/ipu4", "ipu6": "ipu6/ipu6"}
 
 RESULTS = ("PASS", "FAIL", "SKIP", "NOT-IMPLEMENTED", "NOT-RUN")
 
 
 def load_results(dirs) -> dict[str, dict]:
-    """Return ``{variant: results}`` from every results*.json under *dirs*.
+    """Return ``{leg: results}`` from every results*.json under *dirs*.
 
     Missing directories and unreadable / malformed files are ignored.
-    When a variant appears more than once, the newest ``generated_at``
+    When a leg appears more than once, the newest ``generated_at``
     wins (ISO-8601 UTC strings sort chronologically).
     """
-    by_variant: dict[str, dict] = {}
+    by_leg: dict[str, dict] = {}
     for d in dirs:
         d = Path(d)
         if not d.is_dir():
@@ -45,19 +54,22 @@ def load_results(dirs) -> dict[str, dict]:
                 data["tests"] = data.pop("rungs")
             if not isinstance(data, dict) or not isinstance(data.get("tests"), list):
                 continue
-            variant = data.get("variant") or "ipu4"
-            prev = by_variant.get(variant)
+            leg = data.get("leg")
+            if not leg:
+                variant = data.get("variant") or "ipu4"
+                leg = _OLD_VARIANT_LEG.get(variant, variant)
+            prev = by_leg.get(leg)
             if prev is None or (data.get("generated_at") or "") > (prev.get("generated_at") or ""):
-                by_variant[variant] = data
-    return by_variant
+                by_leg[leg] = data
+    return by_leg
 
 
-def _test_order(by_variant: dict[str, dict], fallback: list[str]) -> list[str]:
-    """Ladder order: the ipu4 run first, then tests only other variants
+def _test_order(by_leg: dict[str, dict], fallback: list[str]) -> list[str]:
+    """Ladder order: the first leg's run first, then tests only other legs
     (or ``ladder.sh --list``) know about, appended in their order."""
     order: list[str] = []
-    sources = [by_variant[v] for v in VARIANTS if v in by_variant]
-    sources += [r for v, r in by_variant.items() if v not in VARIANTS]
+    sources = [by_leg[v] for v in LEGS if v in by_leg]
+    sources += [r for v, r in by_leg.items() if v not in LEGS]
     for res in sources:
         for test in res["tests"]:
             name = test.get("name")
@@ -83,39 +95,38 @@ def _summary(res: dict) -> dict:
     }
 
 
-def build(by_variant: dict[str, dict], fallback_tests: list[str] | None = None) -> dict:
-    """Shape the per-variant results for the template.
+def build(by_leg: dict[str, dict], fallback_tests: list[str] | None = None) -> dict:
+    """Shape the per-leg results for the template.
 
-    Returns ``{variants, tests, primary, has_data}`` where ``variants``
-    is a list of ``{name, has_data, summary, generated_at, run_url,
+    Returns ``{legs, tests, primary, has_data}`` where ``legs`` is a
+    list of ``{name, has_data, summary, generated_at, run_url,
     commit_sha, pin, series_count}``, ``tests`` a list of ``{name,
-    cells}`` with one cell per variant (``None`` when that variant has no
-    data for the test),
-    and ``primary`` the results whose pin and series the section shows
-    (ipu4 when present).
+    cells}`` with one cell per leg (``None`` when that leg has no data
+    for the test), and ``primary`` the results whose pin and series the
+    section shows (``PRIMARY`` when present, else the first leg with data).
     """
-    names = list(VARIANTS) + [v for v in by_variant if v not in VARIANTS]
-    variants = []
+    names = list(LEGS) + [v for v in by_leg if v not in LEGS]
+    legs = []
     for v in names:
-        res = by_variant.get(v)
-        variants.append({
+        res = by_leg.get(v)
+        legs.append({
             "name": v,
             "has_data": res is not None,
             "summary": _summary(res) if res else None,
             "generated_at": (res or {}).get("generated_at"),
             "run_url": (res or {}).get("run_url"),
             "commit_sha": (res or {}).get("commit_sha"),
-            # Variants can run on different bases (the ipu6 variant on
-            # unpatched mainline), so each card names its own.
+            # Legs run on different bases (ipu6 on unpatched mainline,
+            # ipu4-out-of-tree on stock v7.3-rc4), so each card names its own.
             "pin": (res or {}).get("pin"),
             "series_count": ((res or {}).get("series") or {}).get("count"),
         })
 
     tests = []
-    for name in _test_order(by_variant, list(fallback_tests or [])):
+    for name in _test_order(by_leg, list(fallback_tests or [])):
         cells = []
         for v in names:
-            res = by_variant.get(v)
+            res = by_leg.get(v)
             if res is None:
                 cells.append(None)
                 continue
@@ -132,12 +143,12 @@ def build(by_variant: dict[str, dict], fallback_tests: list[str] | None = None) 
             })
         tests.append({"name": name, "cells": cells})
 
-    primary = next(
-        (by_variant[v] for v in names if v in by_variant), None
+    primary = by_leg.get(PRIMARY) or next(
+        (by_leg[v] for v in names if v in by_leg), None
     )
     return {
-        "variants": variants,
+        "legs": legs,
         "tests": tests,
         "primary": primary,
-        "has_data": bool(by_variant),
+        "has_data": bool(by_leg),
     }

@@ -11,30 +11,32 @@ no other track's plan.
 ## Goal
 
 Run the ipu6 test ladder against an IPU4P (Ice Lake, `8086:8a19`) model in
-QEMU. This shows two things:
+QEMU. Tests are developed against the unmodified baseline, Ruslan Bay's
+IPU4P series without the IPU4 patches; the same tests then run on the
+upstreamable driver with the series applied (the IPU4 port's gate). This
+shows two things:
 
-- Ruslan Bay's IPU4P support in the shared driver still works with the IPU4
-  series (`patches/ipu6-ipu4/`) applied on top.
-- The IPU4 patches don't regress it.
+- Ruslan Bay's IPU4P support works under the model.
+- The IPU4 patches (`patches/ipu6-ipu4/`) don't regress it.
 
 ## Base and harness
 
-- **Kernel:** the same tree as the IPU4 port, `tools/ipu6/pin` (Ruslan's
-  `ipu4p-upstream`) plus `patches/ipu6-ipu4/`, in `tools/linux-ipu6/`.
-  `ladder.sh` already maps `IPU4_VARIANT=ipu4p` to it. Unlike the IPU6
-  variant, which runs on unpatched mainline, the IPU4P variant runs on the
-  tree that carries both IPU4P and IPU4. That is the combination upstream
-  would get.
+- **Kernel:** the baseline driver `ipu4p`: `tools/ipu6/pin` (Ruslan's
+  `ipu4p-upstream`) without the series, in `tools/linux-ipu6-ruslan/`
+  (`IPU4_DRIVER=ipu4p`). The patched tree (`IPU4_DRIVER=ipu4-patches
+  IPU4_VARIANT=ipu4p`) is gated by the IPU4 port in
+  `enabled-tests.ipu4-patches.ipu4p`, which gains a test once it passes
+  on both.
 - **QEMU:** a `variant=ipu4p` value of the model's `variant` property
   (`-device ipu4,variant=ipu4p`). It sets PCI ID `8a19` and, step by step,
   the IPU4P register behaviour below. Variant-specific behaviour goes in
   `ipu4p_*` functions behind the variant switch, in their own hunks of
   `tools/qemu-patches/hw/misc/ipu4.c`.
-- **Gating:** `tools/tests/ipu6/enabled-tests.ipu4p`, owned by this track.
-- **CI:** a third `vm-ipu6.yml` matrix leg (`variant: ipu4p`). It shares the
-  ipu4 leg's tree cache (same directory, same pin) and the QEMU cache.
-- **Dashboard:** the "IPU4 port" matrix already has an `ipu4p` column. It
-  lights up once the leg uploads `ipu6-ladder-results-ipu4p`.
+- **Gating:** `tools/tests/ipu6/enabled-tests.ipu4p.ipu4p`, owned by this
+  track.
+- **CI:** the `vm-ipu6.yml` leg `ipu4p / ipu4p`, tree cache
+  `linux-ipu6-ruslan`; the QEMU cache is shared.
+- **Dashboard:** the `ipu4p/ipu4p` column of the "IPU4 port" matrix.
 
 ## What the model must do differently
 
@@ -71,12 +73,13 @@ branch until it merges. Independent of the other tracks. A step that needs a sha
 the `init.ipu6-*` frames, `vm-ipu6.yml`) puts that change in its own
 commit, first in the step's PR.
 
-| PR | Content | `enabled-tests.ipu4p` gains | State |
+| PR | Content | `enabled-tests.ipu4p.ipu4p` gains | State |
 |---|---|---|---|
 | P1 | `vm-ipu6.yml` matrix leg `ipu4p` and `enabled-tests.ipu4p` with the static tests | `series-applies`, `build`, `checkpatch` | merged (#139) |
 | P2 | QEMU `variant=ipu4p` (PCI ID `8a19`); `run-vm.sh` maps the variant to `ipu_pci_id=` | `vm-boot`, `module-load` | merged (#142) |
 | P3 | `module-load` for the variant (virt-sensor on the variant's device, as the IPU6 variant's V3 does) | `module-load` | folded into P2 |
 | P4 | Stage `intel/ipu/ipu4p_fw.bin`; `probe-identify` expects that file for `8a19` | `probe-identify` | in review |
+| P4b | Baseline leg `ipu4p / ipu4p` (Ruslan's tree without the series); P1–P4 move to it, `ipu4-patches / ipu4p` keeps them for the series | `series-applies`, `build`, `checkpatch`, `vm-boot`, `module-load`, `probe-identify` | in review (with the ladder's six legs) |
 | P5 | Model: IPU4P PWR_STATE FSM and FREQ_CTL | `probe-buttress` | |
 | P6 | ISYS runtime resume on IPU4P: UNISPART SW IRQ bit 22, SIP0/SIP1 windows. Needs the IPU4 port's forced ISYS resume (its PR 9) | an IPU4P resume test (driver-observable, not trace-based) | |
 | P7 | Model: SysCom queue base register 8 | `fw-open` | |
@@ -117,3 +120,4 @@ commit, first in the step's PR.
   `ipu4p_fw_isys_*` send/proxy tokens), so "the ISYS firmware ABI is the
   same as IPU4's" above needs checking before P7; the model's syscom
   emulation may need IPU4P-specific token sizes.
+- (P4b) BASELINE_LEARNING

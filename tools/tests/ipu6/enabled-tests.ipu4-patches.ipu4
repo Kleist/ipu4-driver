@@ -1,10 +1,11 @@
-# Ladder tests gated in CI for the ipu6 flavor (tools/tests/ipu6/ladder.sh).
+# Gate of the ipu4-patches / ipu4 leg (tools/tests/ipu6/ladder.sh): the
+# upstreamable driver (Ruslan's tree + patches/ipu6-ipu4/) under the IPU4
+# QEMU model. Owned by the IPU4 port (tools/notes/ipu6-ipu4-plan.md); each
+# PR in its sequence enables at least one more test.
 #
 # One test name per line; '#' starts a comment. Every known test runs on
-# every PR, but only the tests listed here fail the job. Each PR in the
-# plan (tools/notes/ipu6-ipu4-plan.md, "PR sequence") enables at least one
-# more test; run `tools/tests/ipu6/ladder.sh --list` for the names.
-#
+# every PR, but only the tests listed here fail the job; run
+# `tools/tests/ipu6/ladder.sh --list` for the names.
 
 # Static tests (plan PR 3).
 series-applies

@@ -6,29 +6,28 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
-# Test ladder for the ipu6 flavor (IPU4_FLAVOR=ipu6): the pinned upstream
-# ipu6 tree (tools/ipu6/pin) + patches/ipu6-ipu4/. Plan and test table:
-# tools/notes/ipu6-ipu4-plan.md.
+# Test ladder for the IPU4 drivers: the upstream ipu6 driver with the
+# IPU4 series (patches/ipu6-ipu4/) and the out-of-tree kernel/ipu4/
+# module. Plan and test table: tools/notes/ipu6-ipu4-plan.md.
 #
 # tools/tests/ipu6/ladder.sh runs every known test and prints a
 # PASS / FAIL / SKIP / NOT-IMPLEMENTED table (also in the job summary).
-# Only the tests listed in tools/tests/ipu6/enabled-tests fail the job, so
-# tests that are not switched on yet stay visible without blocking merges.
+# Only the tests listed in the leg's
+# tools/tests/ipu6/enabled-tests.<driver>.<variant> fail the job, so tests
+# that are not switched on yet stay visible without blocking merges.
 #
-# One leg per QEMU model variant (plan "Tracks and file ownership"): ipu4 is the
-# port itself (tools/ipu6/pin + the series); ipu4p runs the same tree
-# against the model's IPU4P (Ice Lake) emulation
-# (tools/notes/ipu4p-variant-plan.md); ipu6 develops the model's
-# IPU6 emulation against unpatched mainline (tools/ipu6/pin.upstream).
-# Each leg passes IPU4_VARIANT to the ladder, which picks that variant's
-# base and tree, boots it, and gates on its own list (enabled-tests for
-# ipu4, enabled-tests.<variant>).
+# Six legs, driver / QEMU model variant (table in ladder.sh): each IPU
+# under its unmodified baseline driver, ipu4-out-of-tree / ipu4
+# (kernel/ipu4/ on v7.3-rc4), ipu4p / ipu4p (Ruslan's tree, tools/ipu6/pin)
+# and ipu6 / ipu6 (mainline, tools/ipu6/pin.upstream), and each IPU under
+# the upstreamable ipu4-patches (Ruslan's tree + patches/ipu6-ipu4/).
 #
-# Runs alongside ci.yml / vm-smoke.yml (fork flow); nothing here touches
-# tools/linux/. QEMU comes from `tools/bootstrap.sh --qemu-only` and
-# shares its build cache with vm-smoke-reusable.yml (same key). The
-# harness-only virt-sensor module (tools/virt-sensor/) is rebuilt by the
-# module-load test on every run (a few seconds, so it is not cached).
+# Runs alongside ci.yml / vm-smoke.yml (fork flow, kernel/ipu4/ seeded
+# in-tree); nothing here touches tools/linux/. QEMU comes from
+# `tools/bootstrap.sh --qemu-only` and shares its build cache with
+# vm-smoke-reusable.yml (same key). The harness-only virt-sensor module
+# (tools/virt-sensor/) is rebuilt by the module-load test on every run (a
+# few seconds, so it is not cached).
 
 jobs:
   # Skip the ladder on PRs that don't touch its inputs
@@ -37,14 +36,14 @@ jobs:
     uses: ./.github/workflows/changes.yml
 
   ladder:
-    # Keep the check name short ("ladder (ipu4)"); by default it would
-    # list every matrix.include field.
-    name: ladder (${{ matrix.variant }})
+    # Keep the check name short ("ladder (ipu4-patches / ipu4)"); by
+    # default it would list every matrix.include field.
+    name: ladder (${{ matrix.driver }} / ${{ matrix.variant }})
     needs: changes
     runs-on: ubuntu-24.04
     # Gated per step rather than with a job-level `if:`: a skipped
     # matrix job reports one check with the unexpanded name, so
-    # "ladder (ipu4)" / "ladder (ipu6)" would never report and a
+    # "ladder (ipu4-patches / ipu4)" etc. would never report and a
     # required check on them would hang. Every step below carries
     # `env.SELECTED == 'true'`.
     env:
@@ -52,23 +51,40 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # linux-dir / pin mirror the variant -> base table in
-        # tools/tests/ipu6/ladder.sh; they only key the tree cache, whose
-        # name is the tree's directory (so the ipu4 key is unchanged).
+        # linux-dir / pin mirror the driver table in
+        # tools/tests/ipu6/ladder.sh; they only key the tree cache, named
+        # after the tree's directory (the ipu4-patches legs share it).
         include:
-          - variant: ipu4
-            linux-dir: tools/linux-ipu6
+          - driver: ipu4-out-of-tree
+            variant: ipu4
+            linux-dir: tools/linux-ipu4-oot
+            pin: tools/out-of-tree/pin
+            cache: linux-ipu4-oot
+          - driver: ipu4p
+            variant: ipu4p
+            linux-dir: tools/linux-ipu6-ruslan
             pin: tools/ipu6/pin
-            cache: linux-ipu6
-          # Same tree and pin as ipu4, so it shares that leg's cache.
-          - variant: ipu4p
-            linux-dir: tools/linux-ipu6
-            pin: tools/ipu6/pin
-            cache: linux-ipu6
-          - variant: ipu6
+            cache: linux-ipu6-ruslan
+          - driver: ipu6
+            variant: ipu6
             linux-dir: tools/linux-ipu6-upstream
             pin: tools/ipu6/pin.upstream
             cache: linux-ipu6-upstream
+          - driver: ipu4-patches
+            variant: ipu4
+            linux-dir: tools/linux-ipu6
+            pin: tools/ipu6/pin
+            cache: linux-ipu6
+          - driver: ipu4-patches
+            variant: ipu4p
+            linux-dir: tools/linux-ipu6
+            pin: tools/ipu6/pin
+            cache: linux-ipu6
+          - driver: ipu4-patches
+            variant: ipu6
+            linux-dir: tools/linux-ipu6
+            pin: tools/ipu6/pin
+            cache: linux-ipu6
     # Cold (no cache): QEMU build + full guest-kernel build dominate,
     # see the PR 4 learnings in the plan for measured times. Warm runs
     # rebuild only what the series touches.
@@ -115,12 +131,12 @@ jobs:
       # clean (the restore prefix includes it); bootstrap resets the
       # restored tree to the pin and re-applies the series, keeping
       # mtimes of untouched files so make only rebuilds what changed.
-      - name: Cache ipu6 Linux tree
+      - name: Cache Linux tree
         if: env.SELECTED == 'true'
         uses: actions/cache@v4
         with:
           path: ${{ matrix.linux-dir }}
-          key: ${{ matrix.cache }}-${{ hashFiles(matrix.pin) }}-${{ hashFiles('patches/ipu6-ipu4/**', 'tools/ipu6/*.sh', 'tools/build-kernel.sh', 'tools/vm-kconfig.sh') }}
+          key: ${{ matrix.cache }}-${{ hashFiles(matrix.pin) }}-${{ hashFiles('patches/ipu6-ipu4/**', 'tools/ipu6/*.sh', 'tools/out-of-tree/*.sh', 'tools/build-kernel.sh', 'tools/vm-kconfig.sh') }}
           restore-keys: |
             ${{ matrix.cache }}-${{ hashFiles(matrix.pin) }}-
 
@@ -129,15 +145,16 @@ jobs:
         run: ./tools/tests/ipu6/ladder.sh
         env:
           IPU4_ACCEL: tcg
+          IPU4_DRIVER: ${{ matrix.driver }}
           IPU4_VARIANT: ${{ matrix.variant }}
 
       # Small dedicated artifact read by pages.yml (dashboard "IPU4 port"
-      # section), one per QEMU variant leg.
+      # section), one per leg.
       - name: Upload ladder results
         if: always() && env.SELECTED == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: ipu6-ladder-results-${{ matrix.variant }}
+          name: ipu6-ladder-results-${{ matrix.driver }}-${{ matrix.variant }}
           path: tools/tests/out/ipu6-ladder/results.json
           if-no-files-found: ignore
 
@@ -145,11 +162,11 @@ jobs:
         if: always() && env.SELECTED == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: vm-ipu6-ladder-${{ matrix.variant }}-${{ github.run_id }}
+          name: vm-ipu6-ladder-${{ matrix.driver }}-${{ matrix.variant }}-${{ github.run_id }}
           # By pattern, so a new test's logs (tools/tests/out/ipu6-*)
           # need no change here.
           path: |
             tools/tests/out/ipu6-*
-            tools/tests/out/vm-smoke-ipu6.serial
+            tools/tests/out/vm-smoke-*.serial
             ${{ matrix.linux-dir }}/.config
           if-no-files-found: ignore

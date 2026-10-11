@@ -21,8 +21,13 @@ editing the same list.
   (`boot_stream_vm`, `stream_log_ok`, `$STREAM_LOG`, `$STREAM_WRITES`):
   `tools/rootfs/init.ipu6-stream` captures one frame from CSI-2 port 0
   with `streamon` and the tests read its markers and driver output.
-- **Variants:** a test that differs per QEMU model variant reads
-  `$IPU4_VARIANT` (ipu4 | ipu4p | ipu6). Which tests gate a variant is that
-  variant's `enabled-tests[.<variant>]` file, owned by that variant's track.
+- **Legs:** the ladder runs one driver (`$DRIVER`: ipu4-out-of-tree |
+  ipu4p | ipu6 | ipu4-patches) under one QEMU model variant (`$VARIANT`,
+  exported as `$IPU4_VARIANT`: ipu4 | ipu4p | ipu6); table in
+  `../ladder.sh`. A test that differs per driver flavor reads `$FLAVOR`
+  (ipu6 | out-of-tree), one that differs per model `$IPU4_VARIANT`. Which
+  tests gate a leg is its `enabled-tests.<driver>.<variant>` file, owned
+  by the driver's track.
 - **Variables available:** `$ROOT`, `$OUT`, `$LINUX_DIR`, `$PATCH_DIR`,
-  `$VARIANT`, `${WANT[<test>]}` (selected in this run).
+  `$DRIVER`, `$VARIANT`, `$LEG` (`<driver>/<variant>`), `$FLAVOR`,
+  `${WANT[<test>]}` (selected in this run).

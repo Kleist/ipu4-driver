@@ -13,7 +13,7 @@
 #   kunit     ci.yml build-and-kunit legs (fork driver build + KUnit)
 #   pytest    ci.yml pytest job (Python trace / dashboard tools)
 #   vm_smoke  vm-smoke.yml (fork driver in the full VM + MMIO compare)
-#   ipu6      vm-ipu6.yml (ipu6-flavor ladder)
+#   ipu6      vm-ipu6.yml (the test ladder, every leg)
 #
 # Unknown paths select nothing: keep the lists below in step with what
 # each job actually reads (bootstrap / build / test scripts and the
@@ -58,7 +58,11 @@ classify() {
 
 	# Fork driver + its in-tree seeding / build / KUnit runner. KUnit's
 	# gcov harvest boots tools/run-vm.sh with tools/rootfs/init.kunit-cov.
-	kernel/* | tools/linux-patches/* | tools/build.sh | tools/tests/kunit.sh)
+	# The driver sources and tools/build.sh (flavor dispatch) also feed
+	# the ladder's ipu4-out-of-tree leg.
+	kernel/ipu4/* | tools/build.sh)
+		HIT[kunit]=true; HIT[vm_smoke]=true; HIT[ipu6]=true ;;
+	kernel/* | tools/linux-patches/* | tools/tests/kunit.sh)
 		HIT[kunit]=true; HIT[vm_smoke]=true ;;
 	tools/bootstrap.sh | tools/vm-kconfig.sh | tools/run-vm.sh | tools/rootfs/*)
 		HIT[kunit]=true; HIT[vm_smoke]=true; HIT[ipu6]=true ;;
@@ -71,8 +75,9 @@ classify() {
 	tools/trace/check_writes.py)
 		HIT[pytest]=true; HIT[vm_smoke]=true; HIT[ipu6]=true ;;
 
-	# ipu6 flavor.
-	patches/ipu6-ipu4/* | tools/ipu6/* | tools/tests/ipu6/* | tools/virt-sensor/*)
+	# ipu6 and out-of-tree flavors (the ladder).
+	patches/ipu6-ipu4/* | tools/ipu6/* | tools/out-of-tree/* | \
+	tools/tests/ipu6/* | tools/virt-sensor/*)
 		HIT[ipu6]=true ;;
 
 	# Python tools and their tests.
