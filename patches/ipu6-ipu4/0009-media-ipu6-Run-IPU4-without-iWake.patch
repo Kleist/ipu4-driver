@@ -1,0 +1,39 @@
+From 3c2eedbbbb66aa69b82e0fc29b0c3f1e7b3d4033 Mon Sep 17 00:00:00 2001
+From: Andreas Helbech Kleist <andreaskleist@gmail.com>
+Date: Sun, 11 Oct 2026 05:21:57 +0000
+Subject: [PATCH] media: ipu6: Run IPU4 without iWake
+
+When a stream starts or stops, the driver sends the iWake watermark
+settings to the ISYS firmware as proxy tokens (GDA threshold and
+enable, as on IPU4P) and updates the buttress LTR/DID values. The IPU4
+reference driver does neither: on IPU4 hardware no proxy token is ever
+sent and the buttress fabric control register is never written while
+streaming. Each proxy token waits up to 100 ms for a response that
+IPU4 firmware is not known to send, so the stream start is delayed and
+logs "write 2 failed -110" and "write 1 failed -110".
+
+Skip the stream watermark update on IPU4, as is done for IPU7. The
+LTR/DID values are already left alone at ISYS suspend on IPU4.
+
+Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
+---
+ drivers/media/pci/intel/ipu6/ipu6-isys-video.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys-video.c b/drivers/media/pci/intel/ipu6/ipu6-isys-video.c
+index d9cab5b5d..fcab2285f 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-isys-video.c
++++ b/drivers/media/pci/intel/ipu6/ipu6-isys-video.c
+@@ -729,7 +729,8 @@ void ipu6_isys_update_stream_watermark(struct ipu6_isys_video *av, bool state)
+ 		&av->isys->iwake_watermark;
+ 	struct ipu6_device *isp = av->isys->adev->isp;
+ 
+-	if (IS_IPU7(isp) ||
++	/* IPU4 runs without iWake: no watermark proxy writes, no LTR/DID. */
++	if (IS_IPU7(isp) || IS_IPU4(isp) ||
+ 	    !av->watermark.pixel_rate)
+ 		return;
+ 
+-- 
+2.43.0
+
