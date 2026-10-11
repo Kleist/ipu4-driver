@@ -161,33 +161,14 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 
 #define IPU4_CSI2_NUM_PORTS                     6
 
-/* ISYS DMEM syscom ring-pointer block at BAR+0x108000 (from
- * postprocess_trace.py's NAMED_REGIONS; the driver derives offsets
- * via FW_COM_WR_REG / FW_COM_RD_REG in kernel/ipu4/ipu6-fw-com.h).
- * The first 0x100 bytes are firmware-parameter + ring-pointer slots
- * the driver writes during FW bringup and polls during streaming.
- * We back the whole window with a flat array:
- *
- *   0x008 SYSCOM_STATE     latched
- *   0x028 SEND_WR_POS      latched
- *   0x02c SEND_RD_POS      echoes SEND_WR so the driver sees
- *                          "firmware consumed everything"
- *   0x070 RECV_WR_POS      stays at whatever driver last wrote
- *                          (0 initially). Silicon sees real firmware
- *                          updates; the model doesn't, so compare.py
- *                          will flag this as a value_mismatch until
- *                          firmware simulation lands.
- *   0x074 RECV_RD_POS      latched (driver-written ack cursor)
- *   others (0x00-0x7f)     firmware parameter slots; no readback,
- *                          plain latching is enough.
+/* ISYS DMEM SysCom registers at BAR+0x108000 (FW_COM_WR_REG /
+ * FW_COM_RD_REG in kernel/ipu4/ipu6-fw-com.h), backed by a flat array.
+ * Queue cursors are located through the queue descriptors; see
+ * ipu4_syscom_read() / ipu4_syscom_write().
  */
 #define IS_DMEM_BASE                     0x108000
 #define IS_DMEM_SIZE                     0x100
 #define IS_DMEM_SYSCOM_STATE             (IS_DMEM_BASE + 0x008)
-#define IS_DMEM_FW_COM_SEND_WR_POS       (IS_DMEM_BASE + 0x028)
-#define IS_DMEM_FW_COM_SEND_RD_POS       (IS_DMEM_BASE + 0x02c)
-#define IS_DMEM_FW_COM_RECV_WR_POS       (IS_DMEM_BASE + 0x070)
-#define IS_DMEM_FW_COM_RECV_RD_POS       (IS_DMEM_BASE + 0x074)
 
 /* SYSCOM_STATE values (kernel/ipu4/ipu6-fw-com.c:44). The driver
  * writes UNINIT and polls SYSCOM_STATE until it reads READY before
@@ -320,24 +301,13 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
  * `ipu6_isys_csi2_isr`. */
 #define CSI2_PART_IRQ_FS_VC0             (1u << 0)
 
-/* Syscom queue layout (kernel/ipu4/ipu6-fw-com.c:101 + ipu6-fw-isys.h):
- *   reg 0..5  management slots (PKG_DIR, SYSCOM_CONFIG, …, VTL0)
- *   reg 6+    pairs of (wr_reg, rd_reg) per queue, in input-then-output order
- * IPU4 has 1 proxy + 1 dev + 8 msg input queues = queue indices 0..9.
- * The msg-send queue for stream N is at index IPU4_BASE_MSG_SEND_QUEUES + N
- * = 2 + N, occupying register pair (10+2N, 11+2N) — DMEM byte offsets
- * (0x028 + 8N, 0x02c + 8N). The single msg-recv queue follows the input
- * block at index 11 (1 proxy + 0 dev + 1 msg = output indices 0..1, with
- * the msg-recv at output index 1). Mapped as input.10/11 = wr/rd of the
- * 11th queue overall = absolute reg 28/29 (DMEM 0x070/0x074), matching
- * the existing IS_DMEM_FW_COM_RECV_*_POS macros above.
+/* SysCom queues (kernel/ipu4/ipu6-fw-com.c, ipu6-fw-isys.h): input queues
+ * are proxy, dev, then one msg-send queue per stream; output queue 1 is the
+ * msg-recv queue. Each queue's DMEM cursor registers come from its
+ * descriptor, so the model doesn't hardcode the per-variant layout.
  */
 #define IPU4_BASE_MSG_SEND_QUEUES        2
-#define IPU4_BASE_MSG_RECV_QUEUE_INDEX   11   /* in the absolute queue table */
 #define IPU4_MAX_MSG_STREAMS             8
-#define SYSCOM_QPR_BASE_REG              6
-/* ipu4p variant: same queues, but the pointer pairs start at reg 8. */
-#define IPU4PV_SYSCOM_QPR_BASE_REG       8
 
 /* IPU6 ISYS firmware send-token opcodes (kernel/ipu4/ipu6-fw-isys.h:131).
  * The driver's call sequence is well-defined per stream lifecycle but
@@ -500,12 +470,10 @@ typedef struct Ipu4VariantInfo {
     bool (*mmio_write)(Ipu4State *s, hwaddr addr, uint64_t val);
     /* Optional: raise variant-only IRQ state for a delivered frame. */
     void (*frame_irq)(Ipu4State *s);
-    /* DMEM register of the first SysCom queue pointer pair. */
-    unsigned int syscom_qpr_base;
     /* UNISPART bit the firmware IRQ is raised on. */
     uint32_t unispart_sw_irq;
-    /* The IPU4 DMEM window answers iwake proxy tokens. */
-    bool dmem_proxy;
+    /* Answer iwake proxy tokens on input queue 0. */
+    bool answers_proxy;
 } Ipu4VariantInfo;
 
 struct Ipu4State {
@@ -593,8 +561,7 @@ struct Ipu4State {
     Ipu4FwSysQueue is_send_q[IPU4_MAX_MSG_STREAMS];
     bool is_send_q_loaded[IPU4_MAX_MSG_STREAMS];
 
-    /* Cached msg-recv queue descriptor (single output queue at index
-     * IPU4_BASE_MSG_RECV_QUEUE_INDEX of the absolute queue table). */
+    /* Cached msg-recv queue descriptor (output queue 1). */
     Ipu4FwSysQueue is_recv_q;
     bool is_recv_q_loaded;
 
@@ -751,12 +718,6 @@ static bool ipu4_load_queue_desc(Ipu4State *s, uint32_t array_iova,
  * a pointer into the cache, or NULL if the descriptor isn't loadable yet
  * (no syscom config addr written, MMU not programmed, etc.).
  */
-/* DMEM reg of stream 0's msg-send wr cursor (its rd cursor follows). */
-static unsigned int ipu4_msg_send_reg(Ipu4State *s)
-{
-    return s->v->syscom_qpr_base + 2 * IPU4_BASE_MSG_SEND_QUEUES;
-}
-
 static Ipu4FwSysQueue *ipu4_get_send_queue(Ipu4State *s, unsigned int stream)
 {
     Ipu4FwSyscomConfig cfg;
@@ -776,7 +737,8 @@ static Ipu4FwSysQueue *ipu4_get_send_queue(Ipu4State *s, unsigned int stream)
     }
 
     q_index = IPU4_BASE_MSG_SEND_QUEUES + stream;
-    if (!ipu4_load_queue_desc(s, cfg.input_queue, q_index,
+    if (q_index >= cfg.num_input_queues ||
+        !ipu4_load_queue_desc(s, cfg.input_queue, q_index,
                               &s->is_send_q[stream])) {
         return NULL;
     }
@@ -1132,6 +1094,96 @@ static void ipu4_handle_send_bump(Ipu4State *s, unsigned int stream,
     }
 }
 
+/* Consume a proxy token (input queue 0) and answer it on output queue 0.
+ * Returns false when `reg` is not the proxy queue's wr cursor. */
+static bool ipu4_proxy_send(Ipu4State *s, unsigned int reg, uint32_t wr)
+{
+    Ipu4FwSyscomConfig cfg;
+    Ipu4FwSysQueue in, out;
+    uint32_t tok[4];    /* request_id, region_index, offset, value */
+    uint32_t resp[3];   /* request_id, error, error_details */
+
+    if (!s->syscom_config_iova ||
+        !ipu4_dma_read_iova(s, s->syscom_config_iova, &cfg, sizeof(cfg)) ||
+        !ipu4_load_queue_desc(s, cfg.input_queue, 0, &in) ||
+        in.wr_reg != reg || in.size == 0 || in.rd_reg >= IS_DMEM_SIZE / 4) {
+        return false;
+    }
+    s->is_dmem[in.rd_reg] = wr;
+    if (!ipu4_load_queue_desc(s, cfg.output_queue, 0, &out) ||
+        !ipu4_dma_read_iova(s, in.vied_address +
+                            ((wr + in.size - 1) % in.size) * in.token_size,
+                            tok, sizeof(tok))) {
+        return true;
+    }
+    resp[0] = tok[0];
+    resp[1] = resp[2] = 0;
+    ipu4_post_token(s, &out, resp, sizeof(resp));
+    return true;
+}
+
+/* Point the SysCom model at a new config struct; drop the cached queues. */
+static void ipu4_syscom_set_config(Ipu4State *s, uint32_t iova)
+{
+    s->syscom_config_iova = iova;
+    memset(s->is_send_q_loaded, 0, sizeof(s->is_send_q_loaded));
+    s->is_recv_q_loaded = false;
+    memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
+}
+
+static void ipu4_syscom_set_state(Ipu4State *s, uint32_t state)
+{
+    if (state == SYSCOM_STATE_UNINIT) {
+        memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
+    }
+}
+
+/* The stream whose send queue has its rd cursor at DMEM `reg`, or -1. */
+static int ipu4_send_rd_stream(Ipu4State *s, unsigned int reg)
+{
+    unsigned int i;
+
+    for (i = 0; i < IPU4_MAX_MSG_STREAMS; i++) {
+        if (s->is_send_q_loaded[i] && s->is_send_q[i].rd_reg == reg &&
+            s->is_send_q[i].wr_reg < IS_DMEM_SIZE / 4) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* A send queue's rd cursor reads as its wr cursor: the firmware has
+ * consumed every token. */
+static uint32_t ipu4_syscom_read(Ipu4State *s, unsigned int reg)
+{
+    int i = ipu4_send_rd_stream(s, reg);
+
+    return i < 0 ? s->is_dmem[reg] : s->is_dmem[s->is_send_q[i].wr_reg];
+}
+
+static void ipu4_syscom_write(Ipu4State *s, unsigned int reg, uint32_t val)
+{
+    unsigned int i;
+
+    if (ipu4_send_rd_stream(s, reg) >= 0) {
+        qemu_log_mask(LOG_UNIMP,
+                      "ipu4: driver wrote send rd cursor DMEM[%u]=0x%x; "
+                      "reads echo the wr cursor, so it is lost\n", reg, val);
+    }
+    s->is_dmem[reg] = val;
+    if (s->v->answers_proxy && ipu4_proxy_send(s, reg, val)) {
+        return;
+    }
+    for (i = 0; i < IPU4_MAX_MSG_STREAMS; i++) {
+        Ipu4FwSysQueue *q = ipu4_get_send_queue(s, i);
+
+        if (q && q->wr_reg == reg) {
+            ipu4_handle_send_bump(s, i, val);
+            return;
+        }
+    }
+}
+
 /* Resolve a BAR-relative address into (port_index, register_offset)
  * for the CSI2 region. Returns -1 if the address isn't within any
  * port's 0x1000 / 0x800 window. */
@@ -1339,37 +1391,9 @@ static bool ipu6v_is_dmem(hwaddr addr, unsigned int *reg)
     return true;
 }
 
-/* Consume a proxy token (input queue 0) and answer it on output queue 0.
- * Returns false when `reg` is not the proxy queue's wr cursor. */
-static bool ipu6v_proxy_send(Ipu4State *s, unsigned int reg, uint32_t wr)
-{
-    Ipu4FwSyscomConfig cfg;
-    Ipu4FwSysQueue in, out;
-    uint32_t tok[4];    /* request_id, region_index, offset, value */
-    uint32_t resp[3];   /* request_id, error, error_details */
-
-    if (!s->syscom_config_iova ||
-        !ipu4_dma_read_iova(s, s->syscom_config_iova, &cfg, sizeof(cfg)) ||
-        !ipu4_load_queue_desc(s, cfg.input_queue, 0, &in) ||
-        in.wr_reg != reg || in.size == 0 || in.rd_reg >= IS_DMEM_SIZE / 4) {
-        return false;
-    }
-    s->is_dmem[in.rd_reg] = wr;
-    if (!ipu4_load_queue_desc(s, cfg.output_queue, 0, &out) ||
-        !ipu4_dma_read_iova(s, in.vied_address +
-                            ((wr + in.size - 1) % in.size) * in.token_size,
-                            tok, sizeof(tok))) {
-        return true;
-    }
-    resp[0] = tok[0];
-    resp[1] = resp[2] = 0;
-    ipu4_post_token(s, &out, resp, sizeof(resp));
-    return true;
-}
-
 static bool ipu6v_mmio_read(Ipu4State *s, hwaddr addr, uint64_t *val)
 {
-    unsigned int reg, i;
+    unsigned int reg;
 
     switch (addr) {
     case IPU6V_BTRS_SYSCOM_CONFIG:
@@ -1404,33 +1428,20 @@ static bool ipu6v_mmio_read(Ipu4State *s, hwaddr addr, uint64_t *val)
     if (!ipu6v_is_dmem(addr, &reg)) {
         return false;
     }
-    /* Send queues: the firmware has consumed every token. */
-    for (i = 0; i < IPU4_MAX_MSG_STREAMS; i++) {
-        if (s->is_send_q_loaded[i] && s->is_send_q[i].rd_reg == reg &&
-            s->is_send_q[i].wr_reg < IS_DMEM_SIZE / 4) {
-            *val = s->is_dmem[s->is_send_q[i].wr_reg];
-            return true;
-        }
-    }
-    *val = s->is_dmem[reg];
+    *val = ipu4_syscom_read(s, reg);
     return true;
 }
 
 static bool ipu6v_mmio_write(Ipu4State *s, hwaddr addr, uint64_t val)
 {
-    unsigned int reg, i;
+    unsigned int reg;
 
     switch (addr) {
     case IPU6V_BTRS_SYSCOM_CONFIG:
-        s->syscom_config_iova = val;
-        memset(s->is_send_q_loaded, 0, sizeof(s->is_send_q_loaded));
-        s->is_recv_q_loaded = false;
-        memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
+        ipu4_syscom_set_config(s, val);
         return true;
     case IPU6V_BTRS_SYSCOM_STATE:
-        if (val == SYSCOM_STATE_UNINIT) {
-            memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
-        }
+        ipu4_syscom_set_state(s, val);
         return true;
     case IPU6V_IS_SPC_STATUS_CTRL:
         s->is_spc_status_ctrl = val;
@@ -1454,18 +1465,7 @@ static bool ipu6v_mmio_write(Ipu4State *s, hwaddr addr, uint64_t val)
     if (!ipu6v_is_dmem(addr, &reg)) {
         return false;
     }
-    s->is_dmem[reg] = val;
-    if (ipu6v_proxy_send(s, reg, val)) {
-        return true;
-    }
-    for (i = 0; i < IPU4_MAX_MSG_STREAMS; i++) {
-        Ipu4FwSysQueue *q = ipu4_get_send_queue(s, i);
-
-        if (q && q->wr_reg == reg) {
-            ipu4_handle_send_bump(s, i, val);
-            break;
-        }
-    }
+    ipu4_syscom_write(s, reg, val);
     return true;
 }
 
@@ -1475,7 +1475,6 @@ static const Ipu4VariantInfo ipu4_variants[] = {
         .device_id = IPU4_PCI_DEVICE_ID,
         .pwr_state = ipu4_pwr_state,
         .encode_resp = ipu4_encode_resp,
-        .syscom_qpr_base = SYSCOM_QPR_BASE_REG,
         .unispart_sw_irq = ISYS_UNISPART_IRQ_SW,
     },
     {
@@ -1483,9 +1482,8 @@ static const Ipu4VariantInfo ipu4_variants[] = {
         .device_id = IPU4P_PCI_DEVICE_ID,
         .pwr_state = ipu4pv_pwr_state,
         .encode_resp = ipu4_encode_resp,
-        .syscom_qpr_base = IPU4PV_SYSCOM_QPR_BASE_REG,
         .unispart_sw_irq = IPU4PV_UNISPART_IRQ_SW,
-        .dmem_proxy = true,
+        .answers_proxy = true,
     },
     {
         .name = "ipu6",
@@ -1495,9 +1493,9 @@ static const Ipu4VariantInfo ipu4_variants[] = {
         .mmio_read = ipu6v_mmio_read,
         .mmio_write = ipu6v_mmio_write,
         .frame_irq = ipu6v_frame_irq,
-        /* IPU4 values; IPU6's own SysCom and IRQ live in ipu6v_mmio_*(). */
-        .syscom_qpr_base = SYSCOM_QPR_BASE_REG,
+        /* IPU4's bit; ipu6v_mmio_*() map it to IPU6's BIT(22). */
         .unispart_sw_irq = ISYS_UNISPART_IRQ_SW,
+        .answers_proxy = true,
     },
 };
 
@@ -1612,21 +1610,12 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
 
     default:
         if (addr >= IS_DMEM_BASE && addr < IS_DMEM_BASE + IS_DMEM_SIZE) {
-            /* SEND_RD_POS echoes SEND_WR_POS so the driver sees
-             * "firmware has caught up" and doesn't block on the ring
-             * filling. SYSCOM_STATE always returns READY so
-             * ipu6_fw_com_ready()'s 500ms poll terminates on the
-             * first read — the firmware-handshake shortcut documented
-             * in the Step 1 plan. All other slots return their
-             * latched value. */
-            unsigned int send = ipu4_msg_send_reg(s);
-
-            if ((addr - IS_DMEM_BASE) / 4 == send + 1) {
-                val = s->is_dmem[send];
-            } else if (addr == IS_DMEM_SYSCOM_STATE) {
+            /* SYSCOM_STATE reads READY so ipu6_fw_com_ready()'s poll
+             * ends on the first read; the SPC handshake isn't modelled. */
+            if (addr == IS_DMEM_SYSCOM_STATE) {
                 val = SYSCOM_STATE_READY;
             } else {
-                val = s->is_dmem[(addr - IS_DMEM_BASE) / 4];
+                val = ipu4_syscom_read(s, (addr - IS_DMEM_BASE) / 4);
             }
             break;
         }
@@ -1827,59 +1816,15 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
     default:
         if (addr >= IS_DMEM_BASE && addr < IS_DMEM_BASE + IS_DMEM_SIZE) {
             uint32_t reg = (addr - IS_DMEM_BASE) / 4;
-            unsigned int send = ipu4_msg_send_reg(s);
 
-            if (reg == send + 1) {
-                /* The read path echoes SEND_WR_POS here; the driver is
-                 * only expected to *read* this slot. A write means our
-                 * "firmware-owned cursor, driver never writes"
-                 * assumption is wrong — the echo logic would then hide
-                 * the driver's intended value. */
-                qemu_log_mask(LOG_UNIMP,
-                              "ipu4: driver wrote SEND_RD_POS val=0x%"
-                              PRIx64 " — model only echoes SEND_WR_POS "
-                              "on reads; this write is lost.\n", val);
+            /* DMEM[1] and [2] are SYSCOM_CONFIG_REG / SYSCOM_STATE_REG
+             * (kernel/ipu4/ipu6-fw-com.c); IPU6 has them in the buttress. */
+            if (reg == 1) {
+                ipu4_syscom_set_config(s, val);
+            } else if (reg == 2) {
+                ipu4_syscom_set_state(s, val);
             }
-
-            /* DMEM[1] = SYSCOM_CONFIG_REG (kernel/ipu4/ipu6-fw-com.c:101).
-             * The driver writes the IPU IOVA of the syscom_config struct
-             * here right before kicking cell_start. We re-latch the
-             * cached queue descriptors on every write so a fresh
-             * ipu6_fw_com_open call (e.g. after silent reset) starts
-             * clean. */
-            if (reg == 1 /* SYSCOM_CONFIG_REG */) {
-                s->syscom_config_iova = val;
-                memset(s->is_send_q_loaded, 0, sizeof(s->is_send_q_loaded));
-                s->is_recv_q_loaded = false;
-                memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
-            }
-
-            /* DMEM[2] = SYSCOM_STATE_REG. Driver writes UNINIT before
-             * polling for READY. Treat it as the firmware-init reset
-             * marker for the syscom layer — clear the wr-cursor cache
-             * so a re-open without a config rewrite still tracks the
-             * fresh ring correctly. */
-            if (reg == 2 /* SYSCOM_STATE_REG */ &&
-                val == SYSCOM_STATE_UNINIT) {
-                memset(s->is_send_wr_seen, 0, sizeof(s->is_send_wr_seen));
-            }
-
-            s->is_dmem[reg] = val;
-
-            /* ipu4p's driver also sends iwake proxy tokens. */
-            if (s->v->dmem_proxy && ipu6v_proxy_send(s, reg, val)) {
-                break;
-            }
-
-            /* Detect a wr-cursor bump on any of the 8 msg-send queues
-             * and synthesise the matching FW response. The msg-send
-             * queues' wr cursors are every other DMEM reg from
-             * ipu4_msg_send_reg() (= absolute input queue indices 2..9,
-             * see comment above near IPU4_BASE_MSG_SEND_QUEUES). */
-            if (reg >= send && reg < send + IPU4_MAX_MSG_STREAMS * 2 &&
-                ((reg - send) & 1) == 0) {
-                ipu4_handle_send_bump(s, (reg - send) / 2, val);
-            }
+            ipu4_syscom_write(s, reg, val);
             break;
         }
         if (addr >= IS_MMU_BASE && addr < IS_MMU_BASE + IS_MMU_SIZE) {
