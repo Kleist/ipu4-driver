@@ -17,8 +17,21 @@ ladder_test probe-mmu probe-buttress
 # registers from +0x100 (the reference driver programs them, upstream
 # ipu6 does not). The ISYS MMU (+0x1e0000) is only initialised at ISYS
 # runtime resume (first stream open); isys-irq checks it.
+#
+# The ipu6 variant has no silicon trace: it compares with the writes the
+# upstream driver makes from its IPU6 tables (PSYS MMU0/MMU1/MMU1R/MMUI
+# at BAR + 0x1b0000/0x1b0700/0x1b0e00/0x1b1500, ../upstream_writes.py).
 test_probe-mmu() {
 	boot_probe_vm || return 1
+	if [[ "$IPU4_VARIANT" == ipu6 ]]; then
+		local up="$ROOT/tools/tests/ipu6/upstream_writes.py" ranges
+		read -ra ranges < <(python3 "$up" --ranges probe-mmu)
+		probe_log_ok && python3 "$ROOT/tools/trace/check_writes.py" \
+			--expected <(python3 "$up" probe-mmu) \
+			--actual "$PROBE_WRITES" \
+			"${ranges[@]}"
+		return
+	fi
 	probe_log_ok &&
 		python3 "$ROOT/tools/trace/check_writes.py" \
 			--expected "$ROOT/data/trace.txt" --actual "$PROBE_WRITES" \

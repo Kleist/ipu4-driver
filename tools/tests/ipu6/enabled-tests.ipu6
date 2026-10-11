@@ -30,3 +30,9 @@ probe-buttress
 # ISYS runtime resume incl. the TSC sync handshake (HH status at
 # PWR_STATE bits 12:11 on IPU6) (plan "Parallel track", V6).
 isys-resume
+
+# PSYS MMU init at probe and the ISYS resume's MMU/IRQ/LTR writes, checked
+# against the upstream driver's IPU6 tables (tools/tests/ipu6/
+# upstream_writes.py; no IPU6 silicon trace) (plan "Parallel track", V7).
+probe-mmu
+isys-irq

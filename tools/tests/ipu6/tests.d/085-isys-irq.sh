@@ -20,8 +20,24 @@ ladder_test isys-irq probe-mmu
 #  - 0x17c000-0x17c41c, the UNISPART interrupt controller: EDGE, LEVEL,
 #    CLEAR, MASK and ENABLE = the 6 CSI-2 port bits + the firmware bit
 #    (0x40001878), then the software interrupt registers.
+#
+# The ipu6 variant compares with the writes the upstream driver's
+# isys_runtime_pm_resume() and the suspend after it make on 9a19
+# (ISYS MMUs, TSC sync, CSI-2 and UNISPART interrupts, CDC thresholds,
+# LTR/DID; ../upstream_writes.py).
 test_isys-irq() {
 	boot_probe_vm || return 1
+	if [[ "$IPU4_VARIANT" == ipu6 ]]; then
+		local up="$ROOT/tools/tests/ipu6/upstream_writes.py" ranges
+		read -ra ranges < <(python3 "$up" --ranges isys-irq)
+		probe_log_ok &&
+			grep -q '^PROBE:isys-resume ok' "$PROBE_LOG" &&
+			python3 "$ROOT/tools/trace/check_writes.py" \
+				--expected <(python3 "$up" isys-irq) \
+				--actual "$PROBE_WRITES" \
+				"${ranges[@]}"
+		return
+	fi
 	probe_log_ok &&
 		grep -q '^PROBE:isys-resume ok' "$PROBE_LOG" &&
 		python3 "$ROOT/tools/trace/check_writes.py" \
