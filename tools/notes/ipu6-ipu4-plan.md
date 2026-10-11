@@ -133,8 +133,7 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | `probe-buttress` | buttress init + ISYS/PSYS power-up succeed |
 | `probe-mmu` | the PSYS MMU init at probe writes the IPU4 stream tables: the guest's writes to INFO and the L1/L2 stream start registers of the three PSYS MMUs (BAR + `0x4b0000`) equal, in order, the ones in `data/trace.txt` (QEMU write log, `tools/trace/check_writes.py`) |
 | `isys-irq` | a forced ISYS runtime resume (probe init, `power/control`) succeeds and writes what silicon's second ISYS resume writes (`data/trace.txt` lines 487–599): ISYS MMU stream tables, no LTR/DID (`0x68`), one TSC sync request (`0x88`), the UNISPART interrupt setup (`0x17c000`, `0x40001878`) |
-| `probe-fw` | firmware (`ipu4_fw.bin`, synthesized) is mapped and authenticated (`ipu6_buttress_authenticate()`) (passes under the model since PR 7, like `probe-complete`; its step, PR 10, was folded into PR 11) |
-| `probe-complete` | ISYS probe finishes, `/dev/video*` and media graph appear (passes under the model since PR 7, so it gates nothing in the IPU4 sequence; kept for the IPU6 variant, see "Parallel track") |
+| `probe-fw` | firmware (`ipu4_fw.bin`, synthesized) is mapped and authenticated (`ipu6_buttress_authenticate()`) (passes under the model since PR 7; its step, PR 10, was folded into PR 11) |
 | `fw-open` | syscom open + `STREAM_OPEN_DONE` round trip: on the stream boot (`stream-boot.sh`, `init.ipu6-stream`), the driver gets `STREAM_OPEN_DONE` for stream 0 and completes the open, and the boot's ISYS DMEM writes start with silicon's from the firmware open to that response (`data/trace.txt` lines 600–622, `check_writes.py --prefix`) |
 | `stream-on` | on the stream boot, `VIDIOC_STREAMON` succeeds and a frame is dequeued (`STREAM:streamon`, `STREAM:dqbuf`), the boot's oops scan is clean, and its writes to the port 0 CSI-2 receiver's enable/config (BAR + `0x164000`/`0x164008`), LTR/DID (`0x68`) and the ISYS proxy send queue (`0x108018/0x10801c`) equal silicon's stream (`data/trace.txt` lines 600–1113: receiver on, then off; no iWake), and its CSIRX error interrupt setup starts with silicon's (lines 651–668, `--prefix`) |
 | `stream-pattern` | the stream boot's first frame holds the QEMU model's test pattern (`STREAM:pattern_ok`, `STREAM:done`) |
@@ -157,7 +156,7 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | 10 | ~~Internal pdata (`media: ipu6: Add IPU4 platform data`)~~; the firmware name landed in PR 6, the ISYS/PSYS/SPC/DMEM offsets in PR 8, the CSI-2 port count in PR 9, the stream limits in PR 11 | — (was `probe-fw`) | folded into PR 11 |
 | 11 | `media: ipu6: Add the IPU4 ISYS stream limits` (the rest of the pdata, old PR 10) + `media: ipu6: Support the IPU4 SysCom queue layout`; before it, a shared-core PR adds the stream boot (`stream-boot.sh`, `init.ipu6-stream`, `streamon` subdev format) | `fw-open` | merged (#135) |
 | 12 | `media: ipu6: Run IPU4 without iWake` + `media: ipu6: Add IPU4 CSI-2 receiver support` | `stream-on`, `stream-pattern` | merged (#138) |
-| 13 | `media: ipu6: Handle the IPU4 CSI-2 frame interrupts` (decision 3); before it, a shared-core PR puts the QEMU model's CSI-2 ports at the ISYS base (`ipu6-ipu4/core-csi2-irq`) | `csi2-sof-irq` | in review (core fix #140 merged) |
+| 13 | `media: ipu6: Handle the IPU4 CSI-2 frame interrupts` (decision 3); before it, a shared-core PR puts the QEMU model's CSI-2 ports at the ISYS base (`ipu6-ipu4/core-csi2-irq`) | `csi2-sof-irq` | merged (#141, core fix #140) |
 | 14 | ~~`media: ipu6: Enable IPU4 PCI device`~~ | — | moved to PR 8a (after PR 13 the only step left is PR 15) |
 | 15 | Cover letter draft + `get_maintainer.pl` output | — | |
 | Pages | Dashboard section "IPU4 port (upstream ipu6)": `ladder.sh` writes `results.json`, `vm-ipu6` uploads it per variant, Pages shows a test × variant matrix | — | merged (#109) |
@@ -892,10 +891,14 @@ last; each entry names the PR that found it.
   in both runs. Timings (4 cores, TCG, warm): full ladder ~110 s
   (`vm-boot` 49 s incl. the kernel rebuild), `csi2-sof-irq` 0 s on the
   shared stream boot.
-- (PR 13) After this step the remaining step is the cover letter
-  (PR 15): the PCI ID step (PR 14) moved to PR 8a.
+- (PR 13) After this step no step remains: the PCI ID step (PR 14)
+  moved to PR 8a, and the cover letter is written by hand when mailing.
 - (Six-legs PR) The series under the IPU6 model (`ipu4-patches / ipu6`)
   passes what mainline passes there: `vm-boot`, `module-load`,
   `probe-identify`, `probe-buttress`, `isys-resume`; gated in
   `enabled-tests.ipu4-patches.ipu6`. `probe-mmu` fails there as it does on
   mainline (it checks IPU4 silicon values).
+- (After PR 13) The `probe-complete` placeholder was deleted: it passes
+  under the model from PR 7, so no step could gate on it, and
+  `fw-open`/`stream-on` already need what it would check. `probe-fw`
+  stays for the IPU6 variant's firmware step.
