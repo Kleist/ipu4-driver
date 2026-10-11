@@ -14,7 +14,7 @@ Usage:
                                     (tools/trace/check_writes.py --expected)
   upstream_writes.py --ranges SET   the BAR ranges they cover
 
-SET is probe-mmu or isys-irq.
+SET is probe-mmu, isys-irq or fw-open.
 """
 
 import sys
@@ -106,11 +106,60 @@ def isys_resume():
     return writes, ranges
 
 
+def fw_open():
+    """Writes from the ISYS firmware open to the STREAM_OPEN_DONE handling.
+
+    Compared as a prefix: the stream start follows.
+    """
+    spc = 0x210000           # IPU6_ISYS_SPC_OFFSET, SPC_STATUS_CTRL at +0
+    dmem = 0x200000          # IPU6_ISYS_DMEM_OFFSET, 4-byte registers
+    boot = 0x4000            # BUTTRESS_FW_BOOT_PARAMS_0, ISYS offset 0
+    ready, start, run = 1 << 5, 1 << 1, 1 << 3
+    icache_invalidate = 1 << 12
+    writes = [
+        # ipu6_configure_spc(): SPC_STATUS_CTRL |= ICACHE_INVALIDATE on
+        # an idle SPC (READY); secure mode: DMEM[0] =
+        # IPU6_PKG_DIR_IMR_OFFSET.
+        (spc, ready | icache_invalidate),
+        (dmem + 0x0, 0x40),
+        # ipu6_fw_com_open(): TUNIT_CFG_DWR_REG = TUNIT_MAGIC_PATTERN,
+        # SYSCOM_COMMAND_REG = SYSCOM_COMMAND_UNINIT, boot param
+        # SYSCOM_STATE_ID = SYSCOM_STATE_UNINIT (SYSCOM_CONFIG_ID, an
+        # IOVA, is not compared), start_sp(): START | RUN |
+        # ICACHE_INVALIDATE (no prefetch on 9a19).
+        (dmem + 0x4, 0x5a5a5a5a),
+        (dmem + 0x8, 0x57a7f000),
+        (boot + 0x4, 0x57a7e000),
+        (spc, start | run | icache_invalidate),
+    ]
+    # ipu6_fw_com_prepare() hands out cursor registers from
+    # SYSCOM_QPR_BASE_REG (4), a write/read pair per queue: input queues
+    # proxy, dev, then one per stream (IPU6_ISYS_NUM_STREAMS = 12), then
+    # output queues proxy, msg.
+    proxy_send_wr = 4
+    stream0_send_wr = 4 + 2 * 2
+    proxy_recv_rd = 4 + 2 * (2 + 12) + 1
+    msg_recv_rd = proxy_recv_rd + 2
+    # Stream on: three iwake proxy writes (GDA_ENABLE_IWAKE_INDEX,
+    # GDA_IWAKE_THRESHOLD_INDEX, GDA_IRQ_CRITICAL_THRESHOLD_INDEX), each
+    # one token sent and its answer consumed.
+    for n in range(1, 4):
+        writes += [(dmem + 4 * proxy_send_wr, n),
+                   (dmem + 4 * proxy_recv_rd, n)]
+    # STREAM_OPEN on stream 0's queue, then STREAM_OPEN_DONE consumed.
+    writes += [(dmem + 4 * stream0_send_wr, 1),
+               (dmem + 4 * msg_recv_rd, 1)]
+    ranges = [(boot + 0x4, boot + 0x8), (dmem, dmem + 0x100),
+              (spc, spc + 0x4)]
+    return writes, ranges
+
+
 SETS = {
     # Probe: only the PSYS MMUs are initialised (ipu6_pci_probe ->
     # ipu6_mmu_hw_init(psys)); the ISYS ones wait for the ISYS resume.
     "probe-mmu": lambda: mmu_hw_init(PSYS_MMUS),
     "isys-irq": isys_resume,
+    "fw-open": fw_open,
 }
 
 

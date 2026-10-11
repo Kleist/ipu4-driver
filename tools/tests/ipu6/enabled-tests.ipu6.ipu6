@@ -37,3 +37,8 @@ isys-resume
 # upstream_writes.py; no IPU6 silicon trace) (plan "Parallel track", V7).
 probe-mmu
 isys-irq
+
+# ISYS firmware open: IPU6 SysCom (boot params, DMEM at 0x200000), iwake
+# proxy answers and IPU6's response layout in the model; writes checked
+# against upstream (plan "Parallel track", V8).
+fw-open
