@@ -16,7 +16,9 @@ on:
 # tests that are not switched on yet stay visible without blocking merges.
 #
 # One leg per QEMU model variant (plan "Tracks and file ownership"): ipu4 is the
-# port itself (tools/ipu6/pin + the series); ipu6 develops the model's
+# port itself (tools/ipu6/pin + the series); ipu4p runs the same tree
+# against the model's IPU4P (Ice Lake) emulation
+# (tools/notes/ipu4p-variant-plan.md); ipu6 develops the model's
 # IPU6 emulation against unpatched mainline (tools/ipu6/pin.upstream).
 # Each leg passes IPU4_VARIANT to the ladder, which picks that variant's
 # base and tree, boots it, and gates on its own list (enabled-tests for
@@ -55,6 +57,11 @@ jobs:
         # name is the tree's directory (so the ipu4 key is unchanged).
         include:
           - variant: ipu4
+            linux-dir: tools/linux-ipu6
+            pin: tools/ipu6/pin
+            cache: linux-ipu6
+          # Same tree and pin as ipu4, so it shares that leg's cache.
+          - variant: ipu4p
             linux-dir: tools/linux-ipu6
             pin: tools/ipu6/pin
             cache: linux-ipu6
