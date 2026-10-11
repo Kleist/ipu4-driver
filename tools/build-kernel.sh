@@ -3,8 +3,9 @@
 # config as tools/build.sh. Heavier than build.sh (minutes vs. seconds) —
 # only needed for full-VM runs (vm-smoke, e2e).
 #
-# IPU4_FLAVOR=ipu6 builds tools/linux-ipu6/ instead; build.sh then
-# dispatches to tools/ipu6/build.sh for the config pass.
+# IPU4_FLAVOR=ipu6 builds tools/linux-ipu6/ instead, out-of-tree
+# tools/linux-ipu4-oot/; build.sh then dispatches to tools/<flavor>/build.sh
+# for the config pass.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -12,7 +13,8 @@ ROOT="$(cd "$HERE/.." && pwd)"
 case "${IPU4_FLAVOR:-fork}" in
 fork) LINUX_DIR="$ROOT/tools/linux" ;;
 ipu6) LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$ROOT/tools/linux-ipu6}" ;;
-*) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork or ipu6)" >&2; exit 1 ;;
+out-of-tree) LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$ROOT/tools/linux-ipu4-oot}" ;;
+*) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork, ipu6 or out-of-tree)" >&2; exit 1 ;;
 esac
 
 if [[ ! -d "$LINUX_DIR" ]]; then

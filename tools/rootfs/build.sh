@@ -11,7 +11,9 @@
 # harness's tools/virt-sensor/out/virt-sensor.ko when built, stages the
 # synthesized CPD firmware as /lib/firmware/intel/ipu/ipu4_fw.bin, and writes
 # tools/rootfs/out-ipu6/rootfs.cpio.gz, so the two flavors' images
-# never overwrite each other.
+# never overwrite each other. IPU4_FLAVOR=out-of-tree takes the modules
+# from tools/linux-ipu4-oot/ and kernel/ipu4/ (tools/out-of-tree/build.sh)
+# and writes tools/rootfs/out-out-of-tree/.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -40,7 +42,13 @@ ipu6)
 	# Likewise for the ipu4p variant's IPU4P (8086:8a19).
 	FW_EXTRA_NAMES=("intel/ipu/ipu6_fw.bin" "intel/ipu/ipu4p_fw.bin")
 	;;
-*) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork or ipu6)" >&2; exit 1 ;;
+out-of-tree)
+	LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$ROOT/tools/linux-ipu4-oot}"
+	DRV_DIR="$ROOT/kernel/ipu4"
+	OUT="$HERE/out-out-of-tree"
+	FW_NAME="ipu4_cpd_b0.bin"
+	;;
+*) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork, ipu6 or out-of-tree)" >&2; exit 1 ;;
 esac
 mkdir -p "$OUT"
 
