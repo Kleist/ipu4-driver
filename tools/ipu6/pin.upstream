@@ -1,12 +1,7 @@
 # shellcheck shell=bash
-# Unpatched mainline base for the ipu6 QEMU model variant
-# (IPU4_VARIANT=ipu6, plan "Parallel track"): the IPU6 emulation is
-# developed against the upstream driver as released, with neither the
-# pin's IPU4P/IPU7 series nor patches/ipu6-ipu4/. Same variable names as
-# tools/ipu6/pin; tools/tests/ipu6/ladder.sh points tools/ipu6/bootstrap.sh
-# here. v7.3-rc4 is the base of the IPU4 pin.
-#
-# Tag v7.3-rc4 (commit; the tag object is dec005ae90a2) on the GitHub
-# mirror (kernel.org is not reachable from CI).
-IPU6_LINUX_URL="${IPU4_IPU6_LINUX_URL:-https://github.com/torvalds/linux.git}"
-IPU6_LINUX_SHA="${IPU4_IPU6_LINUX_SHA:-93f51579e7df248780214094418f205253383cc5}"
+# Base for the ipu6 QEMU model variant (IPU4_VARIANT=ipu6, plan "Parallel
+# track"): the same mainline tag as tools/ipu6/pin, but bootstrapped with
+# no series, so the IPU6 emulation is developed against the upstream
+# driver as released.
+# shellcheck source=pin
+. "$(dirname "${BASH_SOURCE[0]}")/pin"
