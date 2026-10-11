@@ -47,3 +47,7 @@ fw-open
 # port 0; CSI-2/PHY writes checked against upstream (plan "Parallel
 # track", V9).
 stream-on
+
+# The delivered frame carries the model's pattern (plan "Parallel track",
+# V10).
+stream-pattern
