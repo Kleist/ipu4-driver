@@ -22,3 +22,7 @@ module-load
 # Probe identifies 9a19 as IPU6 (requests intel/ipu/ipu6_fw.bin)
 # (plan "Parallel track", V4).
 probe-identify
+
+# ISYS/PSYS power-up through IPU6's PWR_STATE layout (ipu6v_pwr_state())
+# with the synthesized ipu6_fw.bin (plan "Parallel track", V5).
+probe-buttress

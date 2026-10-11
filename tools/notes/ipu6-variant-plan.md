@@ -34,8 +34,10 @@ shown not to break the other variants of the shared driver.
   (`tools/ipu6/pin.upstream`), not the IPU4 pin + series: the IPU6
   emulation is developed against the upstream driver as released.
 - **PRs.** One PR per ladder test for the variant, top of the table
-  first, at most 2 stacked (`CLAUDE.md`). The stack starts from `main`
-  and is independent of the main sequence's stack.
+  first. One open PR at a time for this track, never stacked
+  (`CLAUDE.md`): the next step is prepared on a local branch while the
+  current PR is in review, and pushed and opened only after it merges,
+  rebased onto the new `main`. Independent of the other tracks' PRs.
 
   | PR | Content | `enabled-tests.<variant>` gains | State |
   |---|---|---|---|
@@ -43,7 +45,9 @@ shown not to break the other variants of the shared driver.
   | V2 | QEMU `variant=ipu6` property (IPU6 PCI ID), variant-aware `vm-boot` | ipu6: `vm-boot` | merged (#119) |
   | V3 | variant-aware `module-load` | ipu6: `module-load` | merged (#120) |
   | V4 | `probe-identify` for ipu6: virt-sensor gets the variant's ID (core PR #127), `060-probe-identify.bound.sh` expects the variant's firmware | ipu6: `probe-identify` | merged (#123) |
-  | V5a | QEMU `ipu6v_pwr_state()`: IPU6 PWR_STATE layout for the ipu6 variant (no test yet; prerequisite for staging `ipu6_fw.bin`) | — | in review (#128) |
+  | V5a | QEMU `ipu6v_pwr_state()`: IPU6 PWR_STATE layout for the ipu6 variant (no test yet; prerequisite for staging `ipu6_fw.bin`) | — | merged (#128) |
+  | core | stage the synthesized CPD as `intel/ipu/ipu6_fw.bin` in the ipu6 initramfs (`tools/rootfs/build.sh`) | — | merged (#132) |
+  | V5b | gate `probe-buttress` for ipu6 | ipu6: `probe-buttress` | in review (#133) |
 
 - **Dashboard hook (Pages PR):** the Pages "IPU4 port" matrix already
   has `ipu4`, `ipu4p` and `ipu6` columns. A variant lights up once its
@@ -141,3 +145,10 @@ shown not to break the other variants of the shared driver.
   modelled for the variant). `probe-mmu` as written compares PSYS MMU
   writes with the IPU4 silicon trace, so it needs an ipu6 counterpart
   (or stays IPU4-only) rather than model work.
+- (V5b) With V5a and #132, the ipu6 variant passes `probe-buttress`:
+  probe powers ISYS/PSYS up and down through `ipu6v_pwr_state()`, and
+  probe completes (`hardware version 1`, 64 video nodes). GitHub once
+  refused to open #132 on #128's branch ("PullRequest.base invalid")
+  although the branch existed; #132 went up as a draft on `main` until
+  #128 merged. Stacking #133 on #132's branch worked, so that was not a
+  standing rule.
