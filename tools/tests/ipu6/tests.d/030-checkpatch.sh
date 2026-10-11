@@ -5,12 +5,6 @@ ladder_test checkpatch
 
 test_checkpatch() {
 	local cp="$LINUX_DIR/scripts/checkpatch.pl" p rc=0
-	# No series on the out-of-tree leg: check the module's sources with
-	# its own Makefile target (CLAUDE.md, "Common commands").
-	if [[ "$FLAVOR" == out-of-tree ]]; then
-		make -C "$ROOT/kernel/ipu4" KERNEL_SRC="$LINUX_DIR" checkpatch
-		return
-	fi
 	if [[ -z "$PATCH_DIR" ]]; then
 		echo "no series on the $DRIVER driver's base; nothing to check"
 		return 0

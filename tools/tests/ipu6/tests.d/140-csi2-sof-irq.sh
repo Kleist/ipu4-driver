@@ -23,15 +23,41 @@ ladder_test csi2-sof-irq stream-on
 # CSI2PART CLEAR is left out: the interrupt handler writes it per
 # interrupt, and the model also raises port 0's interrupt for the frame
 # the firmware delivers before the receiver is enabled.
+#
+# The out-of-tree driver's handler logs nothing; it acknowledges the
+# interrupt by writing the status back to CSI2PART CLEAR, so a CLEAR
+# write with FS of VC 0 (bit 0) other than the enable's 0x3333 is the
+# frame start.
+csi2_fs_acked() {
+	python3 - "$STREAM_WRITES" <<'PY'
+import re, sys
+for line in open(sys.argv[1]):
+    m = re.search(r"addr (0x[0-9a-f]+) value (0x[0-9a-f]+)", line)
+    if not m:
+        continue
+    addr, val = (int(x, 16) for x in m.groups())
+    if addr & 0xffffff == 0x16440c and val & 1 and val != 0x3333:
+        sys.exit(0)
+sys.exit(1)
+PY
+}
+
 test_csi2-sof-irq() {
 	boot_stream_vm || return 1
 	stream_log_ok || return 1
 	local rc=0
-	grep -Eq 'intel_ipu6\.isys\.[0-9]+: csi2-0: frame start, vc 0' \
-		"$STREAM_LOG" || {
-		echo "!!! no CSI-2 frame start interrupt on port 0"
-		rc=1
-	}
+	if [[ "$FLAVOR" == out-of-tree ]]; then
+		csi2_fs_acked || {
+			echo "!!! no CSI-2 frame start interrupt acknowledged on port 0"
+			rc=1
+		}
+	else
+		grep -Eq "$IPU_MODNAME\.isys\.[0-9]+: csi2-0: frame start, vc 0" \
+			"$STREAM_LOG" || {
+			echo "!!! no CSI-2 frame start interrupt on port 0"
+			rc=1
+		}
+	fi
 	python3 "$ROOT/tools/trace/check_writes.py" \
 		--expected "$ROOT/data/trace.txt" --expected-lines 600-1113 \
 		--actual "$STREAM_WRITES" \

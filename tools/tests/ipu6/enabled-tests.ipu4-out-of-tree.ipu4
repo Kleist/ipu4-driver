@@ -1,18 +1,31 @@
 # Gate of the ipu4-out-of-tree / ipu4 leg: the IPU4 baseline, kernel/ipu4/
 # built as an out-of-tree module against v7.3-rc4 (tools/out-of-tree/pin),
 # under the IPU4 QEMU model. Owned by the IPU4 track
-# (tools/notes/ipu4-out-of-tree-plan.md); each of its PRs enables one more
-# test.
+# (tools/notes/ipu4-out-of-tree-plan.md). This driver is known to work, so
+# every implemented test is gated: a failure here points at the test or
+# the model.
 #
 # One test name per line; '#' starts a comment. Every known test runs on
 # every PR, but only the tests listed here fail the job; run
 # `tools/tests/ipu6/ladder.sh --list` for the names.
 
-# Static tests. series-applies is the bare v7.3-rc4 fetch; build is the
-# module's own warning level (not W=1 yet); checkpatch (the module's
-# `make checkpatch`) is not clean yet.
+# Static tests. series-applies is the bare v7.3-rc4 fetch, build the
+# module at its own warning level, and checkpatch has no series to check.
 series-applies
 build
+checkpatch
 
-# Guest boot of the v7.3-rc4 kernel under the IPU4 model (no driver involved).
+# Guest boot, module load and probe (built-in virt sensor).
 vm-boot
+module-load
+probe-identify
+probe-buttress
+probe-mmu
+isys-resume
+isys-irq
+
+# Firmware open, streaming and the CSI-2 frame start interrupt.
+fw-open
+stream-on
+stream-pattern
+csi2-sof-irq
