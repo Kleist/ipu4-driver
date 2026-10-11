@@ -79,6 +79,10 @@ classify() {
 	patches/ipu6-ipu4/* | patches/ipu6-ipu7/* | patches/ipu6-ipu4p/* | tools/ipu6/* | tools/out-of-tree/* | \
 	tools/tests/ipu6/* | tools/virt-sensor/*)
 		HIT[ipu6]=true ;;
+	# Line coverage of a ladder leg (IPU4_GCOV=1); the rest of
+	# tools/coverage/ is the fork's.
+	tools/coverage/ladder.sh)
+		HIT[ipu6]=true ;;
 
 	# Python tools and their tests.
 	tests/* | pyproject.toml | tools/tests/pytest.sh)

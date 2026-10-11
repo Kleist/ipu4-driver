@@ -43,6 +43,8 @@ def classify(*paths):
         ("patches/ipu6-ipu4p/0001-x.patch", {"ipu6"}),
         ("patches/ipu6-ipu7/0001-x.patch", {"ipu6"}),
         ("tools/tests/ipu6/ladder.sh", {"ipu6"}),
+        ("tools/coverage/ladder.sh", {"ipu6"}),
+        ("tools/coverage/collect.sh", {"vm_smoke"}),
         ("tools/tests/compare-mmio-baseline.txt", {"vm_smoke"}),
         ("tools/trace/compare.py", {"pytest", "vm_smoke"}),
         ("tools/trace/check_writes.py", {"pytest", "vm_smoke", "ipu6"}),
