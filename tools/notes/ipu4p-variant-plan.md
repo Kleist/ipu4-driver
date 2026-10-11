@@ -84,8 +84,8 @@ commit, first in the step's PR.
 | P4b | Baseline leg `ipu4p / ipu4p` (Ruslan's tree without the series); P1–P4 move to it, `ipu4-patches / ipu4p` keeps them for the series | `series-applies`, `build`, `checkpatch`, `vm-boot`, `module-load`, `probe-identify` | merged (with the ladder's six legs) |
 | P5 | Model: IPU4P PWR_STATE FSM and FREQ_CTL | `probe-buttress` | merged (#147) |
 | P5b | Ruslan's code as a patch series on the mainline pin (`patches/ipu6-ipu7/`, `patches/ipu6-ipu4p/`), pin bumped weekly | — | merged (#148) |
-| P6 | ISYS binds on IPU4P: virt-sensor on firmware port 3; the forced ISYS resume then runs with ISYS bound | `isys-resume` | in review |
-| P7 | Model: SysCom queue base register 8, UNISPART SW IRQ bit 22, SIP0/SIP1 IRQ windows | `fw-open` | |
+| P6 | ISYS binds on IPU4P: virt-sensor on firmware port 3; the forced ISYS resume then runs with ISYS bound | `isys-resume` | merged (#156) |
+| P7 | Model: SysCom queue base register 8, UNISPART SW IRQ bit 22, proxy tokens; `probe-mmu` / `isys-irq` against the series' writes (`ipu4p_writes.py`) | `probe-mmu`, `isys-irq`, `fw-open` | in review |
 | P8 | Model: 8 CSI-2 ports, port ↔ source map, PHY sideband latches | `stream-on`, `stream-pattern` | |
 
 ## Open questions
@@ -143,3 +143,17 @@ commit, first in the step's PR.
   `intel-ipu6-isys` binds (64 video nodes) and the forced resume passes
   with no model change: UNISPART bit 22 and the SIP IRQ windows only
   matter once the firmware raises interrupts, so they moved to P7.
+- (P7) `fw-open` depends on `isys-irq` → `probe-mmu`, which compared with
+  the IPU4 trace. Like the ipu6 variant's `upstream_writes.py`,
+  `ipu4p_writes.py` derives the expected writes from the series' tables
+  (PSYS/ISYS MMUs at IPU4's addresses but with IPU4P's block sizes,
+  `ipu4p_isys_irq_setup()`'s five IRQ blocks, no LTR/DID).
+- (P7) IPU4P's ISYS firmware ABI is IPU4's after all: same queue counts,
+  send/response token layouts and opcodes. The model needed only the
+  queue register base (8), the SW IRQ bit (22) and proxy answers (the
+  IPU4P driver sends iwake tokens). With those, the stream goes through
+  to `pattern_ok`; `stream-on` fails only its IPU4-trace comparison of
+  the CSI-2 receiver writes (P8).
+- (P7) The model has no handler for the SIP0/SIP1 IRQ windows yet: the
+  writes are absorbed and the model never raises a CSI-2 IRQ through
+  them (P8, `csi2-sof-irq`).
