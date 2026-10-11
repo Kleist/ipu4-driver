@@ -9,6 +9,9 @@ on:
 # picks onto kernel/ipu4/, and opens a PR enumerating applied / conflicting /
 # n-a commits. State rolls forward in tools/notes/upstream-watch-state.json
 # as the last commit on the bot branch.
+#
+# The PR is opened with BUMP_PAT (see bump-kernel-pins.yml): GITHUB_TOKEN
+# may not create PRs in this repo, and its PRs would not trigger CI.
 
 permissions:
   contents: write
@@ -19,10 +22,32 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
+      # Same probe as bump-kernel-pins.yml: an expired BUMP_PAT falls back
+      # to GITHUB_TOKEN with a warning instead of an opaque git error.
+      - name: Check BUMP_PAT
+        id: pat
+        env:
+          BUMP_PAT: ${{ secrets.BUMP_PAT }}
+        run: |
+          if [ -z "$BUMP_PAT" ]; then
+            echo "::warning::BUMP_PAT is not set; creating the PR with GITHUB_TOKEN will fail unless Actions may create PRs."
+            echo "use=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $BUMP_PAT" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY")
+          if [ "$code" = 200 ]; then
+            echo "use=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::BUMP_PAT rejected by GitHub (HTTP $code). Falling back to GITHUB_TOKEN. Regenerate the PAT and update the BUMP_PAT secret."
+            echo "use=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.pat.outputs.use == 'true' && secrets.BUMP_PAT || github.token }}
 
       - name: Install deps
         run: |
@@ -36,7 +61,7 @@ jobs:
 
       - name: Run watcher
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.pat.outputs.use == 'true' && secrets.BUMP_PAT || github.token }}
         run: ./tools/upstream/watch.sh
 
       - name: Upload diagnostics on failure
