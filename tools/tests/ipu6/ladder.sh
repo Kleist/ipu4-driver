@@ -263,6 +263,7 @@ write_results_json() {
 	  LADDER_PATCH_DIR="$PATCH_DIR" LADDER_ENABLED_FILE="$ENABLED_FILE" \
 	  LADDER_PIN_URL="$IPU6_LINUX_URL" LADDER_PIN_SHA="$IPU6_LINUX_SHA" \
 	  LADDER_PIN_TAG="${IPU6_LINUX_TAG:-}" LADDER_BASE_DIRS="$BASE_PATCH_PATH" \
+	  LADDER_COVERAGE="$OUT/coverage/summary.json" \
 	  python3 - > "$OUT/results.json" <<'PY'
 import datetime, email.parser, glob, json, os, re, subprocess, sys
 e = os.environ
@@ -295,6 +296,11 @@ run_url = (f"{e.get('GITHUB_SERVER_URL', 'https://github.com')}/"
            f"{e['GITHUB_REPOSITORY']}/actions/runs/{run_id}"
            if run_id and e.get("GITHUB_REPOSITORY") else None)
 enabled_file = os.path.relpath(e["LADDER_ENABLED_FILE"], root)
+try:
+    with open(e["LADDER_COVERAGE"]) as f:
+        coverage = json.load(f)
+except (OSError, ValueError):
+    coverage = None
 json.dump({
     "schema": 1,
     "leg": e["IPU4_DRIVER"] + "/" + e["IPU4_VARIANT"],
@@ -312,6 +318,7 @@ json.dump({
     "enabled_tests": enabled_file,
     "exit_status": int(e["LADDER_STATUS"]),
     "tests": tests,
+    "coverage": coverage,
 }, sys.stdout, indent=2)
 print()
 PY
