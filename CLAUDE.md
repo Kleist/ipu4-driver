@@ -28,7 +28,7 @@ Do not restructure or "clean up" IPU6 code. Do not rename `ipu6_*` symbols. Keep
 - Every commit must pass CI on its own, not just the tip of the PR. Don't leave "fix previous commit" commits in a PR; fold them into the commit they fix before review.
 - The same applies to kernel patches in `patches/`: each patch in the series must build and pass the checks on its own.
 - Changes go through PRs from short-lived branches into `main`; never commit directly to `main`.
-- Never have more than 2 unmerged PRs stacked on top of each other. Wait for the bottom of the stack to merge before starting another stacked PR; deeper stacks waste work when review feedback forces a rework.
+- One open PR at a time per line of work, never stacked. Prepare the next step on a local branch while the current PR is in review, but push it and open its PR only after the current one has merged (rebased onto the new `main`); review feedback then never has to be carried forward through a stack.
 
 ## Local prerequisites
 
@@ -55,7 +55,7 @@ Two helpers under `tools/upstream/`, both relying on the same file mapping (`dri
 
 ## ipu6 flavor (upstream ipu6 driver + IPU4 patch series)
 
-A second, parallel flow adds IPU4 to the upstream `drivers/media/pci/intel/ipu6/` driver as mailable patches. It never touches `tools/linux/` or `kernel/ipu4/`. Three tracks work on it in parallel, each with its own plan (re-read it before, and update it at the end of, every step) and its own PR stack: the IPU4 port (`tools/notes/ipu6-ipu4-plan.md`, which also holds the test table), the IPU6 QEMU variant (`tools/notes/ipu6-variant-plan.md`) and the IPU4P QEMU variant (`tools/notes/ipu4p-variant-plan.md`):
+A second, parallel flow adds IPU4 to the upstream `drivers/media/pci/intel/ipu6/` driver as mailable patches. It never touches `tools/linux/` or `kernel/ipu4/`. Three tracks work on it in parallel, each with its own plan (re-read it before, and update it at the end of, every step) and its own line of PRs: the IPU4 port (`tools/notes/ipu6-ipu4-plan.md`, which also holds the test table), the IPU6 QEMU variant (`tools/notes/ipu6-variant-plan.md`) and the IPU4P QEMU variant (`tools/notes/ipu4p-variant-plan.md`):
 
 ```bash
 tools/ipu6/bootstrap.sh       # tools/linux-ipu6/ = pin (tools/ipu6/pin) + git am patches/ipu6-ipu4/*.patch
