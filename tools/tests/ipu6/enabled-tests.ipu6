@@ -26,3 +26,7 @@ probe-identify
 # ISYS/PSYS power-up through IPU6's PWR_STATE layout (ipu6v_pwr_state())
 # with the synthesized ipu6_fw.bin (plan "Parallel track", V5).
 probe-buttress
+
+# ISYS runtime resume incl. the TSC sync handshake (HH status at
+# PWR_STATE bits 12:11 on IPU6) (plan "Parallel track", V6).
+isys-resume
