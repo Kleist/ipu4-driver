@@ -23,3 +23,6 @@ module-load
 # Probe identifies 8a19 as IPU4P (requests intel/ipu/ipu4p_fw.bin)
 # (ipu4p plan P4).
 probe-identify
+
+# ISYS/PSYS power-up through IPU4P's PWR_STATE layout (ipu4p plan P5).
+probe-buttress
