@@ -7,5 +7,5 @@
 # The GitHub mirror, as kernel.org is not reachable from CI. SHA is the
 # tag's commit.
 IPU6_LINUX_URL="${IPU4_IPU6_LINUX_URL:-https://github.com/torvalds/linux.git}"
-IPU6_LINUX_TAG="v7.3-rc4"
-IPU6_LINUX_SHA="${IPU4_IPU6_LINUX_SHA:-93f51579e7df248780214094418f205253383cc5}"
+IPU6_LINUX_TAG="v7.3-rc6"
+IPU6_LINUX_SHA="${IPU4_IPU6_LINUX_SHA:-a90ee4305c4a5df72c11b31dacfdc76e00fcf78a}"
