@@ -48,7 +48,8 @@ shown not to break the other variants of the shared driver.
   | V5a | QEMU `ipu6v_pwr_state()`: IPU6 PWR_STATE layout for the ipu6 variant (no test yet; prerequisite for staging `ipu6_fw.bin`) | — | merged (#128) |
   | core | stage the synthesized CPD as `intel/ipu/ipu6_fw.bin` in the ipu6 initramfs (`tools/rootfs/build.sh`) | — | merged (#132) |
   | V5b | gate `probe-buttress` for ipu6 | ipu6: `probe-buttress` | merged (#133) |
-  | V6 | QEMU: TSC-sync HH status at IPU6's bits 12:11 in `ipu6v_pwr_state()`; new variant-neutral `isys-resume` test | ipu6: `isys-resume` | in review |
+  | V6 | QEMU: TSC-sync HH status at IPU6's bits 12:11 in `ipu6v_pwr_state()`; new variant-neutral `isys-resume` test | ipu6: `isys-resume` | merged (#136) |
+  | V7 | `probe-mmu` / `isys-irq` for ipu6: expected writes computed from the upstream driver's IPU6 tables (`tools/tests/ipu6/upstream_writes.py`) instead of the IPU4 silicon trace | ipu6: `probe-mmu`, `isys-irq` | in review |
 
 - **Dashboard hook (Pages PR):** the Pages "IPU4 port" matrix already
   has `ipu4`, `ipu4p` and `ipu6` columns. A variant lights up once its
@@ -162,3 +163,15 @@ shown not to break the other variants of the shared driver.
   compares the IPU4 resume's writes with the silicon trace), so V6 adds
   `tests.d/082-isys-resume.sh`, which only checks the guest's
   `PROBE:isys-resume` marker; it also passes on ipu4 (ungated there).
+- (V7) No IPU6 silicon trace exists, and the purpose of the variant is
+  test coverage of the upstream driver, so the ipu6 `probe-mmu` and
+  `isys-irq` compare the guest's writes with what the upstream driver
+  should write, computed from its own tables in
+  `tools/tests/ipu6/upstream_writes.py` (MMU `l1/l2_block_sz` and
+  `info_bits`, 8 CSI-2 ports on 9a19, `ISYS_UNISPART_IRQS`, CDC
+  thresholds, LTR/DID fabric control). Both tests stay one file each and
+  branch on `$IPU4_VARIANT`; the ranges come from the same script. They
+  passed without model changes (129 PSYS MMU writes at probe, 85 ISYS
+  resume + suspend writes). Next: the firmware tests (`probe-fw`
+  onwards), which need the IPU6 firmware interface in the model
+  (`ipu6v_*`).
