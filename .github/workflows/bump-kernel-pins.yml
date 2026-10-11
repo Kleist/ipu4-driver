@@ -138,3 +138,66 @@ jobs:
             previous run before BUMP_PAT was set). Close and reopen
             this PR to wake CI manually, or wire BUMP_PAT — see
             `bump-kernel-pins.yml`.
+
+  # The ipu6 flavor's mainline pin (tools/ipu6/pin, also the ipu6
+  # variant's base): newest mainline tag, -rc included, so the IPU7/IPU4P
+  # and IPU4 series (patches/ipu6-ipu{7,4p,4}) follow
+  # upstream closely. The PR's vm-ipu6 run shows whether they still apply.
+  bump-ipu6:
+    name: bump (ipu6 mainline)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Resolve and rewrite tools/ipu6/pin
+        id: rewrite
+        run: |
+          ./tools/ipu6/bump-pin.sh | tee /tmp/bump.summary
+          new_ref="$(. tools/ipu6/pin; echo "$IPU6_LINUX_TAG")"
+          echo "new_ref=$new_ref" >> "$GITHUB_OUTPUT"
+          {
+            echo "summary<<EOF"
+            cat /tmp/bump.summary
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check BUMP_PAT
+        id: pat
+        env:
+          BUMP_PAT: ${{ secrets.BUMP_PAT }}
+        run: |
+          if [ -z "$BUMP_PAT" ]; then
+            echo "use=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $BUMP_PAT" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY")
+          if [ "$code" = 200 ]; then
+            echo "use=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::BUMP_PAT rejected by GitHub (HTTP $code). Falling back to GITHUB_TOKEN; the bump PR will not trigger CI."
+            echo "use=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open / refresh PR if anything changed
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ steps.pat.outputs.use == 'true' && secrets.BUMP_PAT || github.token }}
+          branch: bot/bump-ipu6-pin
+          base: main
+          title: "ci: bump ipu6 mainline pin to ${{ steps.rewrite.outputs.new_ref }}"
+          commit-message: "ci: bump ipu6 mainline pin to ${{ steps.rewrite.outputs.new_ref }}"
+          delete-branch: true
+          body: |
+            Auto-generated weekly bump of `tools/ipu6/pin` to the newest
+            mainline tag. vm-ipu6's `series-applies` shows whether
+            `patches/ipu6-ipu7/`, `patches/ipu6-ipu4p/` and `patches/ipu6-ipu4/`
+            still apply.
+
+            ```
+            ${{ steps.rewrite.outputs.summary }}
+            ```
