@@ -183,12 +183,11 @@ runs:
               --json databaseId \
               --jq '.[].databaseId' 2>/dev/null || true)"
           for run_id in $run_ids; do
-            names="$(gh api \
+            all="$(gh api \
                 "repos/$REPO_FULL/actions/runs/$run_id/artifacts?per_page=100" \
-                --jq '.artifacts[]
-                      | select(.expired | not)
-                      | select(.name | startswith("ipu6-ladder-results-"))
-                      | .name' 2>/dev/null || true)"
+                --jq '.artifacts[] | select(.expired | not) | .name' \
+                2>/dev/null || true)"
+            names="$(grep '^ipu6-ladder-results-' <<<"$all" || true)"
             [[ -z "$names" ]] && continue
             echo "vm-ipu6 run $run_id ($branch): $(echo "$names" | tr '\n' ' ')"
             echo "VM_IPU6_RUN_ID=$run_id" >> "$GITHUB_ENV"
@@ -196,6 +195,13 @@ runs:
               gh run download "$run_id" --repo "$REPO_FULL" \
                 --name "$name" \
                 --dir "tools/tests/out/ipu6-ladder-results/$name" || true
+            done
+            # Per-leg driver line coverage (IPU4_GCOV=1), published by
+            # build.sh under ladder-coverage/<driver>-<variant>/.
+            for name in $(grep '^ipu6-ladder-coverage-' <<<"$all" || true); do
+              gh run download "$run_id" --repo "$REPO_FULL" \
+                --name "$name" \
+                --dir "tools/tests/out/ipu6-ladder-coverage/${name#ipu6-ladder-coverage-}" || true
             done
             return 0
           done

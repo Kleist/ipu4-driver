@@ -9,6 +9,9 @@
 #   tools/tests/out/ipu6-ladder-results/**/results.json  ($IPU6_LADDER_DIR,
 #                                               vm-ipu6 artifacts) and
 #   tools/tests/out/ipu6-ladder/results.json    (a local ladder.sh run)
+#   tools/tests/out/ipu6-ladder-coverage/<driver>-<variant>/html/
+#                                               ($IPU6_LADDER_COV_DIR, vm-ipu6
+#                                               artifacts) → site/ladder-coverage/
 #   tools/notes/registers.md
 #   tools/notes/upstream-watch-state.json
 #   tools/notes/upstream-diff/summary.md        (regenerated if missing)
@@ -20,6 +23,7 @@
 #   $OUT_DIR/style.css
 #   $OUT_DIR/data/history.json     trend points (appended-to)
 #   $OUT_DIR/coverage/             lcov HTML tree (copy)
+#   $OUT_DIR/ladder-coverage/<driver>-<variant>/  per-leg lcov HTML (copy)
 #   $OUT_DIR/mmio/report.txt       compare-mmio plain-text report (copy)
 #
 # Inputs that don't exist degrade to "no data yet" placeholders rather
@@ -37,6 +41,7 @@ REPO_SLUG="${REPO_SLUG:-Kleist/ipu4-driver}"
 VM_SMOKE_RUN_ID="${VM_SMOKE_RUN_ID:-}"
 IPU6_LADDER_DIR="${IPU6_LADDER_DIR:-$ROOT/tools/tests/out/ipu6-ladder-results}"
 VM_IPU6_RUN_ID="${VM_IPU6_RUN_ID:-}"
+IPU6_LADDER_COV_DIR="${IPU6_LADDER_COV_DIR:-$ROOT/tools/tests/out/ipu6-ladder-coverage}"
 
 mkdir -p "$OUT_DIR" "$OUT_DIR/data"
 
@@ -54,6 +59,7 @@ python3 "$HERE/build_payload.py" \
   --ipu6-ladder-dir "$IPU6_LADDER_DIR" \
   --ipu6-ladder-dir "$ROOT/tools/tests/out/ipu6-ladder" \
   ${VM_IPU6_RUN_ID:+--vm-ipu6-run-id "$VM_IPU6_RUN_ID"} \
+  --ipu6-ladder-coverage-dir "$IPU6_LADDER_COV_DIR" \
   > "$PAYLOAD"
 
 # --- render ---
@@ -64,6 +70,13 @@ if [[ -d "$COV_DIR/html" ]]; then
   rm -rf "$OUT_DIR/coverage"
   cp -r "$COV_DIR/html" "$OUT_DIR/coverage"
 fi
+rm -rf "$OUT_DIR/ladder-coverage"
+for d in "$IPU6_LADDER_COV_DIR"/*/html; do
+  [[ -f "$d/index.html" ]] || continue
+  leg="$(basename "$(dirname "$d")")"
+  mkdir -p "$OUT_DIR/ladder-coverage"
+  cp -r "$d" "$OUT_DIR/ladder-coverage/$leg"
+done
 if [[ -f "$MMIO_DIR/report.txt" ]]; then
   mkdir -p "$OUT_DIR/mmio"
   cp "$MMIO_DIR/report.txt" "$OUT_DIR/mmio/report.txt"

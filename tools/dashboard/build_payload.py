@@ -136,7 +136,8 @@ def _ladder_tests(root: Path) -> list[str]:
     return [line.strip() for line in out.decode().splitlines() if line.strip()]
 
 
-def _ipu6_port(root: Path, repo: str, ladder_dirs: list[str], run_id: str | None) -> dict:
+def _ipu6_port(root: Path, repo: str, ladder_dirs: list[str], run_id: str | None,
+               ladder_cov_dir: str) -> dict:
     port = parse_ladder.build(
         parse_ladder.load_results(ladder_dirs), _ladder_tests(root),
     )
@@ -148,6 +149,12 @@ def _ipu6_port(root: Path, repo: str, ladder_dirs: list[str], run_id: str | None
     port["run_url"] = run_url
     port["workflow_url"] = f"https://github.com/{repo}/actions/workflows/vm-ipu6.yml"
     port["plan_url"] = f"https://github.com/{repo}/blob/main/tools/notes/ipu6-ipu4-plan.md"
+    # build.sh publishes each leg's lcov HTML (ipu6-ladder-coverage-*
+    # artifacts) at ladder-coverage/<driver>-<variant>/.
+    for leg in port["legs"]:
+        slug = leg["name"].replace("/", "-")
+        if (Path(ladder_cov_dir) / slug / "html" / "index.html").is_file():
+            leg["coverage_url"] = f"ladder-coverage/{slug}/"
     return port
 
 
@@ -179,6 +186,12 @@ def _append_history(out_dir: Path, payload: dict, vm_smoke_run_id: str | None) -
             "files_differ": diff.get("files_differ"),
             "hunks": diff.get("hunks"),
         },
+        # Driver line coverage per ladder leg ("<driver>/<variant>": pct).
+        "ladder_coverage": {
+            leg["name"]: ((leg.get("coverage") or {}).get("lines") or {}).get("pct")
+            for leg in (payload.get("ipu6_port") or {}).get("legs") or []
+            if leg.get("coverage")
+        },
     }
 
     # Idempotency: a single commit can trigger pages.yml multiple times
@@ -206,6 +219,8 @@ def main(argv=None):
     p.add_argument("--ipu6-ladder-dir", action="append", default=[],
                    help="dir searched for ladder results*.json (repeatable)")
     p.add_argument("--vm-ipu6-run-id", default=None)
+    p.add_argument("--ipu6-ladder-coverage-dir", default="",
+                   help="dir of per-leg ladder coverage reports (<driver>-<variant>/)")
     args = p.parse_args(argv)
 
     root = Path(args.root)
@@ -233,7 +248,8 @@ def main(argv=None):
         "registers": registers,
         "kernels": _kernels(root, args.repo),
         "upstream": {"diff": upstream_diff, "watch": upstream_watch},
-        "ipu6_port": _ipu6_port(root, args.repo, args.ipu6_ladder_dir, args.vm_ipu6_run_id),
+        "ipu6_port": _ipu6_port(root, args.repo, args.ipu6_ladder_dir, args.vm_ipu6_run_id,
+                                args.ipu6_ladder_coverage_dir),
     }
     payload["history"] = _append_history(out_dir, payload, args.vm_smoke_run_id)
 

@@ -27,7 +27,9 @@ history.
 
 `build.sh` reads `$OUT_DIR/data/history.json` (if present), appends a
 new datapoint with the current SHA / coverage % / MMIO divergence
-counts, and writes it back into the new artifact. Multiple triggers
+counts / driver line coverage per ladder leg (`ladder_coverage`,
+`{"<driver>/<variant>": pct}`), and writes it back into the new
+artifact. Multiple triggers
 on the same SHA (push + vm-smoke completion + cron) refresh the same
 point rather than appending duplicates. History is capped at 365
 points (one year of daily refreshes plus per-push events).
@@ -70,6 +72,7 @@ The dashboard is a contract over files already produced elsewhere:
 | `tools/tests/out/compare-mmio/report.txt` | same | optional |
 | `tools/tests/out/ipu6-ladder-results/**/results.json` (`$IPU6_LADDER_DIR`) | `tools/tests/ipu6/ladder.sh`, via the `ipu6-ladder-results-<leg>` artifacts of `vm-ipu6` | optional (matrix renders "not run yet") |
 | `tools/tests/out/ipu6-ladder/results.json` | a local `tools/tests/ipu6/ladder.sh` run | optional |
+| `tools/tests/out/ipu6-ladder-coverage/<driver>-<variant>/html/` (`$IPU6_LADDER_COV_DIR`) | `tools/coverage/ladder.sh`, via the `ipu6-ladder-coverage-<leg>` artifacts of `vm-ipu6` | optional (published at `ladder-coverage/<driver>-<variant>/`) |
 | `tools/tests/ipu6/ladder.sh --list` | committed | optional (row names before any results exist) |
 | `tools/notes/registers.md` | committed | yes |
 | `tools/notes/upstream-watch-state.json` | `tools/upstream/watch.sh` (committed) | yes |
@@ -99,7 +102,10 @@ at the end of every run (schema 1):
   "tests": [
     {"name": "build", "depends_on": "series-applies", "enabled": true,
      "result": "PASS", "duration_s": 27}
-  ]
+  ],
+  // tools/coverage/ladder.sh's summary.json; null unless IPU4_GCOV=1.
+  "coverage": {"lines": {"pct": 39.6, "hit": 2293, "total": 5792},
+               "functions": {"pct": 54.7, "hit": 210, "total": 384}}
 }
 ```
 
