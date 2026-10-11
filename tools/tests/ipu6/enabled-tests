@@ -40,3 +40,7 @@ stream-on
 
 # The captured frame holds the QEMU model's test pattern (plan PR 12).
 stream-pattern
+
+# A CSI-2 frame start interrupt arrives on port 0; the CSI2PART/CSI2S2M
+# interrupt setup and teardown match silicon's stream (plan PR 13).
+csi2-sof-irq
