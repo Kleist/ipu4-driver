@@ -1,0 +1,58 @@
+From 0fe5bb6e68e28f241896c5a0cfa96b59bac9d811 Mon Sep 17 00:00:00 2001
+From: Andreas Helbech Kleist <andreaskleist@gmail.com>
+Date: Sun, 11 Oct 2026 00:17:04 +0000
+Subject: [PATCH] media: ipu6: Support the IPU4 SysCom queue layout
+
+IPU4 keeps the SysCom registers in ISYS DMEM like IPU4P, with the same
+management registers 0 to 5, but its firmware has no dual contexts and
+does not reserve registers 6 and 7: the queue read and write pointers
+start at register 6, not 8. With IPU4P's layout the driver and the
+firmware disagree about where every queue's pointers are, so no message
+reaches the firmware's queue and the first stream open times out.
+
+Start the queue pointers at register 6 on IPU4.
+
+Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
+---
+ drivers/media/pci/intel/ipu6/ipu6-fw-com.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-fw-com.c b/drivers/media/pci/intel/ipu6/ipu6-fw-com.c
+index e1bc047bd..489b80867 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-fw-com.c
++++ b/drivers/media/pci/intel/ipu6/ipu6-fw-com.c
+@@ -11,6 +11,7 @@
+ #include <linux/slab.h>
+ #include <linux/types.h>
+ 
++#include "ipu6.h"
+ #include "ipu6-bus.h"
+ #include "ipu6-dma.h"
+ #include "ipu6-fw-com.h"
+@@ -126,6 +127,8 @@ enum ipu4p_regmem_id {
+ 	IPU4P_SYSCOM_COMMAND_REG = 3,
+ 	IPU4P_SYSCOM_IRQ_REG = 4,
+ 	IPU4P_SYSCOM_VTL0_ADDR_MASK = 5,
++	/* IPU4 firmware has no dual contexts; its queues start here. */
++	IPU4_SYSCOM_QPR_BASE_REG = 6,
+ 	/* CNL B0 ISYS firmware reserves registers 6-7 for dual contexts. */
+ 	IPU4P_SYSCOM_QPR_BASE_REG = 8,
+ };
+@@ -254,8 +257,12 @@ void *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
+ 
+ 	/* initialize input queues */
+ 	offset += specific_size;
+-	res.reg = ctx->dmem_syscom ? IPU4P_SYSCOM_QPR_BASE_REG :
+-				     SYSCOM_QPR_BASE_REG;
++	if (!ctx->dmem_syscom)
++		res.reg = SYSCOM_QPR_BASE_REG;
++	else if (IS_IPU4(adev->isp))
++		res.reg = IPU4_SYSCOM_QPR_BASE_REG;
++	else
++		res.reg = IPU4P_SYSCOM_QPR_BASE_REG;
+ 	res.host_address = (uintptr_t)(ctx->dma_buffer + offset);
+ 	res.vied_address = ctx->dma_addr + offset;
+ 	for (i = 0; i < cfg->num_input_queues; i++)
+-- 
+2.43.0
+
