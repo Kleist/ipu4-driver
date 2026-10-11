@@ -236,7 +236,7 @@
     <h4>Upstream-watch state</h4>
     <ul class="watch-state">
       {% for branch, ref in upstream.watch.last_seen.items() %}
-      <li><code>{{ branch }}</code> last seen at <code>{{ ref }}</code></li>
+      <li><code>{{ branch }}</code> {% if ref == "INIT_AT_FIRST_RUN" %}<span class="empty">not set up yet (no watcher run has merged)</span>{% else %}last seen at <code>{{ ref[:12] }}</code>{% endif %}</li>
       {% endfor %}
     </ul>
     <p class="meta">{{ upstream.watch.processed_patch_ids|length }} patch-ids deduped to date</p>
