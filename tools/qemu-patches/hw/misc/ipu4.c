@@ -104,11 +104,15 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 
 /* CSI2 ports. Each of the 6 ports has the same register layout
  * (kernel/ipu4/ipu4-platform-isys-csi2-reg.h:19-56) but lives at an
- * irregular base offset (kernel/ipu4/ipu4-platform-isys-csi2-reg.h:13-15):
+ * irregular offset from the ISYS base
+ * (kernel/ipu4/ipu4-platform-isys-csi2-reg.h:13-15):
  *
  *     port 0 — 0x64000   port 3 — 0x67000
  *     port 1 — 0x65000   port 4 — 0x6c000
  *     port 2 — 0x66000   port 5 — 0x6c800
+ *
+ * Like UNISPART, they are relative to the ISYS base (port 0 at
+ * BAR + 0x164000).
  *
  * Per-port register offsets:
  *
@@ -453,12 +457,15 @@ typedef struct Ipu4Csi2Port {
     uint32_t s2m_edge, s2m_mask, s2m_status, s2m_enable, s2m_level;
 } Ipu4Csi2Port;
 
-/* CSI2 port base offsets — irregular because ports 4 and 5 share a
- * 0x1000 block (ports 0..3 are spaced 0x1000 apart, ports 4 and 5
- * are spaced 0x800). Order matches IPU_CSI_PORT_NUM in
- * kernel/ipu4/ipu6-isys-csi2.c. */
+/* CSI2 port BAR offsets (ISYS base + port offset) — irregular because
+ * ports 4 and 5 share a 0x1000 block (ports 0..3 are spaced 0x1000
+ * apart, ports 4 and 5 are spaced 0x800). Order matches
+ * IPU_CSI_PORT_NUM in kernel/ipu4/ipu6-isys-csi2.c. */
+#define IS_CSI2_BASE                     0x100000
 static const hwaddr ipu4_csi2_port_base[IPU4_CSI2_NUM_PORTS] = {
-    0x64000, 0x65000, 0x66000, 0x67000, 0x6c000, 0x6c800,
+    IS_CSI2_BASE + 0x64000, IS_CSI2_BASE + 0x65000,
+    IS_CSI2_BASE + 0x66000, IS_CSI2_BASE + 0x67000,
+    IS_CSI2_BASE + 0x6c000, IS_CSI2_BASE + 0x6c800,
 };
 
 typedef enum Ipu4Variant {
