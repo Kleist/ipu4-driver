@@ -9,6 +9,11 @@
  *
  * Built statically (musl/-static) so it runs in the busybox initramfs
  * without any libc loader.
+ *
+ * Usage: streamon [VIDEO [MEDIA [SUBDEV]]], default /dev/video0 and
+ * /dev/media0. With SUBDEV (the ipu6 flavor's CSI-2 receiver subdev),
+ * its sink pad is first set to the sensor's 800x800 RGB888 format
+ * ("SUBDEV:s_fmt"), which the upstream driver does not default to.
  */
 
 #include <errno.h>
@@ -26,6 +31,7 @@
 #include <unistd.h>
 
 #include <linux/media.h>
+#include <linux/v4l2-subdev.h>
 #include <linux/videodev2.h>
 
 #define WIDTH		800
@@ -193,11 +199,52 @@ static int enable_media_links(const char *media_dev, const char *video_dev)
 	return 0;
 }
 
+/* Set the sink pad (0) of a CSI-2 receiver subdev to the virt-sensor's
+ * format. The upstream ipu6 CSI-2 subdev defaults to 4096x3072
+ * SGRBG10, which fails link validation against the 800x800 RGB888
+ * sensor; the format propagates to the source pads through the
+ * subdev's routing.
+ */
+static int set_subdev_format(const char *subdev)
+{
+	struct v4l2_subdev_format sfmt = {
+		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
+		.pad = 0,
+		.format = {
+			.width = WIDTH,
+			.height = HEIGHT,
+			.code = MEDIA_BUS_FMT_RGB888_1X24,
+			.field = V4L2_FIELD_NONE,
+		},
+	};
+	int sfd = open(subdev, O_RDWR);
+
+	if (sfd < 0) {
+		printf("SUBDEV:fail step=open errno=%d (%s) dev=%s\n",
+		       errno, strerror(errno), subdev);
+		return -1;
+	}
+	if (ioctl(sfd, VIDIOC_SUBDEV_S_FMT, &sfmt) < 0) {
+		printf("SUBDEV:fail step=s_fmt errno=%d (%s) dev=%s\n",
+		       errno, strerror(errno), subdev);
+		close(sfd);
+		return -1;
+	}
+	printf("SUBDEV:s_fmt dev=%s %ux%u code=0x%x\n", subdev,
+	       sfmt.format.width, sfmt.format.height, sfmt.format.code);
+	close(sfd);
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
 	const char *dev = argc > 1 ? argv[1] : "/dev/video0";
 	const char *media_dev = argc > 2 ? argv[2] : "/dev/media0";
+	const char *subdev = argc > 3 ? argv[3] : NULL;
 	int fd, i;
+
+	if (subdev && set_subdev_format(subdev) < 0)
+		return 1;
 
 	/* Best-effort media-link enable. STREAMON fails with ENOLINK
 	 * if the virt-sensor -> CSI2 -> ISA pipeline isn't linked. */
