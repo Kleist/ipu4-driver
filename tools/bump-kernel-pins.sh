@@ -12,8 +12,9 @@
 # Tracks are discovered from the directory: every <key>.json in
 # .github/kernel-pins/ is a track. Adding a track is a one-file PR.
 # Each file carries `{"url": ..., "ref": ...}`; the resolution rule
-# is "highest v<key>(.X) tag at .url", so a track with a non-stable
-# URL would just need a matching tag pattern.
+# is "highest v<key>(.X) tag at .url", or the highest v<key>-rcN while
+# v<key> is not released yet, so a track with a non-stable URL would
+# just need a matching tag pattern.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -67,13 +68,13 @@ else
 	KEYS=("${ALL_KEYS[@]}")
 fi
 
-# Highest non-rc tag matching <pattern> at <url>.
+# Highest tag matching <pattern> and <anchor> at <url>.
 # Args: $1 = url, $2 = pattern (e.g. 'v6.12*'), $3 = anchor (e.g. '^v6\.12(\.[0-9]+)?$').
 latest_stable_tag() {
 	local url="$1" pattern="$2" anchor="$3"
 	git ls-remote --tags --refs --sort=-v:refname "$url" "$pattern" \
 	  | sed -E 's@^.*refs/tags/@@' \
-	  | grep -E "$anchor" \
+	  | { grep -E "$anchor" || true; } \
 	  | head -n1
 }
 
@@ -83,6 +84,9 @@ for key in "${KEYS[@]}"; do
 	url="$(jq -r '.url' "$pin")"
 	track_re="${key//./\\.}"
 	new="$(latest_stable_tag "$url" "v${key}*" "^v${track_re}(\\.[0-9]+)?\$")"
+	if [[ -z "$new" ]]; then
+		new="$(latest_stable_tag "$url" "v${key}-rc*" "^v${track_re}-rc[0-9]+\$")"
+	fi
 	if [[ -z "$new" ]]; then
 		echo "::error::could not resolve track $key" >&2
 		exit 1

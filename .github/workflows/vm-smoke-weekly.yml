@@ -9,7 +9,7 @@ on:
 
 # Weekly vm-smoke for kernels not on the per-PR canary track. The 6.12
 # leg runs on every PR via vm-smoke.yml; every other track in
-# .github/kernel-pins/ (today: 6.18 + 7.0) runs here. The `pins`
+# .github/kernel-pins/ (today: 6.18 + 7.3) runs here. The `pins`
 # setup job globs that directory and emits a matrix-shaped output
 # covering all non-6.12 tracks; vm-smoke then fans across with
 # fail-fast: false so one bad kernel doesn't mask the other.

@@ -6,7 +6,7 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
-# Per-PR canary: 6.12 by default. Other tracks (6.18, 7.0) run
+# Per-PR canary: 6.12 by default. Other tracks (6.18, 7.3) run
 # weekly via vm-smoke-weekly.yml. Each track's pin lives in its own
 # file under .github/kernel-pins/ so parallel bumper PRs don't
 # conflict on each other.
