@@ -191,9 +191,9 @@ To keep the tracks from conflicting:
 - **Shared core changes go first, alone.** `ladder.sh`, `probe-boot.sh`,
   `stream-boot.sh`, the `init.ipu6-*` frames, `tools/tests/streamon.c`,
   `tools/run-vm.sh`, `tools/rootfs/build.sh` and `vm-ipu6.yml` are
-  shared. A change to them is its own small PR, merged
-  before the feature PR that needs it; feature PRs don't carry core
-  changes.
+  shared. A change to them is its own commit, ahead of the feature
+  commits that need it; the feature PR may carry it, but the commit
+  must pass CI on its own and hold no feature changes.
 - **Own plan only.** A track's PR edits its own plan file; facts another
   track needs go in its PR description (and the owner records them).
 - **QEMU model.** `tools/qemu-patches/hw/misc/ipu4.c` is shared by every

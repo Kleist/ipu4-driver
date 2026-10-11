@@ -66,7 +66,7 @@ tools/tests/ipu6/ladder.sh    # every test; fails only on tests listed in tools/
 
 `IPU4_FLAVOR=ipu6 tools/bootstrap.sh` / `tools/build.sh` dispatch to the same scripts (default `fork`). Kernel changes go in `patches/ipu6-ipu4/` as `git format-patch` output (see its README); CI is `.github/workflows/vm-ipu6.yml`.
 
-To keep the tracks out of each other's way ("Tracks and file ownership" in the IPU4 port's plan): every ladder test is its own file, `tools/tests/ipu6/tests.d/NNN-<test>.sh`, with its guest-side probe checks in `tools/rootfs/init.ipu6-probe.d/NNN-<test>.{bound,unloaded}.sh` (READMEs in both); a new test adds files, it never edits a shared list. A track edits only its own plan and its own `enabled-tests[.<variant>]`. Changes to the shared core (`ladder.sh`, `probe-boot.sh`, `stream-boot.sh`, the `init.ipu6-*` frames, `tools/tests/streamon.c`, `run-vm.sh`, `rootfs/build.sh`, `vm-ipu6.yml`) go in their own small PR, merged before the feature PR that needs them.
+To keep the tracks out of each other's way ("Tracks and file ownership" in the IPU4 port's plan): every ladder test is its own file, `tools/tests/ipu6/tests.d/NNN-<test>.sh`, with its guest-side probe checks in `tools/rootfs/init.ipu6-probe.d/NNN-<test>.{bound,unloaded}.sh` (READMEs in both); a new test adds files, it never edits a shared list. A track edits only its own plan and its own `enabled-tests[.<variant>]`. Changes to the shared core (`ladder.sh`, `probe-boot.sh`, `stream-boot.sh`, the `init.ipu6-*` frames, `tools/tests/streamon.c`, `run-vm.sh`, `rootfs/build.sh`, `vm-ipu6.yml`) go in their own commit, ahead of the feature commits that need them; the PR may carry both, but each commit must pass CI on its own.
 
 ## Common commands
 
