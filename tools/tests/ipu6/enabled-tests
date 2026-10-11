@@ -33,3 +33,10 @@ isys-irq
 # The ISYS firmware opens over IPU4's SysCom layout and answers the first
 # STREAM_OPEN; the SysCom writes match silicon's (plan PR 11).
 fw-open
+
+# VIDIOC_STREAMON succeeds through the IPU4 CSI-2 receiver (no PHY, no
+# iWake); receiver and iWake writes match silicon's stream (plan PR 12).
+stream-on
+
+# The captured frame holds the QEMU model's test pattern (plan PR 12).
+stream-pattern
