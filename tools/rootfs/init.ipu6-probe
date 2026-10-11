@@ -28,6 +28,15 @@ mount -t proc     none /proc
 mount -t sysfs    none /sys
 mount -t devtmpfs none /dev 2>/dev/null || true
 
+# The driver's module, device and node names (IPU_*): staged by
+# tools/rootfs/build.sh from tools/rootfs/ipu-driver.<flavor>.conf.
+. /etc/ipu-driver.conf
+# Unload order: the driver's modules in reverse, then the sensor.
+rmmods=
+for m in $IPU_SENSOR_MODULE $IPU_MODULES; do
+	rmmods="$(echo "$m" | sed 's/-/_/g') $rmmods"
+done
+
 say() {
 	echo "PROBE:$*"
 }
@@ -52,7 +61,7 @@ echo 'file drivers/base/firmware_loader/main.c +p' \
 	say "fail firmware loader dyndbg"
 
 for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
-	virt-sensor intel-ipu6 intel-ipu6-isys; do
+	$IPU_SENSOR_MODULE $IPU_MODULES; do
 	# The MMU code logs every page it maps at debug level; mapping the
 	# 8 MB trash buffer alone pushes the start of probe out of the
 	# kernel log buffer. Keep ipu6-mmu.c quiet, except the line that
@@ -60,7 +69,7 @@ for m in videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
 	# has to be part of the insmod: probe may run inside it.
 	case "$m" in
 	videobuf2-*) args= ;;
-	intel-ipu6) args='dyndbg="+p;file ipu6-mmu.c -p;format iova\040trash\040buffer +p"' ;;
+	"$IPU_PCI_DRIVER") args='dyndbg="+p;file ipu6-mmu.c -p;format iova\040trash\040buffer +p"' ;;
 	virt-sensor) args="dyndbg=+p device=$want" ;;
 	*) args=dyndbg=+p ;;
 	esac
@@ -81,8 +90,8 @@ for dev in /sys/bus/pci/devices/*; do
 done
 [ -n "$ipu" ] || say "fail no 8086:$want PCI device"
 
-echo "=== dmesg (intel-ipu6 $ipu) ==="
-dmesg | grep -E "$ipu|intel_ipu6|intel-ipu6"
+echo "=== dmesg ($IPU_PCI_DRIVER $ipu) ==="
+dmesg | grep -E "$ipu|$IPU_MODNAME|$IPU_PCI_DRIVER"
 echo "=== end dmesg ==="
 
 # The probe tests' checks while the driver is bound.
@@ -104,14 +113,14 @@ say "info $n video nodes"
 
 if [ -e "/sys/bus/pci/devices/$ipu/driver" ]; then
 	say "bound yes"
-	echo "$ipu" > /sys/bus/pci/drivers/intel-ipu6/unbind
+	echo "$ipu" > "/sys/bus/pci/drivers/$IPU_PCI_DRIVER/unbind"
 else
 	say "bound no"
 fi
 
 lsmod
 
-for m in intel_ipu6_isys intel_ipu6 virt_sensor; do
+for m in $rmmods; do
 	if rmmod "$m"; then
 		say "ok rmmod $m"
 	else

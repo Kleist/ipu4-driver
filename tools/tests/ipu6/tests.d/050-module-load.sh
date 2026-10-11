@@ -21,6 +21,6 @@ test_module-load() {
 	rm -f "$log"
 	timeout --preserve-status "${IPU4_SMOKE_TIMEOUT:-90}" \
 		"$ROOT/tools/run-vm.sh" > "$log" 2>&1
-	grep -E '^MODLOAD:|virt-sensor|ipu6' "$log"
+	grep -E "^MODLOAD:|virt-sensor|$IPU_PCI_DRIVER|$IPU_MODNAME" "$log"
 	grep -q '^MODLOAD: PASS' "$log"
 }

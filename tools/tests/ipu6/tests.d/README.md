@@ -30,4 +30,6 @@ editing the same list.
   by the driver's track.
 - **Variables available:** `$ROOT`, `$OUT`, `$LINUX_DIR`, `$PATCH_DIR`,
   `$DRIVER`, `$VARIANT`, `$LEG` (`<driver>/<variant>`), `$FLAVOR`,
-  `${WANT[<test>]}` (selected in this run).
+  `${WANT[<test>]}` (selected in this run), and the driver's names
+  (`$IPU_MODNAME`, `$IPU_PCI_DRIVER`, ...) from
+  `tools/rootfs/ipu-driver.<flavor>.conf`, which the guest inits read too.

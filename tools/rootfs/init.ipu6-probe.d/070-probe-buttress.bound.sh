@@ -11,7 +11,7 @@
 # runtime-suspended again, which powers them down through the same FSM;
 # a failed power-down leaves them active ("power down failed!").
 aux=/sys/bus/auxiliary/devices
-if dmesg | grep -q 'intel_ipu6\.psys\..*iova trash buffer for MMUID'; then
+if dmesg | grep -q "$IPU_MODNAME\.psys\..*iova trash buffer for MMUID"; then
 	powered_up=1
 else
 	powered_up=
@@ -20,7 +20,7 @@ suspended=
 i=0
 while [ "$i" -lt 50 ]; do
 	n=0
-	for d in "$aux"/intel_ipu6.isys.* "$aux"/intel_ipu6.psys.*; do
+	for d in "$aux/$IPU_MODNAME".isys.* "$aux/$IPU_MODNAME".psys.*; do
 		[ "$(cat "$d/power/runtime_status" 2>/dev/null)" = suspended ] &&
 			n=$((n + 1))
 	done
@@ -31,7 +31,7 @@ while [ "$i" -lt 50 ]; do
 	sleep 0.1
 	i=$((i + 1))
 done
-for d in "$aux"/intel_ipu6.*; do
+for d in "$aux/$IPU_MODNAME".*; do
 	[ -e "$d" ] || continue
 	say "info ${d##*/} $(cat "$d/power/runtime_status")"
 done

@@ -38,7 +38,7 @@ boot_stream_vm() {
 # part-way can leave a kernel warning that only the tests for that part
 # should fail on.
 stream_log_ok() {
-	grep -E '^(STREAMVM|STREAM|SUBDEV|MEDIA):|intel-ipu6|intel_ipu6|virt-sensor' \
+	grep -E "^(STREAMVM|STREAM|SUBDEV|MEDIA):|$IPU_PCI_DRIVER|$IPU_MODNAME|virt-sensor" \
 		"$STREAM_LOG" | grep -vE 'dma_alloc|dmamap|mapping entry'
 	if grep -q '^STREAMVM:fail' "$STREAM_LOG"; then
 		echo "!!! STREAMVM:fail markers (see above)"

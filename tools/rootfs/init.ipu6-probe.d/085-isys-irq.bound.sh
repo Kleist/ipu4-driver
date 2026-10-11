@@ -14,7 +14,7 @@
 # worked. A failed resume leaves runtime_status at "error" (or
 # "suspended") instead of "active".
 isys_resumed=fail
-for d in /sys/bus/auxiliary/devices/intel_ipu6.isys.*; do
+for d in /sys/bus/auxiliary/devices/"$IPU_MODNAME".isys.*; do
 	[ -e "$d/power/control" ] || continue
 	echo on > "$d/power/control"
 	st=$(cat "$d/power/runtime_status")
@@ -36,4 +36,4 @@ for d in /sys/bus/auxiliary/devices/intel_ipu6.isys.*; do
 	fi
 done
 say "isys-resume $isys_resumed"
-dmesg | grep -iE 'intel_ipu6\.isys.*(error|fail|timeout)|tsc sync'
+dmesg | grep -iE "$IPU_MODNAME\.isys.*(error|fail|timeout)|tsc sync"

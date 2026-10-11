@@ -17,7 +17,7 @@
 case "$want" in
 0x8a19) fw=intel/ipu/ipu4p_fw.bin ;;
 0x9a19) fw=intel/ipu/ipu6_fw.bin ;;
-*) fw=intel/ipu/ipu4_fw.bin ;;
+*) fw=$IPU_FW_IPU4 ;;
 esac
 did=${want#0x}
 if dmesg | grep -q "Unsupported IPU6 device $did"; then

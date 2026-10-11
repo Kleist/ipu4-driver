@@ -46,6 +46,7 @@ out-of-tree)
 	LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$ROOT/tools/linux-ipu4-oot}"
 	DRV_DIR="$ROOT/kernel/ipu4"
 	OUT="$HERE/out-out-of-tree"
+	# IPU4_FIRMWARE_NAME in kernel/ipu4/ipu6.h.
 	FW_NAME="ipu4_cpd_b0.bin"
 	;;
 *) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork, ipu6 or out-of-tree)" >&2; exit 1 ;;
@@ -116,6 +117,13 @@ if [[ -d "$INIT_SRC.d" ]]; then
 		[[ -e "$f" ]] || continue
 		echo "file /init.d/$(basename "$f")  $f 0644 0 0" >> "$LIST"
 	done
+fi
+
+# The flavor's driver names for the ladder's inits (ipu-driver.<flavor>.conf).
+DRIVER_CONF="$HERE/ipu-driver.${IPU4_FLAVOR:-fork}.conf"
+if [[ -f "$DRIVER_CONF" ]]; then
+	echo "dir  /etc              0755 0 0" >> "$LIST"
+	echo "file /etc/ipu-driver.conf  $DRIVER_CONF 0644 0 0" >> "$LIST"
 fi
 
 # Busybox applet symlinks.
