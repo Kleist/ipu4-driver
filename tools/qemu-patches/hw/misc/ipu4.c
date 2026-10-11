@@ -304,6 +304,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
  */
 #define BTRS_ISR_IS_IRQ                  (1u << 0)
 #define ISYS_UNISPART_IRQ_SW             (1u << 30)
+#define IPU4PV_UNISPART_IRQ_SW           (1u << 22)
 
 /* CSI2 port-N event bit in UNISPART_IRQ_STATUS. Driver dispatches to
  * `ipu6_isys_csi2_isr(&isys->csi2[N])` when bit `IPU4_ISYS_UNISPART_IRQ_CSI2(N)`
@@ -335,6 +336,8 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define IPU4_BASE_MSG_RECV_QUEUE_INDEX   11   /* in the absolute queue table */
 #define IPU4_MAX_MSG_STREAMS             8
 #define SYSCOM_QPR_BASE_REG              6
+/* ipu4p variant: same queues, but the pointer pairs start at reg 8. */
+#define IPU4PV_SYSCOM_QPR_BASE_REG       8
 
 /* IPU6 ISYS firmware send-token opcodes (kernel/ipu4/ipu6-fw-isys.h:131).
  * The driver's call sequence is well-defined per stream lifecycle but
@@ -733,6 +736,15 @@ static bool ipu4_load_queue_desc(Ipu4State *s, uint32_t array_iova,
  * a pointer into the cache, or NULL if the descriptor isn't loadable yet
  * (no syscom config addr written, MMU not programmed, etc.).
  */
+/* DMEM reg of stream 0's msg-send wr cursor (its rd cursor follows). */
+static unsigned int ipu4_msg_send_reg(Ipu4State *s)
+{
+    unsigned int base = s->variant == IPU4_VARIANT_IPU4P ?
+                        IPU4PV_SYSCOM_QPR_BASE_REG : SYSCOM_QPR_BASE_REG;
+
+    return base + 2 * IPU4_BASE_MSG_SEND_QUEUES;
+}
+
 static Ipu4FwSysQueue *ipu4_get_send_queue(Ipu4State *s, unsigned int stream)
 {
     Ipu4FwSyscomConfig cfg;
@@ -873,7 +885,8 @@ static void ipu4_post_response_full(Ipu4State *s,
      * was called in realize() and pci_alloc_irq_vectors() runs at
      * driver probe, so msi_enabled() is reliably true by the time
      * the first response posts. */
-    s->is_unispart_irq_status |= ISYS_UNISPART_IRQ_SW;
+    s->is_unispart_irq_status |= s->variant == IPU4_VARIANT_IPU4P ?
+                                 IPU4PV_UNISPART_IRQ_SW : ISYS_UNISPART_IRQ_SW;
     s->isr_status |= BTRS_ISR_IS_IRQ;
 
     if (msi_enabled(&s->parent_obj)) {
@@ -1562,8 +1575,10 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
              * first read — the firmware-handshake shortcut documented
              * in the Step 1 plan. All other slots return their
              * latched value. */
-            if (addr == IS_DMEM_FW_COM_SEND_RD_POS) {
-                val = s->is_dmem[(IS_DMEM_FW_COM_SEND_WR_POS - IS_DMEM_BASE) / 4];
+            unsigned int send = ipu4_msg_send_reg(s);
+
+            if ((addr - IS_DMEM_BASE) / 4 == send + 1) {
+                val = s->is_dmem[send];
             } else if (addr == IS_DMEM_SYSCOM_STATE) {
                 val = SYSCOM_STATE_READY;
             } else {
@@ -1768,8 +1783,9 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
     default:
         if (addr >= IS_DMEM_BASE && addr < IS_DMEM_BASE + IS_DMEM_SIZE) {
             uint32_t reg = (addr - IS_DMEM_BASE) / 4;
+            unsigned int send = ipu4_msg_send_reg(s);
 
-            if (addr == IS_DMEM_FW_COM_SEND_RD_POS) {
+            if (reg == send + 1) {
                 /* The read path echoes SEND_WR_POS here; the driver is
                  * only expected to *read* this slot. A write means our
                  * "firmware-owned cursor, driver never writes"
@@ -1806,15 +1822,20 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 
             s->is_dmem[reg] = val;
 
+            /* ipu4p's driver also sends iwake proxy tokens. */
+            if (s->variant == IPU4_VARIANT_IPU4P &&
+                ipu6v_proxy_send(s, reg, val)) {
+                break;
+            }
+
             /* Detect a wr-cursor bump on any of the 8 msg-send queues
              * and synthesise the matching FW response. The msg-send
-             * queues live at DMEM regs 10, 12, 14, … 24 (= absolute
-             * input queue indices 2..9, see comment above near
-             * IPU4_BASE_MSG_SEND_QUEUES). */
-            if (reg >= 10 && reg < 10 + IPU4_MAX_MSG_STREAMS * 2 &&
-                ((reg - 10) & 1) == 0) {
-                unsigned int stream = (reg - 10) / 2;
-                ipu4_handle_send_bump(s, stream, val);
+             * queues' wr cursors are every other DMEM reg from
+             * ipu4_msg_send_reg() (= absolute input queue indices 2..9,
+             * see comment above near IPU4_BASE_MSG_SEND_QUEUES). */
+            if (reg >= send && reg < send + IPU4_MAX_MSG_STREAMS * 2 &&
+                ((reg - send) & 1) == 0) {
+                ipu4_handle_send_bump(s, (reg - send) / 2, val);
             }
             break;
         }
