@@ -1,0 +1,7 @@
+# shellcheck shell=bash
+# Kernel the out-of-tree flavor (IPU4_FLAVOR=out-of-tree) builds
+# kernel/ipu4/ against: v7.3-rc4, the base of the other ladder pins
+# (tools/ipu6/pin.upstream). Same variable names as tools/ipu6/pin, since
+# tools/ipu6/bootstrap.sh fetches it (with no series).
+IPU6_LINUX_URL="${IPU4_OOT_LINUX_URL:-https://github.com/torvalds/linux.git}"
+IPU6_LINUX_SHA="${IPU4_OOT_LINUX_SHA:-93f51579e7df248780214094418f205253383cc5}"

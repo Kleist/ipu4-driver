@@ -2,7 +2,8 @@
 # Boot the test VM with the forked QEMU and the IPU4 device model attached.
 # Reads bzImage / rootfs.cpio.gz produced by tools/build-kernel.sh and
 # tools/rootfs/build.sh. IPU4_FLAVOR=ipu6 picks the ipu6-flavor kernel
-# (tools/linux-ipu6/) and initramfs (tools/rootfs/out-ipu6/).
+# (tools/linux-ipu6/) and initramfs (tools/rootfs/out-ipu6/),
+# IPU4_FLAVOR=out-of-tree tools/linux-ipu4-oot/ and tools/rootfs/out-out-of-tree/.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -20,7 +21,12 @@ ipu6)
 	DYNDBG="intel_ipu6.dyndbg=+p intel_ipu6_isys.dyndbg=+p"
 	DYNDBG+=" virt_sensor.dyndbg=+p"
 	;;
-*) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork or ipu6)" >&2; exit 1 ;;
+out-of-tree)
+	LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$ROOT/tools/linux-ipu4-oot}"
+	ROOTFS_OUT="$ROOT/tools/rootfs/out-out-of-tree"
+	DYNDBG="intel_ipu4.dyndbg=+p intel_ipu4_isys.dyndbg=+p"
+	;;
+*) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork, ipu6 or out-of-tree)" >&2; exit 1 ;;
 esac
 
 QEMU_BIN="${IPU4_QEMU_BIN:-$QEMU_DIR/build/qemu-system-x86_64}"

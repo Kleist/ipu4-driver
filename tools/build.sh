@@ -6,12 +6,14 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 
 # IPU4_FLAVOR=ipu6 selects the upstream-ipu6 + patch-series flow
-# (tools/ipu6/, plan in tools/notes/ipu6-ipu4-plan.md). The default
+# (tools/ipu6/, plan in tools/notes/ipu6-ipu4-plan.md), out-of-tree
+# kernel/ipu4/ built with its own Makefile (tools/out-of-tree/). The default
 # "fork" flow below is unchanged.
 case "${IPU4_FLAVOR:-fork}" in
 fork) ;;
 ipu6) exec "$HERE/ipu6/build.sh" "$@" ;;
-*) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork or ipu6)" >&2; exit 1 ;;
+out-of-tree) exec "$HERE/out-of-tree/build.sh" "$@" ;;
+*) echo "unknown IPU4_FLAVOR '${IPU4_FLAVOR}' (expected fork, ipu6 or out-of-tree)" >&2; exit 1 ;;
 esac
 
 LINUX_DIR="$ROOT/tools/linux"

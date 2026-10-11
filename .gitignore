@@ -12,9 +12,11 @@ htmlcov/
 tools/linux/
 tools/linux-ipu6/
 tools/linux-ipu6-upstream/
+tools/linux-ipu4-oot/
 tools/qemu/
 tools/rootfs/out/
 tools/rootfs/out-ipu6/
+tools/rootfs/out-out-of-tree/
 tools/virt-sensor/out/
 tools/tests/out/
 tools/coverage/html/
@@ -26,3 +28,7 @@ kernel/ipu4/*.o
 kernel/ipu4/*.cmd
 kernel/ipu4/*.o.d
 kernel/ipu4/*.mod
+kernel/ipu4/*.mod.c
+kernel/ipu4/*.ko
+kernel/ipu4/Module.symvers
+kernel/ipu4/modules.order
