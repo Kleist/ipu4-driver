@@ -55,7 +55,8 @@ shown not to break the other variants of the shared driver.
   | V7 | `probe-mmu` / `isys-irq` for ipu6: expected writes computed from the upstream driver's IPU6 tables (`tools/tests/ipu6/upstream_writes.py`) instead of the IPU4 silicon trace | ipu6: `probe-mmu`, `isys-irq` | merged (#143) |
   | V8 | QEMU `ipu6v_mmio_*()`: IPU6 ISYS firmware interface (SPC 0x210000, DMEM SysCom 0x200000, config/state in buttress boot params, MMU0 L1 0x2e0004, UNISPART SW IRQ BIT(22)), iwake proxy answers, IPU6 48-byte responses; ipu6 `fw-open` vs upstream writes | ipu6: `fw-open` | merged (#146) |
   | V9 | QEMU: MCD PHY power handshake (`ipu6v_phy_ctl`); virt-sensor presents 2 lanes on 9a19; ipu6 `stream-on` vs upstream CSI-2/PHY writes | ipu6: `stream-on` | merged (#151) |
-  | V10 | gate `stream-pattern` (variant-neutral; passes since V9) | ipu6: `stream-pattern` | in review |
+  | V10 | gate `stream-pattern` (variant-neutral; passes since V9) | ipu6: `stream-pattern` | merged (#153) |
+  | V11 | QEMU: CSI-2 port 0 error IRQ (corrected header error per frame); ipu6 `csi2-sof-irq` redefined as error-IRQ coverage + sync IRQs stay masked | ipu6: `csi2-sof-irq` | in review |
 
 - **Dashboard hook (Pages PR):** the Pages "IPU4 port" matrix already
   has `ipu4`, `ipu4p` and `ipu6` columns. A variant lights up once its
@@ -200,7 +201,11 @@ shown not to break the other variants of the shared driver.
   `ipu6_isys_csi2_set_stream()` enables the CSI-2 sync interrupts but
   writes their MASK as 0 ("Using event from firmware instead of irq"),
   so frame starts reach the driver only as the firmware's FRAME_SOF
-  responses, which `stream-on` already exercises. Open question for the
-  ipu6 variant: leave it ungated, or redefine it (e.g. check that sync
-  IRQs stay masked, or inject a CSI-2 error IRQ to cover
-  `ipu6_isys_register_errors()`).
+  responses, which `stream-on` already exercises.
+- (V11) Decided with the user: for ipu6, `csi2-sof-irq` covers the CSI-2
+  error IRQ instead. The model reports a corrected packet header error on
+  port 0 with each frame, so `isys_isr()` → `ipu6_isys_csi2_isr()` →
+  `ipu6_isys_register_errors()` and `ipu6_isys_csi2_error()` run; the test
+  also checks the sync MASK is only written 0. Both CLEAR registers are
+  now written by the ISR at IRQ-dependent times, so `stream-on` leaves
+  them out.
