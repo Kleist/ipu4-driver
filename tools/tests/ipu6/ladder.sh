@@ -168,7 +168,8 @@ else
 fi
 
 mkdir -p "$OUT"
-rm -f "$PROBE_STAMP" "$STREAM_STAMP"
+rm -f "$PROBE_STAMP" "$STREAM_STAMP" "$ROOT"/tools/tests/out/gcov-ipu6-*.tar
+rm -rf "$OUT/coverage"
 for r in "${ORDER[@]}"; do
 	[[ -z "${WANT[$r]:-}" ]] && continue
 	dep="${DEP[$r]:-}"
@@ -196,6 +197,16 @@ for r in "${ORDER[@]}"; do
 	DUR[$r]=$((SECONDS - start))
 	echo "test $r: ${RESULT[$r]} ($((SECONDS - start))s)"
 done
+
+# IPU4_GCOV=1 (driver built instrumented): line coverage of the driver
+# over the probe and stream boots, in $OUT/coverage/.
+if [[ "${IPU4_GCOV:-0}" == 1 ]]; then
+	drv_dir="$LINUX_DIR/drivers/media/pci/intel/ipu6"
+	[[ "$FLAVOR" == out-of-tree ]] && drv_dir="$ROOT/kernel/ipu4"
+	"$ROOT/tools/coverage/ladder.sh" "$drv_dir" "$OUT/coverage" \
+		"$ROOT"/tools/tests/out/gcov-ipu6-{probe,stream}.tar ||
+		echo "warning: no coverage report" >&2
+fi
 
 status=$bad_config
 echo
@@ -226,6 +237,13 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
 			[[ -z "${WANT[$r]:-}" ]] && continue
 			echo "| \`$r\` | ${ENABLED[$r]:+yes} | ${RESULT[$r]} |"
 		done
+		if [[ -f "$OUT/coverage/summary.json" ]]; then
+			echo
+			python3 -c 'import json, sys
+l = json.load(open(sys.argv[1]))["lines"]
+print("Driver line coverage: %s%% (%s of %s lines)" % (l["pct"], l["hit"], l["total"]))' \
+				"$OUT/coverage/summary.json"
+		fi
 	} >> "$GITHUB_STEP_SUMMARY"
 fi
 

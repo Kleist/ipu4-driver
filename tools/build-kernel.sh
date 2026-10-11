@@ -39,3 +39,9 @@ if [[ ! -f "$BZ" ]]; then
 	exit 2
 fi
 echo ">>> built $BZ ($(stat -c%s "$BZ") bytes)"
+
+# `make modules` just rebuilt the ipu6 driver without instrumentation;
+# redo the driver's own build so the guest gets the instrumented one.
+if [[ "${IPU4_GCOV:-0}" == 1 && "${IPU4_FLAVOR:-fork}" != fork ]]; then
+	"$HERE/build.sh"
+fi

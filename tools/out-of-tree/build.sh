@@ -49,6 +49,7 @@ fi
 	--enable PCI \
 	--enable PCI_MSI \
 	--enable DYNAMIC_DEBUG \
+	--enable GCOV_KERNEL \
 	--module VIDEO_INTEL_IPU6
 "$ROOT/tools/vm-kconfig.sh"
 # As in tools/ipu6/build.sh: the `build` test gates on warnings in the
@@ -73,9 +74,13 @@ fi
 # warning scan. KBUILD_MODPOST_WARN: no vmlinux here, see
 # tools/ipu6/build.sh. The QEMU model has no sensor, so the module gets
 # its built-in virt sensor, as CONFIG_VIDEO_IPU4_VIRT_SENSOR=y does in
-# the fork harness's in-tree build (tools/build.sh).
+# the fork harness's in-tree build (tools/build.sh). IPU4_GCOV=1 as in
+# tools/ipu6/build.sh.
+gcov=()
+[[ "${IPU4_GCOV:-0}" == 1 ]] && gcov=(GCOV_PROFILE=y)
 build() {
 	make -j"$JOBS" M="$DRV_DIR" KBUILD_MODPOST_WARN=1 \
+		"${gcov[@]}" \
 		CONFIG_VIDEO_IPU4_VIRT_SENSOR=y \
 		KCFLAGS=-DCONFIG_VIDEO_IPU4_VIRT_SENSOR=1 \
 		${IPU4_IPU6_W:+W="$IPU4_IPU6_W"}

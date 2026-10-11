@@ -57,6 +57,7 @@ fi
 	--enable PCI \
 	--enable PCI_MSI \
 	--enable DYNAMIC_DEBUG \
+	--enable GCOV_KERNEL \
 	--disable VIDEO_INTEL_IPU \
 	--disable VIDEO_INTEL_IPU7 \
 	--module VIDEO_INTEL_IPU6 \
@@ -107,8 +108,13 @@ if [[ "${IPU4_IPU6_CLEAN:-0}" == "1" ]]; then
 	make -s M=drivers/media/pci/intel/ipu6 clean
 fi
 
+# IPU4_GCOV=1 instruments the driver for line coverage
+# (tools/coverage/ladder.sh).
+gcov=()
+[[ "${IPU4_GCOV:-0}" == 1 ]] && gcov=(GCOV_PROFILE=y)
 build() {
 	make -j"$JOBS" KBUILD_MODPOST_WARN=1 W="$W" \
+		"${gcov[@]}" \
 		M=drivers/media/pci/intel/ipu6
 }
 if [[ -n "${IPU4_IPU6_BUILD_LOG:-}" ]]; then

@@ -148,6 +148,7 @@ jobs:
           IPU4_ACCEL: tcg
           IPU4_DRIVER: ${{ matrix.driver }}
           IPU4_VARIANT: ${{ matrix.variant }}
+          IPU4_GCOV: "1"
 
       # Small dedicated artifact read by pages.yml (dashboard "IPU4 port"
       # section), one per leg.
@@ -157,6 +158,14 @@ jobs:
         with:
           name: ipu6-ladder-results-${{ matrix.driver }}-${{ matrix.variant }}
           path: tools/tests/out/ipu6-ladder/results.json
+          if-no-files-found: ignore
+
+      - name: Upload driver line coverage
+        if: always() && env.SELECTED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipu6-ladder-coverage-${{ matrix.driver }}-${{ matrix.variant }}
+          path: tools/tests/out/ipu6-ladder/coverage
           if-no-files-found: ignore
 
       - name: Upload ladder logs
