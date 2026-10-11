@@ -10,9 +10,9 @@
  * which IPU the device presents, so the upstream ipu6 driver's test
  * ladder can run against other variants of the shared driver
  * (tools/notes/ipu6-variant-plan.md, tools/notes/ipu4p-variant-plan.md).
- * ipu4p only changes the PCI device ID so far. Besides the PCI device ID it switches the
- * registers the upstream driver reads differently on that variant, each
- * in its own ipu6v_*() helper; everything else is IPU4's model.
+ * Besides the PCI device ID it switches the registers the driver reads
+ * differently on that variant, each in its own ipu6v_*() / ipu4pv_*()
+ * helper; everything else is IPU4's model.
  *
  * Register semantics are documented in tools/notes/registers.md as they
  * are inferred from the driver. Do not extend this file without adding
@@ -1197,6 +1197,27 @@ static uint32_t ipu6v_pwr_state(Ipu4State *s)
     return val;
 }
 
+/*
+ * ipu4p variant: IPU4P_BUTTRESS_PWR_STATE_* in Ruslan Bay's driver. IS FSM
+ * at 24:20 (IS_RDY 0xc), PS FSM at 29:25 (PS_PWR_UP 0x10); TSC-sync HH
+ * status at IPU6's 12:11.
+ */
+#define IPU4PV_PWR_STATE_IS_RDY     (0xcu << 20)
+#define IPU4PV_PWR_STATE_PS_PWR_UP  (0x10u << 25)
+
+static uint32_t ipu4pv_pwr_state(Ipu4State *s)
+{
+    uint32_t val = BTRS_PWR_STATE_PWR_RDY | IPU6V_PWR_STATE_HH_DONE;
+
+    if (s->is_powered) {
+        val |= IPU4PV_PWR_STATE_IS_RDY;
+    }
+    if (s->ps_powered) {
+        val |= IPU4PV_PWR_STATE_PS_PWR_UP;
+    }
+    return val;
+}
+
 static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
 {
     Ipu4State *s = IPU4(opaque);
@@ -1224,6 +1245,11 @@ static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
     case BTRS_REG_PWR_STATE:
         if (s->variant == IPU4_VARIANT_IPU6) {
             val = ipu6v_pwr_state(s);
+            s->pwr_state = val;
+            break;
+        }
+        if (s->variant == IPU4_VARIANT_IPU4P) {
+            val = ipu4pv_pwr_state(s);
             s->pwr_state = val;
             break;
         }
