@@ -120,5 +120,7 @@ else
 	say "oops none"
 fi
 
+gcov-harvest ipu6-stream
+
 echo "STREAMVM: DONE"
 poweroff -f
