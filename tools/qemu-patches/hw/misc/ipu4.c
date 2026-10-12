@@ -894,9 +894,12 @@ static void ipu4_post_response(Ipu4State *s, uint8_t resp_type,
  */
 static void ipu4_post_pin_data_ready(Ipu4State *s, uint8_t stream_handle,
                                      uint8_t pin_id, uint32_t pin_addr,
-                                     uint64_t pin_buf_id)
+                                     uint64_t pin_buf_id, uint64_t buf_handle)
 {
+    /* buf_handle echoes the capture token's, as firmware does; the driver
+     * releases its capture message with it. */
     Ipu4FwIsysRespInfo resp = {
+        .buf_handle = buf_handle,
         .type = IPU4_FW_RESP_STREAM_PIN_DATA_READY,
         .stream_handle = stream_handle,
         .pin_id = pin_id,
@@ -928,7 +931,8 @@ static void ipu4_post_pin_data_ready(Ipu4State *s, uint8_t stream_handle,
 #define IPU4_MAX_OPINS 6
 
 static void ipu4_deliver_frame(Ipu4State *s, uint8_t stream,
-                               uint32_t frame_buff_set_iova)
+                               uint32_t frame_buff_set_iova,
+                               uint64_t buf_handle)
 {
     Ipu4FwOutputPin pins[IPU4_MAX_OPINS];
     unsigned int i;
@@ -976,7 +980,8 @@ static void ipu4_deliver_frame(Ipu4State *s, uint8_t stream,
         ipu4_dma_write_iova_pattern(s, pins[i].addr,
                                     IPU4_FRAME_PATTERN_BYTES, 0);
         ipu4_post_pin_data_ready(s, stream, (uint8_t)i,
-                                 pins[i].addr, pins[i].out_buf_id);
+                                 pins[i].addr, pins[i].out_buf_id,
+                                 buf_handle);
     }
 }
 
@@ -1048,7 +1053,8 @@ static void ipu4_handle_send_bump(Ipu4State *s, unsigned int stream,
             ipu4_post_response(s,
                                IPU4_FW_RESP_STREAM_START_AND_CAPTURE_ACK,
                                (uint8_t)stream);
-            ipu4_deliver_frame(s, (uint8_t)stream, token.payload);
+            ipu4_deliver_frame(s, (uint8_t)stream, token.payload,
+                               token.buf_handle);
             break;
         case IPU4_FW_SEND_STREAM_CAPTURE:
             /* Step 4: deliver the frame attached to this token. The
@@ -1056,7 +1062,8 @@ static void ipu4_handle_send_bump(Ipu4State *s, unsigned int stream,
              * only acks the streamon path waits on are STREAM_OPEN
              * and STREAM_*_START), so a single PIN_DATA_READY per
              * non-zero output_pins[i].addr is sufficient. */
-            ipu4_deliver_frame(s, (uint8_t)stream, token.payload);
+            ipu4_deliver_frame(s, (uint8_t)stream, token.payload,
+                               token.buf_handle);
             break;
         case IPU4_FW_SEND_STREAM_FLUSH:
             /* Driver completes stream_stop_completion
