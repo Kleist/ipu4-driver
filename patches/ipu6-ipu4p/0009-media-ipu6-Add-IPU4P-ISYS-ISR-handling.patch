@@ -1,7 +1,7 @@
-From aa2e40c42707e38df45ce735bb484bf523cfde23 Mon Sep 17 00:00:00 2001
-From: Ruslan Bay <67730802+ruslanbay@users.noreply.github.com>
-Date: Fri, 9 Oct 2026 22:53:47 +0200
-Subject: [PATCH 08/11] media: ipu6: Add IPU4P ISYS ISR handling
+From cbdd8e7ce2ba45d85d8e1ef36e1ae4463fb4892a Mon Sep 17 00:00:00 2001
+From: Ruslan Bay <ruslanbey@proton.me>
+Date: Sat, 10 Oct 2026 13:06:39 +0200
+Subject: [PATCH 09/12] media: ipu6: Add IPU4P ISYS ISR handling
 
 Handle IPU4P ISYS software and CSI interrupts and dispatch firmware
 responses and CSI receiver errors to the appropriate handlers.
@@ -9,16 +9,15 @@ responses and CSI receiver errors to the appropriate handlers.
 Signed-off-by: Ruslan Bay <ruslanbey@proton.me>
 ---
  drivers/media/pci/intel/ipu6/ipu4p-fw-isys.c  | 90 +++++++++++++++++++
- drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h  |  2 +
- .../pci/intel/ipu6/ipu4p-isys-csi2-regs.h     | 43 +++++++++
+ .../pci/intel/ipu6/ipu4p-isys-csi2-regs.h     | 38 ++++++++
  drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c | 74 +++++++++++++++
  drivers/media/pci/intel/ipu6/ipu6-isys-csi2.h |  2 +
  drivers/media/pci/intel/ipu6/ipu6-isys.c      | 14 ++-
- drivers/media/pci/intel/ipu6/ipu6.c           |  2 +
- 7 files changed, 225 insertions(+), 2 deletions(-)
+ drivers/media/pci/intel/ipu6/ipu6.c           |  1 +
+ 6 files changed, 217 insertions(+), 2 deletions(-)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.c b/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.c
-index dfab6e570e..6fbbe6376e 100644
+index dfab6e570..6fbbe6376 100644
 --- a/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.c
 +++ b/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.c
 @@ -4,8 +4,10 @@
@@ -131,35 +130,18 @@ index dfab6e570e..6fbbe6376e 100644
 +
 +	return IRQ_HANDLED;
 +}
-diff --git a/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h b/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h
-index 050d9d12d8..a07b79d44a 100644
---- a/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h
-+++ b/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h
-@@ -432,5 +432,7 @@ static_assert(sizeof(struct ipu4p_fw_isys_frame_buff_set) == 120);
- static_assert(sizeof(struct ipu4p_fw_isys_resp_info) == 64);
- 
- extern const struct ipu6_fw_isys_ops ipu4p_fw_isys_ops;
-+irqreturn_t ipu4p_isys_isr(struct ipu6_bus_device *adev);
-+void ipu4p_isys_irq_setup(struct ipu6_isys *isys);
- 
- #endif /* IPU4P_FW_ISYS_H */
 diff --git a/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h b/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
-index eb95ae2d4d..a30965ee46 100644
+index 7f41bdb41..1e1423869 100644
 --- a/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
 +++ b/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
-@@ -4,6 +4,49 @@
+@@ -4,6 +4,44 @@
  
  #include <linux/bits.h>
  
-+#define IPU4P_CSI2_VC_COUNT				4U
-+
 +/* ISYS UNISPART and SIP interrupt registers */
 +#define IPU4P_ISYS_UNISPART_IRQ_EDGE			0x7c000
-+#define IPU4P_ISYS_UNISPART_IRQ_MASK			0x7c004
 +#define IPU4P_ISYS_UNISPART_IRQ_STATUS			0x7c008
 +#define IPU4P_ISYS_UNISPART_IRQ_CLEAR			0x7c00c
-+#define IPU4P_ISYS_UNISPART_IRQ_ENABLE			0x7c010
-+#define IPU4P_ISYS_UNISPART_IRQ_LEVEL_NOT_PULSE		0x7c014
 +#define IPU4P_ISYS_UNISPART_SW_IRQ_REG			0x7c414
 +#define IPU4P_ISYS_UNISPART_SW_IRQ_MUX_REG		0x7c418
 +#define IPU4P_ISYS_UNISPART_IRQ_SW			BIT(22)
@@ -198,7 +180,7 @@ index eb95ae2d4d..a30965ee46 100644
  #define IPU4P_CSI2_RX_ENABLE				0x00
  #define IPU4P_CSI2_RX_ENABLE_ENABLE			BIT(0)
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
-index 9e87750269..ea3817ef8a 100644
+index 9e8775026..ea3817ef8 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
 @@ -25,6 +25,7 @@
@@ -304,7 +286,7 @@ index 9e87750269..ea3817ef8a 100644
  	ipu6_isys_register_errors(csi2);
  	status = csi2->receiver_errors;
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.h b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.h
-index dbaaf00af6..b3eb702f19 100644
+index dbaaf00af..b3eb702f1 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.h
 @@ -75,6 +75,8 @@ void ipu6_isys_csi2_sof_event_by_stream(struct ipu6_isys_stream *stream);
@@ -317,7 +299,7 @@ index dbaaf00af6..b3eb702f19 100644
  				   struct ipu6_isys_csi2 *csi2,
  				   struct media_entity *source_entity,
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys.c b/drivers/media/pci/intel/ipu6/ipu6-isys.c
-index eb771cd75f..b4f6994336 100644
+index 1f9809d1b..6d10a427b 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-isys.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-isys.c
 @@ -41,6 +41,7 @@
@@ -349,7 +331,7 @@ index eb771cd75f..b4f6994336 100644
  		} else {
  			base += CSI_REG_PORT_BASE(i);
  			isys->isr_csi2_bits |= IPU6_ISYS_UNISPART_IRQ_CSI2(i);
-@@ -885,6 +893,8 @@ static int isys_runtime_pm_resume(struct device *dev)
+@@ -892,6 +900,8 @@ static int isys_runtime_pm_resume(struct device *dev)
  
  	if (IS_IPU7(isp)) {
  		ipu7_isys_setup_hw(isys);
@@ -358,7 +340,7 @@ index eb771cd75f..b4f6994336 100644
  	} else {
  		ipu6_isys_setup_hw(isys);
  		set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_ON);
-@@ -911,7 +921,7 @@ static int isys_runtime_pm_suspend(struct device *dev)
+@@ -918,7 +928,7 @@ static int isys_runtime_pm_suspend(struct device *dev)
  	isys->phy_termcal_val = 0;
  	cpu_latency_qos_update_request(&isys->pm_qos, PM_QOS_DEFAULT_VALUE);
  
@@ -367,7 +349,7 @@ index eb771cd75f..b4f6994336 100644
  		set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_OFF);
  
  	ipu6_mmu_hw_cleanup(adev->mmu);
-@@ -1170,7 +1180,7 @@ static const struct ipu6_auxdrv_data ipu6_isys_auxdrv_data = {
+@@ -1177,7 +1187,7 @@ static const struct ipu6_auxdrv_data ipu6_isys_auxdrv_data = {
  };
  
  static const struct ipu6_auxdrv_data ipu4p_isys_auxdrv_data = {
@@ -377,25 +359,17 @@ index eb771cd75f..b4f6994336 100644
  	.wake_isr_thread = false,
  	.fw_ops = &ipu4p_fw_isys_ops,
 diff --git a/drivers/media/pci/intel/ipu6/ipu6.c b/drivers/media/pci/intel/ipu6/ipu6.c
-index 41608adde8..08032dd9d4 100644
+index 417978bef..3ebf2ff76 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6.c
-@@ -34,6 +34,7 @@
- #include "ipu6-platform-buttress-regs.h"
- #include "ipu6-platform-isys-csi2-reg.h"
- #include "ipu6-platform-regs.h"
-+#include "ipu4p-isys-csi2-regs.h"
- #include "ipu7-isys-csi2-regs.h"
- 
- #define IPU6_PCI_BAR		0
-@@ -399,6 +400,7 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
+@@ -399,6 +399,7 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
  	}
  
  	if (IS_IPU4P(isp)) {
 +		isys_ipdata.csi2.nports = IPU4P_ISYS_CSI2_NPORTS;
  		isys_ipdata.num_parallel_streams = IPU4P_ISYS_MAX_STREAMS;
  		isys_ipdata.max_streams = IPU4P_ISYS_MAX_STREAMS;
- 		isys_ipdata.max_sram_blocks = IPU4P_NOF_SRAM_BLOCKS_MAX;
+ 		isys_ipdata.sram_gran_shift = IPU4P_SRAM_GRANULARITY_SHIFT;
 -- 
 2.43.0
 

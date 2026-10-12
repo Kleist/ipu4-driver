@@ -1,13 +1,15 @@
-From acb51496da1a51b3b6f98b529cc6899ddc390d51 Mon Sep 17 00:00:00 2001
-From: Ruslan Bay <67730802+ruslanbay@users.noreply.github.com>
+From f20637c4fe864d0ccc51d46cf6f65f44ad9ebf46 Mon Sep 17 00:00:00 2001
+From: Ruslan Bay <ruslanbey@proton.me>
 Date: Fri, 9 Oct 2026 22:53:13 +0200
-Subject: [PATCH 03/11] media: ipu6: Add IPU4P buttress support
+Subject: [PATCH 03/12] media: ipu6: Add IPU4P buttress support
 
 IPU4P uses different power FSM controls and frequency divisor
 placement from IPU6, and has a different bootloader status register.
 
 Add IPU4P-specific power management and firmware authentication handling
 to the IPU6 buttress driver.
+
+Signed-off-by: Ruslan Bay <ruslanbey@proton.me>
 ---
  drivers/media/pci/intel/ipu6/ipu6-buttress.c  | 48 +++++++++++++++++--
  .../intel/ipu6/ipu6-platform-buttress-regs.h  | 20 ++++++++
@@ -18,7 +20,7 @@ to the IPU6 buttress driver.
  6 files changed, 113 insertions(+), 3 deletions(-)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-buttress.c b/drivers/media/pci/intel/ipu6/ipu6-buttress.c
-index 105de1744d..ae63a92387 100644
+index 105de1744..ae63a9238 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-buttress.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-buttress.c
 @@ -601,6 +601,43 @@ static int __ipu6_power(struct device *dev,
@@ -98,7 +100,7 @@ index 105de1744d..ae63a92387 100644
  		writel(b->regs->irq_all, isp->base + b->regs->irq_clear);
  		writel(b->regs->irq_all, isp->base + b->regs->irq_enable);
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h b/drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h
-index 57e661cc21..6679a7d35e 100644
+index 57e661cc2..6679a7d35 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h
 @@ -330,4 +330,24 @@ enum {
@@ -127,7 +129,7 @@ index 57e661cc21..6679a7d35e 100644
 +
  #endif /* IPU6_PLATFORM_BUTTRESS_REGS_H */
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-platform-regs.h b/drivers/media/pci/intel/ipu6/ipu6-platform-regs.h
-index f08e7e8fd8..526b023092 100644
+index f08e7e8fd..526b02309 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-platform-regs.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6-platform-regs.h
 @@ -16,10 +16,16 @@
@@ -148,7 +150,7 @@ index f08e7e8fd8..526b023092 100644
  #define IPU4P_MMU_L1_STREAM_ID_REG_OFFSET	0x0c
  #define IPU4P_MMU_L2_STREAM_ID_REG_OFFSET	0x4c
 diff --git a/drivers/media/pci/intel/ipu6/ipu6.c b/drivers/media/pci/intel/ipu6/ipu6.c
-index 43d951735f..789477e382 100644
+index 43d951735..789477e38 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6.c
 @@ -140,6 +140,28 @@ static const struct ipu6_buttress_ctrl ipu7_psys_buttress_ctrl = {
@@ -213,7 +215,7 @@ index 43d951735f..789477e382 100644
  		isp->hw_ver = IPU_VERSION_6;
  		isp->cpd_fw_name = IPU6_FIRMWARE_NAME;
 diff --git a/drivers/media/pci/intel/ipu6/ipu6.h b/drivers/media/pci/intel/ipu6/ipu6.h
-index 2afbd70cae..84a50fba14 100644
+index 2afbd70ca..84a50fba1 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6.h
 @@ -26,6 +26,7 @@ struct ipu6_bus_device;
@@ -225,7 +227,7 @@ index 2afbd70cae..84a50fba14 100644
  #define IPU_VERSION_6		BIT(0) /* TGL */
  #define IPU_VERSION_6SE		BIT(1) /* JSL */
 diff --git a/include/media/ipu6-pci-table.h b/include/media/ipu6-pci-table.h
-index cacb8a3170..7369d46621 100644
+index cacb8a317..7369d4662 100644
 --- a/include/media/ipu6-pci-table.h
 +++ b/include/media/ipu6-pci-table.h
 @@ -16,6 +16,7 @@

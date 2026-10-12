@@ -1,4 +1,4 @@
-From 9b973e9fd1a5af778e00f83e7ee5e2d3cbbdff16 Mon Sep 17 00:00:00 2001
+From eb932b6183601025383d34d45c4710cce2c4cc0a Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 20:42:34 +0000
 Subject: [PATCH] media: ipu6: Add IPU4 ISYS and CSI-2 register definitions
@@ -12,20 +12,22 @@ events and the CSIRX summary), 0x500 (CSIRX: the receiver errors, as
 IPU4P_CSIRX_*) and 0x600 (CSI2S2M) from the port base. The receiver
 registers have the IPU4P layout.
 
-Define the registers needed by the ISYS driver next to the IPU4P ones.
+Define the registers needed by the ISYS driver next to the IPU4P ones,
+including the UNISPART mask, enable and level registers and the CSIRX
+error mask, which the IPU4P driver does not use.
 
 Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
 ---
- .../pci/intel/ipu6/ipu4p-isys-csi2-regs.h     | 41 +++++++++++++++++++
- 1 file changed, 41 insertions(+)
+ .../pci/intel/ipu6/ipu4p-isys-csi2-regs.h     | 46 +++++++++++++++++++
+ 1 file changed, 46 insertions(+)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h b/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
-index 3c4126fb1..6a13f35e2 100644
+index 8f2c760ab..42f558d59 100644
 --- a/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
 +++ b/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
-@@ -187,4 +187,45 @@
- 	(BIT(IPU4P_CSI2_SB_DPHY0_RX_CNTRL_SKEWCAL_CR_SEL_DLANE2_SHIFT) | \
- 	 BIT(IPU4P_CSI2_SB_DPHY0_RX_CNTRL_SKEWCAL_CR_SEL_DLANE3_SHIFT))
+@@ -61,4 +61,50 @@
+ /* CSI receiver general-purpose registers */
+ #define IPU4P_CSI2_GPREG_CR_PORT_CONFIG			0x14
  
 +/*
 + * IPU4. The ISYS UNISPART interrupt registers are at the IPU4P offsets
@@ -33,6 +35,9 @@ index 3c4126fb1..6a13f35e2 100644
 + * ports 4 and 5 on bits 11 and 12. The CSI-2 receiver registers have
 + * the IPU4P_CSI2_RX_* layout.
 + */
++#define IPU4P_ISYS_UNISPART_IRQ_MASK			0x7c004
++#define IPU4P_ISYS_UNISPART_IRQ_ENABLE			0x7c010
++#define IPU4P_ISYS_UNISPART_IRQ_LEVEL_NOT_PULSE		0x7c014
 +#define IPU4_ISYS_CSI2_NPORTS				6U
 +#define IPU4_ISYS_UNISPART_IRQ_SW			BIT(30)
 +#define IPU4_ISYS_UNISPART_IRQ_CSI2(port)		\
@@ -60,6 +65,8 @@ index 3c4126fb1..6a13f35e2 100644
 +#define IPU4_CSI2_CSIRX_IRQ_CLEAR			0x50c
 +#define IPU4_CSI2_CSIRX_IRQ_ENABLE			0x510
 +#define IPU4_CSI2_CSIRX_IRQ_LEVEL_NOT_PULSE		0x514
++#define IPU4P_CSIRX_ERROR_IRQ_MASK			GENMASK(16, 0)
++#define IPU4P_CSIRX_NUM_ERRORS				17
 +
 +#define IPU4_CSI2_CSI2S2M_IRQ_EDGE			0x600
 +#define IPU4_CSI2_CSI2S2M_IRQ_MASK			0x604

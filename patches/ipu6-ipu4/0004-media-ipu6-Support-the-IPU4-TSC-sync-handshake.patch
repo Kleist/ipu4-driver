@@ -1,4 +1,4 @@
-From fce4f68b87ce6437371527b420a0d845f57a75d3 Mon Sep 17 00:00:00 2001
+From bb04de08061b5497bb5bef1438eac0fa303572a3 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 20:42:16 +0000
 Subject: [PATCH] media: ipu6: Support the IPU4 TSC sync handshake

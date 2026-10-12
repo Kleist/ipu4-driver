@@ -1,4 +1,4 @@
-From 0fe5bb6e68e28f241896c5a0cfa96b59bac9d811 Mon Sep 17 00:00:00 2001
+From 991723e9d6e014548e7d4228f14551aecf1fed90 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sun, 11 Oct 2026 00:17:04 +0000
 Subject: [PATCH] media: ipu6: Support the IPU4 SysCom queue layout

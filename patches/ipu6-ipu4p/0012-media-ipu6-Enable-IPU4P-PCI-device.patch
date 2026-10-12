@@ -1,16 +1,18 @@
-From 114bcf5e703f5fe32295039b382b7234f2d69ec6 Mon Sep 17 00:00:00 2001
-From: Ruslan Bay <67730802+ruslanbay@users.noreply.github.com>
-Date: Fri, 9 Oct 2026 22:54:38 +0200
-Subject: [PATCH 11/11] media: ipu6: Enable IPU4P PCI device
+From 81fdd59f2e106e22e9a660345fb8904604711ad7 Mon Sep 17 00:00:00 2001
+From: Ruslan Bay <ruslanbey@proton.me>
+Date: Sat, 10 Oct 2026 13:06:50 +0200
+Subject: [PATCH 12/12] media: ipu6: Enable IPU4P PCI device
 
-Register IPU4P in the PCI ID table after the IPU4P MMU, buttress,
-firmware, ISYS, and CSI PHY support has been added.
+Register IPU4P in the PCI ID table after its required MMU, buttress,
+firmware, ISYS, and CSI PHY support is present.
+
+Signed-off-by: Ruslan Bay <ruslanbey@proton.me>
 ---
  include/media/ipu6-pci-table.h | 1 +
  1 file changed, 1 insertion(+)
 
 diff --git a/include/media/ipu6-pci-table.h b/include/media/ipu6-pci-table.h
-index 7369d46621..09b2ea58bc 100644
+index 7369d4662..09b2ea58b 100644
 --- a/include/media/ipu6-pci-table.h
 +++ b/include/media/ipu6-pci-table.h
 @@ -27,6 +27,7 @@ static const struct pci_device_id ipu6_pci_tbl[] = {

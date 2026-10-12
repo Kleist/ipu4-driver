@@ -1,7 +1,7 @@
-From 6285cb1a17f49e7b293c1f178d91b9c18ecea393 Mon Sep 17 00:00:00 2001
+From 961259f15f38499e9a3629bd7d803c334fdc66c5 Mon Sep 17 00:00:00 2001
 From: Ruslan Bay <ruslanbey@proton.me>
 Date: Sun, 27 Sep 2026 17:23:58 +0000
-Subject: [PATCH 01/11] media: ipu6: Add helper to identify IPU4P
+Subject: [PATCH 01/12] media: ipu6: Add helper to identify IPU4P
 
 The IPU4 comes in two flavors, IPU4 and IPU4P.
 
@@ -11,7 +11,7 @@ Signed-off-by: Ruslan Bay <ruslanbey@proton.me>
  1 file changed, 2 insertions(+)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu6.h b/drivers/media/pci/intel/ipu6/ipu6.h
-index 72c5063d51..321ca1d571 100644
+index 72c5063d5..321ca1d57 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6.h
 @@ -33,7 +33,9 @@ struct ipu6_bus_device;
