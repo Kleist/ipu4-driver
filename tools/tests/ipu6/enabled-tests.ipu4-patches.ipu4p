@@ -21,3 +21,14 @@ module-load
 # Probe identifies 8a19 as IPU4P (requests intel/ipu/ipu4p_fw.bin)
 # (ipu4p plan P4).
 probe-identify
+
+# The series passes the IPU4P baseline's whole ladder under the IPU4P
+# model (gated with the IPU6 variant's V12).
+probe-buttress
+probe-mmu
+isys-resume
+isys-irq
+fw-open
+stream-on
+stream-pattern
+csi2-sof-irq

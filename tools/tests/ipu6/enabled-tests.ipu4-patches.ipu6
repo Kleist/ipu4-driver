@@ -23,3 +23,10 @@ isys-resume
 # IPU6 tables, as on the baseline (ipu6 plan V7).
 probe-mmu
 isys-irq
+
+# Streams under the IPU6 model once the model echoes the capture
+# token's buf_handle (IPU6 variant V12).
+fw-open
+stream-on
+stream-pattern
+csi2-sof-irq
