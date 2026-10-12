@@ -1,7 +1,7 @@
-From b43689a35697c65a5909e0aab4e8cf638d250f4f Mon Sep 17 00:00:00 2001
+From ae3229c701813b0ac5a45df98c18646488690844 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 11:55:28 +0000
-Subject: [PATCH] media: ipu6: Identify IPU4 devices
+Subject: [PATCH 01/10] media: ipu6: Identify IPU4 devices
 
 IPU4 is the imaging unit of Intel Apollo Lake (Broxton) SoCs, PCI ID
 8086:5a88. It shares the ISYS firmware ABI with IPU4P but differs in

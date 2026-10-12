@@ -1,31 +1,40 @@
-From eb932b6183601025383d34d45c4710cce2c4cc0a Mon Sep 17 00:00:00 2001
+From 90373c36b589f5fab67535eb336a48704c0354e5 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 20:42:34 +0000
-Subject: [PATCH] media: ipu6: Add IPU4 ISYS and CSI-2 register definitions
+Subject: [PATCH 05/10] media: ipu6: Add IPU4 ISYS and CSI-2 register
+ definitions
 
 IPU4 has six CSI-2 ports. Their interrupts are summarised in the ISYS
 UNISPART interrupt controller, which is at the same offsets as on IPU4P
 but uses different bits: ports 0-3 on bits 3-6, ports 4 and 5 on bits
 11 and 12, and the firmware software interrupt on bit 30. Each port has
-three interrupt controllers of its own, at 0x400 (CSI2PART: frame
-events and the CSIRX summary), 0x500 (CSIRX: the receiver errors, as
-IPU4P_CSIRX_*) and 0x600 (CSI2S2M) from the port base. The receiver
-registers have the IPU4P layout.
+interrupt controllers of its own: CSI2PART at 0x400 from the port base
+summarises the port's interrupts, CSIRX at 0x500 reports the 17
+receiver errors. The receiver registers have the IPU4P layout, with
+timing registers for four data lanes.
 
-Define the registers needed by the ISYS driver next to the IPU4P ones,
-including the UNISPART mask, enable and level registers and the CSIRX
-error mask, which the IPU4P driver does not use.
+Define the registers used by the ISYS driver next to the IPU4P ones,
+including the UNISPART mask, enable and level registers, which the
+IPU4P driver does not use.
 
 Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
 ---
- .../pci/intel/ipu6/ipu4p-isys-csi2-regs.h     | 46 +++++++++++++++++++
- 1 file changed, 46 insertions(+)
+ .../pci/intel/ipu6/ipu4p-isys-csi2-regs.h     | 36 +++++++++++++++++++
+ 1 file changed, 36 insertions(+)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h b/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
-index 8f2c760ab..42f558d59 100644
+index 8f2c760ab..71b8bcddf 100644
 --- a/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
 +++ b/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
-@@ -61,4 +61,50 @@
+@@ -3,6 +3,7 @@
+ #define IPU4P_ISYS_CSI2_REGS_H
+ 
+ #include <linux/bits.h>
++#include <linux/types.h>
+ 
+ /* ISYS UNISPART and SIP interrupt registers */
+ #define IPU4P_ISYS_UNISPART_IRQ_EDGE			0x7c000
+@@ -61,4 +62,39 @@
  /* CSI receiver general-purpose registers */
  #define IPU4P_CSI2_GPREG_CR_PORT_CONFIG			0x14
  
@@ -33,30 +42,27 @@ index 8f2c760ab..42f558d59 100644
 + * IPU4. The ISYS UNISPART interrupt registers are at the IPU4P offsets
 + * above but use different bits: CSI-2 ports 0-3 interrupt on bits 3-6,
 + * ports 4 and 5 on bits 11 and 12. The CSI-2 receiver registers have
-+ * the IPU4P_CSI2_RX_* layout.
++ * the IPU4P_CSI2_RX_* layout, with timing registers for four data lanes.
 + */
 +#define IPU4P_ISYS_UNISPART_IRQ_MASK			0x7c004
 +#define IPU4P_ISYS_UNISPART_IRQ_ENABLE			0x7c010
 +#define IPU4P_ISYS_UNISPART_IRQ_LEVEL_NOT_PULSE		0x7c014
 +#define IPU4_ISYS_CSI2_NPORTS				6U
++#define IPU4_CSI2_RX_MAX_DLANES				4U
 +#define IPU4_ISYS_UNISPART_IRQ_SW			BIT(30)
-+#define IPU4_ISYS_UNISPART_IRQ_CSI2(port)		\
-+	({ typeof(port) __port = (port); \
-+	   __port < 4 ? BIT(3 + __port) : BIT(11 + __port - 4); })
++
++static inline u32 ipu4_isys_unispart_irq_csi2(unsigned int port)
++{
++	return port < 4 ? BIT(3 + port) : BIT(11 + port - 4);
++}
 +
 +/*
 + * IPU4 per-port interrupt controllers, at offsets from the CSI-2 port
-+ * base. CSI2PART carries the frame events and the CSIRX summary bit,
-+ * CSIRX the receiver errors (the IPU4P_CSIRX_* bits).
++ * base. CSI2PART summarises the port's interrupts, CSIRX reports the
++ * receiver errors.
 + */
-+#define IPU4_CSI2_CSI2PART_IRQ_EDGE			0x400
-+#define IPU4_CSI2_CSI2PART_IRQ_MASK			0x404
 +#define IPU4_CSI2_CSI2PART_IRQ_STATUS			0x408
 +#define IPU4_CSI2_CSI2PART_IRQ_CLEAR			0x40c
-+#define IPU4_CSI2_CSI2PART_IRQ_ENABLE			0x410
-+#define IPU4_CSI2_CSI2PART_IRQ_LEVEL_NOT_PULSE		0x414
-+#define IPU4_CSI2_CSI2PART_IRQ_FS_VC(vc)		BIT((vc) * 4)
-+#define IPU4_CSI2_CSI2PART_IRQ_FE_VC(vc)		BIT(1 + (vc) * 4)
 +#define IPU4_CSI2_CSI2PART_IRQ_CSIRX			BIT(16)
 +
 +#define IPU4_CSI2_CSIRX_IRQ_EDGE			0x500
@@ -65,15 +71,7 @@ index 8f2c760ab..42f558d59 100644
 +#define IPU4_CSI2_CSIRX_IRQ_CLEAR			0x50c
 +#define IPU4_CSI2_CSIRX_IRQ_ENABLE			0x510
 +#define IPU4_CSI2_CSIRX_IRQ_LEVEL_NOT_PULSE		0x514
-+#define IPU4P_CSIRX_ERROR_IRQ_MASK			GENMASK(16, 0)
-+#define IPU4P_CSIRX_NUM_ERRORS				17
-+
-+#define IPU4_CSI2_CSI2S2M_IRQ_EDGE			0x600
-+#define IPU4_CSI2_CSI2S2M_IRQ_MASK			0x604
-+#define IPU4_CSI2_CSI2S2M_IRQ_STATUS			0x608
-+#define IPU4_CSI2_CSI2S2M_IRQ_CLEAR			0x60c
-+#define IPU4_CSI2_CSI2S2M_IRQ_ENABLE			0x610
-+#define IPU4_CSI2_CSI2S2M_IRQ_LEVEL_NOT_PULSE		0x614
++#define IPU4_CSI2_CSIRX_ERROR_IRQ_MASK			GENMASK(16, 0)
 +
  #endif /* IPU4P_ISYS_CSI2_REGS_H */
 -- 

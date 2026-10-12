@@ -1,7 +1,7 @@
-From c252734a83c3f44d39d6f82fa8d3e6a397c34ed3 Mon Sep 17 00:00:00 2001
+From 4d44943adbfa9bd2e0888a0a24ac064f16ed9495 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 19:59:00 +0000
-Subject: [PATCH] media: ipu6: Enable IPU4 PCI device
+Subject: [PATCH 10/10] media: ipu6: Enable IPU4 PCI device
 
 Register IPU4 in the PCI ID table after the IPU4 identification,
 buttress and MMU support has been added.

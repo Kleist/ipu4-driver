@@ -68,7 +68,7 @@ automatically.
 |---|---|
 | 1 | Pin the lore SHA `340985596`. |
 | 2 | Firmware file `intel/ipu/ipu4_fw.bin` (matches `ipu4p_fw.bin` naming). |
-| 3 | Keep the fork's CSI-2 frame-start/frame-end interrupts (useful for debugging). Firmware SOF/EOF responses stay the source of V4L2 events, so the CSI-2 path must not emit them a second time; it handles the interrupt and logs at `dev_dbg`. May be revisited before posting upstream. |
+| 3 | ~~Keep the fork's CSI-2 frame-start/frame-end interrupts (useful for debugging).~~ Revisited in the review-fixes step: interrupts enabled on every frame only to `dev_dbg` them don't belong upstream, so the series leaves them masked; firmware SOF/EOF responses are the only source of V4L2 events. |
 | 4 | One small PR per step, branch → `main`, CI (including the QEMU tests) runs on each. |
 
 ## IPU4 vs IPU4P — what the patches must cover
@@ -92,8 +92,8 @@ silicon trace in `data/trace.txt`):
 | CSI-2 receiver registers | `IPU4P_CSI2_RX_*` | same layout (reused) |
 | PHY sideband setup | required | none |
 | CSI-2 port ↔ firmware source | `{3, 6..12}` | identity |
-| CSI-RX error bits | 16 | 17 (adds "inter-frame long packet discarded") |
-| CSI-2 frame interrupts | not reported (firmware SOF/EOF only) | CSI2PART FS/FE of VC 0–3 (`0x3333`) enabled and logged at `dev_dbg` (decision 3); firmware SOF/EOF still drive the events |
+| CSI-RX error bits | 16 (collected from `IPU4P_ISYS_CSI_IRQ_CTRL0`) | 17 (collected from the port's CSIRX controller; adds "inter-frame long packet discarded") |
+| CSI-2 frame interrupts | not reported (firmware SOF/EOF only) | not reported either (decision 3, revised); silicon's driver enables CSI2PART FS/FE of VC 0–3 (`0x3333`) |
 | Buttress IRQ status register | `BUTTRESS_REG_ISR_STATUS` (`ipu6_buttress_regs`) | `BUTTRESS_REG_ISR_ENABLED_STATUS` (`0x94`, fork: `isp->buttress.reg_irq_sts`) |
 
 ## Testing approach
@@ -155,8 +155,9 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | 10 | ~~Internal pdata (`media: ipu6: Add IPU4 platform data`)~~; the firmware name landed in PR 6, the ISYS/PSYS/SPC/DMEM offsets in PR 8, the CSI-2 port count in PR 9, the stream limits in PR 11 | — (was `probe-fw`) | folded into PR 11 |
 | 11 | `media: ipu6: Add the IPU4 ISYS stream limits` (the rest of the pdata, old PR 10) + `media: ipu6: Support the IPU4 SysCom queue layout`; before it, a shared-core PR adds the stream boot (`stream-boot.sh`, `init.ipu6-stream`, `streamon` subdev format) | `fw-open` | merged (#135) |
 | 12 | `media: ipu6: Run IPU4 without iWake` + `media: ipu6: Add IPU4 CSI-2 receiver support` | `stream-on`, `stream-pattern` | merged (#138) |
-| 13 | `media: ipu6: Handle the IPU4 CSI-2 frame interrupts` (decision 3); before it, a shared-core PR puts the QEMU model's CSI-2 ports at the ISYS base (`ipu6-ipu4/core-csi2-irq`) | `csi2-sof-irq` | merged (#141, core fix #140) |
+| 13 | ~~`media: ipu6: Handle the IPU4 CSI-2 frame interrupts`~~ (decision 3, dropped in the review-fixes step); before it, a shared-core PR puts the QEMU model's CSI-2 ports at the ISYS base (`ipu6-ipu4/core-csi2-irq`) | `csi2-sof-irq` | merged (#141, core fix #140) |
 | 14 | ~~`media: ipu6: Enable IPU4 PCI device`~~ | — | moved to PR 8a (after PR 13 the only step left is PR 15) |
+| Review fixes | Fold in the maintainer-style review: SysCom flag instead of `IS_IPU4()` in fw-com, IPU4P MMU tables with IPU4 L1 block-size overrides, one IPU4/IPU4P pdata block (stream limits folded into the MMU patch, old 0007 gone), `ipu4_isys_unispart_irq_csi2()` and only used defines, shared IPU4/IPU4P error reporting, lane-count check, power lock around the stream-stop error collection, no PHY hook for IPU4; frame interrupt patch dropped | `csi2-sof-irq` no longer gated on `ipu4-patches / ipu4` | |
 | 15 | Cover letter draft + `get_maintainer.pl` output | — | |
 | Pages | Dashboard section "IPU4 port (upstream ipu6)": `ladder.sh` writes `results.json`, `vm-ipu6` uploads it per variant, Pages shows a test × variant matrix | — | merged (#109) |
 
@@ -902,3 +903,16 @@ last; each entry names the PR that found it.
   `fw-open`/`stream-on` already need what it would check. The
   `probe-fw` placeholder followed once the IPU6 variant's `fw-open`
   covered its firmware step (variant plan V8).
+- (Review fixes) The "inter-frame long packet discarded" bit is not an
+  IPU4P/IPU4 difference in the receiver: Ruslan's earlier series defined
+  17 CSIRX error bits for IPU4P too, but IPU4P collects its errors from
+  the 16-bit `IPU4P_ISYS_CSI_IRQ_CTRL0` instead, while IPU4 reads CSIRX.
+  His RFC dropped the unused CSIRX and UNISPART mask/enable/level
+  defines, so the IPU4 series defines them (`IPU4_CSI2_CSIRX_ERROR_IRQ_MASK`).
+  Sharing the IPU4P pdata block also gives IPU4 the RFC's IPU4P SRAM
+  granularity and size; they only feed iWake, which IPU4 skips.
+  Per-port IPU4 lane limits are not known; the receiver has timing
+  registers for four data lanes, so that is the bound checked.
+  `csi2-sof-irq` keeps checking silicon's frame-interrupt writes on the
+  out-of-tree leg; on `ipu4-patches / ipu4` it now fails by design and
+  is left out of the gate.

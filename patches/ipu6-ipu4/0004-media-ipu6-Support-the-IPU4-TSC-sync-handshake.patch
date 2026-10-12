@@ -1,7 +1,7 @@
-From bb04de08061b5497bb5bef1438eac0fa303572a3 Mon Sep 17 00:00:00 2001
+From e658030dee04841048c367bf9b032e9366517466 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 20:42:16 +0000
-Subject: [PATCH] media: ipu6: Support the IPU4 TSC sync handshake
+Subject: [PATCH 04/10] media: ipu6: Support the IPU4 TSC sync handshake
 
 The IPU4 buttress reports the state of the TSC sync handshake in
 PWR_STATE bits 13:12, not in bits 12:11 as IPU6 does. With the IPU6
