@@ -57,7 +57,7 @@ shown not to break the other variants of the shared driver.
   | V9 | QEMU: MCD PHY power handshake (`ipu6v_phy_ctl`); virt-sensor presents 2 lanes on 9a19; ipu6 `stream-on` vs upstream CSI-2/PHY writes | ipu6: `stream-on` | merged (#151) |
   | V10 | gate `stream-pattern` (variant-neutral; passes since V9) | ipu6: `stream-pattern` | merged (#153) |
   | V11 | QEMU: CSI-2 port 0 error IRQ (corrected header error per frame); ipu6 `csi2-sof-irq` redefined as error-IRQ coverage + sync IRQs stay masked | ipu6: `csi2-sof-irq` | merged (#155) |
-  | V12 | QEMU: PIN_DATA_READY echoes the capture token's `buf_handle` (all variants); `ipu4-patches / ipu6` streams | — | in review |
+  | V12 | QEMU: PIN_DATA_READY echoes the capture token's `buf_handle` (all variants); `ipu4-patches / ipu6` streams; gate every passing test on the `ipu4-patches` legs | ipu4-patches/*: the rest of the ladder | in review |
 
 - **Dashboard hook (Pages PR):** the Pages "IPU4 port" matrix already
   has `ipu4`, `ipu4p` and `ipu6` columns. A variant lights up once its
@@ -218,5 +218,6 @@ shown not to break the other variants of the shared driver.
   capture message through it, where mainline treats 0 as a no-op. Real
   firmware echoes the capture token's `buf_handle` there, so the model
   now does for every variant; with that the leg passes `fw-open` through
-  `csi2-sof-irq` (ungated there: `enabled-tests.ipu4-patches.ipu6` is the
-  IPU4 port's).
+  `csi2-sof-irq`. At the user's request V12 also gates every test that
+  passes on the `ipu4-patches` legs (the IPU4 port's lists), so all six
+  legs gate the whole ladder.
