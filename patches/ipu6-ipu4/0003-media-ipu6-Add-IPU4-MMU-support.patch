@@ -1,4 +1,4 @@
-From 52bd42c5e25b97e38bdf97f10c8ef29b46c78635 Mon Sep 17 00:00:00 2001
+From a7131b64fc33437db5019fc7fc5e87325cea9c41 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 19:32:04 +0000
 Subject: [PATCH] media: ipu6: Add IPU4 MMU support
@@ -148,10 +148,10 @@ index 93e3be1ef..dc3169cdf 100644
  	else
  		mmu->ops = &ipu6_mmu_ops;
 diff --git a/drivers/media/pci/intel/ipu6/ipu6.c b/drivers/media/pci/intel/ipu6/ipu6.c
-index 28ce3ee4b..4b34e41dc 100644
+index 7c5dcd7ce..7c1146aba 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6.c
-@@ -465,6 +465,16 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
+@@ -467,6 +467,16 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
  		psys_ipdata.hw_variant.spc_offset = IPU4P_PSYS_SPC_OFFSET;
  		psys_ipdata.hw_variant.dmem_offset = IPU4P_PSYS_DMEM_OFFSET;
  	}

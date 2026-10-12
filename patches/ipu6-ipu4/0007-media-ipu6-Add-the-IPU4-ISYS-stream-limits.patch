@@ -1,4 +1,4 @@
-From 5a73896c352f15801fde51ad9c964cc045747c24 Mon Sep 17 00:00:00 2001
+From 8f229de26d2108d8e294eaa4ef31d5c4e456dfd1 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sun, 11 Oct 2026 00:16:45 +0000
 Subject: [PATCH] media: ipu6: Add the IPU4 ISYS stream limits
@@ -20,10 +20,10 @@ Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
  1 file changed, 5 insertions(+)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu6.c b/drivers/media/pci/intel/ipu6/ipu6.c
-index bd0f164b4..af67dc73a 100644
+index 2dfd6646f..01aa420de 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6.c
-@@ -468,6 +468,11 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
+@@ -471,6 +471,11 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
  
  	if (IS_IPU4(isp)) {
  		isys_ipdata.csi2.nports = IPU4_ISYS_CSI2_NPORTS;

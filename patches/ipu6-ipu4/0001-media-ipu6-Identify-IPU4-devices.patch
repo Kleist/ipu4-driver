@@ -1,4 +1,4 @@
-From b82e9d8f119cae94c5e44614880bb42eb3625db9 Mon Sep 17 00:00:00 2001
+From b43689a35697c65a5909e0aab4e8cf638d250f4f Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 11:55:28 +0000
 Subject: [PATCH] media: ipu6: Identify IPU4 devices
@@ -27,10 +27,10 @@ Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
  3 files changed, 10 insertions(+)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu6.c b/drivers/media/pci/intel/ipu6/ipu6.c
-index 08032dd9d..a035b14c7 100644
+index 3ebf2ff76..76c8b82aa 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6.c
-@@ -668,6 +668,12 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+@@ -670,6 +670,12 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
  	psys_ctrl = &ipu6_psys_buttress_ctrl;
  
  	switch (id->device) {

@@ -1,4 +1,4 @@
-From a673043d4b0771c131fb87e93ab6c7358a21aa16 Mon Sep 17 00:00:00 2001
+From 0336c9fb3830af4b6e7f503003cb18196ecee8e5 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 12:07:16 +0000
 Subject: [PATCH] media: ipu6: Add IPU4 buttress support
@@ -76,10 +76,10 @@ index 1830b1277..1a0ddbf5c 100644
  #define IPU4P_BUTTRESS_PWR_STATE_IS_PWR_FSM_SHIFT	20
  #define IPU4P_BUTTRESS_PWR_STATE_IS_PWR_FSM_MASK	GENMASK(24, 20)
 diff --git a/drivers/media/pci/intel/ipu6/ipu6.c b/drivers/media/pci/intel/ipu6/ipu6.c
-index a035b14c7..28ce3ee4b 100644
+index 76c8b82aa..7c5dcd7ce 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6.c
-@@ -141,6 +141,28 @@ static const struct ipu6_buttress_ctrl ipu7_psys_buttress_ctrl = {
+@@ -140,6 +140,28 @@ static const struct ipu6_buttress_ctrl ipu7_psys_buttress_ctrl = {
  	.pwr_sts_off = IPU6_BUTTRESS_PWR_STATE_DN_DONE,
  };
  
@@ -108,7 +108,7 @@ index a035b14c7..28ce3ee4b 100644
  static const struct ipu6_buttress_ctrl ipu4p_isys_buttress_ctrl = {
  	.subsys_id = IPU_ISYS,
  	.ratio = IPU4P_IS_FREQ_CTL_DIVISOR,
-@@ -194,6 +216,37 @@ static const struct ipu6_buttress_registers ipu6_buttress_regs = {
+@@ -193,6 +215,37 @@ static const struct ipu6_buttress_registers ipu6_buttress_regs = {
  	.irq_sai	= BUTTRESS_ISR_SAI_VIOLATION,
  };
  
@@ -146,7 +146,7 @@ index a035b14c7..28ce3ee4b 100644
  static const struct ipu6_buttress_registers ipu7_buttress_regs = {
  	/* Registers */
  	.irq_status	= IPU7_BUTTRESS_REG_IRQ_STATUS,
-@@ -673,6 +726,9 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+@@ -675,6 +728,9 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
  		isp->cpd_fw_name = IPU4_FIRMWARE_NAME;
  		isp->cpd_metadata_cmpnt_size =
  			sizeof(struct ipu6se_cpd_metadata_cmpnt);

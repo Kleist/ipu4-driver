@@ -1,7 +1,7 @@
-From b40aab9d1a6f5296eaff69cea01ba3df5aeb81d4 Mon Sep 17 00:00:00 2001
-From: Ruslan Bay <67730802+ruslanbay@users.noreply.github.com>
+From fe3afe11eee2015f6cbd5a522bd427303c4f5aed Mon Sep 17 00:00:00 2001
+From: Ruslan Bay <ruslanbey@proton.me>
 Date: Fri, 9 Oct 2026 22:53:01 +0200
-Subject: [PATCH 02/11] media: ipu6: Add IPU4P MMU support
+Subject: [PATCH 02/12] media: ipu6: Add IPU4P MMU support
 
 The IPU4P MMU uses the same MMUv2 page tables and register programming
 model as IPU6, but differs in register offsets, number of MMU instances,
@@ -20,7 +20,7 @@ Signed-off-by: Ruslan Bay <ruslanbey@proton.me>
  5 files changed, 129 insertions(+), 1 deletion(-)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-mmu-hw.c b/drivers/media/pci/intel/ipu6/ipu6-mmu-hw.c
-index 2b395fbd59..ca2b237415 100644
+index 2b395fbd5..ca2b23741 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-mmu-hw.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-mmu-hw.c
 @@ -158,6 +158,65 @@ static struct ipu6_mmu_hw ipu6_psys_mmu_hwdata[] = {
@@ -156,7 +156,7 @@ index 2b395fbd59..ca2b237415 100644
 +	.tlb_invalidate = __ipu6_tlb_invalidate,
 +};
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-mmu.c b/drivers/media/pci/intel/ipu6/ipu6-mmu.c
-index 243d438786..93e3be1ef0 100644
+index 243d43878..93e3be1ef 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-mmu.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-mmu.c
 @@ -684,7 +684,12 @@ struct ipu6_mmu *ipu6_mmu_init(struct device *dev,
@@ -174,7 +174,7 @@ index 243d438786..93e3be1ef0 100644
  	mmu->ready = false;
  	INIT_LIST_HEAD(&mmu->vma_list);
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-mmu.h b/drivers/media/pci/intel/ipu6/ipu6-mmu.h
-index 44880478d2..455604eb8b 100644
+index 44880478d..455604eb8 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-mmu.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6-mmu.h
 @@ -197,6 +197,7 @@ struct ipu6_mmu {
@@ -186,7 +186,7 @@ index 44880478d2..455604eb8b 100644
  
  struct ipu6_mmu *ipu6_mmu_init(struct device *dev,
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-platform-regs.h b/drivers/media/pci/intel/ipu6/ipu6-platform-regs.h
-index b883385adb..f08e7e8fd8 100644
+index b883385ad..f08e7e8fd 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-platform-regs.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6-platform-regs.h
 @@ -14,6 +14,17 @@
@@ -208,7 +208,7 @@ index b883385adb..f08e7e8fd8 100644
  #define IPU6_ISYS_IOMMU1_OFFSET		0x2e0500
  #define IPU6_ISYS_IOMMUI_OFFSET		0x2e0a00
 diff --git a/drivers/media/pci/intel/ipu6/ipu6.h b/drivers/media/pci/intel/ipu6/ipu6.h
-index 321ca1d571..2afbd70cae 100644
+index 321ca1d57..2afbd70ca 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6.h
 @@ -93,6 +93,8 @@ struct ipu6_device {

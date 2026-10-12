@@ -1,4 +1,4 @@
-From 3c2eedbbbb66aa69b82e0fc29b0c3f1e7b3d4033 Mon Sep 17 00:00:00 2001
+From 701cbfff150cf25002a2e3d48e0ad63af452acda Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sun, 11 Oct 2026 05:21:57 +0000
 Subject: [PATCH] media: ipu6: Run IPU4 without iWake

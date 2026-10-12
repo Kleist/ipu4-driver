@@ -1,4 +1,4 @@
-From 02fa6121bbb48d9a7235b89cd03ac4f5f3ea638a Mon Sep 17 00:00:00 2001
+From 5d5f8e831b4d73a8c140d69f3e5d939a47d298c4 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sun, 11 Oct 2026 05:22:24 +0000
 Subject: [PATCH] media: ipu6: Add IPU4 CSI-2 receiver support

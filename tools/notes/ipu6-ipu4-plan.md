@@ -15,12 +15,12 @@ repo's QEMU IPU4 model on every PR.
 | What | Value |
 |---|---|
 | Tree | mainline (`https://github.com/torvalds/linux.git`), tag in `tools/ipu6/pin`, bumped weekly by `tools/ipu6/bump-pin.sh` |
-| Base series | `patches/ipu6-ipu7/`: Antti Laakso's IPU7-in-ipu6 series ([lore][antti]); `patches/ipu6-ipu4p/`: Ruslan's 11 IPU4P patches ([lore][ruslan]) |
+| Base series | `patches/ipu6-ipu7/`: Antti Laakso's IPU7-in-ipu6 series ([lore][antti]); `patches/ipu6-ipu4p/`: Ruslan's 12 IPU4P patches (RFC; [lore][ruslan] for the earlier posting) |
 
 The base series was exported from Ruslan's `ipu4p-upstream` branch
-(`340985596`, the SHA referenced from his lore mail). His later
-`work/ipu4p-upstream-series-rebuild-*` branches (e.g. the 64-bit firmware-ABI
-alignment fix) are picked up by re-exporting it, not automatically.
+at `81fdd59f2689`, his October RFC (the earlier `340985596` is kept as
+`ipu4p-backup`). Later revisions are picked up by re-exporting it, not
+automatically.
 
 [antti]: https://lore.kernel.org/all/20260907113004.2489993-1-sakari.ailus@linux.intel.com/
 [ruslan]: https://lore.kernel.org/all/aedlbUANNY6QvZ_mrVqU9aH15j76MKgYxxwkpmayED7tFEDztNQN8A-vDuLUIRpb9At6QpBp4gg9RAOA6gvD-LpCOUpFm8aVDJ5IK87tpPg=@proton.me/

@@ -1,7 +1,7 @@
-From d4a05d4e34d905d6880a5a2b853129c9394e3e08 Mon Sep 17 00:00:00 2001
-From: Ruslan Bay <67730802+ruslanbay@users.noreply.github.com>
-Date: Fri, 9 Oct 2026 22:53:23 +0200
-Subject: [PATCH 05/11] media: ipu6: Support DMEM-based SysCom in ipu6-fw-com
+From 88cfe658b4fbc26d5bef29ad58aef83200b4ec21 Mon Sep 17 00:00:00 2001
+From: Ruslan Bay <ruslanbey@proton.me>
+Date: Sat, 10 Oct 2026 13:06:23 +0200
+Subject: [PATCH 05/12] media: ipu6: Support DMEM-based SysCom in ipu6-fw-com
 
 Handle the IPU4P DMEM-based SysCom register layout and lifecycle in the
 existing firmware communication layer.
@@ -13,7 +13,7 @@ Signed-off-by: Ruslan Bay <ruslanbey@proton.me>
  2 files changed, 48 insertions(+), 4 deletions(-)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-fw-com.c b/drivers/media/pci/intel/ipu6/ipu6-fw-com.c
-index 51567c5fc1..e1bc047bdb 100644
+index 51567c5fc..e1bc047bd 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-fw-com.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-fw-com.c
 @@ -97,6 +97,7 @@ struct ipu6_fw_com_context {
@@ -117,7 +117,7 @@ index 51567c5fc1..e1bc047bdb 100644
  	return state == SYSCOM_STATE_READY;
  }
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-fw-com.h b/drivers/media/pci/intel/ipu6/ipu6-fw-com.h
-index b02285a3e4..226a4713d6 100644
+index b02285a3e..226a4713d 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-fw-com.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6-fw-com.h
 @@ -29,6 +29,7 @@ struct ipu6_fw_com_cfg {

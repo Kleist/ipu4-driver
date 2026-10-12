@@ -1,28 +1,27 @@
-From 1ee2db790b0c569ecd0c5418aeaa1b4dd082ad38 Mon Sep 17 00:00:00 2001
-From: Ruslan Bay <67730802+ruslanbay@users.noreply.github.com>
-Date: Fri, 9 Oct 2026 22:53:29 +0200
-Subject: [PATCH 06/11] media: ipu6: Add IPU4P ISYS firmware operations
+From 25be23bc5fdc80c946cbf944d5c4cc21be1ab21c Mon Sep 17 00:00:00 2001
+From: Ruslan Bay <ruslanbey@proton.me>
+Date: Sat, 10 Oct 2026 13:06:32 +0200
+Subject: [PATCH 07/12] media: ipu6: Add IPU4P ISYS firmware operations
 
-Add IPU4P ISYS firmware operations for stream configuration, buffer
-management, and proxy communication with the firmware.
+Add IPU4P-specific ISYS firmware operations for stream configuration,
+buffer management, response-token handling, and proxy communication.
+Use the common response handler with the IPU4P firmware ABI.
 
 Signed-off-by: Ruslan Bay <ruslanbey@proton.me>
 ---
  drivers/media/pci/intel/ipu6/Makefile         |   1 +
  drivers/media/pci/intel/ipu6/ipu4p-fw-isys.c  | 598 ++++++++++++++++++
- drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h  |   1 +
- drivers/media/pci/intel/ipu6/ipu6-fw-isys.c   |  41 +-
- drivers/media/pci/intel/ipu6/ipu6-fw-isys.h   |   3 +-
+ drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h  |   3 +
  drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c |  11 +-
  .../media/pci/intel/ipu6/ipu6-isys-video.c    |   8 +-
- drivers/media/pci/intel/ipu6/ipu6-isys.c      | 115 +++-
- drivers/media/pci/intel/ipu6/ipu6-isys.h      |  10 +
- drivers/media/pci/intel/ipu6/ipu6.c           |   4 +
- 10 files changed, 753 insertions(+), 39 deletions(-)
+ drivers/media/pci/intel/ipu6/ipu6-isys.c      | 124 +++-
+ drivers/media/pci/intel/ipu6/ipu6-isys.h      |  15 +
+ drivers/media/pci/intel/ipu6/ipu6.c           |   7 +
+ 8 files changed, 742 insertions(+), 25 deletions(-)
  create mode 100644 drivers/media/pci/intel/ipu6/ipu4p-fw-isys.c
 
 diff --git a/drivers/media/pci/intel/ipu6/Makefile b/drivers/media/pci/intel/ipu6/Makefile
-index 676bc978b9..54b543ec5f 100644
+index 676bc978b..54b543ec5 100644
 --- a/drivers/media/pci/intel/ipu6/Makefile
 +++ b/drivers/media/pci/intel/ipu6/Makefile
 @@ -17,6 +17,7 @@ obj-$(CONFIG_VIDEO_INTEL_IPU6)	+= intel-ipu6.o
@@ -35,7 +34,7 @@ index 676bc978b9..54b543ec5f 100644
  				ipu6-isys-queue.o \
 diff --git a/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.c b/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.c
 new file mode 100644
-index 0000000000..dfab6e570e
+index 000000000..dfab6e570
 --- /dev/null
 +++ b/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.c
 @@ -0,0 +1,598 @@
@@ -638,10 +637,10 @@ index 0000000000..dfab6e570e
 +	.dump_frame_buf_set = ipu4p_dump_frame_buf_set,
 +};
 diff --git a/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h b/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h
-index 7ab30c528f..050d9d12d8 100644
+index afc288b93..7444fafea 100644
 --- a/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h
 +++ b/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h
-@@ -19,6 +19,7 @@ struct ipu6_isys_buffer_list;
+@@ -18,6 +18,7 @@ struct ipu6_isys_buffer_list;
  struct isys_fw_msgs;
  
  #define IPU4P_ISYS_MAX_STREAMS			8U
@@ -649,125 +648,16 @@ index 7ab30c528f..050d9d12d8 100644
  #define IPU4P_MAX_IPINS				4U
  #define IPU4P_MAX_OPINS				6U
  #define IPU4P_NOF_SRAM_BLOCKS_MAX		8U
-diff --git a/drivers/media/pci/intel/ipu6/ipu6-fw-isys.c b/drivers/media/pci/intel/ipu6/ipu6-fw-isys.c
-index 3cad7d8f9c..ae4576025a 100644
---- a/drivers/media/pci/intel/ipu6/ipu6-fw-isys.c
-+++ b/drivers/media/pci/intel/ipu6/ipu6-fw-isys.c
-@@ -521,23 +521,16 @@ static u32 resp_type_to_index(int type)
- 	return  ARRAY_SIZE(fw_msg) - 1;
- }
+@@ -404,5 +405,7 @@ static_assert(sizeof(struct ipu4p_fw_isys_frame_buff_set) == 120);
+ static_assert(sizeof(struct ipu4p_fw_isys_resp_info) == 64);
  
--int ipu6_isys_isr_one(struct ipu6_bus_device *adev)
-+void ipu6_isys_handle_response(struct ipu6_bus_device *adev,
-+			       struct ipu6_fw_isys_resp_info_abi *resp)
- {
- 	struct ipu6_isys *isys = ipu6_bus_get_drvdata(adev);
--	struct ipu6_fw_isys_resp_info_abi *resp;
- 	struct ipu6_isys_stream *stream;
- 	struct ipu6_isys_csi2 *csi2 = NULL;
- 	struct isys_fw_msgs *isys_fw_msg = NULL;
- 	u32 index;
- 	u64 ts;
+ extern const struct ipu6_fw_isys_ops ipu4p_fw_isys_ops;
++irqreturn_t ipu4p_isys_isr(struct ipu6_bus_device *adev);
++void ipu4p_isys_irq_setup(struct ipu6_isys *isys);
  
--	if (!isys->fwctx)
--		return 1;
--
--	resp = ipu6_fw_isys_get_resp(isys);
--	if (!resp)
--		return 1;
--
- 	ts = (u64)resp->timestamp[1] << 32 | resp->timestamp[0];
- 
- 	index = resp_type_to_index(resp->type);
-@@ -570,7 +563,8 @@ int ipu6_isys_isr_one(struct ipu6_bus_device *adev)
- 	}
- 	stream->error = resp->error_info.error;
- 
--	csi2 = ipu6_isys_subdev_to_csi2(stream->asd);
-+	if (stream->asd)
-+		csi2 = ipu6_isys_subdev_to_csi2(stream->asd);
- 
- 	switch (resp->type) {
- 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_OPEN_DONE:
-@@ -623,8 +617,8 @@ int ipu6_isys_isr_one(struct ipu6_bus_device *adev)
- 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_CAPTURE_DONE:
- 		break;
- 	case IPU6_FW_ISYS_RESP_TYPE_FRAME_SOF:
--
--		ipu6_isys_csi2_sof_event_by_stream(stream);
-+		if (csi2)
-+			ipu6_isys_csi2_sof_event_by_stream(stream);
- 		stream->seq[stream->seq_index].sequence =
- 			atomic_read(&stream->sequence) - 1;
- 		stream->seq[stream->seq_index].timestamp = ts;
-@@ -636,7 +630,8 @@ int ipu6_isys_isr_one(struct ipu6_bus_device *adev)
- 			% IPU6_ISYS_MAX_PARALLEL_SOF;
- 		break;
- 	case IPU6_FW_ISYS_RESP_TYPE_FRAME_EOF:
--		ipu6_isys_csi2_eof_event_by_stream(stream);
-+		if (csi2)
-+			ipu6_isys_csi2_eof_event_by_stream(stream);
- 		dev_dbg(&adev->auxdev.dev,
- 			"eof: handle %d: (index %u), timestamp 0x%16.16llx\n",
- 			resp->stream_handle,
-@@ -653,7 +648,24 @@ int ipu6_isys_isr_one(struct ipu6_bus_device *adev)
- leave_put_stream:
- 	ipu6_isys_put_stream(stream);
- leave:
-+	return;
-+}
-+
-+static int ipu6_isys_isr_one(struct ipu6_bus_device *adev)
-+{
-+	struct ipu6_isys *isys = ipu6_bus_get_drvdata(adev);
-+	struct ipu6_fw_isys_resp_info_abi *resp;
-+
-+	if (!isys->fwctx)
-+		return 1;
-+
-+	resp = ipu6_fw_isys_get_resp(isys);
-+	if (!resp)
-+		return 1;
-+
-+	ipu6_isys_handle_response(adev, resp);
- 	ipu6_fw_isys_put_resp(isys);
-+
- 	return 0;
- }
- 
-@@ -737,7 +749,7 @@ irqreturn_t ipu6_isys_isr(struct ipu6_bus_device *adev)
- 
- 		writel(0, base + IPU6_REG_ISYS_UNISPART_SW_IRQ_REG);
- 
--		if (!ipu6_isys_isr_one(adev))
-+		if (!adev->auxdrv_data->fw_ops->isr_one(adev))
- 			status_sw = IPU6_ISYS_UNISPART_IRQ_SW;
- 		else
- 			status_sw = 0;
-@@ -957,6 +969,7 @@ static void ipu6_fw_isys_prepare_buf_set(struct isys_fw_msgs *msg,
- const struct ipu6_fw_isys_ops ipu6_fw_isys_ops = {
- 	.init = ipu6_fw_isys_init,
- 	.close = ipu6_fw_isys_close,
-+	.isr_one = ipu6_isys_isr_one,
- 	.cleanup = ipu6_fw_isys_cleanup,
- 	.prepare_stream_cfg = ipu6_fw_isys_prepare_stream_cfg,
- 	.prepare_buf_set = ipu6_fw_isys_prepare_buf_set,
-diff --git a/drivers/media/pci/intel/ipu6/ipu6-fw-isys.h b/drivers/media/pci/intel/ipu6/ipu6-fw-isys.h
-index 2a679d9959..de4608a18f 100644
---- a/drivers/media/pci/intel/ipu6/ipu6-fw-isys.h
-+++ b/drivers/media/pci/intel/ipu6/ipu6-fw-isys.h
-@@ -562,7 +562,8 @@ struct ipu6_fw_proxy_send_queue_token {
- int ipu6_fw_isys_send_proxy_token(struct ipu6_isys *isys, unsigned int req_id,
- 				  unsigned int index, unsigned int offset,
- 				  u32 value);
--int ipu6_isys_isr_one(struct ipu6_bus_device *adev);
-+void ipu6_isys_handle_response(struct ipu6_bus_device *adev,
-+			       struct ipu6_fw_isys_resp_info_abi *resp);
- irqreturn_t ipu6_isys_isr(struct ipu6_bus_device *adev);
- 
- #endif
+ #endif /* IPU4P_FW_ISYS_H */
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
-index 160eace947..9e87750269 100644
+index 160eace94..9e8775026 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
 @@ -22,6 +22,7 @@
@@ -803,7 +693,7 @@ index 160eace947..9e87750269 100644
  	snprintf(csi2->asd.sd.name, sizeof(csi2->asd.sd.name),
  		 IPU6_ISYS_ENTITY_PREFIX " CSI2 %u", index);
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys-video.c b/drivers/media/pci/intel/ipu6/ipu6-isys-video.c
-index 9634b4f232..d9cab5b5d8 100644
+index 9634b4f23..d9cab5b5d 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-isys-video.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-isys-video.c
 @@ -783,13 +783,17 @@ ipu6_isys_get_stream(struct ipu6_isys_video *av, struct ipu6_isys_subdev *asd)
@@ -835,7 +725,7 @@ index 9634b4f232..d9cab5b5d8 100644
  				isys->streams_ref_count[i]++;
  				stream = &isys->streams[i];
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys.c b/drivers/media/pci/intel/ipu6/ipu6-isys.c
-index 08f29b678d..eb771cd75f 100644
+index 08f29b678..1f9809d1b 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-isys.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-isys.c
 @@ -103,6 +103,26 @@ enum ltr_did_type {
@@ -956,7 +846,21 @@ index 08f29b678d..eb771cd75f 100644
  }
  
  /*
-@@ -466,7 +522,7 @@ static void enable_iwake(struct ipu6_isys *isys, bool enable)
+@@ -399,6 +455,13 @@ static void set_iwake_ltrdid(struct ipu6_isys *isys, u16 ltr, u16 did,
+ 	struct ipu6_device *isp = isys->adev->isp;
+ 	union fabric_ctrl fc;
+ 
++	/*
++	 * IPU4P exposes its supported GDA IWAKE controls through the firmware
++	 * proxy. Do not apply IPU6 LTR/DID programming to IPU4P.
++	 */
++	if (IS_IPU4P(isp))
++		return;
++
+ 	switch (use) {
+ 	case LTR_IWAKE_ON:
+ 		ltr_val = min_t(u16, ltr, (u16)LTR_DID_VAL_MAX);
+@@ -466,7 +529,7 @@ static void enable_iwake(struct ipu6_isys *isys, bool enable)
  		return;
  	}
  
@@ -965,7 +869,7 @@ index 08f29b678d..eb771cd75f 100644
  	if (!ret)
  		iwake_watermark->iwake_enabled = enable;
  
-@@ -495,7 +551,8 @@ void update_watermark_setting(struct ipu6_isys *isys)
+@@ -495,7 +558,8 @@ void update_watermark_setting(struct ipu6_isys *isys)
  	mutex_lock(&iwake_watermark->mutex);
  	if (iwake_watermark->force_iwake_disable) {
  		set_iwake_ltrdid(isys, 0, 0, LTR_IWAKE_OFF);
@@ -975,7 +879,7 @@ index 08f29b678d..eb771cd75f 100644
  				   CRITICAL_THRESHOLD_IWAKE_DISABLE);
  		goto unlock_exit;
  	}
-@@ -516,7 +573,8 @@ void update_watermark_setting(struct ipu6_isys *isys)
+@@ -516,7 +580,8 @@ void update_watermark_setting(struct ipu6_isys *isys)
  		enable_iwake(isys, false);
  		set_iwake_ltrdid(isys, 0, 0, LTR_IWAKE_OFF);
  		mutex_lock(&iwake_watermark->mutex);
@@ -985,7 +889,15 @@ index 08f29b678d..eb771cd75f 100644
  				   CRITICAL_THRESHOLD_IWAKE_DISABLE);
  		goto unlock_exit;
  	}
-@@ -555,7 +613,7 @@ void update_watermark_setting(struct ipu6_isys *isys)
+@@ -548,14 +613,14 @@ void update_watermark_setting(struct ipu6_isys *isys)
+ 
+ 	set_iwake_ltrdid(isys, ltr, did, ltr_did_type);
+ 
+-	/* calculate iwake threshold with 2KB granularity pages */
++	/* Calculate the IWAKE threshold in SRAM granularity units. */
+ 	threshold_bytes = did * isys_pb_datarate_mbs;
+ 	iwake_threshold = max_t(u32, 1, threshold_bytes >> shift);
+ 	iwake_threshold = min_t(u32, iwake_threshold, max_sram_size);
  
  	mutex_lock(&iwake_watermark->mutex);
  	if (isys->pdata->ipdata->enhanced_iwake) {
@@ -994,7 +906,7 @@ index 08f29b678d..eb771cd75f 100644
  				   DEFAULT_IWAKE_THRESHOLD);
  		/* calculate number of pages that will be filled in 10 usec */
  		page_num = (DEFAULT_MEM_OPEN_TIME * isys_pb_datarate_mbs) /
-@@ -565,10 +623,11 @@ void update_watermark_setting(struct ipu6_isys *isys)
+@@ -565,10 +630,11 @@ void update_watermark_setting(struct ipu6_isys *isys)
  		mem_open_threshold = isys->pdata->ipdata->memopen_threshold;
  		mem_open_threshold = max_t(u32, mem_open_threshold, page_num);
  		dev_dbg(dev, "mem_open_threshold: %u\n", mem_open_threshold);
@@ -1008,7 +920,7 @@ index 08f29b678d..eb771cd75f 100644
  				   iwake_threshold);
  	}
  
-@@ -578,7 +637,8 @@ void update_watermark_setting(struct ipu6_isys *isys)
+@@ -578,7 +644,8 @@ void update_watermark_setting(struct ipu6_isys *isys)
  	dev_dbg(dev, "threshold: %u critical: %u\n", iwake_threshold,
  		iwake_critical_threshold);
  
@@ -1018,7 +930,7 @@ index 08f29b678d..eb771cd75f 100644
  			   iwake_critical_threshold);
  
  	writel(VAL_PKGC_PMON_CFG_RESET,
-@@ -624,10 +684,11 @@ static int isys_notifier_bound(struct v4l2_async_notifier *notifier,
+@@ -624,10 +691,11 @@ static int isys_notifier_bound(struct v4l2_async_notifier *notifier,
  		container_of(asc, struct sensor_async_sd, asc);
  	int ret;
  
@@ -1032,7 +944,7 @@ index 08f29b678d..eb771cd75f 100644
  	}
  
  	ret = ipu_bridge_instantiate_vcm(sd->dev);
-@@ -987,6 +1048,7 @@ void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, struct isys_fw_msgs *msg)
+@@ -987,6 +1055,7 @@ void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, struct isys_fw_msgs *msg)
  }
  
  static const struct ipu6_auxdrv_data ipu6_isys_auxdrv_data;
@@ -1040,7 +952,7 @@ index 08f29b678d..eb771cd75f 100644
  static const struct ipu6_auxdrv_data ipu7_isys_auxdrv_data;
  
  static int isys_probe(struct auxiliary_device *auxdev,
-@@ -1006,8 +1068,12 @@ static int isys_probe(struct auxiliary_device *auxdev,
+@@ -1006,8 +1075,12 @@ static int isys_probe(struct auxiliary_device *auxdev,
  	if (!isys)
  		return -ENOMEM;
  
@@ -1055,7 +967,7 @@ index 08f29b678d..eb771cd75f 100644
  	adev->auxdrv = to_auxiliary_drv(auxdev->dev.driver);
  	isys->adev = adev;
  	isys->pdata = adev->pdata;
-@@ -1103,6 +1169,13 @@ static const struct ipu6_auxdrv_data ipu6_isys_auxdrv_data = {
+@@ -1103,6 +1176,13 @@ static const struct ipu6_auxdrv_data ipu6_isys_auxdrv_data = {
  	.fw_ops = &ipu6_fw_isys_ops,
  };
  
@@ -1070,10 +982,22 @@ index 08f29b678d..eb771cd75f 100644
  	.isr = ipu7_isys_isr,
  	.isr_threaded = NULL,
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys.h b/drivers/media/pci/intel/ipu6/ipu6-isys.h
-index 7d652a0683..9383cbefa1 100644
+index 7d652a068..775b85396 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-isys.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6-isys.h
-@@ -169,6 +169,13 @@ struct ipu6_isys {
+@@ -57,6 +57,11 @@ struct ipu6_bus_device;
+ #define IPU6_MAX_SRAM_SIZE			(200 << 10)
+ /* IS pixel buffer is 128KB, MaxSRAMSize is 96KB on IPU6SE */
+ #define IPU6SE_MAX_SRAM_SIZE			(96 << 10)
++/* IPU4P has 128 physical GDA pages of 1 KiB each. */
++#define IPU4P_SRAM_GRANULARITY_SHIFT	10
++#define IPU4P_SRAM_GRANULARITY_SIZE	1024
++/* Use the 96 KiB usable size for a 128 KiB buffer, as on IPU6SE. */
++#define IPU4P_MAX_SRAM_SIZE			(96 << 10)
+ 
+ #define IPU6EP_LTR_VALUE			200
+ #define IPU6EP_MIN_MEMOPEN_TH			0x4
+@@ -169,6 +174,13 @@ struct ipu6_isys {
  	struct isys_iwake_watermark iwake_watermark;
  };
  
@@ -1087,7 +1011,7 @@ index 7d652a0683..9383cbefa1 100644
  struct isys_fw_msgs {
  	union {
  		u64 dummy;
-@@ -193,6 +200,9 @@ struct ipu6_fw_isys_ops {
+@@ -193,6 +205,9 @@ struct ipu6_fw_isys_ops {
  	int (*init)(struct ipu6_isys *isys, unsigned int num_streams);
  	int (*close)(struct ipu6_isys *isys);
  	int (*isr_one)(struct ipu6_bus_device *adev);
@@ -1098,15 +1022,18 @@ index 7d652a0683..9383cbefa1 100644
  			const unsigned int stream_handle,
  			void *cpu_mapped_buf,
 diff --git a/drivers/media/pci/intel/ipu6/ipu6.c b/drivers/media/pci/intel/ipu6/ipu6.c
-index 789477e382..41608adde8 100644
+index 789477e38..417978bef 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6.c
-@@ -399,6 +399,10 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
+@@ -399,6 +399,13 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
  	}
  
  	if (IS_IPU4P(isp)) {
 +		isys_ipdata.num_parallel_streams = IPU4P_ISYS_MAX_STREAMS;
 +		isys_ipdata.max_streams = IPU4P_ISYS_MAX_STREAMS;
++		isys_ipdata.sram_gran_shift = IPU4P_SRAM_GRANULARITY_SHIFT;
++		isys_ipdata.sram_gran_size = IPU4P_SRAM_GRANULARITY_SIZE;
++		isys_ipdata.max_sram_size = IPU4P_MAX_SRAM_SIZE;
 +		isys_ipdata.max_sram_blocks = IPU4P_NOF_SRAM_BLOCKS_MAX;
 +		isys_ipdata.max_devq_size = IPU4P_DEV_SEND_QUEUE_SIZE;
  		isys_ipdata.hw_variant.offset = IPU4P_ISYS_OFFSET;
