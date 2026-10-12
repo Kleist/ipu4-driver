@@ -1,7 +1,7 @@
-From 0336c9fb3830af4b6e7f503003cb18196ecee8e5 Mon Sep 17 00:00:00 2001
+From c1a4b42869c68ea1ff2cc585b7a9cdd68c23acb7 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 12:07:16 +0000
-Subject: [PATCH] media: ipu6: Add IPU4 buttress support
+Subject: [PATCH 02/10] media: ipu6: Add IPU4 buttress support
 
 The IPU4 buttress reports the ISYS and PSYS power state in different
 PWR_STATE fields from IPU6: the ISYS power FSM is in bits 23:20 and

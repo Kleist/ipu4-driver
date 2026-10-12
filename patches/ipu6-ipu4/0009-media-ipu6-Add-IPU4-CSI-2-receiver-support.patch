@@ -1,7 +1,7 @@
-From 5d5f8e831b4d73a8c140d69f3e5d939a47d298c4 Mon Sep 17 00:00:00 2001
+From 1ee2504e3f50bc23616824c430d883333977608d Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sun, 11 Oct 2026 05:22:24 +0000
-Subject: [PATCH] media: ipu6: Add IPU4 CSI-2 receiver support
+Subject: [PATCH 09/10] media: ipu6: Add IPU4 CSI-2 receiver support
 
 IPU4 took the IPU6 path when a CSI-2 port is enabled for streaming:
 it programs the IPU6 CSI-2 front end and port hub registers and then
@@ -10,26 +10,36 @@ start fails with "PHY0 powerup ack timeout".
 
 IPU4 has no PHY for the driver to set up. Its CSI-2 receiver has the
 IPU4P register layout at the port base: the clock and data lane
-termination and settle counts, the receiver configuration (release
-from LP-11, no byte clock gating), the number of lanes and the enable.
-The receiver errors are reported by the port's CSIRX interrupt
-controller, whose 17 bits are enabled at stream start.
+termination and settle counts for up to four data lanes, the receiver
+configuration (release from LP-11, no byte clock gating), the number
+of lanes and the enable. The receiver errors are reported by the
+port's CSIRX interrupt controller, which is enabled at stream start.
 
-Add the IPU4 CSI-2 receiver enable and disable. The register writes
-and their order are those of the IPU4 reference driver; at stream
-stop, report the receiver errors before the receiver is disabled and
-mask the CSIRX interrupts again.
+Add the IPU4 CSI-2 receiver enable and disable, and don't set up a PHY
+power hook for IPU4. Reject lane counts the receiver has no timing
+registers for. At stream stop, report the receiver errors before the
+receiver is disabled, under the power lock as the ISR collects them
+too, and mask the CSIRX interrupts again.
 
 Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
 ---
- drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c | 64 +++++++++++++++++++
- 1 file changed, 64 insertions(+)
+ drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c | 76 +++++++++++++++++++
+ drivers/media/pci/intel/ipu6/ipu6-isys.c      |  2 +-
+ 2 files changed, 77 insertions(+), 1 deletion(-)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
-index 67f88bf96..99c4ef0ee 100644
+index 773f245bc..970d26de7 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
-@@ -338,6 +338,60 @@ void ipu6_isys_csi2_error(struct ipu6_isys_csi2 *csi2)
+@@ -11,6 +11,7 @@
+ #include <linux/err.h>
+ #include <linux/io.h>
+ #include <linux/minmax.h>
++#include <linux/spinlock.h>
+ #include <linux/sprintf.h>
+ 
+ #include <media/media-entity.h>
+@@ -344,6 +345,73 @@ void ipu6_isys_csi2_error(struct ipu6_isys_csi2 *csi2)
  	}
  }
  
@@ -39,12 +49,19 @@ index 67f88bf96..99c4ef0ee 100644
 + * layout, and the receiver errors are reported by the port's CSIRX
 + * interrupt controller.
 + */
-+static void ipu4_isys_csi2_stream_enable(struct ipu6_isys_csi2 *csi2,
-+					 const struct ipu6_isys_csi2_timing *timing)
++static int ipu4_isys_csi2_stream_enable(struct ipu6_isys_csi2 *csi2,
++					const struct ipu6_isys_csi2_timing *timing)
 +{
++	struct device *dev = &csi2->isys->adev->auxdev.dev;
 +	void __iomem *base = csi2->base;
-+	u32 mask = IPU4P_CSIRX_ERROR_IRQ_MASK;
++	u32 mask = IPU4_CSI2_CSIRX_ERROR_IRQ_MASK;
 +	u32 val;
++
++	if (!csi2->nlanes || csi2->nlanes > IPU4_CSI2_RX_MAX_DLANES) {
++		dev_err(dev, "csi2-%u: unsupported number of lanes %u\n",
++			csi2->port, csi2->nlanes);
++		return -EINVAL;
++	}
 +
 +	writel(timing->ctermen, base + IPU4P_CSI2_RX_DLY_CNT_TERMEN_CLANE);
 +	writel(timing->csettle, base + IPU4P_CSI2_RX_DLY_CNT_SETTLE_CLANE);
@@ -67,6 +84,8 @@ index 67f88bf96..99c4ef0ee 100644
 +	writel(mask, base + IPU4_CSI2_CSIRX_IRQ_CLEAR);
 +	writel(mask, base + IPU4_CSI2_CSIRX_IRQ_MASK);
 +	writel(mask, base + IPU4_CSI2_CSIRX_IRQ_ENABLE);
++
++	return 0;
 +}
 +
 +static void ipu4_isys_csi2_stream_disable(struct ipu6_isys_csi2 *csi2)
@@ -74,8 +93,12 @@ index 67f88bf96..99c4ef0ee 100644
 +	void __iomem *base = csi2->base;
 +	u32 val;
 +
-+	/* Report what the receiver saw before it is switched off. */
-+	ipu6_isys_csi2_error(csi2);
++	/*
++	 * Report what the receiver saw before it is switched off. The ISR
++	 * collects the errors too, under the power lock.
++	 */
++	scoped_guard(spinlock_irqsave, &csi2->isys->power_lock)
++		ipu6_isys_csi2_error(csi2);
 +
 +	val = readl(base + IPU4P_CSI2_RX_CONFIG);
 +	val &= ~(IPU4P_CSI2_RX_CONFIG_DISABLE_BYTE_CLK_GATING |
@@ -90,7 +113,7 @@ index 67f88bf96..99c4ef0ee 100644
  static void ipu6_isys_csi2_stream_disable(struct ipu6_isys_csi2 *csi2)
  {
  	struct ipu6_isys *isys = csi2->isys;
-@@ -347,6 +401,11 @@ static void ipu6_isys_csi2_stream_disable(struct ipu6_isys_csi2 *csi2)
+@@ -353,6 +421,11 @@ static void ipu6_isys_csi2_stream_disable(struct ipu6_isys_csi2 *csi2)
  	cfg.port = csi2->port;
  	cfg.nlanes = csi2->nlanes;
  
@@ -102,18 +125,29 @@ index 67f88bf96..99c4ef0ee 100644
  	if (IS_IPU4P(csi2->isys->adev->isp)) {
  		isys->phy_set_power(isys, &cfg, NULL, false);
  		return;
-@@ -386,6 +445,11 @@ static int ipu6_isys_csi2_stream_enable(struct ipu6_isys_csi2 *csi2)
+@@ -392,6 +465,9 @@ static int ipu6_isys_csi2_stream_enable(struct ipu6_isys_csi2 *csi2)
  	if (ret)
  		return ret;
  
-+	if (IS_IPU4(isys->adev->isp)) {
-+		ipu4_isys_csi2_stream_enable(csi2, &timing);
-+		return 0;
-+	}
++	if (IS_IPU4(isys->adev->isp))
++		return ipu4_isys_csi2_stream_enable(csi2, &timing);
 +
  	if (IS_IPU4P(isys->adev->isp))
  		return isys->phy_set_power(isys, &cfg, &timing, true);
  
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys.c b/drivers/media/pci/intel/ipu6/ipu6-isys.c
+index 7306a4e82..2f7cdb561 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-isys.c
++++ b/drivers/media/pci/intel/ipu6/ipu6-isys.c
+@@ -1204,7 +1204,7 @@ static int isys_probe(struct auxiliary_device *auxdev,
+ 		isys->phy_set_power = ipu6_isys_dwc_phy_set_power;
+ 	else if (IS_IPU4P(adev->isp))
+ 		isys->phy_set_power = ipu4p_isys_phy_set_power;
+-	else
++	else if (!IS_IPU4(adev->isp))	/* IPU4 has no PHY to set up */
+ 		isys->phy_set_power = ipu6_isys_mcd_phy_set_power;
+ 
+ 	ret = isys_register_devices(isys);
 -- 
 2.43.0
 

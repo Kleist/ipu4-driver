@@ -1,7 +1,7 @@
-From 701cbfff150cf25002a2e3d48e0ad63af452acda Mon Sep 17 00:00:00 2001
+From 1712d9f2854af8d88389197d5a45113feadf9483 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sun, 11 Oct 2026 05:21:57 +0000
-Subject: [PATCH] media: ipu6: Run IPU4 without iWake
+Subject: [PATCH 08/10] media: ipu6: Run IPU4 without iWake
 
 When a stream starts or stops, the driver sends the iWake watermark
 settings to the ISYS firmware as proxy tokens (GDA threshold and
