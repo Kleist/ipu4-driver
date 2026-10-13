@@ -55,3 +55,7 @@ stream-pattern
 # CSI-2 port 0 error IRQ through the ISR (sync IRQs stay masked upstream)
 # (plan "Parallel track", V11).
 csi2-sof-irq
+
+# Query and format ioctls on the capture node and CSI-2 subdev
+# (no hardware access).
+v4l2-query
