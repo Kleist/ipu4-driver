@@ -79,14 +79,17 @@ if [[ ! -x "$GEN" ]]; then
 	exit 2
 fi
 
-# Compile the streamon-attempt helper statically against the host's
-# libc/headers. Used only by tools/tests/streamon-smoke.sh.
-STREAMON_SRC="$ROOT/tools/tests/streamon.c"
-STREAMON_BIN="$OUT/streamon"
-if [[ -f "$STREAMON_SRC" ]] && \
-   { [[ ! -x "$STREAMON_BIN" ]] || [[ "$STREAMON_SRC" -nt "$STREAMON_BIN" ]]; }; then
-	gcc -static -O2 -Wall -o "$STREAMON_BIN" "$STREAMON_SRC"
-fi
+# Compile the guest's V4L2 helpers statically against the host's
+# libc/headers: streamon (the stream tests, tools/tests/streamon-smoke.sh)
+# and v4l2-query (the ipu6 ladder's v4l2-query test).
+GUEST_TOOLS=(streamon v4l2-query)
+for tool in "${GUEST_TOOLS[@]}"; do
+	src="$ROOT/tools/tests/$tool.c"
+	bin="$OUT/$tool"
+	if [[ -f "$src" ]] && { [[ ! -x "$bin" ]] || [[ "$src" -nt "$bin" ]]; }; then
+		gcc -static -O2 -Wall -o "$bin" "$src"
+	fi
+done
 
 LIST="$(mktemp)"
 trap 'rm -f "$LIST"' EXIT
@@ -197,9 +200,11 @@ for name in "${FW_EXTRA_NAMES[@]}"; do
 	echo "file /lib/firmware/$name  $FW_BLOB 0644 0 0" >> "$LIST"
 done
 
-if [[ -x "$STREAMON_BIN" ]]; then
-	echo "file /bin/streamon  $STREAMON_BIN 0755 0 0" >> "$LIST"
-fi
+for tool in "${GUEST_TOOLS[@]}"; do
+	if [[ -x "$OUT/$tool" ]]; then
+		echo "file /bin/$tool  $OUT/$tool 0755 0 0" >> "$LIST"
+	fi
+done
 
 "$GEN" "$LIST" | gzip -9 > "$OUT/rootfs.cpio.gz"
 echo ">>> built $OUT/rootfs.cpio.gz ($(stat -c%s "$OUT/rootfs.cpio.gz") bytes)"
