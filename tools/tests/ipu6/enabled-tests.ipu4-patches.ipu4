@@ -48,3 +48,7 @@ stream-pattern
 # ISYS runtime resume incl. the TSC sync handshake (gated with the IPU6
 # variant's V12).
 isys-resume
+
+# Query and format ioctls on the capture node and CSI-2 subdev
+# (no hardware access).
+v4l2-query

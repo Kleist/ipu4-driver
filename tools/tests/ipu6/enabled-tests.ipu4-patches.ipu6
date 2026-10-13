@@ -30,3 +30,7 @@ fw-open
 stream-on
 stream-pattern
 csi2-sof-irq
+
+# Query and format ioctls on the capture node and CSI-2 subdev
+# (no hardware access).
+v4l2-query
