@@ -48,3 +48,7 @@ csi2-sof-irq
 # Query and format ioctls on the capture node and CSI-2 subdev
 # (no hardware access).
 v4l2-query
+
+# A PCI function reset drops the firmware authentication; the next probe
+# re-runs BOOT_LOAD / AUTH_RUN through the model's CSE.
+pci-reauth
