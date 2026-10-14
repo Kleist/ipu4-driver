@@ -661,27 +661,43 @@ static bool ipu4_iova_to_phys(Ipu4State *s, uint32_t iova, hwaddr *out_phys)
     return true;
 }
 
+/* Copy `len` bytes between `buf` and the memory backing IOVA `iova`,
+ * translating each IPU page on its own: the driver's DMA buffers are
+ * physically discontiguous, so an access that crosses a page boundary
+ * must not run on into the next physical page. */
+static bool ipu4_dma_rw_iova(Ipu4State *s, uint32_t iova, void *buf,
+                             size_t len, DMADirection dir)
+{
+    uint8_t *p = buf;
+
+    while (len) {
+        size_t chunk = MIN(len, ISP_PAGE_MASK + 1 - (iova & ISP_PAGE_MASK));
+        hwaddr phys;
+
+        if (!ipu4_iova_to_phys(s, iova, &phys) ||
+            pci_dma_rw(&s->parent_obj, phys, p, chunk, dir,
+                       MEMTXATTRS_UNSPECIFIED) != MEMTX_OK) {
+            return false;
+        }
+        iova += chunk;
+        p += chunk;
+        len -= chunk;
+    }
+    return true;
+}
+
 /* Read `len` bytes from the guest-side memory backing IOVA `iova`. */
 static bool ipu4_dma_read_iova(Ipu4State *s, uint32_t iova, void *buf,
                                size_t len)
 {
-    hwaddr phys;
-
-    if (!ipu4_iova_to_phys(s, iova, &phys)) {
-        return false;
-    }
-    return pci_dma_read(&s->parent_obj, phys, buf, len) == MEMTX_OK;
+    return ipu4_dma_rw_iova(s, iova, buf, len, DMA_DIRECTION_TO_DEVICE);
 }
 
 static bool ipu4_dma_write_iova(Ipu4State *s, uint32_t iova, const void *buf,
                                 size_t len)
 {
-    hwaddr phys;
-
-    if (!ipu4_iova_to_phys(s, iova, &phys)) {
-        return false;
-    }
-    return pci_dma_write(&s->parent_obj, phys, buf, len) == MEMTX_OK;
+    return ipu4_dma_rw_iova(s, iova, (void *)buf, len,
+                            DMA_DIRECTION_FROM_DEVICE);
 }
 
 /* Step-4 deterministic frame pattern: write `total` bytes starting at
