@@ -199,12 +199,12 @@ for r in "${ORDER[@]}"; do
 done
 
 # IPU4_GCOV=1 (driver built instrumented): line coverage of the driver
-# over the probe and stream boots, in $OUT/coverage/.
+# over the module-load, probe and stream boots, in $OUT/coverage/.
 if [[ "${IPU4_GCOV:-0}" == 1 ]]; then
 	drv_dir="$LINUX_DIR/drivers/media/pci/intel/ipu6"
 	[[ "$FLAVOR" == out-of-tree ]] && drv_dir="$ROOT/kernel/ipu4"
 	"$ROOT/tools/coverage/ladder.sh" "$drv_dir" "$OUT/coverage" \
-		"$ROOT"/tools/tests/out/gcov-ipu6-{probe,stream}.tar ||
+		"$ROOT"/tools/tests/out/gcov-ipu6-{modules,probe,stream}.tar ||
 		echo "warning: no coverage report" >&2
 fi
 

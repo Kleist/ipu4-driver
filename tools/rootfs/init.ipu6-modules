@@ -10,6 +10,11 @@
 # ipu_pci_id= (8086:5a88, IPU4, when absent).
 #
 # The MODLOAD: markers are parsed by the ladder on the host.
+#
+# Later tests that need the driver loaded but no register-write capture
+# add their guest-side checks as init.ipu6-modules.d/NNN-<test>.loaded.sh
+# (packed as /init.d/), run in name order before the unload; they print
+# their own MODLOAD:<test> markers and see $ipu (the IPU's sysfs path).
 
 PATH=/bin:/sbin
 export PATH
@@ -85,6 +90,12 @@ fi
 
 lsmod
 
+for s in /init.d/*.loaded.sh; do
+	[ -e "$s" ] || continue
+	# shellcheck source=/dev/null
+	. "$s"
+done
+
 # Clean unload, reverse order.
 for m in $rmmods; do
 	rmmod "$m"
@@ -107,5 +118,7 @@ if [ "$fail" -eq 0 ]; then
 else
 	echo "MODLOAD: FAIL"
 fi
+
+gcov-harvest ipu6-modules
 
 poweroff -f
