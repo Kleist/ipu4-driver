@@ -130,6 +130,7 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | `vm-boot` | guest boots and enumerates `8086:5a88` |
 | `module-load` | `intel-ipu6` + `intel-ipu6-isys` + virt-sensor load without oops |
 | `pci-reauth` | on the module-load boot, a PCI function reset (the model's Advanced Features FLR) drops the firmware authentication and, after unbind/bind, the probe re-runs BOOT_LOAD / AUTH_RUN through the model's CSE (`CSE authenticate_run done`) and the modules unload cleanly |
+| `auth-error` | a boot of its own with the module-load init and the model's `fail-cse-auth=on` (firmware unauthenticated at reset, AUTH_RUN fails): probe logs `FW authentication failed` and leaves the IPU unbound, and the modules unload without an oops |
 | `probe-identify` | probe (from the PCI table, at `insmod`) identifies IPU4 |
 | `probe-buttress` | buttress init + ISYS/PSYS power-up succeed |
 | `probe-mmu` | the PSYS MMU init at probe writes the IPU4 stream tables: the guest's writes to INFO and the L1/L2 stream start registers of the three PSYS MMUs (BAR + `0x4b0000`) equal, in order, the ones in `data/trace.txt` (QEMU write log, `tools/trace/check_writes.py`) |
