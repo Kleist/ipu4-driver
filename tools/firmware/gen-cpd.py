@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Generate a minimal Intel CPD firmware blob that passes the driver's
-file-level validation in `ipu6_cpd_validate_cpd_file()`, with no
-components (COMPONENTS is empty).
+file-level validation in `ipu6_cpd_validate_cpd_file()` and gives
+`ipu6_cpd_create_pkg_dir()` two components (ISYS, PSYS) to put in the
+package directory. Their payloads are placeholders: the QEMU model
+does not run firmware.
 
 The metadata component size depends on the device: 84 bytes for IPU6,
 68 for IPU6SE, IPU4 and IPU4P (`--cmpnt-size`, shorter SHA hash).
@@ -40,7 +42,10 @@ METADATA_EXTN_SIZE = 4 + 4 + 4 + 16    # u32 extn_type; u32 len; u32 img_type; u
 MODDATA_HDR_SIZE = 4 + 4 + 4 + 4 + 4 + 4 + 11 + 7 + 2  # struct ipu6_cpd_module_data_hdr, __packed
 
 # (nested CPD entry name, metadata cmpnt id, version, payload)
-COMPONENTS: tuple = ()
+COMPONENTS = (
+    (b"ISYS", 1, 1, b"ISYS" * 16),
+    (b"PSYS", 2, 1, b"PSYS" * 16),
+)
 CMPNT_SIZES = (68, 84)
 
 
