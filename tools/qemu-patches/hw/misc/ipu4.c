@@ -87,6 +87,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 #define BTRS_SECURITY_CTL_FW_SETUP_MASK 0x1f
 #define BTRS_SECURITY_CTL_FW_SETUP_DONE BIT(0)
 #define BTRS_SECURITY_CTL_AUTH_DONE     BIT(1)
+#define BTRS_SECURITY_CTL_AUTH_FAILED   BIT(3)
 /* What the CSE's bootloader leaves in its status word after BOOT_LOAD. */
 #define BOOTLOADER_MAGIC_KEY            0xb00710adu
 
@@ -504,6 +505,9 @@ struct Ipu4State {
     /* "fail-stream-starts" property: answer this many STREAM_START /
      * STREAM_START_AND_CAPTURE commands with a firmware error. */
     uint32_t fail_stream_starts;
+    /* "fail-cse-auth" property: the platform did not authenticate the
+     * firmware (no AUTH_DONE at reset) and the CSE fails AUTH_RUN. */
+    bool fail_cse_auth;
     const Ipu4VariantInfo *v;
 
     /* Latched registers. */
@@ -1608,7 +1612,8 @@ static void ipu4_cse_command(Ipu4State *s, uint32_t cmd)
         break;
     case BTRS_IU2CSEDATA0_AUTH_RUN:
         s->security_ctl = (s->security_ctl & ~BTRS_SECURITY_CTL_FW_SETUP_MASK) |
-                          BTRS_SECURITY_CTL_AUTH_DONE;
+                          (s->fail_cse_auth ? BTRS_SECURITY_CTL_AUTH_FAILED :
+                                              BTRS_SECURITY_CTL_AUTH_DONE);
         done = BTRS_CSE2IUDATA0_AUTH_RUN_DONE;
         break;
     default:
@@ -2111,6 +2116,9 @@ static void ipu4_reset(DeviceState *dev)
      * through ipu6_buttress_ipc_reset() at probe time, which the
      * BIT(1)→BIT(0) CSR ping-pong below handles. */
     s->security_ctl = 0x37002;
+    if (s->fail_cse_auth) {
+        s->security_ctl &= ~BTRS_SECURITY_CTL_AUTH_DONE;
+    }
     s->iu2cse_csr = 0;
     s->iu2cse_data0 = 0;
     s->cse2iu_csr = 0;
@@ -2221,6 +2229,7 @@ static const VMStateDescription vmstate_ipu4 = {
 static Property ipu4_properties[] = {
     DEFINE_PROP_STRING("variant", Ipu4State, variant_name),
     DEFINE_PROP_UINT32("fail-stream-starts", Ipu4State, fail_stream_starts, 0),
+    DEFINE_PROP_BOOL("fail-cse-auth", Ipu4State, fail_cse_auth, false),
     DEFINE_PROP_END_OF_LIST(),
 };
 
