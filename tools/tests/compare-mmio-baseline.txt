@@ -4,7 +4,7 @@ qemu accesses:    <volatile>
 == unimplemented addresses (0) ==
   (none)
 
-== read-value mismatches (12) ==
+== read-value mismatches (11) ==
   buttress        0x05c  PWR_STATE
     silicon: 0x72443 0xa71433 0xa72433 0x1a72433 ... (+1 more)
     qemu:    <volatile>
@@ -14,9 +14,6 @@ qemu accesses:    <volatile>
   buttress        0x168  TSC_HI
     silicon: 0x4
     qemu:    <volatile>
-  buttress        0x30c  CSE2IUCSR
-    silicon: 0x0 0x1 0x2 0x3
-    qemu:    0x0 0x2
   isys spc        0x000  SPC_STATUS_CTRL
     silicon: 0xa0 0xa8
     qemu:    <volatile>

@@ -265,10 +265,10 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 /* CSE↔IU IPC CSR token bits (kernel/ipu4/ipu6-platform-buttress-regs.h:184).
  * The driver uses CSR_OUT (IU2CSECSR=0x108) to signal phase tokens to
  * the CSE side and CSR_IN (CSE2IUCSR=0x30c) as the peer-ack channel
- * (W1C-cleared by the driver). The model mirrors a minimal subset
- * sufficient for ipu6_buttress_ipc_reset() to terminate. */
+ * (W1C-cleared by the driver). */
 #define BUTTRESS_IU2CSECSR_ENTRY                       (1u << 0)
 #define BUTTRESS_IU2CSECSR_EXIT                        (1u << 1)
+#define BUTTRESS_IU2CSECSR_QUERY                       (1u << 2)
 #define BUTTRESS_IU2CSECSR_ASSERTED_REG_VALID_REQ      (1u << 3)
 #define BUTTRESS_IU2CSECSR_ACKED_REG_VALID             (1u << 4)
 
@@ -534,6 +534,8 @@ struct Ipu4State {
     uint32_t cse2iu_data0;
     /* The CSE ran BOOT_LOAD since the last FW reset. */
     bool cse_boot_loaded;
+    /* IPC reset handshake: the driver's first ENTRY was answered. */
+    bool cse_rst_entered;
     /* Config space offset of the Advanced Features capability (FLR). */
     uint8_t af_cap;
 
@@ -1870,24 +1872,24 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
         }
         break;
     case BTRS_REG_IU2CSECSR:
-        /* CSR_OUT — driver writes ENTRY/EXIT/QUERY/VALID-REQ tokens
-         * to step the IPC reset state machine
-         * (kernel/ipu4/ipu6-buttress.c:67-181). Mirror the minimum set
-         * of CSE-side responses so the driver's loop terminates on
-         * the success path:
-         *   - BIT(0) ENTRY  written → set BIT(1) EXIT in CSR_IN.
-         *     Drives the loop straight to the `case EXIT:` branch
-         *     which clears state and returns 0.
-         *   - BIT(3) ASSERTED_REG_VALID_REQ → set BIT(4)
-         *     ACKED_REG_VALID in CSR_IN so
-         *     ipu6_buttress_ipc_validity_open() succeeds. (The
-         *     auth_done short-circuit means this isn't actually
-         *     exercised today, but model it for completeness.)
-         *   - BIT(5) DEASSERTED_REG_VALID_REQ → no response needed
-         *     (validity_close is fire-and-forget). */
+        /* CSR_OUT — the driver steps the IPC reset handshake
+         * (ipu6_buttress_ipc_reset()) with ENTRY/QUERY/EXIT tokens and
+         * opens a command with ASSERTED_REG_VALID_REQ. The CSE answers
+         * in CSR_IN as silicon does (data/trace.txt lines 31-45): the
+         * first ENTRY with ENTRY, the second with ENTRY|EXIT, QUERY
+         * with EXIT; the driver's EXIT ends the handshake. */
         s->iu2cse_csr = val;
         if (val & BUTTRESS_IU2CSECSR_ENTRY) {
+            s->cse2iu_csr |= s->cse_rst_entered ?
+                BUTTRESS_IU2CSECSR_ENTRY | BUTTRESS_IU2CSECSR_EXIT :
+                BUTTRESS_IU2CSECSR_ENTRY;
+            s->cse_rst_entered = true;
+        }
+        if (val & BUTTRESS_IU2CSECSR_QUERY) {
             s->cse2iu_csr |= BUTTRESS_IU2CSECSR_EXIT;
+        }
+        if (val & BUTTRESS_IU2CSECSR_EXIT) {
+            s->cse_rst_entered = false;
         }
         if (val & BUTTRESS_IU2CSECSR_ASSERTED_REG_VALID_REQ) {
             s->cse2iu_csr |= BUTTRESS_IU2CSECSR_ACKED_REG_VALID;
@@ -2116,6 +2118,7 @@ static void ipu4_reset(DeviceState *dev)
     s->cse2iu_csr = 0;
     s->cse2iu_data0 = 0;
     s->cse_boot_loaded = false;
+    s->cse_rst_entered = false;
     s->is_unispart_irq_edge = 0;
     s->is_unispart_irq_mask = 0;
     s->is_unispart_irq_status = 0;
@@ -2172,7 +2175,7 @@ static const VMStateDescription vmstate_ipu4_csi2_port = {
 
 static const VMStateDescription vmstate_ipu4 = {
     .name = "ipu4",
-    .version_id = 13,
+    .version_id = 14,
     .minimum_version_id = 1,
     .fields = (const VMStateField[]) {
         VMSTATE_PCI_DEVICE(parent_obj, Ipu4State),
@@ -2214,6 +2217,7 @@ static const VMStateDescription vmstate_ipu4 = {
         VMSTATE_UINT32_V(ipu6v_csi_err, Ipu4State, 12),
         VMSTATE_UINT32_V(iu2cse_data0, Ipu4State, 13),
         VMSTATE_BOOL_V(cse_boot_loaded, Ipu4State, 13),
+        VMSTATE_BOOL_V(cse_rst_entered, Ipu4State, 14),
         VMSTATE_END_OF_LIST()
     }
 };
