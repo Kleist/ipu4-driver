@@ -14,6 +14,10 @@
  * /dev/media0. With SUBDEV (the ipu6 flavor's CSI-2 receiver subdev),
  * its sink pad is first set to the sensor's 800x800 RGB888 format
  * ("SUBDEV:s_fmt"), which the upstream driver does not default to.
+ *
+ * STREAMON_FMT=CODE:FOURCC streams another format: CODE is the media
+ * bus code (hex) set on SUBDEV and, with STREAMON_SENSOR=SUBDEV, on the
+ * sensor's pad first; FOURCC the capture pixel format.
  */
 
 #include <errno.h>
@@ -205,7 +209,7 @@ static int enable_media_links(const char *media_dev, const char *video_dev)
  * sensor; the format propagates to the source pads through the
  * subdev's routing.
  */
-static int set_subdev_format(const char *subdev)
+static int set_subdev_format(const char *subdev, __u32 code)
 {
 	struct v4l2_subdev_format sfmt = {
 		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
@@ -213,7 +217,7 @@ static int set_subdev_format(const char *subdev)
 		.format = {
 			.width = WIDTH,
 			.height = HEIGHT,
-			.code = MEDIA_BUS_FMT_RGB888_1X24,
+			.code = code,
 			.field = V4L2_FIELD_NONE,
 		},
 	};
@@ -241,9 +245,24 @@ int main(int argc, char **argv)
 	const char *dev = argc > 1 ? argv[1] : "/dev/video0";
 	const char *media_dev = argc > 2 ? argv[2] : "/dev/media0";
 	const char *subdev = argc > 3 ? argv[3] : NULL;
+	const char *fmt_env = getenv("STREAMON_FMT");
+	const char *sensor = getenv("STREAMON_SENSOR");
+	__u32 code = MEDIA_BUS_FMT_RGB888_1X24, pixfmt = PIXFMT;
 	int fd, i;
 
-	if (subdev && set_subdev_format(subdev) < 0)
+	if (fmt_env) {
+		char *end;
+
+		code = strtoul(fmt_env, &end, 16);
+		if (*end != ':' || strlen(end + 1) != 4) {
+			printf("STREAM:fail step=fmt_env value=%s\n", fmt_env);
+			return 1;
+		}
+		pixfmt = v4l2_fourcc(end[1], end[2], end[3], end[4]);
+	}
+	if (sensor && set_subdev_format(sensor, code) < 0)
+		return 1;
+	if (subdev && set_subdev_format(subdev, code) < 0)
 		return 1;
 
 	/* Best-effort media-link enable. STREAMON fails with ENOLINK
@@ -267,7 +286,7 @@ int main(int argc, char **argv)
 		.fmt.pix = {
 			.width = WIDTH,
 			.height = HEIGHT,
-			.pixelformat = PIXFMT,
+			.pixelformat = pixfmt,
 			.field = V4L2_FIELD_NONE,
 		},
 	};
