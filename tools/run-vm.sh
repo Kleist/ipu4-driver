@@ -87,9 +87,15 @@ fi
 # IPU4_VARIANT (ipu4 | ipu4p | ipu6, default ipu4) selects which IPU the
 # model presents (tools/tests/ipu6/ladder.sh, plan "Tracks and file ownership");
 # the default leaves the command line exactly as before.
+#
+# IPU4_MODEL_PROPS adds model properties, e.g. "fail-stream-starts=1" for
+# a test that injects a firmware error.
 DEVICE_ARGS=(-device ipu4)
 if [[ "${IPU4_VARIANT:-ipu4}" != ipu4 ]]; then
 	DEVICE_ARGS=(-device "ipu4,variant=$IPU4_VARIANT")
+fi
+if [[ -n "${IPU4_MODEL_PROPS:-}" ]]; then
+	DEVICE_ARGS=(-device "${DEVICE_ARGS[1]},$IPU4_MODEL_PROPS")
 fi
 if [[ "${IPU4_NO_DEVICE:-0}" == "1" ]]; then
 	DEVICE_ARGS=()
