@@ -26,6 +26,7 @@
 #include "qemu/bitops.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
+#include "qemu/range.h"
 #include "qemu/timer.h"
 #include "qemu/units.h"
 #include "hw/pci/pci_device.h"
@@ -75,6 +76,19 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
 
 #define BTRS_FW_RESET_CTL_START    BIT(0)
 #define BTRS_FW_RESET_CTL_DONE     BIT(1)
+
+/* CSE IPC commands and answers, and SECURITY_CTL's FW setup field
+ * (ipu6-platform-buttress-regs.h). */
+#define BTRS_IU2CSEDB0_BUSY             BIT(31)
+#define BTRS_IU2CSEDATA0_BOOT_LOAD      1
+#define BTRS_IU2CSEDATA0_AUTH_RUN       2
+#define BTRS_CSE2IUDATA0_BOOT_LOAD_DONE BIT(0)
+#define BTRS_CSE2IUDATA0_AUTH_RUN_DONE  BIT(1)
+#define BTRS_SECURITY_CTL_FW_SETUP_MASK 0x1f
+#define BTRS_SECURITY_CTL_FW_SETUP_DONE BIT(0)
+#define BTRS_SECURITY_CTL_AUTH_DONE     BIT(1)
+/* What the CSE's bootloader leaves in its status word after BOOT_LOAD. */
+#define BOOTLOADER_MAGIC_KEY            0xb00710adu
 
 /* ISYS unispart IRQ block. The driver derives the address as
  * ISYS_BASE (0x100000) + UNISPART_OFFSET (0x7c000) = 0x17c000 from
@@ -284,6 +298,8 @@ OBJECT_DECLARE_SIMPLE_TYPE(Ipu4State, IPU4)
  * raising the MSI.
  */
 #define BTRS_ISR_IS_IRQ                  (1u << 0)
+#define BTRS_ISR_IPC_EXEC_DONE_BY_CSE    (1u << 2)
+#define BTRS_ISR_IPC_FROM_CSE_IS_WAITING (1u << 4)
 #define ISYS_UNISPART_IRQ_SW             (1u << 30)
 #define IPU4PV_UNISPART_IRQ_SW           (1u << 22)
 
@@ -474,6 +490,9 @@ typedef struct Ipu4VariantInfo {
     uint32_t unispart_sw_irq;
     /* Answer iwake proxy tokens on input queue 0. */
     bool answers_proxy;
+    /* BAR offset of the bootloader status word the driver polls after
+     * BOOT_LOAD (PSYS DMEM on IPU4/IPU4P, buttress on IPU6). */
+    hwaddr bootloader_status;
 } Ipu4VariantInfo;
 
 struct Ipu4State {
@@ -507,8 +526,13 @@ struct Ipu4State {
     uint32_t fw_src_size;
     uint32_t security_ctl;
     uint32_t iu2cse_csr;
+    uint32_t iu2cse_data0;
     uint32_t cse2iu_csr;
     uint32_t cse2iu_data0;
+    /* The CSE ran BOOT_LOAD since the last FW reset. */
+    bool cse_boot_loaded;
+    /* Config space offset of the Advanced Features capability (FLR). */
+    uint8_t af_cap;
 
     /* ISYS unispart IRQ block. */
     uint32_t is_unispart_irq_edge;
@@ -1521,6 +1545,7 @@ static const Ipu4VariantInfo ipu4_variants[] = {
         .pwr_state = ipu4_pwr_state,
         .encode_resp = ipu4_encode_resp,
         .unispart_sw_irq = ISYS_UNISPART_IRQ_SW,
+        .bootloader_status = 0x408000,
     },
     {
         .name = "ipu4p",
@@ -1532,6 +1557,7 @@ static const Ipu4VariantInfo ipu4_variants[] = {
         .frame_irq = ipu6v_frame_irq,   /* the same port 0 error */
         .unispart_sw_irq = IPU4PV_UNISPART_IRQ_SW,
         .answers_proxy = true,
+        .bootloader_status = 0x408000,
     },
     {
         .name = "ipu6",
@@ -1544,14 +1570,51 @@ static const Ipu4VariantInfo ipu4_variants[] = {
         /* IPU4's bit; ipu6v_mmio_*() map it to IPU6's BIT(22). */
         .unispart_sw_irq = ISYS_UNISPART_IRQ_SW,
         .answers_proxy = true,
+        .bootloader_status = 0x15c,
     },
 };
+
+/* The CSE's side of a driver command (ipu6_buttress_ipc_send()): it
+ * takes the command (EXEC_DONE), runs it and answers on CSE2IUDATA0. */
+static void ipu4_cse_command(Ipu4State *s, uint32_t cmd)
+{
+    uint32_t done;
+
+    switch (cmd) {
+    case BTRS_IU2CSEDATA0_BOOT_LOAD:
+        s->security_ctl = (s->security_ctl & ~BTRS_SECURITY_CTL_FW_SETUP_MASK) |
+                          BTRS_SECURITY_CTL_FW_SETUP_DONE;
+        s->cse_boot_loaded = true;
+        done = BTRS_CSE2IUDATA0_BOOT_LOAD_DONE;
+        break;
+    case BTRS_IU2CSEDATA0_AUTH_RUN:
+        s->security_ctl = (s->security_ctl & ~BTRS_SECURITY_CTL_FW_SETUP_MASK) |
+                          BTRS_SECURITY_CTL_AUTH_DONE;
+        done = BTRS_CSE2IUDATA0_AUTH_RUN_DONE;
+        break;
+    default:
+        qemu_log_mask(LOG_UNIMP, "ipu4: CSE command 0x%x\n", cmd);
+        done = 0;
+        break;
+    }
+    s->isr_status |= BTRS_ISR_IPC_EXEC_DONE_BY_CSE;
+    if (done) {
+        s->cse2iu_data0 = done;
+        s->isr_status |= BTRS_ISR_IPC_FROM_CSE_IS_WAITING;
+    }
+    if (msi_enabled(&s->parent_obj)) {
+        msi_notify(&s->parent_obj, 0);
+    }
+}
 
 static uint64_t ipu4_mmio_read(void *opaque, hwaddr addr, unsigned size)
 {
     Ipu4State *s = IPU4(opaque);
     uint64_t val = 0;
 
+    if (s->cse_boot_loaded && addr == s->v->bootloader_status) {
+        return BOOTLOADER_MAGIC_KEY;
+    }
     if (s->v->mmio_read && s->v->mmio_read(s, addr, &val)) {
         return val;
     }
@@ -1729,6 +1792,13 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
         break;
     case BTRS_REG_FW_RESET_CTL:
         s->fw_reset_ctl = val;
+        /* ipu6_buttress_reset_authentication(): the CSE drops the
+         * authenticated firmware, so the next probe runs BOOT_LOAD and
+         * AUTH_RUN again. */
+        if (val & BTRS_FW_RESET_CTL_START) {
+            s->security_ctl &= ~BTRS_SECURITY_CTL_FW_SETUP_MASK;
+            s->cse_boot_loaded = false;
+        }
         break;
     case BTRS_REG_IS_FREQ_CTL:
         /* Driver writes the BUTTRESS_FREQ_CTL_START bit (BIT(31))
@@ -1772,17 +1842,13 @@ static void ipu4_mmio_write(void *opaque, hwaddr addr, uint64_t val,
         s->security_ctl = val;
         break;
     case BTRS_REG_IU2CSEDATA0:
-        /* Driver-to-CSE command word. Step-1-followup secure-mode
-         * model leaves the actual command unchecked because
-         * ipu6_buttress_authenticate() short-circuits on the
-         * AUTH_DONE bit we pre-set in SECURITY_CTL — no BOOT_LOAD /
-         * AUTH_RUN ever ships. Latch for completeness. */
-        s->iu2cse_csr = val;
+        /* Driver-to-CSE command word, run on the IU2CSEDB0 kick. */
+        s->iu2cse_data0 = val;
         break;
     case BTRS_REG_IU2CSEDB0:
-        /* IU2CSEDB0 with BUSY (BIT(31)) is the "command ready" trigger.
-         * In a full secure-mode model we'd drive the CSE-side response
-         * dance here; auth_done short-circuits keep it as a latch. */
+        if (val & BTRS_IU2CSEDB0_BUSY) {
+            ipu4_cse_command(s, s->iu2cse_data0);
+        }
         break;
     case BTRS_REG_IU2CSECSR:
         /* CSR_OUT — driver writes ENTRY/EXIT/QUERY/VALID-REQ tokens
@@ -1928,6 +1994,7 @@ static void ipu4_realize(PCIDevice *pdev, Error **errp)
     Ipu4State *s = IPU4(pdev);
     const char *name = s->variant_name ? s->variant_name : "ipu4";
     unsigned int i;
+    int ret;
 
     s->v = NULL;
     for (i = 0; i < ARRAY_SIZE(ipu4_variants); i++) {
@@ -1953,12 +2020,37 @@ static void ipu4_realize(PCIDevice *pdev, Error **errp)
         return;
     }
 
+    ret = pci_add_capability(pdev, PCI_CAP_ID_AF, 0, PCI_CAP_AF_SIZEOF, errp);
+    if (ret < 0) {
+        return;
+    }
+    s->af_cap = ret;
+    pdev->config[s->af_cap + PCI_AF_LENGTH] = PCI_CAP_AF_SIZEOF;
+    pdev->config[s->af_cap + PCI_AF_CAP] = PCI_AF_CAP_TP | PCI_AF_CAP_FLR;
+    pdev->wmask[s->af_cap + PCI_AF_CTRL] = PCI_AF_CTRL_FLR;
+
     memory_region_init_io(&s->bar0, OBJECT(s), &ipu4_mmio_ops, s,
                           "ipu4-bar0", IPU4_BAR_SIZE);
     pci_register_bar(pdev, 0,
                      PCI_BASE_ADDRESS_SPACE_MEMORY |
                      PCI_BASE_ADDRESS_MEM_TYPE_64,
                      &s->bar0);
+}
+
+/* PCI Advanced Features FLR, so the guest can reset the function
+ * (pci_af_flr(): /sys/bus/pci/devices/.../reset). */
+static void ipu4_config_write(PCIDevice *pdev, uint32_t addr, uint32_t val,
+                              int len)
+{
+    Ipu4State *s = IPU4(pdev);
+    uint8_t *ctrl = &pdev->config[s->af_cap + PCI_AF_CTRL];
+
+    pci_default_write_config(pdev, addr, val, len);
+    if (ranges_overlap(addr, len, s->af_cap + PCI_AF_CTRL, 1) &&
+        (*ctrl & PCI_AF_CTRL_FLR)) {
+        *ctrl &= ~PCI_AF_CTRL_FLR;
+        pci_device_reset(pdev);
+    }
 }
 
 static void ipu4_exit(PCIDevice *pdev)
@@ -1992,16 +2084,19 @@ static void ipu4_reset(DeviceState *dev)
      *   bit  1   AUTH_DONE
      *   bits 12-14, 17  silicon-specific (fuse / config bits)
      *   bit 16   FW_SECURE_MODE
-     * AUTH_DONE is asserted at reset so ipu6_buttress_authenticate()
-     * fast-paths into ipu6_buttress_auth_done() and skips the full
-     * BOOT_LOAD / AUTH_RUN dance — those would require a richer CSE
-     * IPC model than we have. Secure mode (BIT(16)) still routes the
-     * driver through ipu6_buttress_ipc_reset() at probe time, which
-     * the BIT(1)→BIT(0) CSR ping-pong below handles. */
+     * AUTH_DONE is asserted at reset, as the platform authenticated
+     * the firmware before the driver loads, so the first probe skips
+     * BOOT_LOAD / AUTH_RUN. After the driver resets the authentication
+     * (FW_RESET_CTL, at a PCI reset) the next probe sends both to
+     * ipu4_cse_command(). Secure mode (BIT(16)) also routes the driver
+     * through ipu6_buttress_ipc_reset() at probe time, which the
+     * BIT(1)→BIT(0) CSR ping-pong below handles. */
     s->security_ctl = 0x37002;
     s->iu2cse_csr = 0;
+    s->iu2cse_data0 = 0;
     s->cse2iu_csr = 0;
     s->cse2iu_data0 = 0;
+    s->cse_boot_loaded = false;
     s->is_unispart_irq_edge = 0;
     s->is_unispart_irq_mask = 0;
     s->is_unispart_irq_status = 0;
@@ -2058,7 +2153,7 @@ static const VMStateDescription vmstate_ipu4_csi2_port = {
 
 static const VMStateDescription vmstate_ipu4 = {
     .name = "ipu4",
-    .version_id = 12,
+    .version_id = 13,
     .minimum_version_id = 1,
     .fields = (const VMStateField[]) {
         VMSTATE_PCI_DEVICE(parent_obj, Ipu4State),
@@ -2098,6 +2193,8 @@ static const VMStateDescription vmstate_ipu4 = {
         VMSTATE_BOOL_V(ps_powered, Ipu4State, 9),
         VMSTATE_UINT32_ARRAY_V(ipu6v_phy_ctl, Ipu4State, 2, 11),
         VMSTATE_UINT32_V(ipu6v_csi_err, Ipu4State, 12),
+        VMSTATE_UINT32_V(iu2cse_data0, Ipu4State, 13),
+        VMSTATE_BOOL_V(cse_boot_loaded, Ipu4State, 13),
         VMSTATE_END_OF_LIST()
     }
 };
@@ -2114,6 +2211,7 @@ static void ipu4_class_init(ObjectClass *klass, void *data)
 
     k->realize = ipu4_realize;
     k->exit = ipu4_exit;
+    k->config_write = ipu4_config_write;
     k->vendor_id = IPU4_PCI_VENDOR_ID;
     k->device_id = IPU4_PCI_DEVICE_ID;
     k->revision = 0x00;
