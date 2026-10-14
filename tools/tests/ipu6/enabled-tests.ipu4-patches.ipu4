@@ -60,3 +60,6 @@ pci-reauth
 # A firmware error on STREAM_START unwinds cleanly (own boot, model
 # fail-stream-starts=1).
 stream-start-error
+
+# A stream with the virt sensor's CSI-2 frame descriptor (module-load boot).
+frame-desc
