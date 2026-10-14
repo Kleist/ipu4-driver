@@ -21,6 +21,10 @@ editing the same list.
   (`boot_stream_vm`, `stream_log_ok`, `$STREAM_LOG`, `$STREAM_WRITES`):
   `tools/rootfs/init.ipu6-stream` captures one frame from CSI-2 port 0
   with `streamon` and the tests read its markers and driver output.
+  Tests that need the driver loaded but no register-write capture run on
+  the module-load boot: a snippet `tools/rootfs/init.ipu6-modules.d/
+  NNN-<test>.loaded.sh` runs before its unload and the test reads
+  `tools/tests/out/ipu6-module-load.serial`.
 - **Legs:** the ladder runs one driver (`$DRIVER`: ipu4-out-of-tree |
   ipu4p | ipu6 | ipu4-patches) under one QEMU model variant (`$VARIANT`,
   exported as `$IPU4_VARIANT`: ipu4 | ipu4p | ipu6); table in

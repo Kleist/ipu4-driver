@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Line coverage of one ipu6-ladder leg: turn the gcov tars the ladder's
-# probe and stream boots leave on the 9p share (tools/rootfs/gcov-harvest)
-# into an lcov report of the driver.
+# module-load, probe and stream boots leave on the 9p share
+# (tools/rootfs/gcov-harvest) into an lcov report of the driver.
 #
 # Usage: tools/coverage/ladder.sh DRV_DIR OUT_DIR TAR...
 #
