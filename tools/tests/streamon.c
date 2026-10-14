@@ -362,6 +362,28 @@ int main(int argc, char **argv)
 		printf("STREAM:pattern_ok seq=%u bytes=%zu\n", seq, len);
 	}
 
+	/* STREAMON_REQUEUE=N: give the buffer back while streaming and take
+	 * the next frame, N times (QBUF on a running queue). */
+	const char *requeue = getenv("STREAMON_REQUEUE");
+	int n = requeue ? atoi(requeue) : 0;
+
+	for (i = 1; i <= n; i++) {
+		struct v4l2_buffer q = dq;
+
+		if (xioctl(fd, VIDIOC_QBUF, &q, "requeue") < 0)
+			return 1;
+		if (poll(&pfd, 1, 2000) <= 0) {
+			printf("STREAM:fail step=requeue_poll n=%d\n", i);
+			return 1;
+		}
+		memset(&dq, 0, sizeof(dq));
+		dq.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		dq.memory = V4L2_MEMORY_MMAP;
+		if (xioctl(fd, VIDIOC_DQBUF, &dq, "requeue_dqbuf") < 0)
+			return 1;
+		printf("STREAM:requeue_ok n=%d seq=%u\n", i, dq.sequence);
+	}
+
 	printf("STREAM:done bytes=%u\n", dq.bytesused);
 	return 0;
 }
