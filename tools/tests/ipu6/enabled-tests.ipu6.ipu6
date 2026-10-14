@@ -70,3 +70,6 @@ stream-start-error
 
 # A stream with the virt sensor's CSI-2 frame descriptor (module-load boot).
 frame-desc
+
+# Buffers queued while streaming are captured (module-load boot).
+stream-requeue
