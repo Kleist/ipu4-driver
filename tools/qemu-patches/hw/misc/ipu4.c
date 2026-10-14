@@ -501,6 +501,9 @@ struct Ipu4State {
 
     /* "variant" property; looked up in ipu4_variants[] at realize. */
     char *variant_name;
+    /* "fail-stream-starts" property: answer this many STREAM_START /
+     * STREAM_START_AND_CAPTURE commands with a firmware error. */
+    uint32_t fail_stream_starts;
     const Ipu4VariantInfo *v;
 
     /* Latched registers. */
@@ -1062,12 +1065,28 @@ static void ipu4_handle_send_bump(Ipu4State *s, unsigned int stream,
                                (uint8_t)stream);
             break;
         case IPU4_FW_SEND_STREAM_START:
-            /* No buffer attached — STREAM_START is the bufless variant,
-             * so just complete stream_start_completion. */
-            ipu4_post_response(s, IPU4_FW_RESP_STREAM_START_ACK,
-                               (uint8_t)stream);
-            break;
         case IPU4_FW_SEND_STREAM_START_AND_CAPTURE:
+            if (s->fail_stream_starts) {
+                Ipu4FwIsysRespInfo resp = {
+                    .type = token.send_type == IPU4_FW_SEND_STREAM_START ?
+                            IPU4_FW_RESP_STREAM_START_ACK :
+                            IPU4_FW_RESP_STREAM_START_AND_CAPTURE_ACK,
+                    .stream_handle = (uint8_t)stream,
+                    .error_info.error = 1,
+                };
+
+                /* Injected start failure: no frame either. */
+                s->fail_stream_starts--;
+                ipu4_post_response_full(s, &resp);
+                break;
+            }
+            if (token.send_type == IPU4_FW_SEND_STREAM_START) {
+                /* No buffer attached — STREAM_START is the bufless
+                 * variant, so just complete stream_start_completion. */
+                ipu4_post_response(s, IPU4_FW_RESP_STREAM_START_ACK,
+                                   (uint8_t)stream);
+                break;
+            }
             /* Bundle: ack the start completion AND deliver the frame
              * for the buffer attached via token.payload. The driver's
              * isys_isr_one drains responses one at a time per IRQ, so
@@ -2201,6 +2220,7 @@ static const VMStateDescription vmstate_ipu4 = {
 
 static Property ipu4_properties[] = {
     DEFINE_PROP_STRING("variant", Ipu4State, variant_name),
+    DEFINE_PROP_UINT32("fail-stream-starts", Ipu4State, fail_stream_starts, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 
