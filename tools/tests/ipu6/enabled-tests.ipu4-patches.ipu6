@@ -51,3 +51,6 @@ stream-requeue
 
 # A probe whose firmware authentication fails unwinds (own boot).
 auth-error
+
+# Other sensor formats stream (module-load boot).
+stream-formats
