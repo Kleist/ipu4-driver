@@ -40,3 +40,7 @@ v4l2-query
 # A PCI function reset drops the firmware authentication; the next probe
 # re-runs BOOT_LOAD / AUTH_RUN through the model's CSE.
 pci-reauth
+
+# A firmware error on STREAM_START unwinds cleanly (own boot, model
+# fail-stream-starts=1).
+stream-start-error
