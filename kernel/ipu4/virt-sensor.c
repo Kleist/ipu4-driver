@@ -12,9 +12,10 @@
  *      endpoint@0. This is what `fwnode_graph_get_endpoint_by_id()`
  *      in isys_notifier_init() (ipu6-isys.c:824) walks.
  *
- *   2. Registers a v4l2_subdev with a SOURCE pad advertising
- *      RGB888_1X24 at 800x800, with its fwnode set to the sensor HID
- *      node's fwnode so the async matcher can bind it.
+ *   2. Registers a v4l2_subdev with a SOURCE pad advertising 800x800
+ *      RGB888_1X24 (or a Bayer, greyscale or YUV format once set), with
+ *      its fwnode set to the sensor HID node's fwnode so the async
+ *      matcher can bind it.
  *
  * `.s_stream()` is a no-op — frame generation is M5's QEMU work. What
  * this file delivers is: probe completes, `/dev/video*` nodes appear.
@@ -36,7 +37,6 @@
 
 #define VIRT_SENSOR_WIDTH		800
 #define VIRT_SENSOR_HEIGHT		800
-#define VIRT_SENSOR_MBUS_CODE		MEDIA_BUS_FMT_RGB888_1X24
 #define VIRT_SENSOR_LANES		4
 #define VIRT_SENSOR_LINK_FREQ		450000000ULL
 
@@ -50,6 +50,7 @@ struct virt_sensor {
 	struct v4l2_subdev sd;
 	struct media_pad pad;
 	struct v4l2_ctrl_handler ctrl_handler;
+	const struct virt_sensor_fmt *fmt;	/* active format */
 
 	/* Nodes are in the order expected by software_node_register_node_group. */
 	struct software_node ipu_node;
@@ -77,10 +78,35 @@ struct virt_sensor {
 /* Only one virt-sensor per system; matches the one-IPU-device reality. */
 static struct virt_sensor *g_virt_sensor;
 
+/* The formats the sensor offers, the default first, with their CSI-2
+ * data types.
+ */
+static const struct virt_sensor_fmt {
+	u32 code;
+	u8 dt;
+} virt_sensor_fmts[] = {
+	{ MEDIA_BUS_FMT_RGB888_1X24, MIPI_CSI2_DT_RGB888 },
+	{ MEDIA_BUS_FMT_RGB565_1X16, MIPI_CSI2_DT_RGB565 },
+	{ MEDIA_BUS_FMT_UYVY8_1X16, MIPI_CSI2_DT_YUV422_8B },
+	{ MEDIA_BUS_FMT_SBGGR8_1X8, MIPI_CSI2_DT_RAW8 },
+	{ MEDIA_BUS_FMT_SGRBG10_1X10, MIPI_CSI2_DT_RAW10 },
+	{ MEDIA_BUS_FMT_SRGGB12_1X12, MIPI_CSI2_DT_RAW12 },
+	{ MEDIA_BUS_FMT_Y10_1X10, MIPI_CSI2_DT_RAW10 },
+};
+
+static const struct virt_sensor_fmt *virt_sensor_find_fmt(u32 code)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(virt_sensor_fmts); i++)
+		if (virt_sensor_fmts[i].code == code)
+			return &virt_sensor_fmts[i];
+	return NULL;
+}
+
 static const struct v4l2_mbus_framefmt virt_sensor_default_fmt = {
 	.width		= VIRT_SENSOR_WIDTH,
 	.height		= VIRT_SENSOR_HEIGHT,
-	.code		= VIRT_SENSOR_MBUS_CODE,
 	.field		= V4L2_FIELD_NONE,
 	.colorspace	= V4L2_COLORSPACE_SRGB,
 };
@@ -89,9 +115,9 @@ static int virt_sensor_enum_mbus_code(struct v4l2_subdev *sd,
 				      struct v4l2_subdev_state *state,
 				      struct v4l2_subdev_mbus_code_enum *code)
 {
-	if (code->index != 0)
+	if (code->index >= ARRAY_SIZE(virt_sensor_fmts))
 		return -EINVAL;
-	code->code = VIRT_SENSOR_MBUS_CODE;
+	code->code = virt_sensor_fmts[code->index].code;
 	return 0;
 }
 
@@ -99,7 +125,7 @@ static int virt_sensor_enum_frame_size(struct v4l2_subdev *sd,
 				       struct v4l2_subdev_state *state,
 				       struct v4l2_subdev_frame_size_enum *fse)
 {
-	if (fse->index != 0 || fse->code != VIRT_SENSOR_MBUS_CODE)
+	if (fse->index != 0 || !virt_sensor_find_fmt(fse->code))
 		return -EINVAL;
 	fse->min_width = fse->max_width = VIRT_SENSOR_WIDTH;
 	fse->min_height = fse->max_height = VIRT_SENSOR_HEIGHT;
@@ -110,16 +136,27 @@ static int virt_sensor_get_fmt(struct v4l2_subdev *sd,
 			       struct v4l2_subdev_state *state,
 			       struct v4l2_subdev_format *fmt)
 {
+	struct virt_sensor *vs = container_of(sd, struct virt_sensor, sd);
+
 	fmt->format = virt_sensor_default_fmt;
+	fmt->format.code = vs->fmt->code;
 	return 0;
 }
 
+/* One fixed size; an unknown code gets the default format. */
 static int virt_sensor_set_fmt(struct v4l2_subdev *sd,
 			       struct v4l2_subdev_state *state,
 			       struct v4l2_subdev_format *fmt)
 {
-	/* Single format — negotiation is a no-op. */
+	struct virt_sensor *vs = container_of(sd, struct virt_sensor, sd);
+	const struct virt_sensor_fmt *f = virt_sensor_find_fmt(fmt->format.code);
+
+	if (!f)
+		f = &virt_sensor_fmts[0];
+	if (fmt->which == V4L2_SUBDEV_FORMAT_ACTIVE)
+		vs->fmt = f;
 	fmt->format = virt_sensor_default_fmt;
+	fmt->format.code = f->code;
 	return 0;
 }
 
@@ -141,6 +178,8 @@ MODULE_PARM_DESC(virt_sensor_frame_desc, "Report a CSI-2 frame descriptor");
 static int virt_sensor_get_frame_desc(struct v4l2_subdev *sd, unsigned int pad,
 				      struct v4l2_mbus_frame_desc *fd)
 {
+	struct virt_sensor *vs = container_of(sd, struct virt_sensor, sd);
+
 	if (!frame_desc)
 		return -ENOIOCTLCMD;
 
@@ -148,9 +187,9 @@ static int virt_sensor_get_frame_desc(struct v4l2_subdev *sd, unsigned int pad,
 	fd->type = V4L2_MBUS_FRAME_DESC_TYPE_CSI2;
 	fd->num_entries = 1;
 	fd->entry[0].stream = 0;
-	fd->entry[0].pixelcode = VIRT_SENSOR_MBUS_CODE;
+	fd->entry[0].pixelcode = vs->fmt->code;
 	fd->entry[0].bus.csi2.vc = 0;
-	fd->entry[0].bus.csi2.dt = MIPI_CSI2_DT_RGB888;
+	fd->entry[0].bus.csi2.dt = vs->fmt->dt;
 	return 0;
 }
 
@@ -245,6 +284,7 @@ int ipu4_virt_sensor_install(struct pci_dev *pdev)
 	vs = kzalloc(sizeof(*vs), GFP_KERNEL);
 	if (!vs)
 		return -ENOMEM;
+	vs->fmt = &virt_sensor_fmts[0];
 
 	virt_sensor_build_swnodes(vs);
 
