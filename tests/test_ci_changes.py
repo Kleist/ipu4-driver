@@ -30,6 +30,7 @@ def classify(*paths):
         ("tools/notes/ipu6-ipu4-plan.md", set()),
         ("tools/dashboard/templates/index.html.j2", set()),
         ("tools/dashboard/parse_ladder.py", {"pytest"}),
+        ("tools/mutation/mutants.py", {"pytest"}),
         ("tests/test_compare.py", {"pytest"}),
         ("kernel/ipu4/ipu6-isys.c", {"kunit", "vm_smoke", "ipu6"}),
         ("tools/build.sh", {"kunit", "vm_smoke", "ipu6"}),
