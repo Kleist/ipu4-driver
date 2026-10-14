@@ -26,6 +26,7 @@
 #include <linux/types.h>
 
 #include <media/media-entity.h>
+#include <media/mipi-csi2.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-subdev.h>
@@ -129,11 +130,36 @@ static int virt_sensor_s_stream(struct v4l2_subdev *sd, int enable)
 	return 0;
 }
 
+static bool frame_desc;
+module_param_named(virt_sensor_frame_desc, frame_desc, bool, 0644);
+MODULE_PARM_DESC(virt_sensor_frame_desc, "Report a CSI-2 frame descriptor");
+
+/*
+ * With frame_desc, describe the one CSI-2 stream; without, the IPU
+ * derives VC and data type from the format.
+ */
+static int virt_sensor_get_frame_desc(struct v4l2_subdev *sd, unsigned int pad,
+				      struct v4l2_mbus_frame_desc *fd)
+{
+	if (!frame_desc)
+		return -ENOIOCTLCMD;
+
+	memset(fd, 0, sizeof(*fd));
+	fd->type = V4L2_MBUS_FRAME_DESC_TYPE_CSI2;
+	fd->num_entries = 1;
+	fd->entry[0].stream = 0;
+	fd->entry[0].pixelcode = VIRT_SENSOR_MBUS_CODE;
+	fd->entry[0].bus.csi2.vc = 0;
+	fd->entry[0].bus.csi2.dt = MIPI_CSI2_DT_RGB888;
+	return 0;
+}
+
 static const struct v4l2_subdev_pad_ops virt_sensor_pad_ops = {
 	.enum_mbus_code		= virt_sensor_enum_mbus_code,
 	.enum_frame_size	= virt_sensor_enum_frame_size,
 	.get_fmt		= virt_sensor_get_fmt,
 	.set_fmt		= virt_sensor_set_fmt,
+	.get_frame_desc		= virt_sensor_get_frame_desc,
 };
 
 static const struct v4l2_subdev_video_ops virt_sensor_video_ops = {
