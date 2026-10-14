@@ -47,3 +47,6 @@ frame-desc
 
 # Buffers queued while streaming are captured (module-load boot).
 stream-requeue
+
+# A probe whose firmware authentication fails unwinds (own boot).
+auth-error
