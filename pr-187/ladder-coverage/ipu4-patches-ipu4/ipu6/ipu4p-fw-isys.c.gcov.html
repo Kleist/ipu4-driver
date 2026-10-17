@@ -1,0 +1,765 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - all.info - ipu6/ipu4p-fw-isys.c</title>
+  <link rel="stylesheet" type="text/css" href="../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../index.html">top level</a> - <a href="index.html">ipu6</a> - ipu4p-fw-isys.c<span style="font-size: 80%;"> (source / <a href="ipu4p-fw-isys.c.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">all.info</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryLo">71.4&nbsp;%</td>
+            <td class="headerCovTableEntry">283</td>
+            <td class="headerCovTableEntry">202</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-10-16 08:39:11</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryMed">77.3&nbsp;%</td>
+            <td class="headerCovTableEntry">22</td>
+            <td class="headerCovTableEntry">17</td>
+          </tr>
+                  <tr><td><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : // SPDX-License-Identifier: GPL-2.0-only</span>
+<span id="L2"><span class="lineNum">       2</span>              : /*</span>
+<span id="L3"><span class="lineNum">       3</span>              :  * Copyright (C) 2026 Intel Corporation</span>
+<span id="L4"><span class="lineNum">       4</span>              :  */</span>
+<span id="L5"><span class="lineNum">       5</span>              : </span>
+<span id="L6"><span class="lineNum">       6</span>              : #include &lt;linux/cacheflush.h&gt;</span>
+<span id="L7"><span class="lineNum">       7</span>              : #include &lt;linux/cleanup.h&gt;</span>
+<span id="L8"><span class="lineNum">       8</span>              : #include &lt;linux/delay.h&gt;</span>
+<span id="L9"><span class="lineNum">       9</span>              : #include &lt;linux/device.h&gt;</span>
+<span id="L10"><span class="lineNum">      10</span>              : #include &lt;linux/io.h&gt;</span>
+<span id="L11"><span class="lineNum">      11</span>              : #include &lt;linux/slab.h&gt;</span>
+<span id="L12"><span class="lineNum">      12</span>              : </span>
+<span id="L13"><span class="lineNum">      13</span>              : #include &quot;ipu6.h&quot;</span>
+<span id="L14"><span class="lineNum">      14</span>              : #include &quot;ipu6-bus.h&quot;</span>
+<span id="L15"><span class="lineNum">      15</span>              : #include &quot;ipu6-dma.h&quot;</span>
+<span id="L16"><span class="lineNum">      16</span>              : #include &quot;ipu6-fw-com.h&quot;</span>
+<span id="L17"><span class="lineNum">      17</span>              : #include &quot;ipu6-isys.h&quot;</span>
+<span id="L18"><span class="lineNum">      18</span>              : #include &quot;ipu6-isys-queue.h&quot;</span>
+<span id="L19"><span class="lineNum">      19</span>              : #include &quot;ipu6-isys-video.h&quot;</span>
+<span id="L20"><span class="lineNum">      20</span>              : #include &quot;ipu6-platform-regs.h&quot;</span>
+<span id="L21"><span class="lineNum">      21</span>              : #include &quot;ipu4p-fw-isys.h&quot;</span>
+<span id="L22"><span class="lineNum">      22</span>              : #include &quot;ipu4p-isys-csi2-regs.h&quot;</span>
+<span id="L23"><span class="lineNum">      23</span>              : </span>
+<span id="L24"><span class="lineNum">      24</span> <span class="tlaGNC tlaBgGNC">          11 : static void start_sp(struct ipu6_bus_device *adev)</span></span>
+<span id="L25"><span class="lineNum">      25</span>              : {</span>
+<span id="L26"><span class="lineNum">      26</span>              :         struct ipu6_isys *isys = ipu6_bus_get_drvdata(adev);</span>
+<span id="L27"><span class="lineNum">      27</span> <span class="tlaGNC">          11 :         void __iomem *spc_regs_base = isys-&gt;pdata-&gt;base +</span></span>
+<span id="L28"><span class="lineNum">      28</span> <span class="tlaGNC">          11 :                 isys-&gt;pdata-&gt;ipdata-&gt;hw_variant.spc_offset;</span></span>
+<span id="L29"><span class="lineNum">      29</span>              :         u32 val = IPU6_ISYS_SPC_STATUS_START |</span>
+<span id="L30"><span class="lineNum">      30</span>              :                 IPU6_ISYS_SPC_STATUS_RUN |</span>
+<span id="L31"><span class="lineNum">      31</span>              :                 IPU6_ISYS_SPC_STATUS_CTRL_ICACHE_INVALIDATE;</span>
+<span id="L32"><span class="lineNum">      32</span>              : </span>
+<span id="L33"><span class="lineNum">      33</span> <span class="tlaGNC">          22 :         val |= isys-&gt;icache_prefetch ? IPU6_ISYS_SPC_STATUS_ICACHE_PREFETCH : 0;</span></span>
+<span id="L34"><span class="lineNum">      34</span>              : </span>
+<span id="L35"><span class="lineNum">      35</span>              :         writel(val, spc_regs_base + IPU6_ISYS_REG_SPC_STATUS_CTRL);</span>
+<span id="L36"><span class="lineNum">      36</span> <span class="tlaGNC">          11 : }</span></span>
+<span id="L37"><span class="lineNum">      37</span>              : </span>
+<span id="L38"><span class="lineNum">      38</span> <span class="tlaGNC">          22 : static int query_sp(struct ipu6_bus_device *adev)</span></span>
+<span id="L39"><span class="lineNum">      39</span>              : {</span>
+<span id="L40"><span class="lineNum">      40</span>              :         struct ipu6_isys *isys = ipu6_bus_get_drvdata(adev);</span>
+<span id="L41"><span class="lineNum">      41</span> <span class="tlaGNC">          22 :         void __iomem *spc_regs_base = isys-&gt;pdata-&gt;base +</span></span>
+<span id="L42"><span class="lineNum">      42</span> <span class="tlaGNC">          22 :                 isys-&gt;pdata-&gt;ipdata-&gt;hw_variant.spc_offset;</span></span>
+<span id="L43"><span class="lineNum">      43</span>              :         u32 val;</span>
+<span id="L44"><span class="lineNum">      44</span>              : </span>
+<span id="L45"><span class="lineNum">      45</span>              :         val = readl(spc_regs_base + IPU6_ISYS_REG_SPC_STATUS_CTRL);</span>
+<span id="L46"><span class="lineNum">      46</span> <span class="tlaGNC">          22 :         val &amp;= IPU6_ISYS_SPC_STATUS_READY | IPU6_ISYS_SPC_STATUS_START;</span></span>
+<span id="L47"><span class="lineNum">      47</span>              : </span>
+<span id="L48"><span class="lineNum">      48</span> <span class="tlaGNC">          22 :         return val == IPU6_ISYS_SPC_STATUS_READY;</span></span>
+<span id="L49"><span class="lineNum">      49</span>              : }</span>
+<span id="L50"><span class="lineNum">      50</span>              : </span>
+<span id="L51"><span class="lineNum">      51</span> <span class="tlaGNC">          11 : static int ipu4p_isys_fwcom_cfg_init(struct ipu6_isys *isys,</span></span>
+<span id="L52"><span class="lineNum">      52</span>              :                                      struct ipu6_fw_com_cfg *fwcom_cfg,</span>
+<span id="L53"><span class="lineNum">      53</span>              :                                      unsigned int num_streams)</span>
+<span id="L54"><span class="lineNum">      54</span>              : {</span>
+<span id="L55"><span class="lineNum">      55</span>              :         struct ipu6_fw_syscom_queue_config *input_queue_cfg;</span>
+<span id="L56"><span class="lineNum">      56</span>              :         struct ipu6_fw_syscom_queue_config *output_queue_cfg;</span>
+<span id="L57"><span class="lineNum">      57</span> <span class="tlaGNC">          11 :         struct device *dev = &amp;isys-&gt;adev-&gt;auxdev.dev;</span></span>
+<span id="L58"><span class="lineNum">      58</span>              :         struct ipu4p_fw_isys_fw_config *isys_fw_cfg;</span>
+<span id="L59"><span class="lineNum">      59</span>              :         u32 num_in_message_queues;</span>
+<span id="L60"><span class="lineNum">      60</span>              :         unsigned int max_streams;</span>
+<span id="L61"><span class="lineNum">      61</span>              :         unsigned int max_devq_size;</span>
+<span id="L62"><span class="lineNum">      62</span>              :         unsigned int size;</span>
+<span id="L63"><span class="lineNum">      63</span>              :         unsigned int i;</span>
+<span id="L64"><span class="lineNum">      64</span>              : </span>
+<span id="L65"><span class="lineNum">      65</span> <span class="tlaGNC">          11 :         max_streams = isys-&gt;pdata-&gt;ipdata-&gt;max_streams;</span></span>
+<span id="L66"><span class="lineNum">      66</span> <span class="tlaGNC">          11 :         max_devq_size = isys-&gt;pdata-&gt;ipdata-&gt;max_devq_size;</span></span>
+<span id="L67"><span class="lineNum">      67</span> <span class="tlaGNC">          11 :         num_in_message_queues = clamp(num_streams, 1U, max_streams);</span></span>
+<span id="L68"><span class="lineNum">      68</span>              : </span>
+<span id="L69"><span class="lineNum">      69</span>              :         isys_fw_cfg = devm_kzalloc(dev, sizeof(*isys_fw_cfg), GFP_KERNEL);</span>
+<span id="L70"><span class="lineNum">      70</span> <span class="tlaGNC">          11 :         if (!isys_fw_cfg)</span></span>
+<span id="L71"><span class="lineNum">      71</span>              :                 return -ENOMEM;</span>
+<span id="L72"><span class="lineNum">      72</span>              : </span>
+<span id="L73"><span class="lineNum">      73</span> <span class="tlaGNC">          11 :         isys_fw_cfg-&gt;num_send_queues[IPU4P_FW_ISYS_QUEUE_TYPE_PROXY] = 1;</span></span>
+<span id="L74"><span class="lineNum">      74</span> <span class="tlaGNC">          11 :         isys_fw_cfg-&gt;num_send_queues[IPU4P_FW_ISYS_QUEUE_TYPE_DEV] = 1;</span></span>
+<span id="L75"><span class="lineNum">      75</span> <span class="tlaGNC">          11 :         isys_fw_cfg-&gt;num_send_queues[IPU4P_FW_ISYS_QUEUE_TYPE_MSG] =</span></span>
+<span id="L76"><span class="lineNum">      76</span>              :                 num_in_message_queues;</span>
+<span id="L77"><span class="lineNum">      77</span> <span class="tlaGNC">          11 :         isys_fw_cfg-&gt;num_recv_queues[IPU4P_FW_ISYS_QUEUE_TYPE_PROXY] = 1;</span></span>
+<span id="L78"><span class="lineNum">      78</span> <span class="tlaGNC">          11 :         isys_fw_cfg-&gt;num_recv_queues[IPU4P_FW_ISYS_QUEUE_TYPE_DEV] = 0;</span></span>
+<span id="L79"><span class="lineNum">      79</span> <span class="tlaGNC">          11 :         isys_fw_cfg-&gt;num_recv_queues[IPU4P_FW_ISYS_QUEUE_TYPE_MSG] = 1;</span></span>
+<span id="L80"><span class="lineNum">      80</span>              : </span>
+<span id="L81"><span class="lineNum">      81</span> <span class="tlaGNC">          11 :         size = sizeof(*input_queue_cfg) *</span></span>
+<span id="L82"><span class="lineNum">      82</span> <span class="tlaGNC">          11 :                 (IPU4P_BASE_MSG_SEND_QUEUES + num_in_message_queues);</span></span>
+<span id="L83"><span class="lineNum">      83</span> <span class="tlaGNC">          11 :         input_queue_cfg = devm_kzalloc(dev, size, GFP_KERNEL);</span></span>
+<span id="L84"><span class="lineNum">      84</span> <span class="tlaGNC">          11 :         if (!input_queue_cfg)</span></span>
+<span id="L85"><span class="lineNum">      85</span>              :                 return -ENOMEM;</span>
+<span id="L86"><span class="lineNum">      86</span>              : </span>
+<span id="L87"><span class="lineNum">      87</span>              :         size = sizeof(*output_queue_cfg) * IPU4P_N_MAX_RECV_QUEUES;</span>
+<span id="L88"><span class="lineNum">      88</span>              :         output_queue_cfg = devm_kzalloc(dev, size, GFP_KERNEL);</span>
+<span id="L89"><span class="lineNum">      89</span> <span class="tlaGNC">          11 :         if (!output_queue_cfg)</span></span>
+<span id="L90"><span class="lineNum">      90</span>              :                 return -ENOMEM;</span>
+<span id="L91"><span class="lineNum">      91</span>              : </span>
+<span id="L92"><span class="lineNum">      92</span> <span class="tlaGNC">          11 :         fwcom_cfg-&gt;input = input_queue_cfg;</span></span>
+<span id="L93"><span class="lineNum">      93</span> <span class="tlaGNC">          11 :         fwcom_cfg-&gt;output = output_queue_cfg;</span></span>
+<span id="L94"><span class="lineNum">      94</span>              : </span>
+<span id="L95"><span class="lineNum">      95</span> <span class="tlaGNC">          11 :         fwcom_cfg-&gt;num_input_queues =</span></span>
+<span id="L96"><span class="lineNum">      96</span> <span class="tlaGNC">          11 :                 isys_fw_cfg-&gt;num_send_queues[IPU4P_FW_ISYS_QUEUE_TYPE_PROXY] +</span></span>
+<span id="L97"><span class="lineNum">      97</span> <span class="tlaGNC">          11 :                 isys_fw_cfg-&gt;num_send_queues[IPU4P_FW_ISYS_QUEUE_TYPE_DEV] +</span></span>
+<span id="L98"><span class="lineNum">      98</span> <span class="tlaGNC">          11 :                 isys_fw_cfg-&gt;num_send_queues[IPU4P_FW_ISYS_QUEUE_TYPE_MSG];</span></span>
+<span id="L99"><span class="lineNum">      99</span>              : </span>
+<span id="L100"><span class="lineNum">     100</span> <span class="tlaGNC">          11 :         fwcom_cfg-&gt;num_output_queues =</span></span>
+<span id="L101"><span class="lineNum">     101</span> <span class="tlaGNC">          11 :                 isys_fw_cfg-&gt;num_recv_queues[IPU4P_FW_ISYS_QUEUE_TYPE_PROXY] +</span></span>
+<span id="L102"><span class="lineNum">     102</span> <span class="tlaGNC">          11 :                 isys_fw_cfg-&gt;num_recv_queues[IPU4P_FW_ISYS_QUEUE_TYPE_DEV] +</span></span>
+<span id="L103"><span class="lineNum">     103</span> <span class="tlaGNC">          11 :                 isys_fw_cfg-&gt;num_recv_queues[IPU4P_FW_ISYS_QUEUE_TYPE_MSG];</span></span>
+<span id="L104"><span class="lineNum">     104</span>              : </span>
+<span id="L105"><span class="lineNum">     105</span> <span class="tlaGNC">          99 :         for (i = 0; i &lt; IPU4P_ISYS_MAX_STREAMS; i++) {</span></span>
+<span id="L106"><span class="lineNum">     106</span> <span class="tlaGNC">          88 :                 if (i &lt; num_in_message_queues)</span></span>
+<span id="L107"><span class="lineNum">     107</span> <span class="tlaGNC">          88 :                         isys_fw_cfg-&gt;buffer_partition.num_gda_pages[i] =</span></span>
+<span id="L108"><span class="lineNum">     108</span>              :                                 (IPU6_DEVICE_GDA_NR_PAGES *</span>
+<span id="L109"><span class="lineNum">     109</span> <span class="tlaGNC">          88 :                                  IPU6_DEVICE_GDA_VIRT_FACTOR) /</span></span>
+<span id="L110"><span class="lineNum">     110</span>              :                                 num_in_message_queues;</span>
+<span id="L111"><span class="lineNum">     111</span>              :                 else</span>
+<span id="L112"><span class="lineNum">     112</span> <span class="tlaUNC tlaBgUNC">           0 :                         isys_fw_cfg-&gt;buffer_partition.num_gda_pages[i] = 0;</span></span>
+<span id="L113"><span class="lineNum">     113</span>              :         }</span>
+<span id="L114"><span class="lineNum">     114</span>              : </span>
+<span id="L115"><span class="lineNum">     115</span> <span class="tlaGNC tlaBgGNC">          11 :         input_queue_cfg[IPU4P_BASE_PROXY_SEND_QUEUES].token_size =</span></span>
+<span id="L116"><span class="lineNum">     116</span>              :                 sizeof(struct ipu4p_fw_isys_proxy_send_token);</span>
+<span id="L117"><span class="lineNum">     117</span> <span class="tlaGNC">          11 :         input_queue_cfg[IPU4P_BASE_PROXY_SEND_QUEUES].queue_size =</span></span>
+<span id="L118"><span class="lineNum">     118</span>              :                 IPU4P_ISYS_SIZE_PROXY_SEND_QUEUE;</span>
+<span id="L119"><span class="lineNum">     119</span>              : </span>
+<span id="L120"><span class="lineNum">     120</span> <span class="tlaGNC">          11 :         input_queue_cfg[IPU4P_BASE_DEV_SEND_QUEUES].token_size =</span></span>
+<span id="L121"><span class="lineNum">     121</span>              :                 sizeof(struct ipu4p_fw_isys_send_token);</span>
+<span id="L122"><span class="lineNum">     122</span> <span class="tlaGNC">          11 :         input_queue_cfg[IPU4P_BASE_DEV_SEND_QUEUES].queue_size =</span></span>
+<span id="L123"><span class="lineNum">     123</span>              :                 max_devq_size;</span>
+<span id="L124"><span class="lineNum">     124</span>              : </span>
+<span id="L125"><span class="lineNum">     125</span> <span class="tlaGNC">          99 :         for (i = 0; i &lt; num_in_message_queues; i++) {</span></span>
+<span id="L126"><span class="lineNum">     126</span> <span class="tlaGNC">          88 :                 input_queue_cfg[IPU4P_BASE_MSG_SEND_QUEUES + i].token_size =</span></span>
+<span id="L127"><span class="lineNum">     127</span>              :                         sizeof(struct ipu4p_fw_isys_send_token);</span>
+<span id="L128"><span class="lineNum">     128</span> <span class="tlaGNC">          88 :                 input_queue_cfg[IPU4P_BASE_MSG_SEND_QUEUES + i].queue_size =</span></span>
+<span id="L129"><span class="lineNum">     129</span>              :                         IPU4P_ISYS_SIZE_SEND_QUEUE;</span>
+<span id="L130"><span class="lineNum">     130</span>              :         }</span>
+<span id="L131"><span class="lineNum">     131</span>              : </span>
+<span id="L132"><span class="lineNum">     132</span> <span class="tlaGNC">          11 :         output_queue_cfg[IPU4P_BASE_PROXY_RECV_QUEUES].token_size =</span></span>
+<span id="L133"><span class="lineNum">     133</span>              :                 sizeof(struct ipu4p_fw_isys_proxy_recv_token);</span>
+<span id="L134"><span class="lineNum">     134</span> <span class="tlaGNC">          11 :         output_queue_cfg[IPU4P_BASE_PROXY_RECV_QUEUES].queue_size =</span></span>
+<span id="L135"><span class="lineNum">     135</span>              :                 IPU4P_ISYS_SIZE_PROXY_RECV_QUEUE;</span>
+<span id="L136"><span class="lineNum">     136</span>              : </span>
+<span id="L137"><span class="lineNum">     137</span> <span class="tlaGNC">          11 :         output_queue_cfg[IPU4P_BASE_MSG_RECV_QUEUES].token_size =</span></span>
+<span id="L138"><span class="lineNum">     138</span>              :                 sizeof(struct ipu4p_fw_isys_recv_token);</span>
+<span id="L139"><span class="lineNum">     139</span> <span class="tlaGNC">          11 :         output_queue_cfg[IPU4P_BASE_MSG_RECV_QUEUES].queue_size =</span></span>
+<span id="L140"><span class="lineNum">     140</span>              :                 IPU4P_ISYS_SIZE_RECV_QUEUE;</span>
+<span id="L141"><span class="lineNum">     141</span>              : </span>
+<span id="L142"><span class="lineNum">     142</span> <span class="tlaGNC">          11 :         fwcom_cfg-&gt;dmem_addr = isys-&gt;pdata-&gt;ipdata-&gt;hw_variant.dmem_offset;</span></span>
+<span id="L143"><span class="lineNum">     143</span> <span class="tlaGNC">          11 :         fwcom_cfg-&gt;specific_addr = isys_fw_cfg;</span></span>
+<span id="L144"><span class="lineNum">     144</span> <span class="tlaGNC">          11 :         fwcom_cfg-&gt;specific_size = sizeof(*isys_fw_cfg);</span></span>
+<span id="L145"><span class="lineNum">     145</span> <span class="tlaGNC">          11 :         fwcom_cfg-&gt;dmem_syscom = true;</span></span>
+<span id="L146"><span class="lineNum">     146</span> <span class="tlaGNC">          11 :         fwcom_cfg-&gt;syscom_no_dual_ctx = IS_IPU4(isys-&gt;adev-&gt;isp);</span></span>
+<span id="L147"><span class="lineNum">     147</span>              : </span>
+<span id="L148"><span class="lineNum">     148</span> <span class="tlaGNC">          11 :         return 0;</span></span>
+<span id="L149"><span class="lineNum">     149</span>              : }</span>
+<span id="L150"><span class="lineNum">     150</span>              : </span>
+<span id="L151"><span class="lineNum">     151</span> <span class="tlaGNC">          11 : static int ipu4p_fw_isys_close(struct ipu6_isys *isys)</span></span>
+<span id="L152"><span class="lineNum">     152</span>              : {</span>
+<span id="L153"><span class="lineNum">     153</span> <span class="tlaGNC">          11 :         struct device *dev = &amp;isys-&gt;adev-&gt;auxdev.dev;</span></span>
+<span id="L154"><span class="lineNum">     154</span>              :         int retry = IPU4P_ISYS_CLOSE_RETRY;</span>
+<span id="L155"><span class="lineNum">     155</span>              :         unsigned long flags;</span>
+<span id="L156"><span class="lineNum">     156</span>              :         void *fwctx;</span>
+<span id="L157"><span class="lineNum">     157</span>              :         int ret;</span>
+<span id="L158"><span class="lineNum">     158</span>              : </span>
+<span id="L159"><span class="lineNum">     159</span> <span class="tlaGNC">          11 :         spin_lock_irqsave(&amp;isys-&gt;power_lock, flags);</span></span>
+<span id="L160"><span class="lineNum">     160</span> <span class="tlaGNC">          11 :         ret = ipu6_fw_com_close(isys-&gt;fwctx);</span></span>
+<span id="L161"><span class="lineNum">     161</span> <span class="tlaGNC">          11 :         fwctx = isys-&gt;fwctx;</span></span>
+<span id="L162"><span class="lineNum">     162</span> <span class="tlaGNC">          11 :         isys-&gt;fwctx = NULL;</span></span>
+<span id="L163"><span class="lineNum">     163</span>              :         spin_unlock_irqrestore(&amp;isys-&gt;power_lock, flags);</span>
+<span id="L164"><span class="lineNum">     164</span> <span class="tlaGNC">          11 :         if (ret)</span></span>
+<span id="L165"><span class="lineNum">     165</span> <span class="tlaUNC tlaBgUNC">           0 :                 dev_err(dev, &quot;Device close failure: %d\n&quot;, ret);</span></span>
+<span id="L166"><span class="lineNum">     166</span>              : </span>
+<span id="L167"><span class="lineNum">     167</span>              :         do {</span>
+<span id="L168"><span class="lineNum">     168</span>              :                 usleep_range(400, 500);</span>
+<span id="L169"><span class="lineNum">     169</span> <span class="tlaGNC tlaBgGNC">          11 :                 ret = ipu6_fw_com_release(fwctx, 0);</span></span>
+<span id="L170"><span class="lineNum">     170</span> <span class="tlaGNC">          11 :                 retry--;</span></span>
+<span id="L171"><span class="lineNum">     171</span> <span class="tlaGNC">          11 :         } while (ret &amp;&amp; retry);</span></span>
+<span id="L172"><span class="lineNum">     172</span>              : </span>
+<span id="L173"><span class="lineNum">     173</span> <span class="tlaGNC">          11 :         if (ret) {</span></span>
+<span id="L174"><span class="lineNum">     174</span> <span class="tlaUNC tlaBgUNC">           0 :                 dev_err(dev, &quot;Device release time out %d\n&quot;, ret);</span></span>
+<span id="L175"><span class="lineNum">     175</span> <span class="tlaUNC">           0 :                 spin_lock_irqsave(&amp;isys-&gt;power_lock, flags);</span></span>
+<span id="L176"><span class="lineNum">     176</span> <span class="tlaUNC">           0 :                 isys-&gt;fwctx = fwctx;</span></span>
+<span id="L177"><span class="lineNum">     177</span>              :                 spin_unlock_irqrestore(&amp;isys-&gt;power_lock, flags);</span>
+<span id="L178"><span class="lineNum">     178</span>              :         }</span>
+<span id="L179"><span class="lineNum">     179</span>              : </span>
+<span id="L180"><span class="lineNum">     180</span> <span class="tlaGNC tlaBgGNC">          11 :         return ret;</span></span>
+<span id="L181"><span class="lineNum">     181</span>              : }</span>
+<span id="L182"><span class="lineNum">     182</span>              : </span>
+<span id="L183"><span class="lineNum">     183</span> <span class="tlaUNC tlaBgUNC">           0 : static void ipu4p_fw_isys_cleanup(struct ipu6_isys *isys)</span></span>
+<span id="L184"><span class="lineNum">     184</span>              : {</span>
+<span id="L185"><span class="lineNum">     185</span>              :         int ret;</span>
+<span id="L186"><span class="lineNum">     186</span>              : </span>
+<span id="L187"><span class="lineNum">     187</span> <span class="tlaUNC">           0 :         ret = ipu6_fw_com_release(isys-&gt;fwctx, 1);</span></span>
+<span id="L188"><span class="lineNum">     188</span> <span class="tlaUNC">           0 :         if (ret &lt; 0)</span></span>
+<span id="L189"><span class="lineNum">     189</span> <span class="tlaUNC">           0 :                 dev_warn(&amp;isys-&gt;adev-&gt;auxdev.dev,</span></span>
+<span id="L190"><span class="lineNum">     190</span>              :                          &quot;Device busy, fw_com release failed.\n&quot;);</span>
+<span id="L191"><span class="lineNum">     191</span> <span class="tlaUNC">           0 :         isys-&gt;fwctx = NULL;</span></span>
+<span id="L192"><span class="lineNum">     192</span> <span class="tlaUNC">           0 : }</span></span>
+<span id="L193"><span class="lineNum">     193</span>              : </span>
+<span id="L194"><span class="lineNum">     194</span> <span class="tlaGNC tlaBgGNC">          11 : static int ipu4p_fw_isys_init(struct ipu6_isys *isys, unsigned int num_streams)</span></span>
+<span id="L195"><span class="lineNum">     195</span>              : {</span>
+<span id="L196"><span class="lineNum">     196</span> <span class="tlaGNC">          11 :         struct device *dev = &amp;isys-&gt;adev-&gt;auxdev.dev;</span></span>
+<span id="L197"><span class="lineNum">     197</span>              :         int retry = IPU4P_ISYS_OPEN_RETRY;</span>
+<span id="L198"><span class="lineNum">     198</span> <span class="tlaGNC">          11 :         struct ipu6_fw_com_cfg fwcom_cfg = {</span></span>
+<span id="L199"><span class="lineNum">     199</span>              :                 .cell_start = start_sp,</span>
+<span id="L200"><span class="lineNum">     200</span>              :                 .cell_ready = query_sp,</span>
+<span id="L201"><span class="lineNum">     201</span>              :                 .buttress_boot_offset = 0,</span>
+<span id="L202"><span class="lineNum">     202</span>              :                 .dmem_syscom = true,</span>
+<span id="L203"><span class="lineNum">     203</span>              :         };</span>
+<span id="L204"><span class="lineNum">     204</span>              :         int ret;</span>
+<span id="L205"><span class="lineNum">     205</span>              : </span>
+<span id="L206"><span class="lineNum">     206</span> <span class="tlaGNC">          11 :         ret = ipu4p_isys_fwcom_cfg_init(isys, &amp;fwcom_cfg, num_streams);</span></span>
+<span id="L207"><span class="lineNum">     207</span> <span class="tlaGNC">          11 :         if (ret)</span></span>
+<span id="L208"><span class="lineNum">     208</span>              :                 return ret;</span>
+<span id="L209"><span class="lineNum">     209</span>              : </span>
+<span id="L210"><span class="lineNum">     210</span> <span class="tlaGNC">          22 :         isys-&gt;fwctx = ipu6_fw_com_prepare(&amp;fwcom_cfg, isys-&gt;adev,</span></span>
+<span id="L211"><span class="lineNum">     211</span> <span class="tlaGNC">          11 :                                           isys-&gt;pdata-&gt;base);</span></span>
+<span id="L212"><span class="lineNum">     212</span> <span class="tlaGNC">          11 :         if (!isys-&gt;fwctx) {</span></span>
+<span id="L213"><span class="lineNum">     213</span> <span class="tlaUNC tlaBgUNC">           0 :                 dev_err(dev, &quot;isys fw com prepare failed\n&quot;);</span></span>
+<span id="L214"><span class="lineNum">     214</span> <span class="tlaUNC">           0 :                 return -EIO;</span></span>
+<span id="L215"><span class="lineNum">     215</span>              :         }</span>
+<span id="L216"><span class="lineNum">     216</span>              : </span>
+<span id="L217"><span class="lineNum">     217</span> <span class="tlaGNC tlaBgGNC">          11 :         ret = ipu6_fw_com_open(isys-&gt;fwctx);</span></span>
+<span id="L218"><span class="lineNum">     218</span> <span class="tlaGNC">          11 :         if (ret) {</span></span>
+<span id="L219"><span class="lineNum">     219</span> <span class="tlaUNC tlaBgUNC">           0 :                 dev_err(dev, &quot;isys fw com open failed %d\n&quot;, ret);</span></span>
+<span id="L220"><span class="lineNum">     220</span> <span class="tlaUNC">           0 :                 ipu4p_fw_isys_cleanup(isys);</span></span>
+<span id="L221"><span class="lineNum">     221</span> <span class="tlaUNC">           0 :                 return ret;</span></span>
+<span id="L222"><span class="lineNum">     222</span>              :         }</span>
+<span id="L223"><span class="lineNum">     223</span>              : </span>
+<span id="L224"><span class="lineNum">     224</span>              :         do {</span>
+<span id="L225"><span class="lineNum">     225</span>              :                 usleep_range(400, 500);</span>
+<span id="L226"><span class="lineNum">     226</span> <span class="tlaGNC tlaBgGNC">          11 :                 if (ipu6_fw_com_ready(isys-&gt;fwctx))</span></span>
+<span id="L227"><span class="lineNum">     227</span>              :                         break;</span>
+<span id="L228"><span class="lineNum">     228</span> <span class="tlaUNC tlaBgUNC">           0 :                 retry--;</span></span>
+<span id="L229"><span class="lineNum">     229</span> <span class="tlaUNC">           0 :         } while (retry &gt; 0);</span></span>
+<span id="L230"><span class="lineNum">     230</span>              : </span>
+<span id="L231"><span class="lineNum">     231</span> <span class="tlaGNC tlaBgGNC">          11 :         if (!retry) {</span></span>
+<span id="L232"><span class="lineNum">     232</span> <span class="tlaUNC tlaBgUNC">           0 :                 dev_err(dev, &quot;isys port open ready failed\n&quot;);</span></span>
+<span id="L233"><span class="lineNum">     233</span> <span class="tlaUNC">           0 :                 ipu4p_fw_isys_close(isys);</span></span>
+<span id="L234"><span class="lineNum">     234</span> <span class="tlaUNC">           0 :                 return -ETIMEDOUT;</span></span>
+<span id="L235"><span class="lineNum">     235</span>              :         }</span>
+<span id="L236"><span class="lineNum">     236</span>              : </span>
+<span id="L237"><span class="lineNum">     237</span>              :         return 0;</span>
+<span id="L238"><span class="lineNum">     238</span>              : }</span>
+<span id="L239"><span class="lineNum">     239</span>              : </span>
+<span id="L240"><span class="lineNum">     240</span> <span class="tlaGNC tlaBgGNC">          56 : static int ipu4p_send_cmd(struct ipu6_isys *isys,</span></span>
+<span id="L241"><span class="lineNum">     241</span>              :                           const unsigned int stream_handle,</span>
+<span id="L242"><span class="lineNum">     242</span>              :                           void *cpu_mapped_buf,</span>
+<span id="L243"><span class="lineNum">     243</span>              :                           dma_addr_t dma_mapped_buf,</span>
+<span id="L244"><span class="lineNum">     244</span>              :                           size_t size, u16 send_type)</span>
+<span id="L245"><span class="lineNum">     245</span>              : {</span>
+<span id="L246"><span class="lineNum">     246</span> <span class="tlaGNC">          56 :         struct ipu6_fw_com_context *ctx = isys-&gt;fwctx;</span></span>
+<span id="L247"><span class="lineNum">     247</span>              :         struct ipu4p_fw_isys_send_token *token;</span>
+<span id="L248"><span class="lineNum">     248</span>              : </span>
+<span id="L249"><span class="lineNum">     249</span> <span class="tlaGNC">          56 :         if (send_type &gt;= N_IPU4P_FW_ISYS_SEND_TYPE)</span></span>
+<span id="L250"><span class="lineNum">     250</span>              :                 return -EINVAL;</span>
+<span id="L251"><span class="lineNum">     251</span>              : </span>
+<span id="L252"><span class="lineNum">     252</span> <span class="tlaGNC">          56 :         if (cpu_mapped_buf)</span></span>
+<span id="L253"><span class="lineNum">     253</span> <span class="tlaGNC">          35 :                 clflush_cache_range(cpu_mapped_buf, size);</span></span>
+<span id="L254"><span class="lineNum">     254</span>              : </span>
+<span id="L255"><span class="lineNum">     255</span> <span class="tlaGNC">          56 :         token = ipu6_send_get_token(ctx, stream_handle +</span></span>
+<span id="L256"><span class="lineNum">     256</span>              :                                     IPU4P_BASE_MSG_SEND_QUEUES);</span>
+<span id="L257"><span class="lineNum">     257</span> <span class="tlaGNC">          56 :         if (!token)</span></span>
+<span id="L258"><span class="lineNum">     258</span>              :                 return -EBUSY;</span>
+<span id="L259"><span class="lineNum">     259</span>              : </span>
+<span id="L260"><span class="lineNum">     260</span> <span class="tlaGNC">          56 :         token-&gt;buf_handle = (unsigned long)cpu_mapped_buf;</span></span>
+<span id="L261"><span class="lineNum">     261</span> <span class="tlaGNC">          56 :         token-&gt;payload = dma_mapped_buf;</span></span>
+<span id="L262"><span class="lineNum">     262</span> <span class="tlaGNC">          56 :         token-&gt;send_type = send_type;</span></span>
+<span id="L263"><span class="lineNum">     263</span> <span class="tlaGNC">          56 :         token-&gt;stream_id = stream_handle;</span></span>
+<span id="L264"><span class="lineNum">     264</span>              : </span>
+<span id="L265"><span class="lineNum">     265</span> <span class="tlaGNC">          56 :         ipu6_send_put_token(ctx, stream_handle + IPU4P_BASE_MSG_SEND_QUEUES);</span></span>
+<span id="L266"><span class="lineNum">     266</span>              : </span>
+<span id="L267"><span class="lineNum">     267</span> <span class="tlaGNC">          56 :         return 0;</span></span>
+<span id="L268"><span class="lineNum">     268</span>              : }</span>
+<span id="L269"><span class="lineNum">     269</span>              : </span>
+<span id="L270"><span class="lineNum">     270</span> <span class="tlaUNC tlaBgUNC">           0 : static int ipu4p_send_proxy_token(struct ipu6_isys *isys,</span></span>
+<span id="L271"><span class="lineNum">     271</span>              :                                   unsigned int req_id,</span>
+<span id="L272"><span class="lineNum">     272</span>              :                                   unsigned int region_index, u32 value)</span>
+<span id="L273"><span class="lineNum">     273</span>              : {</span>
+<span id="L274"><span class="lineNum">     274</span> <span class="tlaUNC">           0 :         struct ipu6_fw_com_context *ctx = isys-&gt;fwctx;</span></span>
+<span id="L275"><span class="lineNum">     275</span>              :         struct ipu4p_fw_isys_proxy_send_token *send_token;</span>
+<span id="L276"><span class="lineNum">     276</span>              :         unsigned int timeout = 1000;</span>
+<span id="L277"><span class="lineNum">     277</span>              :         int ret = -ETIMEDOUT;</span>
+<span id="L278"><span class="lineNum">     278</span>              : </span>
+<span id="L279"><span class="lineNum">     279</span> <span class="tlaUNC">           0 :         send_token = ipu6_send_get_token(ctx, IPU4P_BASE_PROXY_SEND_QUEUES);</span></span>
+<span id="L280"><span class="lineNum">     280</span> <span class="tlaUNC">           0 :         if (!send_token)</span></span>
+<span id="L281"><span class="lineNum">     281</span>              :                 return -EBUSY;</span>
+<span id="L282"><span class="lineNum">     282</span>              : </span>
+<span id="L283"><span class="lineNum">     283</span> <span class="tlaUNC">           0 :         send_token-&gt;request_id = req_id;</span></span>
+<span id="L284"><span class="lineNum">     284</span> <span class="tlaUNC">           0 :         send_token-&gt;region_index = region_index;</span></span>
+<span id="L285"><span class="lineNum">     285</span> <span class="tlaUNC">           0 :         send_token-&gt;offset = 0;</span></span>
+<span id="L286"><span class="lineNum">     286</span> <span class="tlaUNC">           0 :         send_token-&gt;value = value;</span></span>
+<span id="L287"><span class="lineNum">     287</span> <span class="tlaUNC">           0 :         ipu6_send_put_token(ctx, IPU4P_BASE_PROXY_SEND_QUEUES);</span></span>
+<span id="L288"><span class="lineNum">     288</span>              : </span>
+<span id="L289"><span class="lineNum">     289</span>              :         do {</span>
+<span id="L290"><span class="lineNum">     290</span>              :                 struct ipu4p_fw_isys_proxy_recv_token *recv_token;</span>
+<span id="L291"><span class="lineNum">     291</span>              : </span>
+<span id="L292"><span class="lineNum">     292</span>              :                 usleep_range(100, 110);</span>
+<span id="L293"><span class="lineNum">     293</span> <span class="tlaUNC">           0 :                 recv_token = ipu6_recv_get_token(ctx,</span></span>
+<span id="L294"><span class="lineNum">     294</span>              :                                                  IPU4P_BASE_PROXY_RECV_QUEUES);</span>
+<span id="L295"><span class="lineNum">     295</span> <span class="tlaUNC">           0 :                 if (!recv_token) {</span></span>
+<span id="L296"><span class="lineNum">     296</span> <span class="tlaUNC">           0 :                         timeout--;</span></span>
+<span id="L297"><span class="lineNum">     297</span>              :                         continue;</span>
+<span id="L298"><span class="lineNum">     298</span>              :                 }</span>
+<span id="L299"><span class="lineNum">     299</span>              : </span>
+<span id="L300"><span class="lineNum">     300</span> <span class="tlaUNC">           0 :                 if (recv_token-&gt;proxy_resp_info.request_id != req_id)</span></span>
+<span id="L301"><span class="lineNum">     301</span>              :                         ret = -EIO;</span>
+<span id="L302"><span class="lineNum">     302</span> <span class="tlaUNC">           0 :                 else if (recv_token-&gt;proxy_resp_info.error_info.error)</span></span>
+<span id="L303"><span class="lineNum">     303</span>              :                         ret = -EIO;</span>
+<span id="L304"><span class="lineNum">     304</span>              :                 else</span>
+<span id="L305"><span class="lineNum">     305</span>              :                         ret = 0;</span>
+<span id="L306"><span class="lineNum">     306</span>              : </span>
+<span id="L307"><span class="lineNum">     307</span> <span class="tlaUNC">           0 :                 ipu6_recv_put_token(ctx, IPU4P_BASE_PROXY_RECV_QUEUES);</span></span>
+<span id="L308"><span class="lineNum">     308</span> <span class="tlaUNC">           0 :                 break;</span></span>
+<span id="L309"><span class="lineNum">     309</span> <span class="tlaUNC">           0 :         } while (timeout);</span></span>
+<span id="L310"><span class="lineNum">     310</span>              : </span>
+<span id="L311"><span class="lineNum">     311</span>              :         return ret;</span>
+<span id="L312"><span class="lineNum">     312</span>              : }</span>
+<span id="L313"><span class="lineNum">     313</span>              : </span>
+<span id="L314"><span class="lineNum">     314</span> <span class="tlaUNC">           0 : static int ipu4p_fw_isys_set_iwake_register(struct ipu6_isys *isys,</span></span>
+<span id="L315"><span class="lineNum">     315</span>              :                                             enum ipu6_isys_iwake_register reg,</span>
+<span id="L316"><span class="lineNum">     316</span>              :                                             u32 value)</span>
+<span id="L317"><span class="lineNum">     317</span>              : {</span>
+<span id="L318"><span class="lineNum">     318</span> <span class="tlaUNC">           0 :         switch (reg) {</span></span>
+<span id="L319"><span class="lineNum">     319</span> <span class="tlaUNC">           0 :         case IPU6_ISYS_IWAKE_GDA_THRESHOLD:</span></span>
+<span id="L320"><span class="lineNum">     320</span> <span class="tlaUNC">           0 :                 return ipu4p_send_proxy_token(isys, 0, 0, value);</span></span>
+<span id="L321"><span class="lineNum">     321</span> <span class="tlaUNC">           0 :         case IPU6_ISYS_IWAKE_GDA_ENABLE:</span></span>
+<span id="L322"><span class="lineNum">     322</span> <span class="tlaUNC">           0 :                 return ipu4p_send_proxy_token(isys, 1, 1, value);</span></span>
+<span id="L323"><span class="lineNum">     323</span>              :         case IPU6_ISYS_IWAKE_GDA_IRQ_CRITICAL_THRESHOLD:</span>
+<span id="L324"><span class="lineNum">     324</span>              :         case IPU6_ISYS_IWAKE_GDA_MEMOPEN_THRESHOLD:</span>
+<span id="L325"><span class="lineNum">     325</span>              :                 return -EOPNOTSUPP;</span>
+<span id="L326"><span class="lineNum">     326</span> <span class="tlaUNC">           0 :         default:</span></span>
+<span id="L327"><span class="lineNum">     327</span> <span class="tlaUNC">           0 :                 return -EINVAL;</span></span>
+<span id="L328"><span class="lineNum">     328</span>              :         }</span>
+<span id="L329"><span class="lineNum">     329</span>              : }</span>
+<span id="L330"><span class="lineNum">     330</span>              : </span>
+<span id="L331"><span class="lineNum">     331</span> <span class="tlaGNC tlaBgGNC">         308 : static int ipu4p_isys_isr_one(struct ipu6_bus_device *adev)</span></span>
+<span id="L332"><span class="lineNum">     332</span>              : {</span>
+<span id="L333"><span class="lineNum">     333</span>              :         struct ipu6_isys *isys = ipu6_bus_get_drvdata(adev);</span>
+<span id="L334"><span class="lineNum">     334</span>              :         struct ipu4p_fw_isys_resp_info *fw_resp;</span>
+<span id="L335"><span class="lineNum">     335</span> <span class="tlaGNC">         308 :         struct ipu6_fw_isys_resp_info_abi resp = {};</span></span>
+<span id="L336"><span class="lineNum">     336</span>              : </span>
+<span id="L337"><span class="lineNum">     337</span> <span class="tlaGNC">         308 :         if (!isys-&gt;fwctx)</span></span>
+<span id="L338"><span class="lineNum">     338</span>              :                 return 1;</span>
+<span id="L339"><span class="lineNum">     339</span>              : </span>
+<span id="L340"><span class="lineNum">     340</span> <span class="tlaGNC">         308 :         fw_resp = ipu6_recv_get_token(isys-&gt;fwctx,</span></span>
+<span id="L341"><span class="lineNum">     341</span>              :                                       IPU4P_BASE_MSG_RECV_QUEUES);</span>
+<span id="L342"><span class="lineNum">     342</span> <span class="tlaGNC">         308 :         if (!fw_resp)</span></span>
+<span id="L343"><span class="lineNum">     343</span>              :                 return 1;</span>
+<span id="L344"><span class="lineNum">     344</span>              : </span>
+<span id="L345"><span class="lineNum">     345</span> <span class="tlaGNC">         252 :         resp.buf_id = fw_resp-&gt;buf_id;</span></span>
+<span id="L346"><span class="lineNum">     346</span> <span class="tlaGNC">         252 :         resp.pin.out_buf_id = fw_resp-&gt;pin.out_buf_id;</span></span>
+<span id="L347"><span class="lineNum">     347</span>              :         /*</span>
+<span id="L348"><span class="lineNum">     348</span>              :          * IPU4P returns the opaque frame-buffer-set handle in the output</span>
+<span id="L349"><span class="lineNum">     349</span>              :          * pin payload for PIN_DATA_READY, not in the common response buf_id</span>
+<span id="L350"><span class="lineNum">     350</span>              :          * field. Normalize it here so the common response handler can</span>
+<span id="L351"><span class="lineNum">     351</span>              :          * release the message buffer before completing the capture buffer.</span>
+<span id="L352"><span class="lineNum">     352</span>              :          */</span>
+<span id="L353"><span class="lineNum">     353</span> <span class="tlaGNC">         252 :         if (fw_resp-&gt;type == IPU4P_FW_ISYS_RESP_TYPE_PIN_DATA_READY)</span></span>
+<span id="L354"><span class="lineNum">     354</span> <span class="tlaGNC">          23 :                 resp.buf_id = fw_resp-&gt;pin.out_buf_id;</span></span>
+<span id="L355"><span class="lineNum">     355</span> <span class="tlaGNC">         252 :         resp.pin.addr = fw_resp-&gt;pin.addr;</span></span>
+<span id="L356"><span class="lineNum">     356</span> <span class="tlaGNC">         252 :         resp.pin.compress = fw_resp-&gt;pin.compress;</span></span>
+<span id="L357"><span class="lineNum">     357</span> <span class="tlaGNC">         252 :         resp.error_info.error = fw_resp-&gt;error_info.error;</span></span>
+<span id="L358"><span class="lineNum">     358</span> <span class="tlaGNC">         252 :         resp.error_info.error_details = fw_resp-&gt;error_info.error_details;</span></span>
+<span id="L359"><span class="lineNum">     359</span> <span class="tlaGNC">         252 :         resp.timestamp[0] = fw_resp-&gt;timestamp[0];</span></span>
+<span id="L360"><span class="lineNum">     360</span> <span class="tlaGNC">         252 :         resp.timestamp[1] = fw_resp-&gt;timestamp[1];</span></span>
+<span id="L361"><span class="lineNum">     361</span> <span class="tlaGNC">         252 :         resp.stream_handle = fw_resp-&gt;stream_handle;</span></span>
+<span id="L362"><span class="lineNum">     362</span> <span class="tlaGNC">         252 :         resp.type = fw_resp-&gt;type;</span></span>
+<span id="L363"><span class="lineNum">     363</span> <span class="tlaGNC">         252 :         resp.pin_id = fw_resp-&gt;pin_id;</span></span>
+<span id="L364"><span class="lineNum">     364</span>              : </span>
+<span id="L365"><span class="lineNum">     365</span> <span class="tlaGNC">         252 :         ipu6_isys_handle_response(adev, &amp;resp);</span></span>
+<span id="L366"><span class="lineNum">     366</span> <span class="tlaGNC">         252 :         ipu6_recv_put_token(isys-&gt;fwctx, IPU4P_BASE_MSG_RECV_QUEUES);</span></span>
+<span id="L367"><span class="lineNum">     367</span>              : </span>
+<span id="L368"><span class="lineNum">     368</span> <span class="tlaGNC">         252 :         return 0;</span></span>
+<span id="L369"><span class="lineNum">     369</span>              : }</span>
+<span id="L370"><span class="lineNum">     370</span>              : </span>
+<span id="L371"><span class="lineNum">     371</span> <span class="tlaGNC">          11 : static int ipu4p_isys_fw_pin_cfg(struct ipu6_isys_video *av,</span></span>
+<span id="L372"><span class="lineNum">     372</span>              :                                  struct ipu4p_fw_isys_stream_cfg *cfg)</span>
+<span id="L373"><span class="lineNum">     373</span>              : {</span>
+<span id="L374"><span class="lineNum">     374</span> <span class="tlaGNC">          11 :         struct media_pad *src_pad = media_pad_remote_pad_first(&amp;av-&gt;pad);</span></span>
+<span id="L375"><span class="lineNum">     375</span> <span class="tlaGNC">          11 :         struct v4l2_subdev *sd = media_entity_to_v4l2_subdev(src_pad-&gt;entity);</span></span>
+<span id="L376"><span class="lineNum">     376</span>              :         struct v4l2_subdev_state *state =</span>
+<span id="L377"><span class="lineNum">     377</span>              :                 v4l2_subdev_get_locked_active_state(sd);</span>
+<span id="L378"><span class="lineNum">     378</span>              :         struct ipu4p_fw_isys_input_pin_info *input_pin;</span>
+<span id="L379"><span class="lineNum">     379</span>              :         struct ipu4p_fw_isys_output_pin_info *output_pin;</span>
+<span id="L380"><span class="lineNum">     380</span> <span class="tlaGNC">          11 :         struct ipu6_isys_stream *stream = av-&gt;stream;</span></span>
+<span id="L381"><span class="lineNum">     381</span> <span class="tlaGNC">          11 :         struct ipu6_isys_queue *aq = &amp;av-&gt;aq;</span></span>
+<span id="L382"><span class="lineNum">     382</span>              :         struct v4l2_mbus_framefmt fmt;</span>
+<span id="L383"><span class="lineNum">     383</span>              :         const struct ipu6_isys_pixelformat *pfmt =</span>
+<span id="L384"><span class="lineNum">     384</span> <span class="tlaGNC">          11 :                 ipu6_isys_get_isys_format(ipu6_isys_get_format(av), 0);</span></span>
+<span id="L385"><span class="lineNum">     385</span>              :         unsigned int input_pins;</span>
+<span id="L386"><span class="lineNum">     386</span>              :         unsigned int output_pins;</span>
+<span id="L387"><span class="lineNum">     387</span>              :         u32 src_stream;</span>
+<span id="L388"><span class="lineNum">     388</span>              : </span>
+<span id="L389"><span class="lineNum">     389</span> <span class="tlaGNC">          11 :         if (cfg-&gt;nof_input_pins &gt;= IPU4P_MAX_IPINS ||</span></span>
+<span id="L390"><span class="lineNum">     390</span> <span class="tlaGNC">          11 :             cfg-&gt;nof_output_pins &gt;= IPU4P_MAX_OPINS)</span></span>
+<span id="L391"><span class="lineNum">     391</span>              :                 return -EINVAL;</span>
+<span id="L392"><span class="lineNum">     392</span>              : </span>
+<span id="L393"><span class="lineNum">     393</span> <span class="tlaGNC">          11 :         input_pins = cfg-&gt;nof_input_pins++;</span></span>
+<span id="L394"><span class="lineNum">     394</span>              : </span>
+<span id="L395"><span class="lineNum">     395</span> <span class="tlaGNC">          11 :         src_stream = ipu6_isys_get_src_stream_by_src_pad(sd, src_pad-&gt;index);</span></span>
+<span id="L396"><span class="lineNum">     396</span> <span class="tlaGNC">          11 :         fmt = *v4l2_subdev_state_get_format(state, src_pad-&gt;index, src_stream);</span></span>
+<span id="L397"><span class="lineNum">     397</span>              : </span>
+<span id="L398"><span class="lineNum">     398</span>              :         input_pin = &amp;cfg-&gt;input_pins[input_pins];</span>
+<span id="L399"><span class="lineNum">     399</span> <span class="tlaGNC">          11 :         input_pin-&gt;input_res.width = fmt.width;</span></span>
+<span id="L400"><span class="lineNum">     400</span> <span class="tlaGNC">          11 :         input_pin-&gt;input_res.height = fmt.height;</span></span>
+<span id="L401"><span class="lineNum">     401</span> <span class="tlaGNC">          11 :         input_pin-&gt;dt = av-&gt;dt;</span></span>
+<span id="L402"><span class="lineNum">     402</span> <span class="tlaGNC">          11 :         input_pin-&gt;bits_per_pix = pfmt-&gt;bpp_packed;</span></span>
+<span id="L403"><span class="lineNum">     403</span> <span class="tlaGNC">          11 :         input_pin-&gt;mapped_dt = N_IPU4P_FW_ISYS_MIPI_DATA_TYPE;</span></span>
+<span id="L404"><span class="lineNum">     404</span> <span class="tlaGNC">          11 :         input_pin-&gt;mipi_store_mode = (pfmt-&gt;bpp == pfmt-&gt;bpp_packed) ?</span></span>
+<span id="L405"><span class="lineNum">     405</span> <span class="tlaGNC">          11 :                 IPU4P_FW_ISYS_MIPI_STORE_MODE_DISCARD_LONG_HEADER :</span></span>
+<span id="L406"><span class="lineNum">     406</span>              :                 IPU4P_FW_ISYS_MIPI_STORE_MODE_NORMAL;</span>
+<span id="L407"><span class="lineNum">     407</span>              : </span>
+<span id="L408"><span class="lineNum">     408</span> <span class="tlaGNC">          11 :         output_pins = cfg-&gt;nof_output_pins++;</span></span>
+<span id="L409"><span class="lineNum">     409</span> <span class="tlaGNC">          11 :         aq-&gt;fw_output = output_pins;</span></span>
+<span id="L410"><span class="lineNum">     410</span> <span class="tlaGNC">          11 :         stream-&gt;output_pins_queue[output_pins] = aq;</span></span>
+<span id="L411"><span class="lineNum">     411</span>              : </span>
+<span id="L412"><span class="lineNum">     412</span>              :         output_pin = &amp;cfg-&gt;output_pins[output_pins];</span>
+<span id="L413"><span class="lineNum">     413</span> <span class="tlaGNC">          11 :         output_pin-&gt;input_pin_id = input_pins;</span></span>
+<span id="L414"><span class="lineNum">     414</span> <span class="tlaGNC">          11 :         output_pin-&gt;output_res.width = ipu6_isys_get_frame_width(av);</span></span>
+<span id="L415"><span class="lineNum">     415</span> <span class="tlaGNC">          11 :         output_pin-&gt;output_res.height = ipu6_isys_get_frame_height(av);</span></span>
+<span id="L416"><span class="lineNum">     416</span> <span class="tlaGNC">          11 :         output_pin-&gt;stride = ipu6_isys_get_bytes_per_line(av);</span></span>
+<span id="L417"><span class="lineNum">     417</span> <span class="tlaGNC">          11 :         output_pin-&gt;watermark_in_lines = 0;</span></span>
+<span id="L418"><span class="lineNum">     418</span> <span class="tlaGNC">          11 :         output_pin-&gt;payload_buf_size = 0;</span></span>
+<span id="L419"><span class="lineNum">     419</span> <span class="tlaGNC">          11 :         output_pin-&gt;send_irq = 1;</span></span>
+<span id="L420"><span class="lineNum">     420</span> <span class="tlaGNC">          11 :         output_pin-&gt;link_id = IPU4P_FW_ISYS_LINK_OFFLINE;</span></span>
+<span id="L421"><span class="lineNum">     421</span> <span class="tlaGNC">          11 :         output_pin-&gt;reserve_compression = 0;</span></span>
+<span id="L422"><span class="lineNum">     422</span> <span class="tlaGNC">          11 :         output_pin-&gt;ft = pfmt-&gt;css_pixelformat;</span></span>
+<span id="L423"><span class="lineNum">     423</span>              : </span>
+<span id="L424"><span class="lineNum">     424</span> <span class="tlaGNC">          11 :         if (pfmt-&gt;bpp != pfmt-&gt;bpp_packed)</span></span>
+<span id="L425"><span class="lineNum">     425</span> <span class="tlaGNC">           1 :                 output_pin-&gt;pt = IPU4P_FW_ISYS_PIN_TYPE_RAW_SOC;</span></span>
+<span id="L426"><span class="lineNum">     426</span>              :         else</span>
+<span id="L427"><span class="lineNum">     427</span> <span class="tlaGNC">          10 :                 output_pin-&gt;pt = IPU4P_FW_ISYS_PIN_TYPE_MIPI;</span></span>
+<span id="L428"><span class="lineNum">     428</span>              : </span>
+<span id="L429"><span class="lineNum">     429</span>              :         return 0;</span>
+<span id="L430"><span class="lineNum">     430</span>              : }</span>
+<span id="L431"><span class="lineNum">     431</span>              : </span>
+<span id="L432"><span class="lineNum">     432</span> <span class="tlaGNC">          11 : static void ipu4p_dump_stream_cfg(struct device *dev, struct isys_fw_msgs *msg)</span></span>
+<span id="L433"><span class="lineNum">     433</span>              : {</span>
+<span id="L434"><span class="lineNum">     434</span>              :         struct ipu4p_fw_isys_stream_cfg *cfg = &amp;msg-&gt;ipu4p.stream;</span>
+<span id="L435"><span class="lineNum">     435</span>              :         unsigned int i;</span>
+<span id="L436"><span class="lineNum">     436</span>              : </span>
+<span id="L437"><span class="lineNum">     437</span> <span class="tlaGNC">           2 :         dev_dbg(dev, &quot;IPU4P ISYS stream cfg: src=%u vc=%u in_pins=%u out_pins=%u\n&quot;,</span></span>
+<span id="L438"><span class="lineNum">     438</span>              :                 cfg-&gt;src, cfg-&gt;vc, cfg-&gt;nof_input_pins, cfg-&gt;nof_output_pins);</span>
+<span id="L439"><span class="lineNum">     439</span>              : </span>
+<span id="L440"><span class="lineNum">     440</span> <span class="tlaGNC">          22 :         for (i = 0; i &lt; cfg-&gt;nof_input_pins; i++)</span></span>
+<span id="L441"><span class="lineNum">     441</span> <span class="tlaGNC">           2 :                 dev_dbg(dev, &quot;  input[%u]: %ux%u dt=0x%x bpp=%u\n&quot;,</span></span>
+<span id="L442"><span class="lineNum">     442</span>              :                         i, cfg-&gt;input_pins[i].input_res.width,</span>
+<span id="L443"><span class="lineNum">     443</span>              :                         cfg-&gt;input_pins[i].input_res.height,</span>
+<span id="L444"><span class="lineNum">     444</span>              :                         cfg-&gt;input_pins[i].dt,</span>
+<span id="L445"><span class="lineNum">     445</span>              :                         cfg-&gt;input_pins[i].bits_per_pix);</span>
+<span id="L446"><span class="lineNum">     446</span>              : </span>
+<span id="L447"><span class="lineNum">     447</span> <span class="tlaGNC">          22 :         for (i = 0; i &lt; cfg-&gt;nof_output_pins; i++)</span></span>
+<span id="L448"><span class="lineNum">     448</span> <span class="tlaGNC">           2 :                 dev_dbg(dev, &quot;  output[%u]: %ux%u stride=%u pt=%u ft=%u\n&quot;,</span></span>
+<span id="L449"><span class="lineNum">     449</span>              :                         i, cfg-&gt;output_pins[i].output_res.width,</span>
+<span id="L450"><span class="lineNum">     450</span>              :                         cfg-&gt;output_pins[i].output_res.height,</span>
+<span id="L451"><span class="lineNum">     451</span>              :                         cfg-&gt;output_pins[i].stride,</span>
+<span id="L452"><span class="lineNum">     452</span>              :                         cfg-&gt;output_pins[i].pt,</span>
+<span id="L453"><span class="lineNum">     453</span>              :                         cfg-&gt;output_pins[i].ft);</span>
+<span id="L454"><span class="lineNum">     454</span> <span class="tlaGNC">          11 : }</span></span>
+<span id="L455"><span class="lineNum">     455</span>              : </span>
+<span id="L456"><span class="lineNum">     456</span> <span class="tlaGNC">          11 : static int ipu4p_fw_isys_prepare_stream_cfg(struct ipu6_isys_video *av,</span></span>
+<span id="L457"><span class="lineNum">     457</span>              :                                             struct isys_fw_msgs *msg)</span>
+<span id="L458"><span class="lineNum">     458</span>              : {</span>
+<span id="L459"><span class="lineNum">     459</span> <span class="tlaGNC">          11 :         struct ipu4p_fw_isys_stream_cfg *stream_cfg = &amp;msg-&gt;ipu4p.stream;</span></span>
+<span id="L460"><span class="lineNum">     460</span> <span class="tlaGNC">          11 :         struct device *dev = &amp;av-&gt;isys-&gt;adev-&gt;auxdev.dev;</span></span>
+<span id="L461"><span class="lineNum">     461</span> <span class="tlaGNC">          11 :         struct ipu6_isys_stream *stream = av-&gt;stream;</span></span>
+<span id="L462"><span class="lineNum">     462</span>              :         struct ipu6_isys_queue *aq;</span>
+<span id="L463"><span class="lineNum">     463</span>              : </span>
+<span id="L464"><span class="lineNum">     464</span> <span class="tlaGNC">          11 :         memset(stream_cfg, 0, sizeof(*stream_cfg));</span></span>
+<span id="L465"><span class="lineNum">     465</span> <span class="tlaGNC">          11 :         stream_cfg-&gt;src = stream-&gt;stream_source;</span></span>
+<span id="L466"><span class="lineNum">     466</span> <span class="tlaGNC">          11 :         stream_cfg-&gt;vc = stream-&gt;vc;</span></span>
+<span id="L467"><span class="lineNum">     467</span>              :         stream_cfg-&gt;isl_use = IPU4P_FW_ISYS_USE_NO_ISL_NO_ISA;</span>
+<span id="L468"><span class="lineNum">     468</span>              : </span>
+<span id="L469"><span class="lineNum">     469</span> <span class="tlaGNC">          22 :         list_for_each_entry(aq, &amp;stream-&gt;queues, node) {</span></span>
+<span id="L470"><span class="lineNum">     470</span>              :                 struct ipu6_isys_video *__av = ipu6_isys_queue_to_video(aq);</span>
+<span id="L471"><span class="lineNum">     471</span>              :                 int ret;</span>
+<span id="L472"><span class="lineNum">     472</span>              : </span>
+<span id="L473"><span class="lineNum">     473</span> <span class="tlaGNC">          11 :                 ret = ipu4p_isys_fw_pin_cfg(__av, stream_cfg);</span></span>
+<span id="L474"><span class="lineNum">     474</span> <span class="tlaGNC">          11 :                 if (ret &lt; 0)</span></span>
+<span id="L475"><span class="lineNum">     475</span> <span class="tlaUNC tlaBgUNC">           0 :                         return ret;</span></span>
+<span id="L476"><span class="lineNum">     476</span>              :         }</span>
+<span id="L477"><span class="lineNum">     477</span>              : </span>
+<span id="L478"><span class="lineNum">     478</span> <span class="tlaGNC tlaBgGNC">          11 :         stream-&gt;nr_output_pins = stream_cfg-&gt;nof_output_pins;</span></span>
+<span id="L479"><span class="lineNum">     479</span>              : </span>
+<span id="L480"><span class="lineNum">     480</span> <span class="tlaGNC">          11 :         ipu4p_dump_stream_cfg(dev, msg);</span></span>
+<span id="L481"><span class="lineNum">     481</span>              : </span>
+<span id="L482"><span class="lineNum">     482</span> <span class="tlaGNC">          11 :         return 0;</span></span>
+<span id="L483"><span class="lineNum">     483</span>              : }</span>
+<span id="L484"><span class="lineNum">     484</span>              : </span>
+<span id="L485"><span class="lineNum">     485</span>              : static void ipu4p_isys_buf_to_fw_frame_buf_pin(struct vb2_buffer *vb,</span>
+<span id="L486"><span class="lineNum">     486</span>              :                                                struct ipu4p_fw_isys_frame_buff_set *set)</span>
+<span id="L487"><span class="lineNum">     487</span>              : {</span>
+<span id="L488"><span class="lineNum">     488</span> <span class="tlaGNC">          24 :         struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(vb-&gt;vb2_queue);</span></span>
+<span id="L489"><span class="lineNum">     489</span>              :         struct vb2_v4l2_buffer *vvb = to_vb2_v4l2_buffer(vb);</span>
+<span id="L490"><span class="lineNum">     490</span>              :         struct ipu6_isys_video_buffer *ivb =</span>
+<span id="L491"><span class="lineNum">     491</span>              :                 vb2_buffer_to_ipu6_isys_video_buffer(vvb);</span>
+<span id="L492"><span class="lineNum">     492</span>              : </span>
+<span id="L493"><span class="lineNum">     493</span> <span class="tlaGNC">          24 :         set-&gt;output_pins[aq-&gt;fw_output].addr = ivb-&gt;dma_addr;</span></span>
+<span id="L494"><span class="lineNum">     494</span>              :         /*</span>
+<span id="L495"><span class="lineNum">     495</span>              :          * IPU4P echoes out_buf_id in PIN_DATA_READY. Store the message</span>
+<span id="L496"><span class="lineNum">     496</span>              :          * pointer here so the common response handler can release it.</span>
+<span id="L497"><span class="lineNum">     497</span>              :          */</span>
+<span id="L498"><span class="lineNum">     498</span> <span class="tlaGNC">          24 :         set-&gt;output_pins[aq-&gt;fw_output].out_buf_id = (u64)(uintptr_t)set;</span></span>
+<span id="L499"><span class="lineNum">     499</span>              : }</span>
+<span id="L500"><span class="lineNum">     500</span>              : </span>
+<span id="L501"><span class="lineNum">     501</span> <span class="tlaGNC">          24 : static void ipu4p_prepare_buf_set(struct isys_fw_msgs *msg,</span></span>
+<span id="L502"><span class="lineNum">     502</span>              :                                   struct ipu6_isys_stream *stream,</span>
+<span id="L503"><span class="lineNum">     503</span>              :                                   struct ipu6_isys_buffer_list *bl)</span>
+<span id="L504"><span class="lineNum">     504</span>              : {</span>
+<span id="L505"><span class="lineNum">     505</span> <span class="tlaGNC">          24 :         struct ipu4p_fw_isys_frame_buff_set *set = &amp;msg-&gt;ipu4p.frame;</span></span>
+<span id="L506"><span class="lineNum">     506</span>              :         struct ipu6_isys_buffer *ib;</span>
+<span id="L507"><span class="lineNum">     507</span>              : </span>
+<span id="L508"><span class="lineNum">     508</span> <span class="tlaGNC">          24 :         WARN_ON(!bl-&gt;nbufs);</span></span>
+<span id="L509"><span class="lineNum">     509</span>              : </span>
+<span id="L510"><span class="lineNum">     510</span> <span class="tlaGNC">          24 :         memset(set, 0, sizeof(*set));</span></span>
+<span id="L511"><span class="lineNum">     511</span> <span class="tlaGNC">          24 :         set-&gt;send_irq_sof = 1;</span></span>
+<span id="L512"><span class="lineNum">     512</span> <span class="tlaGNC">          24 :         set-&gt;send_irq_eof = 1;</span></span>
+<span id="L513"><span class="lineNum">     513</span> <span class="tlaGNC">          24 :         set-&gt;send_irq_capture_ack = 1;</span></span>
+<span id="L514"><span class="lineNum">     514</span> <span class="tlaGNC">          24 :         set-&gt;send_irq_capture_done = 1;</span></span>
+<span id="L515"><span class="lineNum">     515</span> <span class="tlaGNC">          24 :         set-&gt;send_resp_sof = 1;</span></span>
+<span id="L516"><span class="lineNum">     516</span> <span class="tlaGNC">          24 :         set-&gt;send_resp_eof = 1;</span></span>
+<span id="L517"><span class="lineNum">     517</span> <span class="tlaGNC">          24 :         set-&gt;frame_counter = atomic_fetch_inc(&amp;stream-&gt;buf_id) % 256;</span></span>
+<span id="L518"><span class="lineNum">     518</span>              : </span>
+<span id="L519"><span class="lineNum">     519</span> <span class="tlaGNC">          48 :         list_for_each_entry(ib, &amp;bl-&gt;head, head) {</span></span>
+<span id="L520"><span class="lineNum">     520</span>              :                 struct vb2_buffer *vb = ipu6_isys_buffer_to_vb2_buffer(ib);</span>
+<span id="L521"><span class="lineNum">     521</span>              : </span>
+<span id="L522"><span class="lineNum">     522</span>              :                 ipu4p_isys_buf_to_fw_frame_buf_pin(vb, set);</span>
+<span id="L523"><span class="lineNum">     523</span>              :         }</span>
+<span id="L524"><span class="lineNum">     524</span> <span class="tlaGNC">          24 : }</span></span>
+<span id="L525"><span class="lineNum">     525</span>              : </span>
+<span id="L526"><span class="lineNum">     526</span> <span class="tlaGNC">          13 : static void ipu4p_dump_frame_buf_set(struct device *dev,</span></span>
+<span id="L527"><span class="lineNum">     527</span>              :                                      struct isys_fw_msgs *msg,</span>
+<span id="L528"><span class="lineNum">     528</span>              :                                      unsigned int outputs)</span>
+<span id="L529"><span class="lineNum">     529</span>              : {</span>
+<span id="L530"><span class="lineNum">     530</span>              :         struct ipu4p_fw_isys_frame_buff_set *set = &amp;msg-&gt;ipu4p.frame;</span>
+<span id="L531"><span class="lineNum">     531</span>              :         unsigned int i;</span>
+<span id="L532"><span class="lineNum">     532</span>              : </span>
+<span id="L533"><span class="lineNum">     533</span> <span class="tlaGNC">           1 :         dev_dbg(dev, &quot;IPU4P frame buff set: fid=%u outputs=%u\n&quot;,</span></span>
+<span id="L534"><span class="lineNum">     534</span>              :                 set-&gt;frame_counter, outputs);</span>
+<span id="L535"><span class="lineNum">     535</span> <span class="tlaGNC">          26 :         for (i = 0; i &lt; outputs; i++)</span></span>
+<span id="L536"><span class="lineNum">     536</span> <span class="tlaGNC">           1 :                 dev_dbg(dev, &quot;  pin[%u]: addr=0x%x token=0x%llx\n&quot;,</span></span>
+<span id="L537"><span class="lineNum">     537</span>              :                         i, set-&gt;output_pins[i].addr,</span>
+<span id="L538"><span class="lineNum">     538</span>              :                         set-&gt;output_pins[i].out_buf_id);</span>
+<span id="L539"><span class="lineNum">     539</span> <span class="tlaGNC">          13 : }</span></span>
+<span id="L540"><span class="lineNum">     540</span>              : </span>
+<span id="L541"><span class="lineNum">     541</span> <span class="tlaGNC">          11 : static int ipu4p_stream_open(struct ipu6_isys *isys,</span></span>
+<span id="L542"><span class="lineNum">     542</span>              :                              const unsigned int stream_handle,</span>
+<span id="L543"><span class="lineNum">     543</span>              :                              struct isys_fw_msgs *msg)</span>
+<span id="L544"><span class="lineNum">     544</span>              : {</span>
+<span id="L545"><span class="lineNum">     545</span> <span class="tlaGNC">          11 :         return ipu4p_send_cmd(isys, stream_handle, &amp;msg-&gt;ipu4p.stream,</span></span>
+<span id="L546"><span class="lineNum">     546</span>              :                               msg-&gt;dma_addr, sizeof(msg-&gt;ipu4p.stream),</span>
+<span id="L547"><span class="lineNum">     547</span>              :                               IPU4P_FW_ISYS_SEND_TYPE_STREAM_OPEN);</span>
+<span id="L548"><span class="lineNum">     548</span>              : }</span>
+<span id="L549"><span class="lineNum">     549</span>              : </span>
+<span id="L550"><span class="lineNum">     550</span> <span class="tlaGNC">          11 : static int ipu4p_stream_start(struct ipu6_isys *isys,</span></span>
+<span id="L551"><span class="lineNum">     551</span>              :                               const unsigned int stream_handle,</span>
+<span id="L552"><span class="lineNum">     552</span>              :                               struct isys_fw_msgs *msg, bool capture)</span>
+<span id="L553"><span class="lineNum">     553</span>              : {</span>
+<span id="L554"><span class="lineNum">     554</span> <span class="tlaGNC">          11 :         if (!capture)</span></span>
+<span id="L555"><span class="lineNum">     555</span> <span class="tlaUNC tlaBgUNC">           0 :                 return ipu4p_send_cmd(isys, stream_handle, NULL, 0, 0,</span></span>
+<span id="L556"><span class="lineNum">     556</span>              :                                       IPU4P_FW_ISYS_SEND_TYPE_STREAM_START);</span>
+<span id="L557"><span class="lineNum">     557</span>              : </span>
+<span id="L558"><span class="lineNum">     558</span> <span class="tlaGNC tlaBgGNC">          11 :         return ipu4p_send_cmd(isys, stream_handle, &amp;msg-&gt;ipu4p.frame,</span></span>
+<span id="L559"><span class="lineNum">     559</span>              :                               msg-&gt;dma_addr, sizeof(msg-&gt;ipu4p.frame),</span>
+<span id="L560"><span class="lineNum">     560</span>              :                               IPU4P_FW_ISYS_SEND_TYPE_STREAM_START_AND_CAPTURE);</span>
+<span id="L561"><span class="lineNum">     561</span>              : }</span>
+<span id="L562"><span class="lineNum">     562</span>              : </span>
+<span id="L563"><span class="lineNum">     563</span> <span class="tlaGNC">          13 : static int ipu4p_stream_capture(struct ipu6_isys *isys,</span></span>
+<span id="L564"><span class="lineNum">     564</span>              :                                 const unsigned int stream_handle,</span>
+<span id="L565"><span class="lineNum">     565</span>              :                                 struct isys_fw_msgs *msg)</span>
+<span id="L566"><span class="lineNum">     566</span>              : {</span>
+<span id="L567"><span class="lineNum">     567</span> <span class="tlaGNC">          13 :         return ipu4p_send_cmd(isys, stream_handle, &amp;msg-&gt;ipu4p.frame,</span></span>
+<span id="L568"><span class="lineNum">     568</span>              :                               msg-&gt;dma_addr, sizeof(msg-&gt;ipu4p.frame),</span>
+<span id="L569"><span class="lineNum">     569</span>              :                               IPU4P_FW_ISYS_SEND_TYPE_STREAM_CAPTURE);</span>
+<span id="L570"><span class="lineNum">     570</span>              : }</span>
+<span id="L571"><span class="lineNum">     571</span>              : </span>
+<span id="L572"><span class="lineNum">     572</span> <span class="tlaGNC">          10 : static int ipu4p_stream_flush(struct ipu6_isys *isys,</span></span>
+<span id="L573"><span class="lineNum">     573</span>              :                               const unsigned int stream_handle)</span>
+<span id="L574"><span class="lineNum">     574</span>              : {</span>
+<span id="L575"><span class="lineNum">     575</span> <span class="tlaGNC">          10 :         return ipu4p_send_cmd(isys, stream_handle, NULL, 0, 0,</span></span>
+<span id="L576"><span class="lineNum">     576</span>              :                               IPU4P_FW_ISYS_SEND_TYPE_STREAM_FLUSH);</span>
+<span id="L577"><span class="lineNum">     577</span>              : }</span>
+<span id="L578"><span class="lineNum">     578</span>              : </span>
+<span id="L579"><span class="lineNum">     579</span> <span class="tlaGNC">          11 : static int ipu4p_stream_close(struct ipu6_isys *isys,</span></span>
+<span id="L580"><span class="lineNum">     580</span>              :                               const unsigned int stream_handle)</span>
+<span id="L581"><span class="lineNum">     581</span>              : {</span>
+<span id="L582"><span class="lineNum">     582</span> <span class="tlaGNC">          11 :         return ipu4p_send_cmd(isys, stream_handle, NULL, 0, 0,</span></span>
+<span id="L583"><span class="lineNum">     583</span>              :                               IPU4P_FW_ISYS_SEND_TYPE_STREAM_CLOSE);</span>
+<span id="L584"><span class="lineNum">     584</span>              : }</span>
+<span id="L585"><span class="lineNum">     585</span>              : </span>
+<span id="L586"><span class="lineNum">     586</span>              : const struct ipu6_fw_isys_ops ipu4p_fw_isys_ops = {</span>
+<span id="L587"><span class="lineNum">     587</span>              :         .init = ipu4p_fw_isys_init,</span>
+<span id="L588"><span class="lineNum">     588</span>              :         .close = ipu4p_fw_isys_close,</span>
+<span id="L589"><span class="lineNum">     589</span>              :         .isr_one = ipu4p_isys_isr_one,</span>
+<span id="L590"><span class="lineNum">     590</span>              :         .set_iwake_register = ipu4p_fw_isys_set_iwake_register,</span>
+<span id="L591"><span class="lineNum">     591</span>              :         .cleanup = ipu4p_fw_isys_cleanup,</span>
+<span id="L592"><span class="lineNum">     592</span>              :         .send_cmd = ipu4p_send_cmd,</span>
+<span id="L593"><span class="lineNum">     593</span>              :         .prepare_stream_cfg = ipu4p_fw_isys_prepare_stream_cfg,</span>
+<span id="L594"><span class="lineNum">     594</span>              :         .prepare_buf_set = ipu4p_prepare_buf_set,</span>
+<span id="L595"><span class="lineNum">     595</span>              :         .stream_open = ipu4p_stream_open,</span>
+<span id="L596"><span class="lineNum">     596</span>              :         .stream_start = ipu4p_stream_start,</span>
+<span id="L597"><span class="lineNum">     597</span>              :         .stream_capture = ipu4p_stream_capture,</span>
+<span id="L598"><span class="lineNum">     598</span>              :         .stream_flush = ipu4p_stream_flush,</span>
+<span id="L599"><span class="lineNum">     599</span>              :         .stream_close = ipu4p_stream_close,</span>
+<span id="L600"><span class="lineNum">     600</span>              :         .dump_stream_cfg = ipu4p_dump_stream_cfg,</span>
+<span id="L601"><span class="lineNum">     601</span>              :         .dump_frame_buf_set = ipu4p_dump_frame_buf_set,</span>
+<span id="L602"><span class="lineNum">     602</span>              : };</span>
+<span id="L603"><span class="lineNum">     603</span>              : </span>
+<span id="L604"><span class="lineNum">     604</span> <span class="tlaUNC tlaBgUNC">           0 : void ipu4p_isys_irq_setup(struct ipu6_isys *isys)</span></span>
+<span id="L605"><span class="lineNum">     605</span>              : {</span>
+<span id="L606"><span class="lineNum">     606</span>              :         static const u32 irq_offsets[] = {</span>
+<span id="L607"><span class="lineNum">     607</span>              :                 0x00, IPU4P_ISYS_IRQ_MASK_OFFSET,</span>
+<span id="L608"><span class="lineNum">     608</span>              :                 IPU4P_ISYS_IRQ_ENABLE_OFFSET,</span>
+<span id="L609"><span class="lineNum">     609</span>              :                 IPU4P_ISYS_IRQ_LEVEL_NOT_PULSE_OFFSET,</span>
+<span id="L610"><span class="lineNum">     610</span>              :         };</span>
+<span id="L611"><span class="lineNum">     611</span>              :         const u32 isys_irq_mask = IPU4P_ISYS_UNISPART_IRQ_SW |</span>
+<span id="L612"><span class="lineNum">     612</span>              :                 IPU4P_ISYS_UNISPART_IRQ_CSI2(0) |</span>
+<span id="L613"><span class="lineNum">     613</span>              :                 IPU4P_ISYS_UNISPART_IRQ_CSI2(1);</span>
+<span id="L614"><span class="lineNum">     614</span>              :         const struct {</span>
+<span id="L615"><span class="lineNum">     615</span>              :                 u32 base;</span>
+<span id="L616"><span class="lineNum">     616</span>              :                 u32 mask;</span>
+<span id="L617"><span class="lineNum">     617</span> <span class="tlaUNC">           0 :         } irq_config[] = {</span></span>
+<span id="L618"><span class="lineNum">     618</span>              :                 { IPU4P_ISYS_UNISPART_IRQ_EDGE, isys_irq_mask },</span>
+<span id="L619"><span class="lineNum">     619</span>              :                 { IPU4P_ISYS_ISA_ACC_IRQ_CTRL_BASE, 0 },</span>
+<span id="L620"><span class="lineNum">     620</span>              :                 { IPU4P_ISYS_A_IRQ_CTRL_BASE, 0 },</span>
+<span id="L621"><span class="lineNum">     621</span>              :                 { IPU4P_ISYS_SIP0_IRQ_CTRL_BASE, IPU4P_ISYS_SIP0_CSI2_IRQ },</span>
+<span id="L622"><span class="lineNum">     622</span>              :                 { IPU4P_ISYS_SIP1_IRQ_CTRL_BASE, IPU4P_ISYS_SIP1_CSI2_IRQ_MASK },</span>
+<span id="L623"><span class="lineNum">     623</span>              :         };</span>
+<span id="L624"><span class="lineNum">     624</span> <span class="tlaUNC">           0 :         void __iomem *base = isys-&gt;pdata-&gt;base;</span></span>
+<span id="L625"><span class="lineNum">     625</span>              : </span>
+<span id="L626"><span class="lineNum">     626</span> <span class="tlaUNC">           0 :         for (unsigned int i = 0; i &lt; ARRAY_SIZE(irq_config); i++) {</span></span>
+<span id="L627"><span class="lineNum">     627</span> <span class="tlaUNC">           0 :                 for (unsigned int j = 0; j &lt; ARRAY_SIZE(irq_offsets); j++)</span></span>
+<span id="L628"><span class="lineNum">     628</span> <span class="tlaUNC">           0 :                         writel(irq_config[i].mask,</span></span>
+<span id="L629"><span class="lineNum">     629</span> <span class="tlaUNC">           0 :                                base + irq_config[i].base + irq_offsets[j]);</span></span>
+<span id="L630"><span class="lineNum">     630</span>              : </span>
+<span id="L631"><span class="lineNum">     631</span>              :                 writel(0xffffffff,</span>
+<span id="L632"><span class="lineNum">     632</span> <span class="tlaUNC">           0 :                        base + irq_config[i].base + IPU4P_ISYS_IRQ_CLEAR_OFFSET);</span></span>
+<span id="L633"><span class="lineNum">     633</span>              :         }</span>
+<span id="L634"><span class="lineNum">     634</span>              : </span>
+<span id="L635"><span class="lineNum">     635</span> <span class="tlaUNC">           0 :         writel(0, base + IPU4P_ISYS_UNISPART_SW_IRQ_REG);</span></span>
+<span id="L636"><span class="lineNum">     636</span> <span class="tlaUNC">           0 :         writel(0, base + IPU4P_ISYS_UNISPART_SW_IRQ_MUX_REG);</span></span>
+<span id="L637"><span class="lineNum">     637</span> <span class="tlaUNC">           0 : }</span></span>
+<span id="L638"><span class="lineNum">     638</span>              : </span>
+<span id="L639"><span class="lineNum">     639</span> <span class="tlaUNC">           0 : irqreturn_t ipu4p_isys_isr(struct ipu6_bus_device *adev)</span></span>
+<span id="L640"><span class="lineNum">     640</span>              : {</span>
+<span id="L641"><span class="lineNum">     641</span>              :         struct ipu6_isys *isys = ipu6_bus_get_drvdata(adev);</span>
+<span id="L642"><span class="lineNum">     642</span> <span class="tlaUNC">           0 :         void __iomem *base = isys-&gt;pdata-&gt;base;</span></span>
+<span id="L643"><span class="lineNum">     643</span>              :         u32 status, sip0_status, sip1_status;</span>
+<span id="L644"><span class="lineNum">     644</span>              : </span>
+<span id="L645"><span class="lineNum">     645</span>              :         guard(spinlock)(&amp;isys-&gt;power_lock);</span>
+<span id="L646"><span class="lineNum">     646</span>              : </span>
+<span id="L647"><span class="lineNum">     647</span> <span class="tlaUNC">           0 :         if (!isys-&gt;power)</span></span>
+<span id="L648"><span class="lineNum">     648</span>              :                 return IRQ_NONE;</span>
+<span id="L649"><span class="lineNum">     649</span>              : </span>
+<span id="L650"><span class="lineNum">     650</span> <span class="tlaUNC">           0 :         status = readl(base + IPU4P_ISYS_UNISPART_IRQ_STATUS);</span></span>
+<span id="L651"><span class="lineNum">     651</span> <span class="tlaUNC">           0 :         sip0_status = readl(base + IPU4P_ISYS_SIP0_IRQ_CTRL_STATUS);</span></span>
+<span id="L652"><span class="lineNum">     652</span> <span class="tlaUNC">           0 :         sip1_status = readl(base + IPU4P_ISYS_SIP1_IRQ_CTRL_STATUS);</span></span>
+<span id="L653"><span class="lineNum">     653</span> <span class="tlaUNC">           0 :         if (!status &amp;&amp; !sip0_status &amp;&amp; !sip1_status)</span></span>
+<span id="L654"><span class="lineNum">     654</span>              :                 return IRQ_NONE;</span>
+<span id="L655"><span class="lineNum">     655</span>              : </span>
+<span id="L656"><span class="lineNum">     656</span>              :         do {</span>
+<span id="L657"><span class="lineNum">     657</span> <span class="tlaUNC">           0 :                 writel(status, base + IPU4P_ISYS_UNISPART_IRQ_CLEAR);</span></span>
+<span id="L658"><span class="lineNum">     658</span>              : </span>
+<span id="L659"><span class="lineNum">     659</span> <span class="tlaUNC">           0 :                 writel(sip0_status, base + IPU4P_ISYS_SIP0_IRQ_CTRL_CLEAR);</span></span>
+<span id="L660"><span class="lineNum">     660</span> <span class="tlaUNC">           0 :                 writel(sip1_status, base + IPU4P_ISYS_SIP1_IRQ_CTRL_CLEAR);</span></span>
+<span id="L661"><span class="lineNum">     661</span>              : </span>
+<span id="L662"><span class="lineNum">     662</span> <span class="tlaUNC">           0 :                 for (unsigned int i = 0;</span></span>
+<span id="L663"><span class="lineNum">     663</span> <span class="tlaUNC">           0 :                      i &lt; isys-&gt;pdata-&gt;ipdata-&gt;csi2.nports; i++) {</span></span>
+<span id="L664"><span class="lineNum">     664</span>              :                         bool port_irq = i ?</span>
+<span id="L665"><span class="lineNum">     665</span> <span class="tlaUNC">           0 :                                 (sip1_status &amp; IPU4P_ISYS_SIP1_CSI2_IRQ(i)) :</span></span>
+<span id="L666"><span class="lineNum">     666</span>              :                                 (sip0_status &amp; IPU4P_ISYS_SIP0_CSI2_IRQ);</span>
+<span id="L667"><span class="lineNum">     667</span>              : </span>
+<span id="L668"><span class="lineNum">     668</span> <span class="tlaUNC">           0 :                         if (port_irq &amp;&amp; isys-&gt;csi2[i].base)</span></span>
+<span id="L669"><span class="lineNum">     669</span> <span class="tlaUNC">           0 :                                 ipu4p_isys_csi2_isr(&amp;isys-&gt;csi2[i]);</span></span>
+<span id="L670"><span class="lineNum">     670</span>              :                 }</span>
+<span id="L671"><span class="lineNum">     671</span>              : </span>
+<span id="L672"><span class="lineNum">     672</span> <span class="tlaUNC">           0 :                 writel(0, base + IPU4P_ISYS_UNISPART_SW_IRQ_REG);</span></span>
+<span id="L673"><span class="lineNum">     673</span>              : </span>
+<span id="L674"><span class="lineNum">     674</span> <span class="tlaUNC">           0 :                 if ((status &amp; IPU4P_ISYS_UNISPART_IRQ_SW) &amp;&amp;</span></span>
+<span id="L675"><span class="lineNum">     675</span> <span class="tlaUNC">           0 :                     !adev-&gt;auxdrv_data-&gt;fw_ops-&gt;isr_one(adev))</span></span>
+<span id="L676"><span class="lineNum">     676</span>              :                         status = IPU4P_ISYS_UNISPART_IRQ_SW;</span>
+<span id="L677"><span class="lineNum">     677</span>              :                 else</span>
+<span id="L678"><span class="lineNum">     678</span>              :                         status = 0;</span>
+<span id="L679"><span class="lineNum">     679</span>              : </span>
+<span id="L680"><span class="lineNum">     680</span> <span class="tlaUNC">           0 :                 status |= readl(base + IPU4P_ISYS_UNISPART_IRQ_STATUS);</span></span>
+<span id="L681"><span class="lineNum">     681</span>              :                 sip0_status = readl(base + IPU4P_ISYS_SIP0_IRQ_CTRL_STATUS);</span>
+<span id="L682"><span class="lineNum">     682</span>              :                 sip1_status = readl(base + IPU4P_ISYS_SIP1_IRQ_CTRL_STATUS);</span>
+<span id="L683"><span class="lineNum">     683</span> <span class="tlaUNC">           0 :         } while ((status &amp; (isys-&gt;isr_csi2_bits |</span></span>
+<span id="L684"><span class="lineNum">     684</span> <span class="tlaUNC">           0 :                             IPU4P_ISYS_UNISPART_IRQ_SW)) ||</span></span>
+<span id="L685"><span class="lineNum">     685</span> <span class="tlaUNC">           0 :                  (sip0_status &amp; IPU4P_ISYS_SIP0_CSI2_IRQ) ||</span></span>
+<span id="L686"><span class="lineNum">     686</span>              :                  (sip1_status &amp; IPU4P_ISYS_SIP1_CSI2_IRQ_MASK));</span>
+<span id="L687"><span class="lineNum">     687</span>              : </span>
+<span id="L688"><span class="lineNum">     688</span>              :         return IRQ_HANDLED;</span>
+<span id="L689"><span class="lineNum">     689</span>              : }</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>
