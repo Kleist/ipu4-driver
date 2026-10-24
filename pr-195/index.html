@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IPU4 driver</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<header class="hero">
+  <h1>IPU4 driver</h1>
+  <p class="tagline">Intel IPU4 support for Linux, as an out-of-tree module (<code>kernel/ipu4/</code>) and as patches on the upstream ipu6 driver (<code>patches/ipu6-ipu4/</code>), tested against QEMU models of IPU4, IPU4P and IPU6.</p>
+  <p class="meta">
+    Last updated <time datetime="2026-10-21T09:31:46Z">2026-10-21T09:31:46Z</time>
+ · commit <a href="https://github.com/Kleist/ipu4-driver/commit/d8c485fa7c388e65126f0ff2191db3e2075a024a"><code>d8c485f</code></a>    · <a href="https://github.com/Kleist/ipu4-driver">repository</a>
+  </p>
+</header>
+
+<section class="card" id="ladder">
+  <h2>Test ladder</h2>
+  <p class="meta">
+    Each leg is a driver under a QEMU model:
+    <code>ipu4-out-of-tree</code>, <code>ipu4p</code> and <code>ipu6</code> are the unmodified
+    baselines, <code>ipu4-patches</code> is the upstreamable series under all three models.
+    <span class="gated">gated</span> tests fail CI unless they pass.
+    <a href="https://github.com/Kleist/ipu4-driver/blob/main/tools/notes/ipu6-ipu4-plan.md">Plan</a> ·
+<a href="https://github.com/Kleist/ipu4-driver/actions/runs/39304335052">latest vm-ipu6 run</a>  </p>
+  <div class="kpi-row">
+    <div class="kpi ladder-variant ladder-ok">
+      <div class="kpi-label">ipu4-out-of-tree/ipu4</div>
+      <div class="kpi-value">21 / 21</div>
+      <div class="kpi-sub">tests passing · gated 21 / 21 pass</div>
+      <div class="kpi-sub"><a href="https://github.com/Kleist/ipu4-driver/actions/runs/39304335052">2026-10-19 18:44</a> · <code>9574f6e</code></div>
+<div class="kpi-sub">driver lines <a href="ladder-coverage/ipu4-out-of-tree-ipu4/">72.5%</a> (2516 / 3472)</div><div class="kpi-sub">base <code>v7.3-rc4</code></div>    </div>
+    <div class="kpi ladder-variant ladder-ok">
+      <div class="kpi-label">ipu4p/ipu4p</div>
+      <div class="kpi-value">21 / 21</div>
+      <div class="kpi-sub">tests passing · gated 21 / 21 pass</div>
+      <div class="kpi-sub"><a href="https://github.com/Kleist/ipu4-driver/actions/runs/39304335052">2026-10-19 18:53</a> · <code>9574f6e</code></div>
+<div class="kpi-sub">driver lines <a href="ladder-coverage/ipu4p-ipu4p/">48.7%</a> (2762 / 5672)</div><div class="kpi-sub">base <code>v7.3</code> + IPU7 series (45) + IPU4P series (12)</div>    </div>
+    <div class="kpi ladder-variant ladder-ok">
+      <div class="kpi-label">ipu6/ipu6</div>
+      <div class="kpi-value">21 / 21</div>
+      <div class="kpi-sub">tests passing · gated 21 / 21 pass</div>
+      <div class="kpi-sub"><a href="https://github.com/Kleist/ipu4-driver/actions/runs/39304335052">2026-10-19 18:53</a> · <code>9574f6e</code></div>
+<div class="kpi-sub">driver lines <a href="ladder-coverage/ipu6-ipu6/">71.9%</a> (2734 / 3800)</div><div class="kpi-sub">base <code>v7.3</code></div>    </div>
+    <div class="kpi ladder-variant ladder-ok">
+      <div class="kpi-label">ipu4-patches/ipu4</div>
+      <div class="kpi-value">20 / 21</div>
+      <div class="kpi-sub">tests passing · gated 20 / 20 pass</div>
+      <div class="kpi-sub"><a href="https://github.com/Kleist/ipu4-driver/actions/runs/39304335052">2026-10-19 18:53</a> · <code>9574f6e</code></div>
+<div class="kpi-sub">driver lines <a href="ladder-coverage/ipu4-patches-ipu4/">45.1%</a> (2604 / 5780)</div><div class="kpi-sub">base <code>v7.3</code> + IPU7 series (45) + IPU4P series (12) + 10 IPU4 patches</div>    </div>
+    <div class="kpi ladder-variant ladder-ok">
+      <div class="kpi-label">ipu4-patches/ipu4p</div>
+      <div class="kpi-value">21 / 21</div>
+      <div class="kpi-sub">tests passing · gated 21 / 21 pass</div>
+      <div class="kpi-sub"><a href="https://github.com/Kleist/ipu4-driver/actions/runs/39304335052">2026-10-19 18:53</a> · <code>9574f6e</code></div>
+<div class="kpi-sub">driver lines <a href="ladder-coverage/ipu4-patches-ipu4p/">48.1%</a> (2781 / 5780)</div><div class="kpi-sub">base <code>v7.3</code> + IPU7 series (45) + IPU4P series (12) + 10 IPU4 patches</div>    </div>
+    <div class="kpi ladder-variant ladder-ok">
+      <div class="kpi-label">ipu4-patches/ipu6</div>
+      <div class="kpi-value">21 / 21</div>
+      <div class="kpi-sub">tests passing · gated 21 / 21 pass</div>
+      <div class="kpi-sub"><a href="https://github.com/Kleist/ipu4-driver/actions/runs/39304335052">2026-10-19 18:53</a> · <code>9574f6e</code></div>
+<div class="kpi-sub">driver lines <a href="ladder-coverage/ipu4-patches-ipu6/">49.7%</a> (2871 / 5780)</div><div class="kpi-sub">base <code>v7.3</code> + IPU7 series (45) + IPU4P series (12) + 10 IPU4 patches</div>    </div>
+  </div>
+  <div class="table-scroll">
+  <table class="reg-table ladder-table">
+    <thead><tr><th>Test</th><th>ipu4-out-of-tree/ipu4</th><th>ipu4p/ipu4p</th><th>ipu6/ipu6</th><th>ipu4-patches/ipu4</th><th>ipu4-patches/ipu4p</th><th>ipu4-patches/ipu6</th></tr></thead>
+    <tbody>
+    <tr>
+      <td><code>series-applies</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">34s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">42s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">35s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">35s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">40s</span></td>
+    </tr>
+    <tr>
+      <td><code>build</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">10s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">25s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">20s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">21s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">19s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">20s</span></td>
+    </tr>
+    <tr>
+      <td><code>checkpatch</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">7s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">8s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">7s</span></td>
+    </tr>
+    <tr>
+      <td><code>vm-boot</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">30s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">408s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">413s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">431s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">373s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">416s</span></td>
+    </tr>
+    <tr>
+      <td><code>module-load</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">9s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">9s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">8s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">9s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">8s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">8s</span></td>
+    </tr>
+    <tr>
+      <td><code>pci-reauth</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>probe-identify</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+    </tr>
+    <tr>
+      <td><code>probe-buttress</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>auth-error</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+    </tr>
+    <tr>
+      <td><code>probe-mmu</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>isys-resume</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>isys-irq</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>v4l2-query</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>fw-open</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+    </tr>
+    <tr>
+      <td><code>stream-on</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>stream-start-error</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+    </tr>
+    <tr>
+      <td><code>stream-requeue</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>stream-pattern</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>stream-formats</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>frame-desc</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>csi2-sof-irq</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-fail">fail</td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    </tbody>
+  </table>
+  </div>
+  <h3>Driver line coverage per leg</h3>
+  <p class="meta">Probe and stream boots of each leg (<code>IPU4_GCOV=1</code>, <code>tools/coverage/ladder.sh</code>). The ipu4p and ipu4-patches trees also count the IPU7/IPU4P code in the driver directory, so compare a driver across variants rather than drivers against each other.</p>
+  <canvas id="ladder-coverage-trend" height="80"></canvas>
+  <h3>Base and series (ipu4-patches/ipu4 run)</h3>
+  <ul class="series">
+    <li>Mainline <code>torvalds/linux</code>
+<code>v7.3</code> @ <a href="https://github.com/torvalds/linux/commit/c03c1a14507dfaf8b856c2608f9ac216021fc222"><code>c03c1a14507d</code></a></li>
+    <li>+ IPU7 series (<a href="https://lore.kernel.org/all/20260907113004.2489993-1-sakari.ailus@linux.intel.com/">lore</a>): 45 patches in <a href="https://github.com/Kleist/ipu4-driver/tree/main/patches/ipu6-ipu7"><code>patches/ipu6-ipu7/</code></a></li>
+    <li>+ IPU4P series (<a href="https://github.com/ruslanbay/linux/tree/ipu4p-upstream">ruslanbay/linux ipu4p-upstream</a>): 12 patches in <a href="https://github.com/Kleist/ipu4-driver/tree/main/patches/ipu6-ipu4p"><code>patches/ipu6-ipu4p/</code></a></li>
+    <li>+ IPU4 series: 10 patches in <a href="https://github.com/Kleist/ipu4-driver/tree/main/patches/ipu6-ipu4"><code>patches/ipu6-ipu4/</code></a></li>
+  </ul>
+  <ol class="series">
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/9574f6ede9fd4500ced2e43e82903ff506a16a5d/patches/ipu6-ipu4/0001-media-ipu6-Identify-IPU4-devices.patch">media: ipu6: Identify IPU4 devices</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/9574f6ede9fd4500ced2e43e82903ff506a16a5d/patches/ipu6-ipu4/0002-media-ipu6-Add-IPU4-buttress-support.patch">media: ipu6: Add IPU4 buttress support</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/9574f6ede9fd4500ced2e43e82903ff506a16a5d/patches/ipu6-ipu4/0003-media-ipu6-Add-IPU4-MMU-support.patch">media: ipu6: Add IPU4 MMU support</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/9574f6ede9fd4500ced2e43e82903ff506a16a5d/patches/ipu6-ipu4/0004-media-ipu6-Support-the-IPU4-TSC-sync-handshake.patch">media: ipu6: Support the IPU4 TSC sync handshake</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/9574f6ede9fd4500ced2e43e82903ff506a16a5d/patches/ipu6-ipu4/0005-media-ipu6-Add-IPU4-ISYS-and-CSI-2-register-definiti.patch">media: ipu6: Add IPU4 ISYS and CSI-2 register definitions</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/9574f6ede9fd4500ced2e43e82903ff506a16a5d/patches/ipu6-ipu4/0006-media-ipu6-Add-IPU4-ISYS-interrupt-handling.patch">media: ipu6: Add IPU4 ISYS interrupt handling</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/9574f6ede9fd4500ced2e43e82903ff506a16a5d/patches/ipu6-ipu4/0007-media-ipu6-Support-the-IPU4-SysCom-queue-layout.patch">media: ipu6: Support the IPU4 SysCom queue layout</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/9574f6ede9fd4500ced2e43e82903ff506a16a5d/patches/ipu6-ipu4/0008-media-ipu6-Run-IPU4-without-iWake.patch">media: ipu6: Run IPU4 without iWake</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/9574f6ede9fd4500ced2e43e82903ff506a16a5d/patches/ipu6-ipu4/0009-media-ipu6-Add-IPU4-CSI-2-receiver-support.patch">media: ipu6: Add IPU4 CSI-2 receiver support</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/9574f6ede9fd4500ced2e43e82903ff506a16a5d/patches/ipu6-ipu4/0010-media-ipu6-Enable-IPU4-PCI-device.patch">media: ipu6: Enable IPU4 PCI device</a></li>
+  </ol>
+</section>
+
+<section class="card" id="kernels">
+  <h2>Supported kernels</h2>
+  <p class="meta">
+    <code>kernel/ipu4/</code> builds and passes KUnit on every track in
+    <code>.github/kernel-pins/</code>; the ladder runs on <code>v7.3-rc4</code>.
+<a href="https://github.com/Kleist/ipu4-driver/actions/runs/39304335048">latest ci run on main</a>  </p>
+  <div class="kpi-row">
+    <div class="kpi kernel-track state-success">
+      <div class="kpi-label">Linux 6.12</div>
+      <div class="kpi-value"><code>v6.12.113</code></div>
+      <div class="kpi-sub">build + KUnit: success</div>
+    </div>
+    <div class="kpi kernel-track state-success">
+      <div class="kpi-label">Linux 6.18</div>
+      <div class="kpi-value"><code>v6.18.57</code></div>
+      <div class="kpi-sub">build + KUnit: success</div>
+    </div>
+    <div class="kpi kernel-track state-success">
+      <div class="kpi-label">Linux 7.3</div>
+      <div class="kpi-value"><code>v7.3</code></div>
+      <div class="kpi-sub">build + KUnit: success</div>
+    </div>
+  </div>
+</section>
+
+<details class="card" id="harness">
+  <summary><h2>Out-of-tree QEMU harness (vm-smoke)</h2></summary>
+  <p class="meta">Coverage and silicon-vs-QEMU MMIO divergence of <code>kernel/ipu4/</code> on 6.12, register handlers of the IPU4 model and upstream divergence.</p>
+  <section class="sub">
+    <h3>Code coverage</h3>
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-label">lines</div>
+        <div class="kpi-value">59.0%</div>
+        <div class="kpi-sub">2205 / 3740</div>
+      </div>
+      <div class="kpi"><div class="kpi-label">functions</div>
+        <div class="kpi-value">71.3%</div>
+        <div class="kpi-sub">184 / 258</div>
+      </div>
+    </div>
+    <p><a href="coverage/index.html">Browse the full lcov report →</a></p>
+    <canvas id="coverage-trend" height="80"></canvas>
+  </section>
+  
+  <section class="sub">
+    <h3>MMIO divergence (silicon vs QEMU)</h3>
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-label">unimplemented</div>
+        <div class="kpi-value">0</div>
+        <div class="kpi-sub">silicon-touched, QEMU silent</div>
+      </div>
+      <div class="kpi"><div class="kpi-label">value mismatch</div>
+        <div class="kpi-value">11</div>
+        <div class="kpi-sub">read divergence</div>
+      </div>
+      <div class="kpi"><div class="kpi-label">extra in QEMU</div>
+        <div class="kpi-value">8</div>
+        <div class="kpi-sub">benign / informational</div>
+      </div>
+    </div>
+    <p>
+      silicon: 1088 accesses ·
+      qemu: 653 accesses ·
+      <a href="mmio/report.txt">full report.txt →</a>
+    </p>
+    <canvas id="mmio-trend" height="80"></canvas>
+  </section>
+  
+  <section class="sub">
+    <h3>Register coverage (54 handlers in <code>hw/misc/ipu4.c</code>)</h3>
+    <div class="kpi-row">
+      <div class="kpi conf-doc"><div class="kpi-label">doc</div>
+        <div class="kpi-value">0</div>
+      </div>
+      <div class="kpi conf-inferred"><div class="kpi-label">inferred</div>
+        <div class="kpi-value">36</div>
+      </div>
+      <div class="kpi conf-guess"><div class="kpi-label">guess</div>
+        <div class="kpi-value">18</div>
+      </div>
+    </div>
+    <details>
+      <summary>Show register table</summary>
+      <table class="reg-table">
+        <thead><tr><th>Offset</th><th>Block</th><th>Driver caller</th><th>Confidence</th></tr></thead>
+        <tbody>
+        <tr class="conf-inferred">
+          <td><code>0x008</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c WDT kick</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x00c</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c BTRS_CTRL</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x030</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c FW_RESET_CTL</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x034</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c IS_FREQ_CTL</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x038</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c PS_FREQ_CTL</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x05c</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c PWR_STATE poll</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x078</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c FW_SOURCE_BASE_LO</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x07c</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c FW_SOURCE_BASE_HI</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x080</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c FW_SOURCE_SIZE</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x088</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c FABRIC_CMD</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x090</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c ISR_STATUS</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x094</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c ISR_ENABLED_STATUS</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x098</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c ISR_ENABLE</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x09c</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c ISR_CLEAR</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x100</code></td>
+          <td>CSE IPC</td>
+          <td>ipu6-buttress.c IU2CSEDB0</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x104</code></td>
+          <td>CSE IPC</td>
+          <td>ipu6-buttress.c IU2CSEDATA0</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x108</code></td>
+          <td>CSE IPC</td>
+          <td>ipu6-buttress.c IU2CSECSR</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x164</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c TSC_LO</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x168</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c TSC_HI</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x300</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c SECURITY_CTL</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x304</code></td>
+          <td>CSE IPC</td>
+          <td>ipu6-buttress.c CSE2IUDB0</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x308</code></td>
+          <td>CSE IPC</td>
+          <td>ipu6-buttress.c CSE2IUDATA0</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x30c</code></td>
+          <td>CSE IPC</td>
+          <td>ipu6-buttress.c CSE2IUCSR</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x314</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c SKU</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x4000</code></td>
+          <td>Buttress</td>
+          <td>ipu6-fw-com.c FW boot param SYSCOM_CONFIG_ID (ipu6 variant)</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x4004</code></td>
+          <td>Buttress</td>
+          <td>ipu6-fw-com.c FW boot param SYSCOM_STATE_ID (ipu6 variant)</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x17c000</code></td>
+          <td>ISYS</td>
+          <td>ipu6-isys.c unispart IRQ_EDGE</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x17c004</code></td>
+          <td>ISYS</td>
+          <td>ipu6-isys.c unispart IRQ_MASK</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x17c008</code></td>
+          <td>ISYS</td>
+          <td>ipu6-isys.c unispart IRQ_STATUS</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x166308</code></td>
+          <td>ISYS (ipu4p variant)</td>
+          <td>ipu4p-isys-csi2-regs.h CSI port 0 IRQ CTRL STATUS</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x166408-0x16640c</code></td>
+          <td>ISYS (ipu4p variant)</td>
+          <td>ipu4p-isys-csi2-regs.h CSI port 0 IRQ CTRL0 STATUS/CLEAR</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x166d08</code></td>
+          <td>ISYS (ipu4p variant)</td>
+          <td>ipu4p-isys-csi2-regs.h SIP0 IRQ STATUS</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x17c00c</code></td>
+          <td>ISYS</td>
+          <td>ipu6-isys.c unispart IRQ_CLEAR</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x17c010</code></td>
+          <td>ISYS</td>
+          <td>ipu6-isys.c unispart IRQ_ENABLE</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x17c014</code></td>
+          <td>ISYS</td>
+          <td>ipu6-isys.c unispart IRQ_LEVEL_NOT_PULSE</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x17c414</code></td>
+          <td>ISYS</td>
+          <td>ipu6-isys.c unispart SW_IRQ</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x17c418</code></td>
+          <td>ISYS</td>
+          <td>ipu6-isys.c unispart SW_IRQ_MUX</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x164000-0x164fff</code></td>
+          <td>CSI2 port 0</td>
+          <td>ipu6-isys-csi2.c per-port block</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x165000-0x165fff</code></td>
+          <td>CSI2 port 1</td>
+          <td>ipu6-isys-csi2.c per-port block</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x166000-0x166fff</code></td>
+          <td>CSI2 port 2</td>
+          <td>ipu6-isys-csi2.c per-port block</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x167000-0x167fff</code></td>
+          <td>CSI2 port 3</td>
+          <td>ipu6-isys-csi2.c per-port block</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x16c000-0x16c7ff</code></td>
+          <td>CSI2 port 4</td>
+          <td>ipu6-isys-csi2.c per-port block</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x16c800-0x16cfff</code></td>
+          <td>CSI2 port 5</td>
+          <td>ipu6-isys-csi2.c per-port block</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x100000</code></td>
+          <td>ISYS</td>
+          <td>ipu6-fw-isys.c ISYS SPC_STATUS_CTRL</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x108000-0x1080ff</code></td>
+          <td>ISYS</td>
+          <td>ipu6-fw-com.c DMEM syscom window</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x400000</code></td>
+          <td>PSYS</td>
+          <td>ipu6-fw-isys.c PSYS SPC_STATUS_CTRL</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x1e0000-0x1e04ff</code></td>
+          <td>MMU</td>
+          <td>ipu6-mmu.c ISYS MMU page-table window</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x4b0000-0x4b09ff</code></td>
+          <td>MMU</td>
+          <td>ipu6-mmu.c PSYS MMU page-table window</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x200000-0x2000ff</code></td>
+          <td>ISYS DMEM (ipu6 variant)</td>
+          <td>ipu6-fw-com.c SysCom registers</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x210000</code></td>
+          <td>ISYS SPC (ipu6 variant)</td>
+          <td>ipu6-fw-isys.c query_sp / start_sp</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x220088 / 0x22008c, 0x238208</code></td>
+          <td>CSI-2 port 0 / CSI top (ipu6 variant)</td>
+          <td>ipu6-isys.c isys_isr, ipu6-isys-csi2.c ipu6_isys_register_errors</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x238008 / 0x23800c (+8 per PHY)</code></td>
+          <td>CSI-2 hub (ipu6 variant)</td>
+          <td>ipu6-isys-mcd-phy.c GPREG_PHY_CTL / PHY_STATUS</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x27c008 / 0x27c00c</code></td>
+          <td>ISYS UNISPART (ipu6 variant)</td>
+          <td>ipu6-isys.c isys_isr</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x2e0004</code></td>
+          <td>ISYS MMU0 (ipu6 variant)</td>
+          <td>ipu6-mmu.c REG_L1_PHYS</td>
+          <td>guess</td>
+        </tr>
+        </tbody>
+      </table>
+    </details>
+  </section>
+  
+  <section class="sub">
+    <h3>Upstream divergence (kernel/ipu4 vs IPU6)</h3>
+    <p>
+      Upstream pin: <code>v6.12.113</code> ·
+      29 files differ ·
+      272 hunks ·
+      +1865 / −604 lines
+    </p>
+    <h4>Upstream-watch state</h4>
+    <ul class="watch-state">
+      <li><code>linux-6.12.y</code> last seen at <code>85d82e0d7c2d</code></li>
+      <li><code>master</code> last seen at <code>a804c5742bff</code></li>
+    </ul>
+    <p class="meta">0 patch-ids deduped to date</p>
+  </section>
+</details>
+
+<footer>
+  Generated by <code>tools/dashboard/build.sh</code>. Sources: <code>.github/kernel-pins/</code>, <code>tools/notes/registers.md</code>, <code>tools/notes/upstream-watch-state.json</code>, <code>tools/coverage/summary.json</code>, <code>tools/tests/out/compare-mmio/report.json</code>, <code>tools/tests/out/ipu6-ladder/results.json</code> (vm-ipu6), GitHub Actions API.
+</footer>
+
+<script id="history-data" type="application/json">{"schema":1,"points":[{"ts":"2026-10-14T10:25:56Z","sha":"2ff6d636f461a33d59b516b36dcc0cd177267fc6","vm_smoke_run_id":"38549176724","coverage":{"lines_pct":58.4,"functions_pct":70.9},"mmio":{"unimplemented":0,"value_mismatch":12,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":29,"hunks":272},"ladder_coverage":{"ipu4-out-of-tree/ipu4":70.1,"ipu4p/ipu4p":47.0,"ipu6/ipu6":69.6,"ipu4-patches/ipu4":43.4,"ipu4-patches/ipu4p":46.5,"ipu4-patches/ipu6":48.0}},{"ts":"2026-10-14T10:29:43Z","sha":"8069ae63a6c6ff7b9196a607662333be411d89d7","vm_smoke_run_id":"38549463786","coverage":{"lines_pct":58.4,"functions_pct":70.9},"mmio":{"unimplemented":0,"value_mismatch":12,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":29,"hunks":272},"ladder_coverage":{"ipu4-out-of-tree/ipu4":70.4,"ipu4p/ipu4p":47.2,"ipu6/ipu6":69.9,"ipu4-patches/ipu4":43.7,"ipu4-patches/ipu4p":46.7,"ipu4-patches/ipu6":48.3}},{"ts":"2026-10-14T11:56:37Z","sha":"ed46d256e041d0cf495751d820beedff04533e6d","vm_smoke_run_id":"38550189189","coverage":{"lines_pct":58.4,"functions_pct":70.9},"mmio":{"unimplemented":0,"value_mismatch":12,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":29,"hunks":272},"ladder_coverage":{"ipu4-out-of-tree/ipu4":70.9,"ipu4p/ipu4p":47.5,"ipu6/ipu6":70.3,"ipu4-patches/ipu4":43.9,"ipu4-patches/ipu4p":46.9,"ipu4-patches/ipu6":48.5}},{"ts":"2026-10-14T12:02:04Z","sha":"f8967f98c68cf2e5fa3ae4d55cb6307bbd7a46e9","vm_smoke_run_id":"38560168204","coverage":{"lines_pct":58.6,"functions_pct":70.9},"mmio":{"unimplemented":0,"value_mismatch":11,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":29,"hunks":272},"ladder_coverage":{"ipu4-out-of-tree/ipu4":70.9,"ipu4p/ipu4p":47.5,"ipu6/ipu6":70.3,"ipu4-patches/ipu4":43.9,"ipu4-patches/ipu4p":46.9,"ipu4-patches/ipu6":48.5}},{"ts":"2026-10-14T12:05:58Z","sha":"789e4551d0d284ee1839b0738e2fdfab5a2fc04f","vm_smoke_run_id":"38560752978","coverage":{"lines_pct":59.0,"functions_pct":71.3},"mmio":{"unimplemented":0,"value_mismatch":11,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":29,"hunks":272},"ladder_coverage":{"ipu4-out-of-tree/ipu4":71.7,"ipu4p/ipu4p":48.1,"ipu6/ipu6":71.1,"ipu4-patches/ipu4":44.5,"ipu4-patches/ipu4p":47.5,"ipu4-patches/ipu6":49.1}},{"ts":"2026-10-15T11:55:05Z","sha":"cb588484918aef3fe31130cc9f1b076a83d5faf9","vm_smoke_run_id":"38561454308","coverage":{"lines_pct":59.0,"functions_pct":71.3},"mmio":{"unimplemented":0,"value_mismatch":11,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":29,"hunks":272},"ladder_coverage":{"ipu4-out-of-tree/ipu4":72.5,"ipu4p/ipu4p":48.7,"ipu6/ipu6":71.9,"ipu4-patches/ipu4":45.1,"ipu4-patches/ipu4p":48.1,"ipu4-patches/ipu6":49.7}},{"ts":"2026-10-19T13:47:57Z","sha":"f758d17cf5d9367abdc73bcf3e55ad7766c4948f","vm_smoke_run_id":"38874815578","coverage":{"lines_pct":59.0,"functions_pct":71.3},"mmio":{"unimplemented":0,"value_mismatch":11,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":29,"hunks":272},"ladder_coverage":{"ipu4-out-of-tree/ipu4":72.5,"ipu4p/ipu4p":48.7,"ipu6/ipu6":71.9,"ipu4-patches/ipu4":45.1,"ipu4-patches/ipu4p":48.1,"ipu4-patches/ipu6":49.7}},{"ts":"2026-10-19T18:39:10Z","sha":"3e4d8bd75ad1d4a1b2819e8909badb80dc93f97f","vm_smoke_run_id":"38874815578","coverage":{"lines_pct":59.0,"functions_pct":71.3},"mmio":{"unimplemented":0,"value_mismatch":11,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":29,"hunks":272},"ladder_coverage":{"ipu4-out-of-tree/ipu4":72.5,"ipu4p/ipu4p":48.7,"ipu6/ipu6":71.9,"ipu4-patches/ipu4":45.1,"ipu4-patches/ipu4p":48.1,"ipu4-patches/ipu6":49.7}},{"ts":"2026-10-20T11:57:13Z","sha":"9574f6ede9fd4500ced2e43e82903ff506a16a5d","vm_smoke_run_id":"39304335051","coverage":{"lines_pct":59.0,"functions_pct":71.3},"mmio":{"unimplemented":0,"value_mismatch":11,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":29,"hunks":272},"ladder_coverage":{"ipu4-out-of-tree/ipu4":72.5,"ipu4p/ipu4p":48.7,"ipu6/ipu6":71.9,"ipu4-patches/ipu4":45.1,"ipu4-patches/ipu4p":48.1,"ipu4-patches/ipu6":49.7}},{"ts":"2026-10-21T09:31:46Z","sha":"d8c485fa7c388e65126f0ff2191db3e2075a024a","vm_smoke_run_id":"39304335051","coverage":{"lines_pct":59.0,"functions_pct":71.3},"mmio":{"unimplemented":0,"value_mismatch":11,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":29,"hunks":272},"ladder_coverage":{"ipu4-out-of-tree/ipu4":72.5,"ipu4p/ipu4p":48.7,"ipu6/ipu6":71.9,"ipu4-patches/ipu4":45.1,"ipu4-patches/ipu4p":48.1,"ipu4-patches/ipu6":49.7}}]}</script>
+<script>
+(function () {
+  const raw = document.getElementById('history-data').textContent;
+  const history = JSON.parse(raw);
+  const points = (history && history.points) || [];
+  if (!points.length) return;
+  const labels = points.map(p => p.ts.slice(0, 10));
+
+  const lineCfg = (canvasId, datasets) => {
+    const el = document.getElementById(canvasId);
+    if (!el) return;
+    new Chart(el, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' } },
+        scales: { y: { beginAtZero: false } },
+      },
+    });
+  };
+
+  lineCfg('coverage-trend', [
+    { label: 'lines %', data: points.map(p => (p.coverage || {}).lines_pct ?? null), borderColor: '#5ec27e', tension: 0.2 },
+    { label: 'functions %', data: points.map(p => (p.coverage || {}).functions_pct ?? null), borderColor: '#74a9ff', tension: 0.2 },
+  ]);
+  // One colour per QEMU variant; dashed = the variant's baseline driver,
+  // solid = ipu4-patches.
+  const variantColors = { ipu4: '#5ec27e', ipu4p: '#b48ee0', ipu6: '#74a9ff' };
+  const legs = [];
+  points.forEach(p => Object.keys(p.ladder_coverage || {}).forEach(l => {
+    if (!legs.includes(l)) legs.push(l);
+  }));
+  legs.sort((a, b) => a.split('/')[1].localeCompare(b.split('/')[1]) ||
+    a.startsWith('ipu4-patches/') - b.startsWith('ipu4-patches/'));
+  lineCfg('ladder-coverage-trend', legs.map(l => ({
+    label: l,
+    data: points.map(p => (p.ladder_coverage || {})[l] ?? null),
+    borderColor: variantColors[l.split('/')[1]] || '#d8c46a',
+    borderDash: l.startsWith('ipu4-patches/') ? [] : [5, 4],
+    spanGaps: true,
+    tension: 0.2,
+  })));
+  lineCfg('mmio-trend', [
+    { label: 'unimplemented', data: points.map(p => (p.mmio || {}).unimplemented ?? null), borderColor: '#e08e6e', tension: 0.2 },
+    { label: 'value mismatch', data: points.map(p => (p.mmio || {}).value_mismatch ?? null), borderColor: '#d8c46a', tension: 0.2 },
+  ]);
+})();
+</script>
+</body>
+</html>
