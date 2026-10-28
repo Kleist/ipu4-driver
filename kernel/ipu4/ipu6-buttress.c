@@ -454,6 +454,44 @@ irqreturn_t ipu6_buttress_isr_threaded(int irq, void *isp_ptr)
 	return ret;
 }
 
+static int __ipu4p_power(struct device *dev,
+			 const struct ipu6_buttress_ctrl *ctrl, bool on)
+{
+	struct ipu6_device *isp = to_ipu6_bus_device(dev)->isp;
+	u32 pwr_sts, val;
+	int ret;
+
+	if (!on) {
+		val = 0;
+		pwr_sts = ctrl->pwr_sts_off << ctrl->pwr_sts_shift;
+	} else {
+		val = BUTTRESS_FREQ_CTL_START;
+		if (ctrl->subsys_id == IPU_ISYS) {
+			val |= FIELD_PREP(IPU4P_BUTTRESS_IS_FREQ_CTL_RATIO_MASK,
+					  ctrl->ratio);
+			val |= FIELD_PREP(BUTTRESS_FREQ_CTL_QOS_FLOOR_MASK,
+					  ctrl->qos_floor);
+		} else {
+			val |= FIELD_PREP(IPU4P_BUTTRESS_PS_FREQ_CTL_RATIO_MASK,
+					  ctrl->ratio);
+			val |= IPU4P_BUTTRESS_PS_FREQ_CTL_OVRD;
+		}
+
+		pwr_sts = ctrl->pwr_sts_on << ctrl->pwr_sts_shift;
+	}
+
+	writel(val, isp->base + ctrl->freq_ctl);
+
+	ret = readl_poll_timeout(isp->base + isp->buttress.regs->pwr_status,
+				 val, (val & ctrl->pwr_sts_mask) == pwr_sts,
+				 100, BUTTRESS_POWER_TIMEOUT_US);
+	if (ret)
+		dev_err(&isp->pdev->dev,
+			"Change power status timeout with 0x%x\n", val);
+
+	return ret;
+}
+
 static int ipu7_isys_d2d_power(struct ipu6_device *isp, bool on)
 {
 	u32 target = on ? IPU7_BUTTRESS_D2D_PWR_ACK : 0U;
@@ -636,7 +674,9 @@ int ipu6_buttress_power(struct device *dev,
 
 	mutex_lock(&isp->buttress.power_mutex);
 
-	if (IS_IPU7(isp) || IS_IPU8(isp))
+	if (IS_IPU4P(isp))
+		ret = __ipu4p_power(dev, ctrl, on);
+	else if (IS_IPU7(isp) || IS_IPU8(isp))
 		ret = on ? __ipu7_power_on(dev, ctrl) :
 			   __ipu7_power_off(dev, ctrl);
 	else
@@ -778,6 +818,7 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 {
 	struct ipu6_buttress *b = &isp->buttress;
 	struct ipu6_psys_pdata *psys_pdata;
+	void __iomem *base;
 	u32 data, mask, done, fail;
 	int ret;
 	u32 bootloader_status_offset = IS_IPU4(isp) ?
@@ -852,9 +893,12 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 		goto out_pm_put;
 	}
 
-	void __iomem *base = (IS_IPU7(isp) || IS_IPU8(isp)) ?
-			     isp->base + IPU7_BUTTRESS_REG_FW_BOOT_PARAMS7 :
-			     psys_pdata->base + bootloader_status_offset;
+	if (IS_IPU4P(isp))
+		base = psys_pdata->base + IPU4P_BOOTLOADER_STATUS_OFFSET;
+	else if (IS_IPU7(isp) || IS_IPU8(isp))
+		base = isp->base + IPU7_BUTTRESS_REG_FW_BOOT_PARAMS7;
+	else
+		base = psys_pdata->base + bootloader_status_offset;
 
 	ret = readl_poll_timeout(base, data, data == BOOTLOADER_MAGIC_KEY, 500,
 				 BUTTRESS_CSE_BOOTLOAD_TIMEOUT_US);
@@ -1166,9 +1210,10 @@ int ipu6_buttress_init(struct ipu6_device *isp)
 		ipu7_buttress_setup(isp);
 		b->ref_clk = 384;
 	} else {
-		dev_dbg(&isp->pdev->dev, "IPU6 touch 0x%x mask 0x%x\n",
-			readl(isp->base + BUTTRESS_REG_SECURITY_TOUCH),
-			readl(isp->base + BUTTRESS_REG_CAMERA_MASK));
+		if (!IS_IPU4P(isp))
+			dev_dbg(&isp->pdev->dev, "IPU6 touch 0x%x mask 0x%x\n",
+				readl(isp->base + BUTTRESS_REG_SECURITY_TOUCH),
+				readl(isp->base + BUTTRESS_REG_CAMERA_MASK));
 
 		writel(b->regs->irq_all, isp->base + b->regs->irq_clear);
 		writel(b->regs->irq_all, isp->base + b->regs->irq_enable);
