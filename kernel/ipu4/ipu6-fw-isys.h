@@ -832,7 +832,9 @@ ipu4_fw_isys_dump_frame_buff_set(struct device *dev,
 int ipu6_fw_isys_send_proxy_token(struct ipu6_isys *isys, unsigned int req_id,
 				  unsigned int index, unsigned int offset,
 				  u32 value);
-int ipu6_isys_isr_one(struct ipu6_bus_device *adev);
+void ipu6_isys_handle_response(struct ipu6_bus_device *adev,
+			       struct ipu6_fw_isys_resp_info_abi *resp,
+			       bool release_msg_buf);
 irqreturn_t ipu6_isys_isr(struct ipu6_bus_device *adev);
 
 #endif

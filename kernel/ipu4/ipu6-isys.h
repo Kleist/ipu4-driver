@@ -174,6 +174,7 @@ struct isys_fw_msgs {
 struct ipu6_fw_isys_ops {
 	int (*init)(struct ipu6_isys *isys, unsigned int num_streams);
 	int (*close)(struct ipu6_isys *isys);
+	int (*isr_one)(struct ipu6_bus_device *adev);
 	int (*send_cmd)(struct ipu6_isys *isys,
 			const unsigned int stream_handle,
 			void *cpu_mapped_buf,
