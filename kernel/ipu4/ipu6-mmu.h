@@ -199,6 +199,7 @@ struct ipu6_mmu {
 	const struct ipu6_mmu_hw_ops *ops;
 };
 
+extern const struct ipu6_mmu_hw_ops ipu4p_mmu_ops;
 extern const struct ipu6_mmu_hw_ops ipu6_mmu_ops;
 extern const struct ipu6_mmu_hw_ops ipu7_mmu_ops;
 extern const struct ipu6_mmu_hw_ops ipu4_mmu_ops;

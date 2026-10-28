@@ -684,7 +684,12 @@ struct ipu6_mmu *ipu6_mmu_init(struct device *dev,
 	if (!mmu)
 		return ERR_PTR(-ENOMEM);
 
-	mmu->ops = (IS_IPU7(isp) || IS_IPU8(isp)) ? &ipu7_mmu_ops : &ipu6_mmu_ops;
+	if (IS_IPU4P(isp))
+		mmu->ops = &ipu4p_mmu_ops;
+	else if (IS_IPU7(isp) || IS_IPU8(isp))
+		mmu->ops = &ipu7_mmu_ops;
+	else
+		mmu->ops = &ipu6_mmu_ops;
 	if (IS_IPU4(isp))
 		mmu->ops = &ipu4_mmu_ops;
 	mmu->mmid = mmid;

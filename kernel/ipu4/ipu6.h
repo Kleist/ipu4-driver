@@ -116,6 +116,8 @@ struct ipu6_device {
 /* The firmware is accessible within the first 2 GiB only in non-secure mode. */
 #define IPU6_MMU_ADDR_BITS_NON_SECURE	31
 
+#define IPU4P_MMU_MAX_TLB_L1_STREAMS	16
+#define IPU4P_MMU_MAX_TLB_L2_STREAMS	16
 #define IPU6_MMU_MAX_TLB_L1_STREAMS	32
 #define IPU6_MMU_MAX_TLB_L2_STREAMS	32
 #define IPU6_MAX_LI_BLOCK_ADDR		128
