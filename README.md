@@ -50,7 +50,7 @@ See [CLAUDE.md](CLAUDE.md) for prerequisites, all commands and CI details, and [
 ## Upstream sync
 
 - `tools/upstream/diff.sh` reports the divergence of `kernel/ipu4/` from upstream IPU6.
-- `tools/upstream/watch.sh` runs daily in CI and opens a PR with cherry-picks of new upstream IPU6 commits.
+- `tools/upstream/watch.sh` runs weekly in CI and, when there is something new, opens a PR with cherry-picks of new upstream IPU6 commits.
 
 ## Hardware trace scripts
 

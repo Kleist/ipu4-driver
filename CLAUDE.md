@@ -52,7 +52,7 @@ The first list matches the `build-and-kunit` workflow; the second is the `vm-smo
 Two helpers under `tools/upstream/`, both relying on the same file mapping (`drivers/media/pci/intel/ipu6/<f>` ↔ `kernel/ipu4/<f>`, IPU4-only files in `IPU4_LOCAL_ONLY` skipped):
 
 - `tools/upstream/diff.sh` — regenerates `tools/notes/upstream-diff/{summary.md,per-file/<f>.diff}` showing the current divergence between `kernel/ipu4/` and upstream IPU6 at the pinned tag. Read this when picking the next divergence chunk to remove. Output is gitignored — re-run on demand. Honours `IPU4_LINUX_TAG` for one-off comparisons against a different upstream pin.
-- `tools/upstream/watch.sh` — driven by `.github/workflows/upstream-watch.yml` (daily 04:00 UTC). Detects new IPU6 commits on `linux-6.12.y` (stable) and Linus `master` (deduped against 6.12.y by patch-id), tries `git am` of each onto `kernel/ipu4/`, and opens a PR on `claude/upstream-watch/<date>` listing applied / conflict / n-a commits. State is kept in `tools/notes/upstream-watch-state.json` and rolls forward in the last commit on the bot branch. Run locally with `IPU4_UPSTREAM_WATCH_DRY_RUN=1` to inspect the would-be PR without pushing.
+- `tools/upstream/watch.sh` — driven by `.github/workflows/upstream-watch.yml` (Mondays 04:00 UTC). Detects new IPU6 commits on `linux-6.12.y` (stable) and Linus `master` (deduped against 6.12.y by patch-id), tries `git am` of each onto `kernel/ipu4/`, and opens a PR on `claude/upstream-watch/<date>` listing applied / conflict / n-a commits — only when some commit applies or conflicts and no open watch PR already lists the same set; the new PR closes older open ones. State is kept in `tools/notes/upstream-watch-state.json` and rolls forward in the last commit on the bot branch. Run locally with `IPU4_UPSTREAM_WATCH_DRY_RUN=1` to inspect the would-be PR without pushing.
 
 ## ipu6 flavor (upstream ipu6 driver + IPU4 patch series)
 
@@ -114,7 +114,7 @@ The bootstrap script is idempotent. Re-run after pulling to re-apply patches fro
 - `.github/workflows/vm-ipu6.yml` — the test ladder (`tools/tests/ipu6/ladder.sh`) on every PR and on push to `main`/`master`, six matrix legs: each QEMU variant under its baseline driver (`ipu4-out-of-tree / ipu4`, `ipu4p / ipu4p`, `ipu6 / ipu6`) and under `ipu4-patches`, checks `ladder (<driver> / <variant>)`; each leg is gated only by its list (`tools/tests/ipu6/enabled-tests.<driver>.<variant>`). See "ipu6 flavor" above.
 - `.github/workflows/pages.yml` — renders the dashboard (`tools/dashboard/`, build steps in the `.github/actions/build-dashboard` composite) and deploys it to GitHub Pages on push to `main`/`master`, `vm-smoke` completion, a daily cron and `workflow_dispatch`. Each deploy also publishes open PRs' previews from the `pages-previews` branch under `/pr-preview/pr-<N>/`.
 - `.github/workflows/pages-preview.yml` — on every same-repo PR push, renders the dashboard from the PR head, parks it on `pages-previews` via `tools/dashboard/previews.sh`, dispatches `pages.yml` on the default branch, and comments the preview URL; closing the PR removes it. See `tools/dashboard/README.md`.
-- `.github/workflows/upstream-watch.yml` — daily cron that surfaces new upstream IPU6 commits as cherry-pick PRs (see "Upstream sync tooling" above).
+- `.github/workflows/upstream-watch.yml` — weekly (Monday) cron that surfaces new upstream IPU6 commits as cherry-pick PRs (see "Upstream sync tooling" above).
 
 ## QEMU device-model workflow
 
