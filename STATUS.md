@@ -65,7 +65,7 @@ tools/
     vm-smoke.yml             PR/push thin caller: 6.12 leg into vm-smoke-reusable.yml
     vm-smoke-weekly.yml      Sunday cron: 6.18 leg into vm-smoke-reusable.yml
     bump-kernel-pins.yml     weekly Monday cron: open auto-PR rewriting bump-pin lines
-    upstream-watch.yml       daily IPU6-cherry-pick triage cron
+    upstream-watch.yml       weekly IPU6-cherry-pick triage cron
 data/trace.txt           silicon's mmiotrace capture; baseline for compare-mmio
 ```
 

@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Daily upstream IPU6 commit watcher. Detects new commits on linux-6.12.y and
+# Weekly upstream IPU6 commit watcher. Detects new commits on linux-6.12.y and
 # Linus master that touch drivers/media/pci/intel/ipu6/, attempts to apply
 # each to kernel/ipu4/ via git am, and (in normal mode) opens a single PR
 # with the clean cherry-picks stacked. Conflicts and N/A commits are
-# enumerated in the PR body for manual triage.
+# enumerated in the PR body for manual triage. Runs with nothing to apply,
+# or whose commits an open PR already lists, stay silent; a new PR closes
+# the older open ones it supersedes.
 #
 # State lives in tools/notes/upstream-watch-state.json and rolls forward in
 # the last commit on the bot branch, so PR-tip and state advance atomically.
@@ -230,10 +232,17 @@ n_applied=$(wc -l < "$applied_nd" || echo 0)
 n_conflict=$(wc -l < "$conflict_nd" || echo 0)
 n_total=$(( n_applied + n_conflict ))
 
-if (( n_total == 0 && state_changed == 0 )); then
-	echo ">>> nothing to do (no candidates, no state drift)"
+# State drift alone (upstream moved without touching forked files) is not
+# worth a PR; the range is simply re-scanned next run.
+if (( n_total == 0 && is_seeding == 0 )); then
+	echo ">>> nothing to do (no applicable candidates)"
 	exit 0
 fi
+
+# Identifies the commits a PR asks to triage, so an unmerged PR is not
+# re-opened every run for the same commits.
+key=$(jq -rs 'map(.sha) | sort | join(" ")' "$applied_nd" "$conflict_nd")
+marker="<!-- upstream-watch-commits: ${key:-seed} -->"
 
 # --- render PR body -----------------------------------------------------------
 
@@ -241,6 +250,7 @@ pr_body="$OUT/pr-body.md"
 STABLE_OLD="$stable_old" STABLE_NEW="$stable_new" \
 	MASTER_OLD="$master_old" MASTER_NEW="$master_new" \
 	"$HERE/render-pr-body.sh" "$applied_nd" "$conflict_nd" "$na_nd" > "$pr_body"
+printf '\n%s\n' "$marker" >> "$pr_body"
 
 echo
 echo "=== PR body ==="
@@ -253,6 +263,16 @@ if [[ "$DRY_RUN" == "1" ]]; then
 	exit 0
 fi
 
+open_prs=$(gh pr list --state open --limit 100 \
+	--json number,headRefName,body \
+	--jq '[.[] | select(.headRefName | startswith("claude/upstream-watch/"))]')
+dup=$(jq -r --arg m "$marker" \
+	'.[] | select(.body | contains($m)) | .number' <<<"$open_prs" | head -n1)
+if [[ -n "$dup" ]]; then
+	echo ">>> open PR #$dup already covers these commits; nothing to do"
+	exit 0
+fi
+
 git -C "$ROOT" push -u origin "$branch"
 
 if (( is_seeding == 1 && n_total == 0 )); then
@@ -260,5 +280,12 @@ if (( is_seeding == 1 && n_total == 0 )); then
 else
 	title="$date_tag upstream sync: $n_applied clean, $n_conflict conflicts"
 fi
-gh pr create --base "${BASE_REF#origin/}" --head "$branch" \
-	--title "$title" --body-file "$pr_body"
+url=$(gh pr create --base "${BASE_REF#origin/}" --head "$branch" \
+	--title "$title" --body-file "$pr_body")
+echo "$url"
+
+# The new PR re-lists everything still unmerged, so older ones are stale.
+jq -r --arg b "$branch" '.[] | select(.headRefName != $b) | .number' \
+	<<<"$open_prs" | while read -r n; do
+	gh pr close "$n" --delete-branch --comment "Superseded by $url."
+done

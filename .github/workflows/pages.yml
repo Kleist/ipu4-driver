@@ -13,7 +13,7 @@ on:
     workflows: ["vm-smoke", "vm-ipu6"]
     types: [completed]
   schedule:
-    # Daily refresh at 06:30 UTC. After upstream-watch (04:00 daily)
+    # Daily refresh at 06:30 UTC. After upstream-watch (04:00 Mon)
     # and after the Monday rebase (06:00 Mon) so the dashboard picks
     # up their conclusions on the same refresh and the three crons
     # don't pile onto the runner queue at the same minute.
