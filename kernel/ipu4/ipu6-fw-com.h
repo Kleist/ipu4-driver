@@ -4,6 +4,8 @@
 #ifndef IPU6_FW_COM_H
 #define IPU6_FW_COM_H
 
+#include <linux/types.h>
+
 struct ipu6_fw_com_context;
 struct ipu6_bus_device;
 
@@ -29,6 +31,7 @@ struct ipu6_fw_com_cfg {
 	void (*cell_start)(struct ipu6_bus_device *adev);
 
 	unsigned int buttress_boot_offset;
+	bool dmem_syscom;
 };
 
 struct ipu6_fw_com_context *

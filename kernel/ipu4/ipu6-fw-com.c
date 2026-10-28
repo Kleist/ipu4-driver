@@ -90,6 +90,7 @@ struct ipu6_fw_com_context {
 
 	unsigned int buttress_boot_offset;
 	void __iomem *base_addr;
+	bool dmem_syscom;
 };
 
 #define FW_COM_WR_REG 0
@@ -97,6 +98,14 @@ struct ipu6_fw_com_context {
 
 #define REGMEM_OFFSET 0
 #define TUNIT_MAGIC_PATTERN 0x5a5a5a5a
+
+enum ipu4p_regmem_id {
+	IPU4P_SYSCOM_CONFIG_REG = 1,
+	IPU4P_SYSCOM_STATE_REG = 2,
+	IPU4P_SYSCOM_COMMAND_REG = 3,
+	/* Registers 6-7 reserved by ISYS firmware for dual contexts. */
+	IPU4P_SYSCOM_QPR_BASE_REG = 8,
+};
 
 enum regmem_id {
 	/* pass pkg_dir address to SPC in non-secure mode */
@@ -182,6 +191,7 @@ struct ipu6_fw_com_context *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
 	ctx->cell_ready = cfg->cell_ready;
 	ctx->buttress_boot_offset = cfg->buttress_boot_offset;
 	ctx->base_addr  = base;
+	ctx->dmem_syscom = cfg->dmem_syscom;
 
 	/*
 	 * Allocate DMA mapped memory. Allocate one big chunk.
@@ -244,7 +254,8 @@ struct ipu6_fw_com_context *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
 
 	/* initialize input queues */
 	offset += specific_size;
-	res.reg = SYSCOM_QPR_BASE_REG;
+	res.reg = ctx->dmem_syscom ? IPU4P_SYSCOM_QPR_BASE_REG :
+				     SYSCOM_QPR_BASE_REG;
 	res.host_address = (uintptr_t)(ctx->dma_buffer + offset);
 	res.vied_address = ctx->dma_addr + offset;
 	for (i = 0; i < cfg->num_input_queues; i++)
@@ -268,6 +279,21 @@ EXPORT_SYMBOL_NS_GPL(ipu6_fw_com_prepare, "INTEL_IPU6");
 
 int ipu6_fw_com_open(struct ipu6_fw_com_context *ctx)
 {
+	if (ctx->dmem_syscom) {
+		if (!ctx->cell_ready(ctx->adev))
+			return -EIO;
+
+		writel(SYSCOM_STATE_UNINIT,
+		       ctx->dmem_addr + IPU4P_SYSCOM_STATE_REG * 4);
+		writel(SYSCOM_COMMAND_UNINIT,
+		       ctx->dmem_addr + IPU4P_SYSCOM_COMMAND_REG * 4);
+		writel(ctx->config_vied_addr,
+		       ctx->dmem_addr + IPU4P_SYSCOM_CONFIG_REG * 4);
+		ctx->cell_start(ctx->adev);
+
+		return 0;
+	}
+
 	/* Check if SP is in valid state */
 	if (!ctx->cell_ready(ctx->adev))
 		return -EIO;
@@ -292,6 +318,17 @@ EXPORT_SYMBOL_NS_GPL(ipu6_fw_com_open, "INTEL_IPU6");
 int ipu6_fw_com_close(struct ipu6_fw_com_context *ctx)
 {
 	int state;
+
+	if (ctx->dmem_syscom) {
+		state = readl(ctx->dmem_addr + IPU4P_SYSCOM_STATE_REG * 4);
+		if (state != SYSCOM_STATE_READY)
+			return -EBUSY;
+
+		writel(SYSCOM_COMMAND_INACTIVE,
+		       ctx->dmem_addr + IPU4P_SYSCOM_COMMAND_REG * 4);
+
+		return 0;
+	}
 
 	state = readl(ctx->dmem_addr + SYSCOM_STATE_REG * 4);
 	if (state != SYSCOM_STATE_READY)
@@ -322,7 +359,10 @@ bool ipu6_fw_com_ready(struct ipu6_fw_com_context *ctx)
 {
 	int state;
 
-	state = readl(ctx->dmem_addr + SYSCOM_STATE_REG * 4);
+	if (ctx->dmem_syscom)
+		state = readl(ctx->dmem_addr + IPU4P_SYSCOM_STATE_REG * 4);
+	else
+		state = readl(ctx->dmem_addr + SYSCOM_STATE_REG * 4);
 
 	return state == SYSCOM_STATE_READY;
 }
