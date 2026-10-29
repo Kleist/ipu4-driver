@@ -13,6 +13,15 @@
 	((typeof(P) *)kmalloc_array(COUNT, sizeof(P), GFP_KERNEL))
 #endif
 
+#include <linux/device.h>
+#ifndef devm_kzalloc_obj
+// Typed devres allocation helpers of 7.4.
+#define devm_kzalloc_obj(DEV, P) \
+	((typeof(P) *)devm_kzalloc(DEV, sizeof(P), GFP_KERNEL))
+#define devm_kzalloc_objs(DEV, P, COUNT) \
+	((typeof(P) *)devm_kcalloc(DEV, COUNT, sizeof(P), GFP_KERNEL))
+#endif
+
 #include <linux/bitfield.h>
 #ifndef field_get
 // Non-constant mask variant of FIELD_GET() (6.19).
