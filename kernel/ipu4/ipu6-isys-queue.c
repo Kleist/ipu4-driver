@@ -303,8 +303,10 @@ static void buf_queue(struct vb2_buffer *vb)
 	struct device *dev = &adev->auxdev.dev;
 	struct ipu6_isys_stream *stream;
 	struct ipu6_isys_csi2 *csi2;
+	struct ipu6_isys_buffer *buffers[IPU6_ISYS_OUTPUT_PINS];
 	struct ipu6_isys_buffer_list bl;
 	struct isys_fw_msgs *msg;
+	unsigned int num_buffers = 0, i;
 	unsigned long flags;
 	dma_addr_t dma;
 	int ret;
@@ -350,8 +352,14 @@ static void buf_queue(struct vb2_buffer *vb)
 	msg = ipu6_get_fw_msg_buf(stream);
 	if (!msg) {
 		ret = -ENOMEM;
+		ipu6_isys_buffer_list_queue(&bl,
+					    IPU6_ISYS_BUFFER_LIST_FL_INCOMING,
+					    VB2_BUF_STATE_QUEUED);
 		goto out;
 	}
+
+	list_for_each_entry(ib, &bl.head, head)
+		buffers[num_buffers++] = ib;
 
 	fw_ops->prepare_buf_set(msg, stream, &bl);
 	fw_ops->dump_frame_buf_set(dev, msg, stream->nr_output_pins);
@@ -365,8 +373,29 @@ static void buf_queue(struct vb2_buffer *vb)
 	ipu6_isys_buffer_list_queue(&bl, IPU6_ISYS_BUFFER_LIST_FL_ACTIVE, 0);
 
 	ret = fw_ops->stream_capture(stream->isys, stream->stream_handle, msg);
-	if (ret < 0)
-		dev_err(dev, "send stream capture failed\n");
+	if (ret < 0) {
+		dev_err(dev, "send stream capture failed: %d\n", ret);
+		ipu6_put_fw_msg_buf(stream->isys, msg);
+
+		/*
+		 * The command was not submitted. Return only this frame's
+		 * buffers, leaving other in-flight captures untouched.
+		 */
+		for (i = 0; i < num_buffers; i++) {
+			struct ipu6_isys_queue *buffer_aq;
+			struct vb2_buffer *buffer_vb;
+
+			ib = buffers[i];
+			buffer_vb = ipu6_isys_buffer_to_vb2_buffer(ib);
+			buffer_aq = vb2_queue_to_isys_queue(buffer_vb->vb2_queue);
+
+			spin_lock_irqsave(&buffer_aq->lock, flags);
+			list_del(&ib->head);
+			spin_unlock_irqrestore(&buffer_aq->lock, flags);
+
+			vb2_buffer_done(buffer_vb, VB2_BUF_STATE_ERROR);
+		}
+	}
 
 out:
 	mutex_unlock(&stream->mutex);
@@ -710,7 +739,8 @@ void ipu6_isys_queue_buf_ready(struct ipu6_isys_stream *stream,
 			       struct ipu6_fw_isys_resp_info_abi *info)
 {
 	u64 time = (u64)info->timestamp[1] << 32 | info->timestamp[0];
-	bool err = info->error_info.error == IPU6_FW_ISYS_ERROR_HW_REPORTED_STR2MMIO;
+	bool err = info->type == IPU6_FW_ISYS_RESP_TYPE_PIN_DATA_SKIPPED ||
+		   info->error_info.error == IPU6_FW_ISYS_ERROR_HW_REPORTED_STR2MMIO;
 
 	ipu6_stream_buf_ready(stream, info->pin_id, info->pin.addr, time, err);
 }

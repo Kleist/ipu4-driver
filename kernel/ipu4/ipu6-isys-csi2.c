@@ -3,6 +3,7 @@
  * Copyright (C) 2013--2024 Intel Corporation
  */
 
+#include <linux/array_size.h>
 #include <linux/atomic.h>
 #include <linux/bitfield.h>
 #include <linux/bits.h>
@@ -1084,12 +1085,27 @@ void ipu6_isys_csi2_cleanup(struct ipu6_isys_csi2 *csi2)
 	csi2->isys = NULL;
 }
 
+static const u8 ipu4p_csi2_fw_sources[] = {
+	IPU4P_FW_ISYS_STREAM_SRC_PORT_3,
+	IPU4P_FW_ISYS_STREAM_SRC_PORT_6,
+	IPU4P_FW_ISYS_STREAM_SRC_PORT_7,
+	IPU4P_FW_ISYS_STREAM_SRC_PORT_8,
+	IPU4P_FW_ISYS_STREAM_SRC_PORT_9,
+	IPU4P_FW_ISYS_STREAM_SRC_PORT_10,
+	IPU4P_FW_ISYS_STREAM_SRC_PORT_11,
+	IPU4P_FW_ISYS_STREAM_SRC_PORT_12,
+};
+
 int ipu6_isys_csi2_init(struct ipu6_isys_csi2 *csi2,
 			struct ipu6_isys *isys,
 			void __iomem *base, unsigned int index)
 {
 	struct device *dev = &isys->adev->auxdev.dev;
 	int ret;
+
+	if (IS_IPU4P(isys->adev->isp) &&
+	    index >= ARRAY_SIZE(ipu4p_csi2_fw_sources))
+		return -EINVAL;
 
 	csi2->isys = isys;
 	csi2->base = base;
@@ -1104,7 +1120,10 @@ int ipu6_isys_csi2_init(struct ipu6_isys_csi2 *csi2,
 
 	INIT_LIST_HEAD(&csi2->av_head);
 	INIT_LIST_HEAD(&csi2->streams);
-	csi2->asd.source = IPU6_FW_ISYS_STREAM_SRC_CSI2_PORT0 + index;
+	if (IS_IPU4P(isys->adev->isp))
+		csi2->asd.source = ipu4p_csi2_fw_sources[index];
+	else
+		csi2->asd.source = IPU6_FW_ISYS_STREAM_SRC_CSI2_PORT0 + index;
 	csi2->asd.supported_codes = csi2_supported_codes;
 	snprintf(csi2->asd.sd.name, sizeof(csi2->asd.sd.name),
 		 "Intel IPU%s CSI2 %u",

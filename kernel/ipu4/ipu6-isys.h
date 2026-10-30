@@ -18,6 +18,7 @@
 #include <media/v4l2-mediabus.h>
 
 #include "ipu6.h"
+#include "ipu4p-fw-isys.h"
 #include "ipu6-fw-isys.h"
 #include "ipu7-fw-isys.h"
 #include "ipu6-isys-csi2.h"
@@ -67,12 +68,18 @@ static inline const char *ipu6_isys_entity_version(struct ipu6_device *isp)
 #define IPU6_ISYS_MAX_WIDTH		4672U
 #define IPU6_ISYS_MAX_HEIGHT		3416U
 
+/* IPU4P has 128 physical GDA pages of 1 KiB each. */
+#define IPU4P_SRAM_GRANULARITY_SHIFT	10
+#define IPU4P_SRAM_GRANULARITY_SIZE	1024
 /* the threshold granularity is 2KB on IPU6 */
 #define IPU6_SRAM_GRANULARITY_SHIFT	11
 #define IPU6_SRAM_GRANULARITY_SIZE	2048
 /* the threshold granularity is 1KB on IPU6SE */
 #define IPU6SE_SRAM_GRANULARITY_SHIFT	10
 #define IPU6SE_SRAM_GRANULARITY_SIZE	1024
+
+/* Use the 96 KiB usable size for a 128 KiB buffer, as on IPU6SE. */
+#define IPU4P_MAX_SRAM_SIZE			(96 << 10)
 /* IS pixel buffer is 256KB, MaxSRAMSize is 200KB on IPU6 */
 #define IPU6_MAX_SRAM_SIZE			(200 << 10)
 /* IS pixel buffer is 128KB, MaxSRAMSize is 96KB on IPU6SE */
@@ -156,6 +163,10 @@ struct isys_fw_msgs {
 	union {
 		u64 dummy;
 		union {
+			struct ipu4p_fw_isys_frame_buff_set frame;
+			struct ipu4p_fw_isys_stream_cfg stream;
+		} ipu4p;
+		union {
 			struct ipu4_fw_isys_frame_buff_set_abi frame;
 			struct ipu4_fw_isys_stream_cfg_data_abi stream;
 		} ipu6;
@@ -169,12 +180,28 @@ struct isys_fw_msgs {
 	};
 	struct list_head head;
 	dma_addr_t dma_addr;
+	u8 ipu4p_stream_handle;
+	u8 ipu4p_frame_counter;
+	/* Bits mark output pins with buffers awaiting firmware completion. */
+	u8 ipu4p_pending_pin_mask;
+	bool ipu4p_is_frame;
+	bool ipu4p_addr_error;
+};
+
+enum ipu6_isys_iwake_register {
+	IPU6_ISYS_IWAKE_GDA_IRQ_CRITICAL_THRESHOLD,
+	IPU6_ISYS_IWAKE_GDA_THRESHOLD,
+	IPU6_ISYS_IWAKE_GDA_ENABLE,
+	IPU6_ISYS_IWAKE_GDA_MEMOPEN_THRESHOLD,
 };
 
 struct ipu6_fw_isys_ops {
 	int (*init)(struct ipu6_isys *isys, unsigned int num_streams);
 	int (*close)(struct ipu6_isys *isys);
 	int (*isr_one)(struct ipu6_bus_device *adev);
+	/* Optional; NULL uses the IPU6 proxy-region mapping. */
+	int (*set_iwake_register)(struct ipu6_isys *isys,
+				  enum ipu6_isys_iwake_register reg, u32 value);
 	int (*send_cmd)(struct ipu6_isys *isys,
 			const unsigned int stream_handle,
 			void *cpu_mapped_buf,

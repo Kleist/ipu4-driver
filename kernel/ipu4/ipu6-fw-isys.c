@@ -715,7 +715,7 @@ void ipu6_isys_handle_response(struct ipu6_bus_device *adev,
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_START_AND_CAPTURE_ACK:
 		if (release_msg_buf)
 			ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev),
-					    ipu4_fw_msg_from_handle(resp->buf_handle));
+					    ipu4_fw_msg_from_handle(resp->buf_id));
 		complete(&stream->stream_start_completion);
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_STOP_ACK:
@@ -723,6 +723,15 @@ void ipu6_isys_handle_response(struct ipu6_bus_device *adev,
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_FLUSH_ACK:
 		complete(&stream->stream_stop_completion);
+		break;
+	case IPU6_FW_ISYS_RESP_TYPE_PIN_DATA_SKIPPED:
+		if (resp->pin_id < IPU6_ISYS_OUTPUT_PINS &&
+		    stream->output_pins_queue[resp->pin_id])
+			ipu6_isys_queue_buf_ready(stream, resp);
+		else
+			dev_warn(&adev->auxdev.dev,
+				 "%d:No queue for skipped pin id %d\n",
+				 resp->stream_handle, resp->pin_id);
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_PIN_DATA_READY:
 #ifdef IPU6 // IPU4 firmware releases the message at capture ack
@@ -756,7 +765,7 @@ void ipu6_isys_handle_response(struct ipu6_bus_device *adev,
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_CAPTURE_ACK:
 		if (release_msg_buf)
 			ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev),
-					    ipu4_fw_msg_from_handle(resp->buf_handle));
+					    ipu4_fw_msg_from_handle(resp->buf_id));
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_START_AND_CAPTURE_DONE:
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_CAPTURE_DONE:

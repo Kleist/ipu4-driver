@@ -461,6 +461,14 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
 	isys_ipdata.csi2.fw_access_port_ofs = CSI_REG_HUB_FW_ACCESS_PORT_OFS;
 
 	if (IS_IPU4P(isp)) {
+		isys_ipdata.num_parallel_streams = IPU4P_ISYS_MAX_STREAMS;
+		isys_ipdata.max_streams = IPU4P_ISYS_MAX_STREAMS;
+		isys_ipdata.sram_gran_shift = IPU4P_SRAM_GRANULARITY_SHIFT;
+		isys_ipdata.sram_gran_size = IPU4P_SRAM_GRANULARITY_SIZE;
+		isys_ipdata.max_sram_size = IPU4P_MAX_SRAM_SIZE;
+		isys_ipdata.max_send_queues = IPU4P_N_MAX_SEND_QUEUES;
+		isys_ipdata.max_sram_blocks = IPU4P_NOF_SRAM_BLOCKS_MAX;
+		isys_ipdata.max_devq_size = IPU4P_DEV_SEND_QUEUE_SIZE;
 		isys_ipdata.hw_variant.offset = IPU4P_ISYS_OFFSET;
 		isys_ipdata.hw_variant.spc_offset = IPU4P_ISYS_SPC_OFFSET;
 		isys_ipdata.hw_variant.dmem_offset = IPU4P_ISYS_DMEM_OFFSET;

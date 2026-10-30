@@ -46,6 +46,7 @@ struct ipu6_auxdrv_data {
 	container_of(_auxdev, struct ipu6_bus_device, auxdev)
 #define ipu6_bus_get_drvdata(adev) dev_get_drvdata(&(adev)->auxdev.dev)
 
+extern const struct ipu6_fw_isys_ops ipu4p_fw_isys_ops;
 extern const struct ipu6_fw_isys_ops ipu6_fw_isys_ops;
 extern const struct ipu6_fw_isys_ops ipu7_fw_isys_ops;
 
