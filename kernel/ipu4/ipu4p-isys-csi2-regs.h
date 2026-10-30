@@ -47,6 +47,10 @@ static inline u32 ipu4p_isys_csi_irq_ctrl0_base(unsigned int port)
 #define IPU4P_ISYS_CSI_ERROR_MASK			GENMASK(15, 0)
 #define IPU4P_ISYS_CSI_ERROR_BITS			16U
 
+/* IPU4P ISYS GPREG windows */
+#define IPU4P_ISYS_GPOFFSET				0x66800
+#define IPU4P_ISYS_COMBO_GPOFFSET			0x6e800
+
 /* CSI receiver registers */
 #define IPU4P_CSI2_RX_ENABLE				0x00
 #define IPU4P_CSI2_RX_ENABLE_ENABLE			BIT(0)

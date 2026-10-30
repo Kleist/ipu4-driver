@@ -867,12 +867,14 @@ static int isys_runtime_pm_resume(struct device *dev)
 	if (ret)
 		goto err_mmu_hw_cleanup;
 
-	if (IS_IPU7(isp) || IS_IPU8(isp))
+	if (IS_IPU7(isp) || IS_IPU8(isp)) {
 		ipu7_isys_setup_hw(isys);
-	else if (IS_IPU4P(isp))
+	} else if (IS_IPU4P(isp)) {
 		ipu4p_isys_irq_setup(isys);
-	else
+		ipu4p_isys_phy_setup(isys);
+	} else {
 		ipu6_isys_setup_hw(isys);
+	}
 
 #ifdef IPU6
 	if (!IS_IPU7(isp) && !IS_IPU8(isp))
@@ -1156,6 +1158,8 @@ static int isys_probe(struct auxiliary_device *auxdev,
 		isys->phy_set_power = ipu6_isys_jsl_phy_set_power;
 	else if (IS_IPU6EP_MTL(adev->isp))
 		isys->phy_set_power = ipu6_isys_dwc_phy_set_power;
+	else if (IS_IPU4P(adev->isp))
+		isys->phy_set_power = ipu4p_isys_phy_set_power;
 	else
 		isys->phy_set_power = ipu6_isys_mcd_phy_set_power;
 #endif

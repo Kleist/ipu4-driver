@@ -552,6 +552,11 @@ static void ipu6_isys_csi2_stream_disable(struct ipu6_isys_csi2 *csi2)
 	cfg.port = csi2->port;
 	cfg.nlanes = csi2->nlanes;
 
+	if (IS_IPU4P(csi2->isys->adev->isp)) {
+		isys->phy_set_power(isys, &cfg, NULL, false);
+		return;
+	}
+
 	writel(0, csi2->base + CSI_REG_CSI_FE_ENABLE);
 	writel(0, csi2->base + CSI_REG_PPI2CSI_ENABLE);
 	writel(0, csi2->base + CSI_PORT_REG_BASE_IRQ_CSI +
@@ -589,6 +594,9 @@ static int ipu6_isys_csi2_stream_enable(struct ipu6_isys_csi2 *csi2)
 	ret = ipu6_isys_csi2_calc_timing(csi2, &timing, CSI2_ACCINV);
 	if (ret)
 		return ret;
+
+	if (IS_IPU4P(isys->adev->isp))
+		return isys->phy_set_power(isys, &cfg, &timing, true);
 
 	mask = isys->pdata->ipdata->csi2.irq_mask;
 	nports = isys->pdata->ipdata->csi2.nports;

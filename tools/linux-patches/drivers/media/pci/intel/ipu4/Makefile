@@ -35,6 +35,7 @@ intel-ipu4-isys-y := \
 	ipu6-isys-queue.o \
 	ipu6-isys-subdev.o \
 	ambu-silent-reset.o \
+	ipu4p-isys-csi-phy.o \
 	ipu7-isys-csi-phy.o
 
 obj-$(CONFIG_VIDEO_INTEL_IPU4) += intel-ipu4-isys.o
