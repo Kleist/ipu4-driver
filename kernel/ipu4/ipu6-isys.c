@@ -41,6 +41,7 @@
 #include "ipu6-platform-buttress-regs.h"
 #include "ipu6-platform-isys-csi2-reg.h"
 #include "ipu6-platform-regs.h"
+#include "ipu4p-isys-csi2-regs.h"
 #include "ipu7-isys-csi-phy.h"
 #include "ipu7-isys-csi2-regs.h"
 #include "ipu7-platform-regs.h"
@@ -201,6 +202,10 @@ static void isys_csi2_unregister_subdevices(struct ipu6_isys *isys)
 
 static int isys_csi2_register_subdevices(struct ipu6_isys *isys)
 {
+	static const u32 ipu4p_port_offsets[IPU4P_ISYS_CSI2_NPORTS] = {
+		0x64300, 0x6c000, 0x6c100, 0x6c200,
+		0x6c300, 0x6c400, 0x6c500, 0x6c600,
+	};
 	const struct ipu6_isys_internal_csi2_pdata *csi2_pdata =
 		&isys->pdata->ipdata->csi2;
 	unsigned int i;
@@ -216,6 +221,9 @@ static int isys_csi2_register_subdevices(struct ipu6_isys *isys)
 
 			isys->isr_csi2_bits |= mask;
 			isys->csi2[i].legacy_irq_mask = mask;
+		} else if (IS_IPU4P(isys->adev->isp)) {
+			base += ipu4p_port_offsets[i];
+			isys->isr_csi2_bits |= IPU4P_ISYS_UNISPART_IRQ_CSI2(i);
 		} else {
 			base += CSI_REG_PORT_BASE(i);
 			isys->isr_csi2_bits |= IPU4_ISYS_UNISPART_IRQ_CSI2(i);
@@ -861,7 +869,9 @@ static int isys_runtime_pm_resume(struct device *dev)
 
 	if (IS_IPU7(isp) || IS_IPU8(isp))
 		ipu7_isys_setup_hw(isys);
-	else if (!IS_IPU4P(isp))
+	else if (IS_IPU4P(isp))
+		ipu4p_isys_irq_setup(isys);
+	else
 		ipu6_isys_setup_hw(isys);
 
 #ifdef IPU6
@@ -1189,7 +1199,7 @@ static void isys_remove(struct auxiliary_device *auxdev)
 }
 
 static const struct ipu6_auxdrv_data ipu4p_isys_auxdrv_data = {
-	.isr = NULL,
+	.isr = ipu4p_isys_isr,
 	.isr_threaded = NULL,
 	.wake_isr_thread = false,
 	.fw_ops = &ipu4p_fw_isys_ops,

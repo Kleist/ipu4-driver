@@ -14,6 +14,7 @@
 #include <linux/kernel.h>
 #include <linux/list.h>
 #include <linux/minmax.h>
+#include <linux/pm_runtime.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/string.h>
@@ -25,6 +26,7 @@
 #include "ipu6-isys-queue.h"
 #include "ipu6-isys-subdev.h"
 #include "ipu4p-fw-isys.h"
+#include "ipu4p-isys-csi2-regs.h"
 #include "ipu6-platform-regs.h"
 
 static const char send_msg_types[N_IPU4P_FW_ISYS_SEND_TYPE][32] = {
@@ -878,3 +880,117 @@ const struct ipu6_fw_isys_ops ipu4p_fw_isys_ops = {
 	.dump_stream_cfg = ipu4p_fw_isys_dump_stream_cfg,
 	.dump_frame_buf_set = ipu4p_fw_isys_dump_frame_buf_set,
 };
+
+void ipu4p_isys_irq_setup(struct ipu6_isys *isys)
+{
+	static const struct {
+		u32 base;
+		u32 mask;
+	} irq_config[] = {
+		{ IPU4P_ISYS_UNISPART_IRQ_EDGE,
+		  IPU4P_ISYS_UNISPART_IRQ_SW |
+		  IPU4P_ISYS_UNISPART_IRQ_CSI2(0) |
+		  IPU4P_ISYS_UNISPART_IRQ_CSI2(1) },
+		{ IPU4P_ISYS_ISA_ACC_IRQ_CTRL_BASE, 0 },
+		{ IPU4P_ISYS_A_IRQ_CTRL_BASE, 0 },
+		{ IPU4P_ISYS_SIP0_IRQ_CTRL_BASE, IPU4P_ISYS_SIP0_CSI2_IRQ },
+		{ IPU4P_ISYS_SIP1_IRQ_CTRL_BASE, IPU4P_ISYS_SIP1_CSI2_IRQ_MASK },
+	};
+	void __iomem *base = isys->pdata->base;
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(irq_config); i++) {
+		const u32 irq_base = irq_config[i].base;
+
+		writel(0, base + irq_base + IPU4P_ISYS_IRQ_ENABLE_OFFSET);
+		writel(0, base + irq_base + IPU4P_ISYS_IRQ_MASK_OFFSET);
+	}
+
+	for (i = 0; i < ARRAY_SIZE(irq_config); i++) {
+		const u32 irq_base = irq_config[i].base;
+		const u32 mask = irq_config[i].mask;
+
+		writel(mask, base + irq_base);
+		writel(mask, base + irq_base +
+		       IPU4P_ISYS_IRQ_LEVEL_NOT_PULSE_OFFSET);
+		writel(0xffffffff,
+		       base + irq_base + IPU4P_ISYS_IRQ_CLEAR_OFFSET);
+	}
+
+	writel(0, base + IPU4P_ISYS_UNISPART_SW_IRQ_REG);
+	writel(0, base + IPU4P_ISYS_UNISPART_SW_IRQ_MUX_REG);
+
+	/* Keep the top-level source disabled until its child controllers are ready. */
+	for (i = ARRAY_SIZE(irq_config); i > 0; i--) {
+		const u32 irq_base = irq_config[i - 1].base;
+		const u32 mask = irq_config[i - 1].mask;
+
+		writel(mask, base + irq_base + IPU4P_ISYS_IRQ_MASK_OFFSET);
+		writel(mask, base + irq_base + IPU4P_ISYS_IRQ_ENABLE_OFFSET);
+	}
+}
+
+irqreturn_t ipu4p_isys_isr(struct ipu6_bus_device *adev)
+{
+	struct ipu6_isys *isys = ipu6_bus_get_drvdata(adev);
+	void __iomem *base = isys->pdata->base;
+	u32 status, sip0_status, sip1_status;
+	int pm_status;
+	irqreturn_t ret = IRQ_HANDLED;
+
+	pm_status = pm_runtime_get_if_active(&adev->auxdev.dev);
+	if (!pm_status)
+		return IRQ_NONE;
+
+	status = readl(base + IPU4P_ISYS_UNISPART_IRQ_STATUS);
+	sip0_status = readl(base + IPU4P_ISYS_SIP0_IRQ_CTRL_STATUS);
+	sip1_status = readl(base + IPU4P_ISYS_SIP1_IRQ_CTRL_STATUS);
+
+	if (!(status & (isys->isr_csi2_bits | IPU4P_ISYS_UNISPART_IRQ_SW)) &&
+	    !(sip0_status & IPU4P_ISYS_SIP0_CSI2_IRQ) &&
+	    !(sip1_status & IPU4P_ISYS_SIP1_CSI2_IRQ_MASK)) {
+		ret = IRQ_NONE;
+		goto out;
+	}
+
+	do {
+		writel(status & (isys->isr_csi2_bits |
+				IPU4P_ISYS_UNISPART_IRQ_SW),
+		       base + IPU4P_ISYS_UNISPART_IRQ_CLEAR);
+		writel(sip0_status & IPU4P_ISYS_SIP0_CSI2_IRQ,
+		       base + IPU4P_ISYS_SIP0_IRQ_CTRL_CLEAR);
+		writel(sip1_status & IPU4P_ISYS_SIP1_CSI2_IRQ_MASK,
+		       base + IPU4P_ISYS_SIP1_IRQ_CTRL_CLEAR);
+
+		for (unsigned int i = 0;
+		     i < isys->pdata->ipdata->csi2.nports; i++) {
+			bool port_irq = i ?
+				(sip1_status & IPU4P_ISYS_SIP1_CSI2_IRQ(i)) :
+				(sip0_status & IPU4P_ISYS_SIP0_CSI2_IRQ);
+
+			if (port_irq && isys->csi2[i].base)
+				ipu4p_isys_csi2_isr(&isys->csi2[i]);
+		}
+
+		writel(0, base + IPU4P_ISYS_UNISPART_SW_IRQ_REG);
+
+		if ((status & IPU4P_ISYS_UNISPART_IRQ_SW) &&
+		    !adev->auxdrv_data->fw_ops->isr_one(adev))
+			status = IPU4P_ISYS_UNISPART_IRQ_SW;
+		else
+			status = 0;
+
+		status |= readl(base + IPU4P_ISYS_UNISPART_IRQ_STATUS);
+		sip0_status = readl(base + IPU4P_ISYS_SIP0_IRQ_CTRL_STATUS);
+		sip1_status = readl(base + IPU4P_ISYS_SIP1_IRQ_CTRL_STATUS);
+	} while ((status & (isys->isr_csi2_bits |
+			    IPU4P_ISYS_UNISPART_IRQ_SW)) ||
+		 (sip0_status & IPU4P_ISYS_SIP0_CSI2_IRQ) ||
+		 (sip1_status & IPU4P_ISYS_SIP1_CSI2_IRQ_MASK));
+
+out:
+	if (pm_status > 0)
+		pm_runtime_put(&adev->auxdev.dev);
+
+	return ret;
+}

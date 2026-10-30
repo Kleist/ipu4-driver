@@ -254,5 +254,7 @@ int ipu6_isys_jsl_phy_set_power(struct ipu6_isys *isys,
 				struct ipu6_isys_csi2_config *cfg,
 				const struct ipu6_isys_csi2_timing *timing,
 				bool on);
+void ipu4p_isys_irq_setup(struct ipu6_isys *isys);
+irqreturn_t ipu4p_isys_isr(struct ipu6_bus_device *adev);
 
 #endif /* IPU6_ISYS_H */
