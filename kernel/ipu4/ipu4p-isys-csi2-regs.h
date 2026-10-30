@@ -63,6 +63,9 @@ static inline u32 ipu4p_isys_csi_irq_ctrl0_base(unsigned int port)
 #define IPU4P_CSI2_RX_DLY_CNT_TERMEN_DLANE(lane)	(0x34 + (lane) * 8)
 #define IPU4P_CSI2_RX_DLY_CNT_SETTLE_DLANE(lane)	(0x38 + (lane) * 8)
 
+/* Shifted CSI-2 data-lane timing register offsets. */
+#define IPU4P_CSI2_RX_DLY_CNT_SHIFTED_DATA_TICKS(lane)	(0x3c + (lane) * 8)
+
 /* CSI receiver general-purpose registers */
 #define IPU4P_CSI2_GPREG_CR_PORT_CONFIG			0x14
 

@@ -5,6 +5,7 @@
 #include <linux/bitfield.h>
 #include <linux/bits.h>
 #include <linux/dev_printk.h>
+#include <linux/dmi.h>
 #include <linux/errno.h>
 #include <linux/io.h>
 #include <linux/types.h>
@@ -24,6 +25,36 @@ struct ipu4p_phy_bb_config {
 
 #define IPU4P_CSI2_GPREG_CR_PORT_CONFIG_DEFAULT	0x3895
 #define IPU4P_CSI_BSCAN_EXCLUDE			(BIT(9) | BIT(18) | BIT(27))
+
+struct ipu4p_csi2_timing_quirk {
+	unsigned int port;
+	unsigned int nlanes;
+	u32 data_ticks;
+};
+
+/* The Surface Pro 7 front camera needs shifted CSI-2 data timing on IPU4P. */
+static const struct ipu4p_csi2_timing_quirk ipu4p_surface_pro7_timing = {
+	.port = 2,
+	.nlanes = 2,
+	/*
+	 * Reverse-engineered from a Windows camera driver:
+	 *     data_ticks = 1360 - 32000 / F_MHz
+	 * At 350 MHz, integer division gives 1269.
+	 */
+	.data_ticks = 1269,
+};
+
+static const struct dmi_system_id ipu4p_csi2_timing_quirks[] = {
+	{
+		.ident = "Microsoft Surface Pro 7",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Pro 7"),
+		},
+		.driver_data = (void *)&ipu4p_surface_pro7_timing,
+	},
+	{}
+};
 
 static const struct ipu4p_phy_bb_config ipu4p_phy_bb_configs[] = {
 	{ 4, 13, 32, 0x0f },
@@ -118,6 +149,8 @@ int ipu4p_isys_phy_set_power(struct ipu6_isys *isys,
 			     bool on)
 {
 	struct ipu6_isys_csi2 *csi2;
+	const struct dmi_system_id *dmi_id;
+	const struct ipu4p_csi2_timing_quirk *quirk;
 	void __iomem *base;
 	u32 value;
 
@@ -148,14 +181,31 @@ int ipu4p_isys_phy_set_power(struct ipu6_isys *isys,
 	if (!timing)
 		return -EINVAL;
 
-	writel(timing->ctermen, base + IPU4P_CSI2_RX_DLY_CNT_TERMEN_CLANE);
-	writel(timing->csettle, base + IPU4P_CSI2_RX_DLY_CNT_SETTLE_CLANE);
+	dmi_id = dmi_first_match(ipu4p_csi2_timing_quirks);
+	quirk = dmi_id ? dmi_id->driver_data : NULL;
 
-	for (unsigned int lane = 0; lane < cfg->nlanes; lane++) {
-		writel(timing->dtermen,
-		       base + IPU4P_CSI2_RX_DLY_CNT_TERMEN_DLANE(lane));
-		writel(timing->dsettle,
-		       base + IPU4P_CSI2_RX_DLY_CNT_SETTLE_DLANE(lane));
+	if (quirk && cfg->port == quirk->port &&
+	    cfg->nlanes == quirk->nlanes) {
+		for (unsigned int lane = 0; lane < cfg->nlanes; lane++)
+			writel(quirk->data_ticks,
+			       base +
+			       IPU4P_CSI2_RX_DLY_CNT_SHIFTED_DATA_TICKS(lane));
+
+		dev_dbg(&isys->adev->auxdev.dev,
+			"using Surface Pro 7 shifted timing for CSI-2 port %u, %u lanes\n",
+			cfg->port, cfg->nlanes);
+	} else {
+		writel(timing->ctermen,
+		       base + IPU4P_CSI2_RX_DLY_CNT_TERMEN_CLANE);
+		writel(timing->csettle,
+		       base + IPU4P_CSI2_RX_DLY_CNT_SETTLE_CLANE);
+
+		for (unsigned int lane = 0; lane < cfg->nlanes; lane++) {
+			writel(timing->dtermen,
+			       base + IPU4P_CSI2_RX_DLY_CNT_TERMEN_DLANE(lane));
+			writel(timing->dsettle,
+			       base + IPU4P_CSI2_RX_DLY_CNT_SETTLE_DLANE(lane));
+		}
 	}
 
 	value = readl(base + IPU4P_CSI2_RX_CONFIG);
