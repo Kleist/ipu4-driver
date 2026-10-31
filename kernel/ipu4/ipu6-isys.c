@@ -1274,9 +1274,9 @@ static int isys_probe(struct auxiliary_device *auxdev,
 #ifdef IPU6 // Disabled for IPU4
 	isys_iwake_watermark_init(isys);
 
-	if (is_ipu6se(adev->isp->hw_ver))
+	if (IS_IPU6SE(adev->isp))
 		isys->phy_set_power = ipu6_isys_jsl_phy_set_power;
-	else if (is_ipu6ep_mtl(adev->isp->hw_ver))
+	else if (IS_IPU6EP_MTL(adev->isp))
 		isys->phy_set_power = ipu6_isys_dwc_phy_set_power;
 	else
 		isys->phy_set_power = ipu6_isys_mcd_phy_set_power;
@@ -1389,10 +1389,10 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 	u32 index;
 	u64 ts;
 
-	if (!isys->fwcom)
+	if (!isys->fwctx)
 		return 1;
 
-	resp = ipu6_fw_isys_get_resp(isys->fwcom, IPU4_BASE_MSG_RECV_QUEUES);
+	resp = ipu6_fw_isys_get_resp(isys);
 	if (!resp)
 		return 1;
 
@@ -1502,7 +1502,7 @@ static int isys_isr_one(struct ipu6_bus_device *adev)
 
 	ipu6_isys_put_stream(stream);
 leave:
-	ipu6_fw_isys_put_resp(isys->fwcom, IPU4_BASE_MSG_RECV_QUEUES);
+	ipu6_fw_isys_put_resp(isys);
 	return 0;
 }
 

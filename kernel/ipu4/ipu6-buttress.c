@@ -225,7 +225,7 @@ static int ipu6_buttress_ipc_send_bulk(struct ipu6_device *isp,
 	unsigned long tx_timeout_jiffies, rx_timeout_jiffies;
 	unsigned int i, retry = BUTTRESS_IPC_CMD_SEND_RETRY;
 	struct ipu6_buttress *b = &isp->buttress;
-	struct ipu6_buttress_ipc *ipc = &b->cse;
+	struct ipu6_buttress_ipc *ipc = &b->ipc;
 	u32 val;
 	int ret;
 	int tout;
@@ -381,14 +381,15 @@ irqreturn_t ipu6_buttress_isr(int irq, void *isp_ptr)
 		if (irq_status & BUTTRESS_ISR_IPC_FROM_CSE_IS_WAITING) {
 			dev_dbg(&isp->pdev->dev,
 				"BUTTRESS_ISR_IPC_FROM_CSE_IS_WAITING\n");
-			ipu6_buttress_ipc_recv(isp, &b->cse, &b->cse.recv_data);
-			complete(&b->cse.recv_complete);
+
+			ipu6_buttress_ipc_recv(isp, &b->ipc, &b->ipc.recv_data);
+			complete(&b->ipc.recv_complete);
 		}
 
 		if (irq_status & BUTTRESS_ISR_IPC_EXEC_DONE_BY_CSE) {
 			dev_dbg(&isp->pdev->dev,
 				"BUTTRESS_ISR_IPC_EXEC_DONE_BY_CSE\n");
-			complete(&b->cse.send_complete);
+			complete(&b->ipc.send_complete);
 		}
 
 		if (irq_status & BUTTRESS_ISR_SAI_VIOLATION &&
@@ -618,7 +619,7 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 	struct ipu6_psys_pdata *psys_pdata;
 	u32 data, mask, done, fail;
 	int ret;
-	u32 bootloader_status_offset = is_ipu4(isp->hw_ver) ?
+	u32 bootloader_status_offset = IS_IPU4(isp) ?
 		IPU4_BOOTLOADER_STATUS_OFFSET : IPU6_BOOTLOADER_STATUS_OFFSET;
 
 	if (!isp->secure_mode) {
@@ -842,17 +843,17 @@ int ipu6_buttress_init(struct ipu6_device *isp)
 	mutex_init(&b->auth_mutex);
 	mutex_init(&b->cons_mutex);
 	mutex_init(&b->ipc_mutex);
-	init_completion(&b->cse.send_complete);
-	init_completion(&b->cse.recv_complete);
+	init_completion(&b->ipc.send_complete);
+	init_completion(&b->ipc.recv_complete);
 
-	b->cse.nack = BUTTRESS_CSE2IUDATA0_IPC_NACK;
-	b->cse.nack_mask = BUTTRESS_CSE2IUDATA0_IPC_NACK_MASK;
-	b->cse.csr_in = BUTTRESS_REG_CSE2IUCSR;
-	b->cse.csr_out = BUTTRESS_REG_IU2CSECSR;
-	b->cse.db0_in = BUTTRESS_REG_CSE2IUDB0;
-	b->cse.db0_out = BUTTRESS_REG_IU2CSEDB0;
-	b->cse.data0_in = BUTTRESS_REG_CSE2IUDATA0;
-	b->cse.data0_out = BUTTRESS_REG_IU2CSEDATA0;
+	b->ipc.nack = BUTTRESS_CSE2IUDATA0_IPC_NACK;
+	b->ipc.nack_mask = BUTTRESS_CSE2IUDATA0_IPC_NACK_MASK;
+	b->ipc.csr_in = BUTTRESS_REG_CSE2IUCSR;
+	b->ipc.csr_out = BUTTRESS_REG_IU2CSECSR;
+	b->ipc.db0_in = BUTTRESS_REG_CSE2IUDB0;
+	b->ipc.db0_out = BUTTRESS_REG_IU2CSEDB0;
+	b->ipc.data0_in = BUTTRESS_REG_CSE2IUDATA0;
+	b->ipc.data0_out = BUTTRESS_REG_IU2CSEDATA0;
 
 
 	isp->secure_mode = ipu6_buttress_get_secure_mode(isp);
@@ -888,7 +889,7 @@ int ipu6_buttress_init(struct ipu6_device *isp)
 
 	/* Retry couple of times in case of CSE initialization is delayed */
 	do {
-		ret = ipu6_buttress_ipc_reset(isp, &b->cse);
+		ret = ipu6_buttress_ipc_reset(isp, &b->ipc);
 		if (ret) {
 			dev_warn(&isp->pdev->dev,
 				 "IPC reset protocol failed, retrying\n");
