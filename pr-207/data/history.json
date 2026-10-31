@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "points": [
+    {
+      "ts": "2026-10-31T07:13:32Z",
+      "sha": "52100c19143f7c99e33c0d4f10e94dc6114a7794",
+      "vm_smoke_run_id": "41179239611",
+      "coverage": {
+        "lines_pct": 59.0,
+        "functions_pct": 71.3
+      },
+      "mmio": {
+        "unimplemented": 0,
+        "value_mismatch": 11,
+        "extra_in_qemu": 8
+      },
+      "registers": {
+        "doc": 0,
+        "inferred": 36,
+        "guess": 18
+      },
+      "upstream_diff": {
+        "files_differ": 29,
+        "hunks": 272
+      },
+      "ladder_coverage": {
+        "ipu4-out-of-tree/ipu4": 72.5,
+        "ipu4p/ipu4p": 48.7,
+        "ipu6/ipu6": 71.9,
+        "ipu4-patches/ipu4": 45.1,
+        "ipu4-patches/ipu4p": 48.1,
+        "ipu4-patches/ipu6": 49.7
+      }
+    },
+    {
+      "ts": "2026-10-31T07:19:27Z",
+      "sha": "e3a5077e730cd1011b2a324b5f090a70e53c37d6",
+      "vm_smoke_run_id": "41179239611",
+      "coverage": {
+        "lines_pct": 59.0,
+        "functions_pct": 71.3
+      },
+      "mmio": {
+        "unimplemented": 0,
+        "value_mismatch": 11,
+        "extra_in_qemu": 8
+      },
+      "registers": {
+        "doc": 0,
+        "inferred": 36,
+        "guess": 18
+      },
+      "upstream_diff": {
+        "files_differ": 29,
+        "hunks": 285
+      },
+      "ladder_coverage": {
+        "ipu4-out-of-tree/ipu4": 72.5,
+        "ipu4p/ipu4p": 48.7,
+        "ipu6/ipu6": 71.9,
+        "ipu4-patches/ipu4": 45.1,
+        "ipu4-patches/ipu4p": 48.1,
+        "ipu4-patches/ipu6": 49.7
+      }
+    }
+  ]
+}
