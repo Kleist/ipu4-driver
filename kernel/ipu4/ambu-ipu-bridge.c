@@ -333,6 +333,10 @@ EXPORT_SYMBOL_NS_GPL(ambu_ipu_bridge_init, "INTEL_IPU_BRIDGE");
 
 void ambu_ipu_bridge_uninit(struct device *dev)
 {
+	/* Probe skips init when the device already has a fwnode graph. */
+	if (!static_bridge)
+		return;
+
 	dev->fwnode->secondary = NULL;
 	ipu_bridge_unregister_sensors(static_bridge);
 	software_node_unregister(&static_bridge->ipu_hid_node);
