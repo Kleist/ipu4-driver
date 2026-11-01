@@ -1,0 +1,146 @@
+From 449e123e2950ac8f4cb2dd0a2297a854995d1f3f Mon Sep 17 00:00:00 2001
+From: Ruslan Bay <ruslanbey@proton.me>
+Date: Fri, 30 Oct 2026 20:55:27 +0100
+Subject: [RFC PATCH v2 11/12] media: ipu6: Fix Surface Pro 7 CSI-2 capture
+ timing
+
+The calculated D-PHY timing causes capture errors on the Surface
+Pro 7 front camera.
+
+A shifted data-lane timing was observed on a Windows system and
+reverse-engineered from its camera driver. Apply the resulting
+1269-tick value to both lanes on IPU4P CSI-2 port 2.
+
+Keep the existing timing path for other configurations.
+
+Tested on Microsoft Surface Pro 7 with the OV5693 front camera.
+
+The Co-developed-by tags will be updated with the contributors' actual
+names and email addresses in the final patchset.
+
+Co-developed-by: supermepsipax <supermepsipax@github>
+Co-developed-by: thisiscamk <thisiscamk@github>
+Co-developed-by: ConsultingFuture4200 <ConsultingFuture4200@github>
+Co-developed-by: georgemihaila <georgemihaila@github>
+
+Signed-off-by: Ruslan Bay <ruslanbey@proton.me>
+---
+ .../media/pci/intel/ipu6/ipu4p-isys-csi-phy.c | 66 ++++++++++++++++---
+ .../pci/intel/ipu6/ipu4p-isys-csi2-regs.h     |  3 +
+ 2 files changed, 61 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/media/pci/intel/ipu6/ipu4p-isys-csi-phy.c b/drivers/media/pci/intel/ipu6/ipu4p-isys-csi-phy.c
+index 6177be4fa01..43cd11cac03 100644
+--- a/drivers/media/pci/intel/ipu6/ipu4p-isys-csi-phy.c
++++ b/drivers/media/pci/intel/ipu6/ipu4p-isys-csi-phy.c
+@@ -5,6 +5,7 @@
+ #include <linux/bitfield.h>
+ #include <linux/bits.h>
+ #include <linux/dev_printk.h>
++#include <linux/dmi.h>
+ #include <linux/errno.h>
+ #include <linux/io.h>
+ #include <linux/types.h>
+@@ -25,6 +26,36 @@ struct ipu4p_phy_bb_config {
+ #define IPU4P_CSI2_GPREG_CR_PORT_CONFIG_DEFAULT	0x3895
+ #define IPU4P_CSI_BSCAN_EXCLUDE			(BIT(9) | BIT(18) | BIT(27))
+ 
++struct ipu4p_csi2_timing_quirk {
++	unsigned int port;
++	unsigned int nlanes;
++	u32 data_ticks;
++};
++
++/* The Surface Pro 7 front camera needs shifted CSI-2 data timing on IPU4P. */
++static const struct ipu4p_csi2_timing_quirk ipu4p_surface_pro7_timing = {
++	.port = 2,
++	.nlanes = 2,
++	/*
++	 * Reverse-engineered from a Windows camera driver:
++	 *     data_ticks = 1360 - 32000 / F_MHz
++	 * At 350 MHz, integer division gives 1269.
++	 */
++	.data_ticks = 1269,
++};
++
++static const struct dmi_system_id ipu4p_csi2_timing_quirks[] = {
++	{
++		.ident = "Microsoft Surface Pro 7",
++		.matches = {
++			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
++			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Pro 7"),
++		},
++		.driver_data = (void *)&ipu4p_surface_pro7_timing,
++	},
++	{}
++};
++
+ static const struct ipu4p_phy_bb_config ipu4p_phy_bb_configs[] = {
+ 	{ 4, 13, 32, 0x0f },
+ 	{ 6, 13, 32, 0x15 },
+@@ -118,6 +149,8 @@ int ipu4p_isys_phy_set_power(struct ipu6_isys *isys,
+ 			     bool on)
+ {
+ 	struct ipu6_isys_csi2 *csi2;
++	const struct dmi_system_id *dmi_id;
++	const struct ipu4p_csi2_timing_quirk *quirk;
+ 	void __iomem *base;
+ 	u32 value;
+ 
+@@ -148,14 +181,31 @@ int ipu4p_isys_phy_set_power(struct ipu6_isys *isys,
+ 	if (!timing)
+ 		return -EINVAL;
+ 
+-	writel(timing->ctermen, base + IPU4P_CSI2_RX_DLY_CNT_TERMEN_CLANE);
+-	writel(timing->csettle, base + IPU4P_CSI2_RX_DLY_CNT_SETTLE_CLANE);
+-
+-	for (unsigned int lane = 0; lane < cfg->nlanes; lane++) {
+-		writel(timing->dtermen,
+-		       base + IPU4P_CSI2_RX_DLY_CNT_TERMEN_DLANE(lane));
+-		writel(timing->dsettle,
+-		       base + IPU4P_CSI2_RX_DLY_CNT_SETTLE_DLANE(lane));
++	dmi_id = dmi_first_match(ipu4p_csi2_timing_quirks);
++	quirk = dmi_id ? dmi_id->driver_data : NULL;
++
++	if (quirk && cfg->port == quirk->port &&
++	    cfg->nlanes == quirk->nlanes) {
++		for (unsigned int lane = 0; lane < cfg->nlanes; lane++)
++			writel(quirk->data_ticks,
++			       base +
++			       IPU4P_CSI2_RX_DLY_CNT_SHIFTED_DATA_TICKS(lane));
++
++		dev_dbg(&isys->adev->auxdev.dev,
++			"using Surface Pro 7 shifted timing for CSI-2 port %u, %u lanes\n",
++			cfg->port, cfg->nlanes);
++	} else {
++		writel(timing->ctermen,
++		       base + IPU4P_CSI2_RX_DLY_CNT_TERMEN_CLANE);
++		writel(timing->csettle,
++		       base + IPU4P_CSI2_RX_DLY_CNT_SETTLE_CLANE);
++
++		for (unsigned int lane = 0; lane < cfg->nlanes; lane++) {
++			writel(timing->dtermen,
++			       base + IPU4P_CSI2_RX_DLY_CNT_TERMEN_DLANE(lane));
++			writel(timing->dsettle,
++			       base + IPU4P_CSI2_RX_DLY_CNT_SETTLE_DLANE(lane));
++		}
+ 	}
+ 
+ 	value = readl(base + IPU4P_CSI2_RX_CONFIG);
+diff --git a/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h b/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
+index 05f96b7e97b..4b7510e05e1 100644
+--- a/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
++++ b/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
+@@ -63,6 +63,9 @@ static inline u32 ipu4p_isys_csi_irq_ctrl0_base(unsigned int port)
+ #define IPU4P_CSI2_RX_DLY_CNT_TERMEN_DLANE(lane)	(0x34 + (lane) * 8)
+ #define IPU4P_CSI2_RX_DLY_CNT_SETTLE_DLANE(lane)	(0x38 + (lane) * 8)
+ 
++/* Shifted CSI-2 data-lane timing register offsets. */
++#define IPU4P_CSI2_RX_DLY_CNT_SHIFTED_DATA_TICKS(lane)	(0x3c + (lane) * 8)
++
+ /* CSI receiver general-purpose registers */
+ #define IPU4P_CSI2_GPREG_CR_PORT_CONFIG			0x14
+ 
+-- 
+2.56.0
+

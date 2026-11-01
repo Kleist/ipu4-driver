@@ -1,19 +1,23 @@
-From 88cfe658b4fbc26d5bef29ad58aef83200b4ec21 Mon Sep 17 00:00:00 2001
+From 90f564f2d5da7e592eb746ac6bb54cc8ddc7c5c7 Mon Sep 17 00:00:00 2001
 From: Ruslan Bay <ruslanbey@proton.me>
-Date: Sat, 10 Oct 2026 13:06:23 +0200
-Subject: [PATCH 05/12] media: ipu6: Support DMEM-based SysCom in ipu6-fw-com
+Date: Thu, 29 Oct 2026 00:00:32 +0100
+Subject: [RFC PATCH v2 05/12] media: ipu6: Support DMEM-based SysCom in
+ ipu6-fw-com
 
-Handle the IPU4P DMEM-based SysCom register layout and lifecycle in the
-existing firmware communication layer.
+IPU4P uses DMEM for SysCom control registers instead of the buttress
+boot-parameter area used by IPU6.
+
+Handle the IPU4P register layout during queue setup and firmware
+initialization, shutdown and readiness checks.
 
 Signed-off-by: Ruslan Bay <ruslanbey@proton.me>
 ---
- drivers/media/pci/intel/ipu6/ipu6-fw-com.c | 51 ++++++++++++++++++++--
- drivers/media/pci/intel/ipu6/ipu6-fw-com.h |  1 +
- 2 files changed, 48 insertions(+), 4 deletions(-)
+ drivers/media/pci/intel/ipu6/ipu6-fw-com.c | 48 ++++++++++++++++++++--
+ drivers/media/pci/intel/ipu6/ipu6-fw-com.h |  3 ++
+ 2 files changed, 47 insertions(+), 4 deletions(-)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-fw-com.c b/drivers/media/pci/intel/ipu6/ipu6-fw-com.c
-index 51567c5fc..e1bc047bd 100644
+index 51567c5fc13..fc2fe6f3f3f 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-fw-com.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-fw-com.c
 @@ -97,6 +97,7 @@ struct ipu6_fw_com_context {
@@ -24,25 +28,22 @@ index 51567c5fc..e1bc047bd 100644
  };
  
  #define FW_COM_WR_REG 0
-@@ -118,6 +119,17 @@ enum regmem_id {
- 	SYSCOM_QPR_BASE_REG = 4
- };
+@@ -105,6 +106,14 @@ struct ipu6_fw_com_context {
+ #define REGMEM_OFFSET 0
+ #define TUNIT_MAGIC_PATTERN 0x5a5a5a5a
  
 +enum ipu4p_regmem_id {
-+	IPU4P_PKG_DIR_ADDR_REG = 0,
 +	IPU4P_SYSCOM_CONFIG_REG = 1,
 +	IPU4P_SYSCOM_STATE_REG = 2,
 +	IPU4P_SYSCOM_COMMAND_REG = 3,
-+	IPU4P_SYSCOM_IRQ_REG = 4,
-+	IPU4P_SYSCOM_VTL0_ADDR_MASK = 5,
-+	/* CNL B0 ISYS firmware reserves registers 6-7 for dual contexts. */
++	/* Registers 6-7 reserved by ISYS firmware for dual contexts. */
 +	IPU4P_SYSCOM_QPR_BASE_REG = 8,
 +};
 +
- #define BUTTRESS_FW_BOOT_PARAMS_0 0x4000
- #define BUTTRESS_FW_BOOT_PARAM_REG(base, offset, id)			\
- 	((base) + BUTTRESS_FW_BOOT_PARAMS_0 + ((offset) + (id)) * 4)
-@@ -179,6 +191,7 @@ void *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
+ enum regmem_id {
+ 	/* pass pkg_dir address to SPC in non-secure mode */
+ 	PKG_DIR_ADDR_REG = 0,
+@@ -179,6 +188,7 @@ void *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
  	ctx->cell_ready = cfg->cell_ready;
  	ctx->buttress_boot_offset = cfg->buttress_boot_offset;
  	ctx->base_addr  = base;
@@ -50,7 +51,7 @@ index 51567c5fc..e1bc047bd 100644
  
  	/*
  	 * Allocate DMA mapped memory. Allocate one big chunk.
-@@ -241,7 +254,8 @@ void *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
+@@ -241,7 +251,8 @@ void *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
  
  	/* initialize input queues */
  	offset += specific_size;
@@ -60,7 +61,7 @@ index 51567c5fc..e1bc047bd 100644
  	res.host_address = (uintptr_t)(ctx->dma_buffer + offset);
  	res.vied_address = ctx->dma_addr + offset;
  	for (i = 0; i < cfg->num_input_queues; i++)
-@@ -265,6 +279,21 @@ EXPORT_SYMBOL_NS_GPL(ipu6_fw_com_prepare, "INTEL_IPU6");
+@@ -265,6 +276,21 @@ EXPORT_SYMBOL_NS_GPL(ipu6_fw_com_prepare, "INTEL_IPU6");
  
  int ipu6_fw_com_open(struct ipu6_fw_com_context *ctx)
  {
@@ -82,7 +83,7 @@ index 51567c5fc..e1bc047bd 100644
  	/* write magic pattern to disable the tunit trace */
  	writel(TUNIT_MAGIC_PATTERN, ctx->dmem_addr + TUNIT_CFG_DWR_REG * 4);
  	/* Check if SP is in valid state */
-@@ -295,6 +324,17 @@ int ipu6_fw_com_close(struct ipu6_fw_com_context *ctx)
+@@ -295,6 +321,17 @@ int ipu6_fw_com_close(struct ipu6_fw_com_context *ctx)
  {
  	int state;
  
@@ -100,7 +101,7 @@ index 51567c5fc..e1bc047bd 100644
  	state = readl(BUTTRESS_FW_BOOT_PARAM_REG(ctx->base_addr,
  						 ctx->buttress_boot_offset,
  						 SYSCOM_STATE_ID));
-@@ -326,9 +366,12 @@ bool ipu6_fw_com_ready(struct ipu6_fw_com_context *ctx)
+@@ -326,9 +363,12 @@ bool ipu6_fw_com_ready(struct ipu6_fw_com_context *ctx)
  {
  	int state;
  
@@ -117,10 +118,19 @@ index 51567c5fc..e1bc047bd 100644
  	return state == SYSCOM_STATE_READY;
  }
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-fw-com.h b/drivers/media/pci/intel/ipu6/ipu6-fw-com.h
-index b02285a3e..226a4713d 100644
+index b02285a3e43..0323d8e4821 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-fw-com.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6-fw-com.h
-@@ -29,6 +29,7 @@ struct ipu6_fw_com_cfg {
+@@ -4,6 +4,8 @@
+ #ifndef IPU6_FW_COM_H
+ #define IPU6_FW_COM_H
+ 
++#include <linux/types.h>
++
+ struct ipu6_fw_com_context;
+ struct ipu6_bus_device;
+ 
+@@ -29,6 +31,7 @@ struct ipu6_fw_com_cfg {
  	void (*cell_start)(struct ipu6_bus_device *adev);
  
  	unsigned int buttress_boot_offset;
@@ -129,5 +139,5 @@ index b02285a3e..226a4713d 100644
  
  void *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
 -- 
-2.43.0
+2.56.0
 

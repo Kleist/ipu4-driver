@@ -1,0 +1,45 @@
+From 31c0379d9fe033b4ac1d9471ab81dedd6bdb08d9 Mon Sep 17 00:00:00 2001
+From: Ruslan Bay <ruslanbey@proton.me>
+Date: Thu, 29 Oct 2026 00:00:17 +0100
+Subject: [RFC PATCH v2 01/12] media: ipu6: Add IPU4P hardware identification
+
+Add IPU_VERSION_4P and IS_IPU4P() to identify IPU4P hardware.
+Place IPU4P at BIT(0), shifting the existing version flags up one bit.
+
+Signed-off-by: Ruslan Bay <ruslanbey@proton.me>
+---
+ drivers/media/pci/intel/ipu6/ipu6.h | 18 ++++++++++--------
+ 1 file changed, 10 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/media/pci/intel/ipu6/ipu6.h b/drivers/media/pci/intel/ipu6/ipu6.h
+index 00fb78a1ec1..4db9f3d85d8 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6.h
++++ b/drivers/media/pci/intel/ipu6/ipu6.h
+@@ -29,14 +29,16 @@ struct ipu6_bus_device;
+ #define IPU7P5_FIRMWARE_NAME		"intel/ipu/ipu7ptl_fw.bin"
+ #define IPU8_FIRMWARE_NAME		"intel/ipu/ipu8_fw.bin"
+ 
+-#define IPU_VERSION_6		BIT(0) /* TGL */
+-#define IPU_VERSION_6SE		BIT(1) /* JSL */
+-#define IPU_VERSION_6EP		BIT(2) /* ADL/RPL */
+-#define IPU_VERSION_6EP_MTL	BIT(3) /* MTL */
+-#define IPU_VERSION_7		BIT(4) /* LNL */
+-#define IPU_VERSION_7P5		BIT(5) /* PTL */
+-#define IPU_VERSION_8		BIT(6) /* NVL */
+-
++#define IPU_VERSION_4P		BIT(0) /* ICL */
++#define IPU_VERSION_6		BIT(1) /* TGL */
++#define IPU_VERSION_6SE		BIT(2) /* JSL */
++#define IPU_VERSION_6EP		BIT(3) /* ADL/RPL */
++#define IPU_VERSION_6EP_MTL	BIT(4) /* MTL */
++#define IPU_VERSION_7		BIT(5) /* LNL */
++#define IPU_VERSION_7P5		BIT(6) /* PTL */
++#define IPU_VERSION_8		BIT(7) /* NVL */
++
++#define IS_IPU4P(isp)		((isp)->hw_ver & IPU_VERSION_4P)
+ #define IS_IPU6_TGL(isp)	((isp)->hw_ver & IPU_VERSION_6)
+ #define IS_IPU6SE(isp)		((isp)->hw_ver & IPU_VERSION_6SE)
+ #define IS_IPU6EP(isp)		((isp)->hw_ver & IPU_VERSION_6EP)
+-- 
+2.56.0
+

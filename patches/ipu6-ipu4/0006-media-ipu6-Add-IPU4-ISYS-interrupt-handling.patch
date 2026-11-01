@@ -1,4 +1,4 @@
-From ecec7c85320df1b4ffb8bd0521cc4c5f8b758625 Mon Sep 17 00:00:00 2001
+From ce9778a531827a8b374c3354f01e4c9d53b350e7 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 20:42:51 +0000
 Subject: [PATCH 06/10] media: ipu6: Add IPU4 ISYS interrupt handling
@@ -19,23 +19,25 @@ that interrupted and hands firmware responses to the firmware ops. As
 on IPU4P, the firmware reports start and end of frame, so the CSI-2
 frame interrupts are not turned into events here.
 
-IPU4 shares the IPU4P ISYS firmware ABI, so use ipu4p_fw_isys_ops for
-it. Its receiver reports the IPU4P errors plus "inter-frame long packet
-discarded" in bit 16; add that to the error table.
+IPU4 has no IPU6 fabric LTR/DID registers either, so leave them alone
+as on IPU4P. IPU4 shares the IPU4P ISYS firmware ABI, so use
+ipu4p_fw_isys_ops for it. Its receiver reports the IPU4P errors plus
+"inter-frame long packet discarded" in bit 16; add that to the error
+table.
 
 Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
 ---
- drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c | 72 ++++++++++++++----
+ drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c | 72 ++++++++++++----
  drivers/media/pci/intel/ipu6/ipu6-isys-csi2.h |  1 +
- drivers/media/pci/intel/ipu6/ipu6-isys.c      | 75 ++++++++++++++++++-
+ drivers/media/pci/intel/ipu6/ipu6-isys.c      | 86 ++++++++++++++++++-
  drivers/media/pci/intel/ipu6/ipu6.c           |  4 +-
- 4 files changed, 134 insertions(+), 18 deletions(-)
+ 4 files changed, 143 insertions(+), 20 deletions(-)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
-index 1d4762758..773f245bc 100644
+index d34eb29f9..4ce2e9b36 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
-@@ -101,6 +101,8 @@ static const struct ipu6_csi2_error ipu4p_csi2_errors[] = {
+@@ -105,6 +105,8 @@ static const struct ipu6_csi2_error ipu4p_csi2_errors[] = {
  	{ "Escape mode ultra-low power state for data lane(s)", true },
  	{ "Escape mode ultra-low power state exit for clock lane", true },
  	{ "Inter-frame short packet discarded", true },
@@ -44,7 +46,7 @@ index 1d4762758..773f245bc 100644
  };
  
  s64 ipu6_isys_csi2_get_link_freq(struct ipu6_isys_csi2 *csi2)
-@@ -230,6 +232,30 @@ void ipu6_isys_register_errors(struct ipu6_isys_csi2 *csi2)
+@@ -234,6 +236,30 @@ void ipu6_isys_register_errors(struct ipu6_isys_csi2 *csi2)
  	csi2->receiver_errors |= irq & mask;
  }
  
@@ -75,7 +77,7 @@ index 1d4762758..773f245bc 100644
  void ipu4p_isys_register_errors(struct ipu6_isys_csi2 *csi2)
  {
  	void __iomem *base = csi2->isys->pdata->base;
-@@ -263,6 +289,28 @@ void ipu4p_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
+@@ -267,6 +293,28 @@ void ipu4p_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
  	ipu4p_isys_register_errors(csi2);
  }
  
@@ -104,7 +106,7 @@ index 1d4762758..773f245bc 100644
  void ipu6_isys_csi2_error(struct ipu6_isys_csi2 *csi2)
  {
  	struct device *dev = &csi2->isys->adev->auxdev.dev;
-@@ -270,24 +318,16 @@ void ipu6_isys_csi2_error(struct ipu6_isys_csi2 *csi2)
+@@ -274,24 +322,16 @@ void ipu6_isys_csi2_error(struct ipu6_isys_csi2 *csi2)
  	u32 status;
  	u32 i;
  
@@ -138,22 +140,22 @@ index 1d4762758..773f245bc 100644
  	}
  
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.h b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.h
-index b3eb702f1..2fecd5a17 100644
+index 76c5d2cbb..e34926c97 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.h
-@@ -75,6 +75,7 @@ void ipu6_isys_csi2_sof_event_by_stream(struct ipu6_isys_stream *stream);
+@@ -84,6 +84,7 @@ void ipu6_isys_csi2_sof_event_by_stream(struct ipu6_isys_stream *stream);
  void ipu6_isys_csi2_eof_event_by_stream(struct ipu6_isys_stream *stream);
  void ipu6_isys_register_errors(struct ipu6_isys_csi2 *csi2);
  void ipu6_isys_csi2_error(struct ipu6_isys_csi2 *csi2);
 +void ipu4_isys_csi2_isr(struct ipu6_isys_csi2 *csi2);
  void ipu4p_isys_register_errors(struct ipu6_isys_csi2 *csi2);
  void ipu4p_isys_csi2_isr(struct ipu6_isys_csi2 *csi2);
- int ipu6_isys_csi2_get_remote_desc(u32 source_stream,
+ 
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys.c b/drivers/media/pci/intel/ipu6/ipu6-isys.c
-index 12498748c..7306a4e82 100644
+index ef1100c2c..d73f570a0 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-isys.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-isys.c
-@@ -203,6 +203,9 @@ static void isys_csi2_unregister_subdevices(struct ipu6_isys *isys)
+@@ -202,6 +202,9 @@ static void isys_csi2_unregister_subdevices(struct ipu6_isys *isys)
  
  static int isys_csi2_register_subdevices(struct ipu6_isys *isys)
  {
@@ -163,7 +165,7 @@ index 12498748c..7306a4e82 100644
  	static const u32 ipu4p_port_offsets[IPU4P_ISYS_CSI2_NPORTS] = {
  		0x64300, 0x6c000, 0x6c100, 0x6c200,
  		0x6c300, 0x6c400, 0x6c500, 0x6c600,
-@@ -222,6 +225,9 @@ static int isys_csi2_register_subdevices(struct ipu6_isys *isys)
+@@ -221,6 +224,9 @@ static int isys_csi2_register_subdevices(struct ipu6_isys *isys)
  
  			isys->isr_csi2_bits |= mask;
  			isys->csi2[i].legacy_irq_mask = mask;
@@ -173,7 +175,7 @@ index 12498748c..7306a4e82 100644
  		} else if (IS_IPU4P(isys->adev->isp)) {
  			base += ipu4p_port_offsets[i];
  			isys->isr_csi2_bits |= IPU4P_ISYS_UNISPART_IRQ_CSI2(i);
-@@ -383,6 +389,60 @@ static void ipu6_isys_setup_hw(struct ipu6_isys *isys)
+@@ -383,6 +389,67 @@ static void ipu6_isys_setup_hw(struct ipu6_isys *isys)
  		writel(thd[i], base + IPU6_REG_ISYS_CDC_THRESHOLD(i));
  }
  
@@ -196,16 +198,19 @@ index 12498748c..7306a4e82 100644
 +{
 +	struct ipu6_isys *isys = ipu6_bus_get_drvdata(adev);
 +	void __iomem *base = isys->pdata->base;
++	irqreturn_t ret = IRQ_HANDLED;
++	int pm_status;
 +	u32 status;
 +
-+	guard(spinlock)(&isys->power_lock);
-+
-+	if (!isys->power)
++	pm_status = pm_runtime_get_if_active(&adev->auxdev.dev);
++	if (!pm_status)
 +		return IRQ_NONE;
 +
 +	status = readl(base + IPU4P_ISYS_UNISPART_IRQ_STATUS);
-+	if (!status)
-+		return IRQ_NONE;
++	if (!status) {
++		ret = IRQ_NONE;
++		goto out;
++	}
 +
 +	do {
 +		writel(status, base + IPU4P_ISYS_UNISPART_IRQ_CLEAR);
@@ -228,50 +233,58 @@ index 12498748c..7306a4e82 100644
 +		status |= readl(base + IPU4P_ISYS_UNISPART_IRQ_STATUS);
 +	} while (status & (isys->isr_csi2_bits | IPU4_ISYS_UNISPART_IRQ_SW));
 +
-+	return IRQ_HANDLED;
++out:
++	if (pm_status > 0)
++		pm_runtime_put(&adev->auxdev.dev);
++
++	return ret;
 +}
 +
- static void get_lut_ltrdid(struct ipu6_isys *isys, struct ltr_did *pltr_did)
+ static int set_iwake_register(struct ipu6_isys *isys,
+ 			      enum ipu6_isys_iwake_register index, u32 value)
  {
- 	struct isys_iwake_watermark *iwake_watermark = &isys->iwake_watermark;
-@@ -900,6 +960,8 @@ static int isys_runtime_pm_resume(struct device *dev)
+@@ -427,8 +494,8 @@ static void set_iwake_ltrdid(struct ipu6_isys *isys, u16 ltr, u16 did,
+ 	struct ipu6_device *isp = isys->adev->isp;
+ 	union fabric_ctrl fc;
  
- 	if (IS_IPU7(isp)) {
+-	/* IPU4P must not use the IPU6-specific fabric LTR/DID registers. */
+-	if (IS_IPU4P(isp))
++	/* IPU4(P) must not use the IPU6-specific fabric LTR/DID registers. */
++	if (IS_IPU4(isp) || IS_IPU4P(isp))
+ 		return;
+ 
+ 	switch (use) {
+@@ -831,6 +898,8 @@ static int isys_runtime_pm_resume(struct device *dev)
+ 
+ 	if (IS_IPU7(isp) || IS_IPU8(isp)) {
  		ipu7_isys_setup_hw(isys);
 +	} else if (IS_IPU4(isp)) {
 +		ipu4_isys_setup_hw(isys);
  	} else if (IS_IPU4P(isp)) {
  		ipu4p_isys_irq_setup(isys);
  		ipu4p_isys_phy_setup(isys);
-@@ -929,7 +991,7 @@ static int isys_runtime_pm_suspend(struct device *dev)
- 	isys->phy_termcal_val = 0;
- 	cpu_latency_qos_update_request(&isys->pm_qos, PM_QOS_DEFAULT_VALUE);
- 
--	if (!IS_IPU7(isp) && !IS_IPU4P(isp))
-+	if (!IS_IPU7(isp) && !IS_IPU4(isp) && !IS_IPU4P(isp))
- 		set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_OFF);
- 
- 	ipu6_mmu_hw_cleanup(adev->mmu);
-@@ -1066,6 +1128,7 @@ void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, struct isys_fw_msgs *msg)
+@@ -1038,6 +1107,7 @@ void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, struct isys_fw_msgs *msg)
+ 	spin_unlock_irqrestore(&isys->listlock, flags);
  }
  
- static const struct ipu6_auxdrv_data ipu6_isys_auxdrv_data;
 +static const struct ipu6_auxdrv_data ipu4_isys_auxdrv_data;
  static const struct ipu6_auxdrv_data ipu4p_isys_auxdrv_data;
+ static const struct ipu6_auxdrv_data ipu6_isys_auxdrv_data;
  static const struct ipu6_auxdrv_data ipu7_isys_auxdrv_data;
+@@ -1058,7 +1128,9 @@ static int isys_probe(struct auxiliary_device *auxdev,
+ 	if (!isys)
+ 		return -ENOMEM;
  
-@@ -1088,6 +1151,8 @@ static int isys_probe(struct auxiliary_device *auxdev,
- 
- 	if (IS_IPU7(isp))
- 		adev->auxdrv_data = &ipu7_isys_auxdrv_data;
-+	else if (IS_IPU4(isp))
+-	if (IS_IPU4P(isp))
++	if (IS_IPU4(isp))
 +		adev->auxdrv_data = &ipu4_isys_auxdrv_data;
- 	else if (IS_IPU4P(isp))
++	else if (IS_IPU4P(isp))
  		adev->auxdrv_data = &ipu4p_isys_auxdrv_data;
- 	else
-@@ -1189,6 +1254,14 @@ static const struct ipu6_auxdrv_data ipu6_isys_auxdrv_data = {
- 	.fw_ops = &ipu6_fw_isys_ops,
- };
+ 	else if (IS_IPU7(isp) || IS_IPU8(isp))
+ 		adev->auxdrv_data = &ipu7_isys_auxdrv_data;
+@@ -1144,6 +1216,14 @@ static void isys_remove(struct auxiliary_device *auxdev)
+ 	mutex_destroy(&isys->mutex);
+ }
  
 +/* IPU4 shares the IPU4P ISYS firmware ABI */
 +static const struct ipu6_auxdrv_data ipu4_isys_auxdrv_data = {
@@ -285,7 +298,7 @@ index 12498748c..7306a4e82 100644
  	.isr = ipu4p_isys_isr,
  	.isr_threaded = NULL,
 diff --git a/drivers/media/pci/intel/ipu6/ipu6.c b/drivers/media/pci/intel/ipu6/ipu6.c
-index baa9745da..5a9c57489 100644
+index 9d188c9c2..a40c8a53a 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6.c
 @@ -34,6 +34,7 @@
@@ -296,7 +309,7 @@ index baa9745da..5a9c57489 100644
  #include "ipu7-isys-csi2-regs.h"
  
  #define IPU6_PCI_BAR		0
-@@ -453,7 +454,8 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
+@@ -424,7 +425,8 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
  
  	/* IPU4 has the IPU4P subsystem layout and firmware stream limits */
  	if (IS_IPU4(isp) || IS_IPU4P(isp)) {

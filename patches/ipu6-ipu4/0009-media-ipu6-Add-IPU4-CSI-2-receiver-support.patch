@@ -1,4 +1,4 @@
-From 1ee2504e3f50bc23616824c430d883333977608d Mon Sep 17 00:00:00 2001
+From 2c5eaf6e5ae354aac1738b5dfe29fec92575a76c Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sun, 11 Oct 2026 05:22:24 +0000
 Subject: [PATCH 09/10] media: ipu6: Add IPU4 CSI-2 receiver support
@@ -17,9 +17,9 @@ port's CSIRX interrupt controller, which is enabled at stream start.
 
 Add the IPU4 CSI-2 receiver enable and disable, and don't set up a PHY
 power hook for IPU4. Reject lane counts the receiver has no timing
-registers for. At stream stop, report the receiver errors before the
-receiver is disabled, under the power lock as the ISR collects them
-too, and mask the CSIRX interrupts again.
+registers for. At stream stop, hold off the CSIRX interrupt
+and wait for a running ISR, report the receiver errors before the
+receiver is disabled, and mask the CSIRX interrupts again.
 
 Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
 ---
@@ -28,19 +28,19 @@ Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
  2 files changed, 77 insertions(+), 1 deletion(-)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
-index 773f245bc..970d26de7 100644
+index 85354905f..756b26043 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
-@@ -11,6 +11,7 @@
+@@ -10,6 +10,7 @@
+ #include <linux/delay.h>
+ #include <linux/device.h>
  #include <linux/err.h>
++#include <linux/interrupt.h>
  #include <linux/io.h>
  #include <linux/minmax.h>
-+#include <linux/spinlock.h>
- #include <linux/sprintf.h>
- 
- #include <media/media-entity.h>
-@@ -344,6 +345,73 @@ void ipu6_isys_csi2_error(struct ipu6_isys_csi2 *csi2)
- 	}
+ #include <linux/pm_runtime.h>
+@@ -426,6 +427,73 @@ static void ipu6_isys_csi2_clear_watermark(struct ipu6_isys_csi2 *csi2)
+ 	ipu6_isys_update_watermark_setting(csi2->isys);
  }
  
 +/*
@@ -94,11 +94,12 @@ index 773f245bc..970d26de7 100644
 +	u32 val;
 +
 +	/*
-+	 * Report what the receiver saw before it is switched off. The ISR
-+	 * collects the errors too, under the power lock.
++	 * Report what the receiver saw before it is switched off, with the
++	 * CSIRX interrupt held off so the ISR does not collect them too.
 +	 */
-+	scoped_guard(spinlock_irqsave, &csi2->isys->power_lock)
-+		ipu6_isys_csi2_error(csi2);
++	writel(0, base + IPU4_CSI2_CSIRX_IRQ_ENABLE);
++	synchronize_irq(csi2->isys->adev->isp->pdev->irq);
++	ipu6_isys_csi2_error(csi2);
 +
 +	val = readl(base + IPU4P_CSI2_RX_CONFIG);
 +	val &= ~(IPU4P_CSI2_RX_CONFIG_DISABLE_BYTE_CLK_GATING |
@@ -107,13 +108,12 @@ index 773f245bc..970d26de7 100644
 +	writel(0, base + IPU4P_CSI2_RX_ENABLE);
 +
 +	writel(0, base + IPU4_CSI2_CSIRX_IRQ_MASK);
-+	writel(0, base + IPU4_CSI2_CSIRX_IRQ_ENABLE);
 +}
 +
  static void ipu6_isys_csi2_stream_disable(struct ipu6_isys_csi2 *csi2)
  {
  	struct ipu6_isys *isys = csi2->isys;
-@@ -353,6 +421,11 @@ static void ipu6_isys_csi2_stream_disable(struct ipu6_isys_csi2 *csi2)
+@@ -435,6 +503,11 @@ static void ipu6_isys_csi2_stream_disable(struct ipu6_isys_csi2 *csi2)
  	cfg.port = csi2->port;
  	cfg.nlanes = csi2->nlanes;
  
@@ -125,7 +125,7 @@ index 773f245bc..970d26de7 100644
  	if (IS_IPU4P(csi2->isys->adev->isp)) {
  		isys->phy_set_power(isys, &cfg, NULL, false);
  		return;
-@@ -392,6 +465,9 @@ static int ipu6_isys_csi2_stream_enable(struct ipu6_isys_csi2 *csi2)
+@@ -474,6 +547,9 @@ static int ipu6_isys_csi2_stream_enable(struct ipu6_isys_csi2 *csi2)
  	if (ret)
  		return ret;
  
@@ -136,10 +136,10 @@ index 773f245bc..970d26de7 100644
  		return isys->phy_set_power(isys, &cfg, &timing, true);
  
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys.c b/drivers/media/pci/intel/ipu6/ipu6-isys.c
-index 7306a4e82..2f7cdb561 100644
+index d73f570a0..380e2fad8 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-isys.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-isys.c
-@@ -1204,7 +1204,7 @@ static int isys_probe(struct auxiliary_device *auxdev,
+@@ -1179,7 +1179,7 @@ static int isys_probe(struct auxiliary_device *auxdev,
  		isys->phy_set_power = ipu6_isys_dwc_phy_set_power;
  	else if (IS_IPU4P(adev->isp))
  		isys->phy_set_power = ipu4p_isys_phy_set_power;

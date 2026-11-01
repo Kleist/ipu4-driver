@@ -22,9 +22,10 @@ shows two things:
 ## Base and harness
 
 - **Kernel:** the baseline driver `ipu4p`: the mainline pin
-  `tools/ipu6/pin` (bumped weekly) plus `patches/ipu6-ipu7/` (Antti's
-  IPU7 series) and `patches/ipu6-ipu4p/` (Ruslan's IPU4P series), exported from his
-  `ipu4p-upstream` branch), in `tools/linux-ipu6-ruslan/`
+  `tools/ipu6/pin` (bumped weekly; Antti's IPU7 series is in mainline
+  since 7.4) plus `patches/ipu6-ipu4p/` (Ruslan's IPU4P series, RFC v2
+  from the `upstream` branch of ruslanbay/ipu4-drivers), in
+  `tools/linux-ipu6-ruslan/`
   (`IPU4_DRIVER=ipu4p`). The patched tree (`IPU4_DRIVER=ipu4-patches
   IPU4_VARIANT=ipu4p`) is gated by the IPU4 port in
   `enabled-tests.ipu4-patches.ipu4p`, which gains a test once it passes
@@ -172,3 +173,15 @@ commit, first in the step's PR.
   dispatches port 0 and the driver logs the corrected header error as
   info (bit 0 is `is_info_only`). Every ladder test now passes on
   `ipu4p / ipu4p`.
+- (IPU4P v2) Ruslan's v2 on the 7.4 merge-window pin enables the ISYS
+  IRQ controllers in a new order (ENABLE/MASK cleared first, enabled in
+  reverse; `ipu4p_writes.py` follows) and matches each PIN_DATA_READY to
+  its frame by `frame_counter`, which the model now echoes. With that,
+  every test passes on `ipu4p / ipu4p` except `stream-start-error`:
+  7.4's `ipu6_isys_csi2_enable_streams()` requeues the already-emptied
+  buffer list after a failed STREAM_START and hits
+  `WARN_ON_ONCE(!bl->nbufs)`; and with `IPU4_GCOV=1` (CI), the ISYS
+  runtime suspend after `pci-reauth`'s rebind closes firmware it never
+  opened (NULL dereference, `module-load` fails). Both fixes are in
+  `patches/ipu6-fixes/`, applied after `patches/ipu6-ipu4p/` on the
+  `ipu4p` baseline too.

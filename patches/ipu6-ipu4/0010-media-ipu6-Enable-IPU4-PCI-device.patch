@@ -1,28 +1,53 @@
-From 4d44943adbfa9bd2e0888a0a24ac064f16ed9495 Mon Sep 17 00:00:00 2001
+From 1757e01a5068d7849f8c1777bad70af361c8be8b Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 19:59:00 +0000
 Subject: [PATCH 10/10] media: ipu6: Enable IPU4 PCI device
 
 Register IPU4 in the PCI ID table after the IPU4 identification,
-buttress and MMU support has been added.
+buttress and MMU support has been added, and name it in Kconfig.
 
 Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
 ---
- include/media/ipu6-pci-table.h | 1 +
- 1 file changed, 1 insertion(+)
+ drivers/media/pci/intel/ipu6/Kconfig | 8 ++++----
+ include/media/ipu6-pci-table.h       | 1 +
+ 2 files changed, 5 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/media/pci/intel/ipu6/Kconfig b/drivers/media/pci/intel/ipu6/Kconfig
+index e901cce5c..20006fb05 100644
+--- a/drivers/media/pci/intel/ipu6/Kconfig
++++ b/drivers/media/pci/intel/ipu6/Kconfig
+@@ -1,5 +1,5 @@
+ config VIDEO_INTEL_IPU6
+-	tristate "Intel IPU 4P/6/7/8 driver"
++	tristate "Intel IPU 4/4P/6/7/8 driver"
+ 	depends on ACPI || COMPILE_TEST
+ 	depends on VIDEO_DEV
+ 	depends on X86 && HAS_DMA
+@@ -11,9 +11,9 @@ config VIDEO_INTEL_IPU6
+ 	select VIDEOBUF2_DMA_SG
+ 	select V4L2_FWNODE
+ 	help
+-	  This is the driver for Intel IPU4P, IPU6, IPU7 and IPU8 image
+-	  processing units, used for capturing images and video from camera
+-	  sensors.
++	  This is the driver for Intel IPU4, IPU4P, IPU6, IPU7 and IPU8
++	  image processing units, used for capturing images and video from
++	  camera sensors.
+ 
+ 	  To compile this driver, say Y here! The two modules will be
+ 	  called intel_ipu6 and intel_ipu6_isys.
 diff --git a/include/media/ipu6-pci-table.h b/include/media/ipu6-pci-table.h
-index 17ec5b15e..f9f858106 100644
+index 8c0bcdb59..615dae343 100644
 --- a/include/media/ipu6-pci-table.h
 +++ b/include/media/ipu6-pci-table.h
-@@ -29,6 +29,7 @@ static const struct pci_device_id ipu6_pci_tbl[] = {
- 	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_IPU7) },
- 	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_IPU7P5) },
- 	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_IPU4P) },
-+	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_IPU4) },
- 	{ }
- };
+@@ -21,6 +21,7 @@
+ #define PCI_DEVICE_ID_INTEL_IPU8		0xd719
  
+ static const struct pci_device_id ipu6_pci_tbl[] = {
++	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_IPU4) },
+ 	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_IPU4P) },
+ 	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_IPU6) },
+ 	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_IPU6SE) },
 -- 
 2.43.0
 

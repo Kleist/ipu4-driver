@@ -1,4 +1,4 @@
-From e658030dee04841048c367bf9b032e9366517466 Mon Sep 17 00:00:00 2001
+From ca1099b7c0b100de45505d79c7a8f3ea06d81969 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 20:42:16 +0000
 Subject: [PATCH 04/10] media: ipu6: Support the IPU4 TSC sync handshake
@@ -18,10 +18,10 @@ Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
  2 files changed, 6 insertions(+), 3 deletions(-)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-buttress.c b/drivers/media/pci/intel/ipu6/ipu6-buttress.c
-index 8b2ec11b5..6627f1967 100644
+index 7b70a292f..f2711867d 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-buttress.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-buttress.c
-@@ -923,13 +923,14 @@ static int ipu6_buttress_send_tsc_request(struct ipu6_device *isp)
+@@ -946,13 +946,14 @@ static int ipu6_buttress_send_tsc_request(struct ipu6_device *isp)
  	u32 val, mask, done;
  	int ret;
  
@@ -38,7 +38,7 @@ index 8b2ec11b5..6627f1967 100644
  	if (val == BUTTRESS_PWR_STATE_HH_STATE_ERR) {
  		dev_err(&isp->pdev->dev, "Start tsc sync failed\n");
  		return -EINVAL;
-@@ -937,7 +938,7 @@ static int ipu6_buttress_send_tsc_request(struct ipu6_device *isp)
+@@ -960,7 +961,7 @@ static int ipu6_buttress_send_tsc_request(struct ipu6_device *isp)
  
  	done = BUTTRESS_PWR_STATE_HH_STATE_DONE;
  	ret = readl_poll_timeout(isp->base + regs->pwr_status,
@@ -48,10 +48,10 @@ index 8b2ec11b5..6627f1967 100644
  	if (ret)
  		dev_err(&isp->pdev->dev, "Start tsc sync timeout\n");
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h b/drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h
-index 1a0ddbf5c..2fa3113a2 100644
+index 20f71fff3..ac08bf13e 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h
-@@ -353,6 +353,8 @@ enum {
+@@ -16,6 +16,8 @@
  #define IPU4_BUTTRESS_PWR_STATE_PS_PWR_FSM_IDLE		0x0
  #define IPU4_BUTTRESS_PWR_STATE_PS_PWR_FSM_PS_PWR_UP	0xf
  

@@ -1,4 +1,4 @@
-From 90373c36b589f5fab67535eb336a48704c0354e5 Mon Sep 17 00:00:00 2001
+From 4831bc82ff8f0603f4e0ecc5dadaadc2970f0649 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 20:42:34 +0000
 Subject: [PATCH 05/10] media: ipu6: Add IPU4 ISYS and CSI-2 register
@@ -19,22 +19,14 @@ IPU4P driver does not use.
 
 Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
 ---
- .../pci/intel/ipu6/ipu4p-isys-csi2-regs.h     | 36 +++++++++++++++++++
- 1 file changed, 36 insertions(+)
+ .../pci/intel/ipu6/ipu4p-isys-csi2-regs.h     | 35 +++++++++++++++++++
+ 1 file changed, 35 insertions(+)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h b/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
-index 8f2c760ab..71b8bcddf 100644
+index 4b7510e05..97dd748e8 100644
 --- a/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
 +++ b/drivers/media/pci/intel/ipu6/ipu4p-isys-csi2-regs.h
-@@ -3,6 +3,7 @@
- #define IPU4P_ISYS_CSI2_REGS_H
- 
- #include <linux/bits.h>
-+#include <linux/types.h>
- 
- /* ISYS UNISPART and SIP interrupt registers */
- #define IPU4P_ISYS_UNISPART_IRQ_EDGE			0x7c000
-@@ -61,4 +62,39 @@
+@@ -69,4 +69,39 @@ static inline u32 ipu4p_isys_csi_irq_ctrl0_base(unsigned int port)
  /* CSI receiver general-purpose registers */
  #define IPU4P_CSI2_GPREG_CR_PORT_CONFIG			0x14
  
