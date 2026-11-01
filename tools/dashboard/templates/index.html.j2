@@ -18,87 +18,6 @@
   </p>
 </header>
 
-<section class="card" id="ladder">
-  <h2>Test ladder</h2>
-  <p class="meta">
-    Each leg is a driver under a QEMU model:
-    <code>ipu4-out-of-tree</code>, <code>ipu4p</code> and <code>ipu6</code> are the unmodified
-    baselines, <code>ipu4-patches</code> is the upstreamable series under all three models.
-    <span class="gated">gated</span> tests fail CI unless they pass.
-    <a href="{{ ipu6_port.plan_url }}">Plan</a> ·
-    {% if ipu6_port.run_url %}<a href="{{ ipu6_port.run_url }}">latest vm-ipu6 run</a>{% else %}<a href="{{ ipu6_port.workflow_url }}">vm-ipu6 runs</a>{% endif %}
-  </p>
-  {% if not ipu6_port.has_data %}
-  <p class="empty">No ladder results yet — the first <code>vm-ipu6</code> run on the default branch populates this.</p>
-  {% endif %}
-  <div class="kpi-row">
-    {% for v in ipu6_port.legs %}
-    {% if v.has_data %}
-    <div class="kpi ladder-variant {{ 'ladder-ok' if v.summary.ok else 'ladder-bad' }}">
-      <div class="kpi-label">{{ v.name }}</div>
-      <div class="kpi-value">{{ v.summary.passing }} / {{ v.summary.total }}</div>
-      <div class="kpi-sub">tests passing · gated {{ v.summary.enabled_passing }} / {{ v.summary.enabled }} pass</div>
-      {% if v.summary.enabled_failing %}<div class="kpi-sub ladder-failing">failing: {{ v.summary.enabled_failing | join(', ') }}</div>{% endif %}
-      <div class="kpi-sub">{% if v.run_url %}<a href="{{ v.run_url }}">{% endif %}{{ (v.generated_at or '')[:16] | replace('T', ' ') }}{% if v.run_url %}</a>{% endif %}{% if v.commit_sha %} · <code>{{ v.commit_sha[:7] }}</code>{% endif %}</div>
-      {% if v.coverage and v.coverage.lines %}<div class="kpi-sub">driver lines {% if v.coverage_url %}<a href="{{ v.coverage_url }}">{{ v.coverage.lines.pct | pct }}</a>{% else %}{{ v.coverage.lines.pct | pct }}{% endif %} ({{ v.coverage.lines.hit }} / {{ v.coverage.lines.total }})</div>{% endif %}
-      {% if v.pin and v.pin.url %}<div class="kpi-sub">base <code>{{ v.pin.tag or (v.pin.url | replace('https://github.com/', '') | replace('.git', '')) ~ '@' ~ (v.pin.sha or '')[:7] }}</code>{% for b in v.base_series %} + {{ b.label }} ({{ b.count }}){% endfor %}{% if v.series_count %} + {{ v.series_count }} IPU4 patch{{ '' if v.series_count == 1 else 'es' }}{% endif %}</div>{% endif %}
-    </div>
-    {% else %}
-    <div class="kpi ladder-variant ladder-none">
-      <div class="kpi-label">{{ v.name }}</div>
-      <div class="kpi-value">—</div>
-      <div class="kpi-sub">not run yet</div>
-    </div>
-    {% endif %}
-    {% endfor %}
-  </div>
-  {% if ipu6_port.tests %}
-  <div class="table-scroll">
-  <table class="reg-table ladder-table">
-    <thead><tr><th>Test</th>{% for v in ipu6_port.legs %}<th>{{ v.name }}</th>{% endfor %}</tr></thead>
-    <tbody>
-    {% for test in ipu6_port.tests %}
-    <tr>
-      <td><code>{{ test.name }}</code></td>
-      {% for cell in test.cells %}
-      {% if cell %}
-      <td class="ladder-cell res-{{ cell.css }}">{{ cell.result | lower | replace('-', ' ') }}{% if cell.enabled %} <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span>{% endif %}{% if cell.duration_s %} <span class="dur">{{ cell.duration_s }}s</span>{% endif %}</td>
-      {% else %}
-      <td class="ladder-cell res-none">{{ 'not run yet' if not ipu6_port.legs[loop.index0].has_data else '—' }}</td>
-      {% endif %}
-      {% endfor %}
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  </div>
-  {% endif %}
-  <h3>Driver line coverage per leg</h3>
-  <p class="meta">Probe and stream boots of each leg (<code>IPU4_GCOV=1</code>, <code>tools/coverage/ladder.sh</code>). The ipu4p and ipu4-patches trees also count the IPU7/IPU4P code in the driver directory, so compare a driver across variants rather than drivers against each other.</p>
-  <canvas id="ladder-coverage-trend" height="80"></canvas>
-  {% if ipu6_port.primary %}
-  {% set pr = ipu6_port.primary %}
-  <h3>Base and series ({{ pr.leg or pr.variant }} run)</h3>
-  <ul class="series">
-    <li>Mainline <code>{{ pr.pin.url | replace('https://github.com/', '') | replace('.git', '') }}</code>
-    {% if pr.pin.tag %}<code>{{ pr.pin.tag }}</code> {% endif %}@ {% if pr.pin.url.startswith('https://github.com/') %}<a href="{{ pr.pin.url | replace('.git', '') }}/commit/{{ pr.pin.sha }}"><code>{{ pr.pin.sha[:12] }}</code></a>{% else %}<code>{{ pr.pin.sha[:12] }}</code>{% endif %}</li>
-    {% for b in pr.base_series %}
-    <li>+ {{ b.label }}{% if b.source %} ({% if b.url %}<a href="{{ b.url }}">{{ b.source }}</a>{% else %}{{ b.source }}{% endif %}){% endif %}: {{ b.count }} patch{{ '' if b.count == 1 else 'es' }} in <a href="https://github.com/{{ repo }}/tree/main/{{ b.dir }}"><code>{{ b.dir }}/</code></a></li>
-    {% endfor %}
-    <li>+ IPU4 series: {{ pr.series.count }} patch{{ '' if pr.series.count == 1 else 'es' }} in <a href="https://github.com/{{ repo }}/tree/main/patches/ipu6-ipu4"><code>patches/ipu6-ipu4/</code></a></li>
-  </ul>
-  {% if pr.series.patches %}
-  <ol class="series">
-    {% for p in pr.series.patches %}
-    <li><a href="https://github.com/{{ repo }}/blob/{{ pr.commit_sha or 'main' }}/patches/ipu6-ipu4/{{ p.file }}">{{ p.subject }}</a></li>
-    {% endfor %}
-  </ol>
-  {% else %}
-  <p class="empty">The series is empty (no kernel patches yet).</p>
-  {% endif %}
-  {% endif %}
-</section>
-
 <section class="card" id="kernels">
   <h2>Supported kernels</h2>
   <p class="meta">
@@ -182,6 +101,87 @@
   </ul>
   <p class="meta">{{ upstream.watch.processed_patch_ids|length }} patch-ids deduped to date</p>
 </section>
+
+<details class="card" id="ladder">
+  <summary><h2>Test ladder (vm-ipu6)</h2></summary>
+  <p class="meta">
+    Each leg is a driver under a QEMU model:
+    <code>ipu4-out-of-tree</code>, <code>ipu4p</code> and <code>ipu6</code> are the unmodified
+    baselines, <code>ipu4-patches</code> is the upstreamable series under all three models.
+    <span class="gated">gated</span> tests fail CI unless they pass.
+    <a href="{{ ipu6_port.plan_url }}">Plan</a> ·
+    {% if ipu6_port.run_url %}<a href="{{ ipu6_port.run_url }}">latest vm-ipu6 run</a>{% else %}<a href="{{ ipu6_port.workflow_url }}">vm-ipu6 runs</a>{% endif %}
+  </p>
+  {% if not ipu6_port.has_data %}
+  <p class="empty">No ladder results yet — the first <code>vm-ipu6</code> run on the default branch populates this.</p>
+  {% endif %}
+  <div class="kpi-row">
+    {% for v in ipu6_port.legs %}
+    {% if v.has_data %}
+    <div class="kpi ladder-variant {{ 'ladder-ok' if v.summary.ok else 'ladder-bad' }}">
+      <div class="kpi-label">{{ v.name }}</div>
+      <div class="kpi-value">{{ v.summary.passing }} / {{ v.summary.total }}</div>
+      <div class="kpi-sub">tests passing · gated {{ v.summary.enabled_passing }} / {{ v.summary.enabled }} pass</div>
+      {% if v.summary.enabled_failing %}<div class="kpi-sub ladder-failing">failing: {{ v.summary.enabled_failing | join(', ') }}</div>{% endif %}
+      <div class="kpi-sub">{% if v.run_url %}<a href="{{ v.run_url }}">{% endif %}{{ (v.generated_at or '')[:16] | replace('T', ' ') }}{% if v.run_url %}</a>{% endif %}{% if v.commit_sha %} · <code>{{ v.commit_sha[:7] }}</code>{% endif %}</div>
+      {% if v.coverage and v.coverage.lines %}<div class="kpi-sub">driver lines {% if v.coverage_url %}<a href="{{ v.coverage_url }}">{{ v.coverage.lines.pct | pct }}</a>{% else %}{{ v.coverage.lines.pct | pct }}{% endif %} ({{ v.coverage.lines.hit }} / {{ v.coverage.lines.total }})</div>{% endif %}
+      {% if v.pin and v.pin.url %}<div class="kpi-sub">base <code>{{ v.pin.tag or (v.pin.url | replace('https://github.com/', '') | replace('.git', '')) ~ '@' ~ (v.pin.sha or '')[:7] }}</code>{% for b in v.base_series %} + {{ b.label }} ({{ b.count }}){% endfor %}{% if v.series_count %} + {{ v.series_count }} IPU4 patch{{ '' if v.series_count == 1 else 'es' }}{% endif %}</div>{% endif %}
+    </div>
+    {% else %}
+    <div class="kpi ladder-variant ladder-none">
+      <div class="kpi-label">{{ v.name }}</div>
+      <div class="kpi-value">—</div>
+      <div class="kpi-sub">not run yet</div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% if ipu6_port.tests %}
+  <div class="table-scroll">
+  <table class="reg-table ladder-table">
+    <thead><tr><th>Test</th>{% for v in ipu6_port.legs %}<th>{{ v.name }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for test in ipu6_port.tests %}
+    <tr>
+      <td><code>{{ test.name }}</code></td>
+      {% for cell in test.cells %}
+      {% if cell %}
+      <td class="ladder-cell res-{{ cell.css }}">{{ cell.result | lower | replace('-', ' ') }}{% if cell.enabled %} <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span>{% endif %}{% if cell.duration_s %} <span class="dur">{{ cell.duration_s }}s</span>{% endif %}</td>
+      {% else %}
+      <td class="ladder-cell res-none">{{ 'not run yet' if not ipu6_port.legs[loop.index0].has_data else '—' }}</td>
+      {% endif %}
+      {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+  <h3>Driver line coverage per leg</h3>
+  <p class="meta">Probe and stream boots of each leg (<code>IPU4_GCOV=1</code>, <code>tools/coverage/ladder.sh</code>). The ipu4p and ipu4-patches trees also count the IPU7/IPU4P code in the driver directory, so compare a driver across variants rather than drivers against each other.</p>
+  <canvas id="ladder-coverage-trend" height="80"></canvas>
+  {% if ipu6_port.primary %}
+  {% set pr = ipu6_port.primary %}
+  <h3>Base and series ({{ pr.leg or pr.variant }} run)</h3>
+  <ul class="series">
+    <li>Mainline <code>{{ pr.pin.url | replace('https://github.com/', '') | replace('.git', '') }}</code>
+    {% if pr.pin.tag %}<code>{{ pr.pin.tag }}</code> {% endif %}@ {% if pr.pin.url.startswith('https://github.com/') %}<a href="{{ pr.pin.url | replace('.git', '') }}/commit/{{ pr.pin.sha }}"><code>{{ pr.pin.sha[:12] }}</code></a>{% else %}<code>{{ pr.pin.sha[:12] }}</code>{% endif %}</li>
+    {% for b in pr.base_series %}
+    <li>+ {{ b.label }}{% if b.source %} ({% if b.url %}<a href="{{ b.url }}">{{ b.source }}</a>{% else %}{{ b.source }}{% endif %}){% endif %}: {{ b.count }} patch{{ '' if b.count == 1 else 'es' }} in <a href="https://github.com/{{ repo }}/tree/main/{{ b.dir }}"><code>{{ b.dir }}/</code></a></li>
+    {% endfor %}
+    <li>+ IPU4 series: {{ pr.series.count }} patch{{ '' if pr.series.count == 1 else 'es' }} in <a href="https://github.com/{{ repo }}/tree/main/patches/ipu6-ipu4"><code>patches/ipu6-ipu4/</code></a></li>
+  </ul>
+  {% if pr.series.patches %}
+  <ol class="series">
+    {% for p in pr.series.patches %}
+    <li><a href="https://github.com/{{ repo }}/blob/{{ pr.commit_sha or 'main' }}/patches/ipu6-ipu4/{{ p.file }}">{{ p.subject }}</a></li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="empty">The series is empty (no kernel patches yet).</p>
+  {% endif %}
+  {% endif %}
+</details>
 
 <details class="card" id="harness">
   <summary><h2>Out-of-tree QEMU harness (vm-smoke)</h2></summary>
