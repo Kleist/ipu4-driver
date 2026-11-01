@@ -186,6 +186,9 @@ def _append_history(out_dir: Path, payload: dict, vm_smoke_run_id: str | None) -
             "files_differ": diff.get("files_differ"),
             "hunks": diff.get("hunks"),
         },
+        # Unexplained divergence from the convergence target tree.
+        "target_divergence": (((payload.get("upstream") or {}).get("history") or {})
+                              .get("target") or {}).get("divergence"),
         # Driver line coverage per ladder leg ("<driver>/<variant>": pct).
         "ladder_coverage": {
             leg["name"]: ((leg.get("coverage") or {}).get("lines") or {}).get("pct")

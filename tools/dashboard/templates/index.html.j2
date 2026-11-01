@@ -231,6 +231,28 @@
       ({{ upstream.history.master.date[:10] }}): <strong>{{ upstream.history.master.divergence }}</strong> lines.{% endif %}
     </p>
     <canvas id="upstream-trend" height="90"></canvas>
+    {% if upstream.history.target %}
+    <h4>Distance to the convergence target</h4>
+    <p>
+      <strong>{{ upstream.history.target.divergence }}</strong> lines of unexplained divergence
+      from the target tree: mainline <code>{{ upstream.history.target.pin[:12] }}</code>
+      {% for s, n in upstream.history.target.series.items() %}+ <code>patches/{{ s }}</code> ({{ n }}) {% endfor %}
+      — outside the permanent delta in <code>tools/out-of-tree/delta.txt</code>. The plan is
+      "Convergence" in <code>tools/notes/ipu4-out-of-tree-plan.md</code>; the trend is
+      the orange line above.
+    </p>
+    <details>
+      <summary>{{ upstream.history.target.files|length }} files to converge</summary>
+      <table>
+        <thead><tr><th>File</th><th>Status</th><th>Lines</th></tr></thead>
+        <tbody>
+        {% for f in upstream.history.target.files %}
+          <tr><td><code>{{ f.name }}</code></td><td>{{ f.status }}</td><td>{{ f.lines }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </details>
+    {% endif %}
     <script id="upstream-history-data" type="application/json">{{ upstream.history | json_dump | safe }}</script>
     {% else %}
     <p class="empty">No history — run <code>tools/upstream/divergence_history.py --fetch --linux &lt;dir&gt;</code>.</p>
@@ -258,6 +280,11 @@
     const up = JSON.parse(upEl.textContent);
     const pts = up.points.map(p => ({ x: p.ts, y: p.divergence, p }));
     const day = ts => new Date(ts).toISOString().slice(0, 10);
+    const runs = (JSON.parse(document.getElementById('history-data').textContent) || {}).points || [];
+    const targetPts = runs.filter(r => r.target_divergence != null).map(r => ({
+      x: Date.parse(r.ts), y: r.target_divergence,
+      p: { kind: 'target', ref: 'target tree', ts: Date.parse(r.ts), sha: r.sha || '',
+           subject: '', divergence: r.target_divergence } }));
     new Chart(upCanvas, {
       type: 'line',
       data: {
@@ -267,6 +294,8 @@
             pointStyle: c => (c.raw && c.raw.p.kind === 'tag' ? 'rectRot' : 'circle'),
             pointBackgroundColor: c => (c.raw && c.raw.p.kind === 'tag' ? '#d8c46a' : '#74a9ff'),
             stepped: false, tension: 0 },
+          ...(targetPts.length ? [{ label: 'vs target tree (per pages run)', data: targetPts,
+            borderColor: '#e0a35e', pointRadius: 2, tension: 0 }] : []),
           ...(up.master ? [{ label: 'HEAD vs upstream master', showLine: false,
             data: [{ x: Date.parse(up.master.date), y: up.master.divergence,
                      p: Object.assign({ kind: 'master', ref: 'master', ts: Date.parse(up.master.date),
@@ -282,12 +311,14 @@
           tooltip: { callbacks: {
             title: items => {
               const p = items[0].raw.p;
+              if (p.kind === 'target') return 'target tree (' + day(p.ts) + ')';
               if (p.kind === 'master') return 'HEAD vs upstream master ' + p.sha.slice(0, 12) + ' (' + day(p.ts) + ')';
               return p.kind === 'tag' ? p.ref + ' (' + day(p.ts) + ')'
                 : p.sha.slice(0, 12) + ' ' + day(p.ts);
             },
             label: item => {
               const p = item.raw.p;
+              if (p.kind === 'target') return [p.divergence + ' lines vs the target tree', 'pages run on ' + p.sha.slice(0, 12)];
               const out = [p.divergence + ' lines vs ' + p.ref,
                 p.files + ' files, ' + p.lines + ' lines; ' + p.files_missing_upstream + ' not upstream'];
               if (p.upstream_only_files) out.push(p.upstream_only_files + ' upstream-only files (' + p.upstream_only_lines + ' lines)');
