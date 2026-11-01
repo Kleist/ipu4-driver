@@ -1,0 +1,302 @@
+{
+  "schema": 1,
+  "points": [
+    {
+      "ts": "2026-11-01T15:43:48Z",
+      "sha": "73d256174e519b51af0713ffcdb8f8ff4962ee6e",
+      "vm_smoke_run_id": "41321886363",
+      "vm_ipu6_run_id": "41321886433",
+      "coverage": {
+        "lines_pct": 56.9,
+        "functions_pct": 67.8
+      },
+      "mmio": {
+        "unimplemented": 0,
+        "value_mismatch": 11,
+        "extra_in_qemu": 8
+      },
+      "registers": {
+        "doc": 0,
+        "inferred": 36,
+        "guess": 18
+      },
+      "upstream_diff": {
+        "files_differ": 30,
+        "hunks": 299
+      },
+      "target_divergence": 10560,
+      "ladder_coverage": {
+        "ipu4-out-of-tree/ipu4": 66.8,
+        "ipu4p/ipu4p": 47.4,
+        "ipu6/ipu6": 53.2,
+        "ipu4-patches/ipu4": 43.9,
+        "ipu4-patches/ipu4p": 46.7,
+        "ipu4-patches/ipu6": 47.5
+      }
+    },
+    {
+      "ts": "2026-11-01T16:26:49Z",
+      "sha": "36007e8da72931d05ced32ec1976a233ddf672a7",
+      "vm_smoke_run_id": "41323830203",
+      "vm_ipu6_run_id": "41323830204",
+      "coverage": {
+        "lines_pct": 59.0,
+        "functions_pct": 70.3
+      },
+      "mmio": {
+        "unimplemented": 0,
+        "value_mismatch": 11,
+        "extra_in_qemu": 8
+      },
+      "registers": {
+        "doc": 0,
+        "inferred": 36,
+        "guess": 18
+      },
+      "upstream_diff": {
+        "files_differ": 30,
+        "hunks": 299
+      },
+      "target_divergence": 10512,
+      "ladder_coverage": {
+        "ipu4-out-of-tree/ipu4": 69.2,
+        "ipu4p/ipu4p": 47.4,
+        "ipu6/ipu6": 53.2,
+        "ipu4-patches/ipu4": 43.9,
+        "ipu4-patches/ipu4p": 46.7,
+        "ipu4-patches/ipu6": 47.5
+      }
+    },
+    {
+      "ts": "2026-11-01T19:30:49Z",
+      "sha": "47100369e7fd413d8c75680e35a0305a9ffa404a",
+      "vm_smoke_run_id": "41341339183",
+      "vm_ipu6_run_id": "41341339178",
+      "coverage": {
+        "lines_pct": 59.0,
+        "functions_pct": 70.3
+      },
+      "mmio": {
+        "unimplemented": 0,
+        "value_mismatch": 11,
+        "extra_in_qemu": 8
+      },
+      "registers": {
+        "doc": 0,
+        "inferred": 36,
+        "guess": 18
+      },
+      "upstream_diff": {
+        "files_differ": 30,
+        "hunks": 299
+      },
+      "target_divergence": 10512,
+      "ladder_coverage": {
+        "ipu4-out-of-tree/ipu4": 69.2,
+        "ipu4p/ipu4p": 47.4,
+        "ipu6/ipu6": 53.2,
+        "ipu4-patches/ipu4": 43.9,
+        "ipu4-patches/ipu4p": 46.7,
+        "ipu4-patches/ipu6": 47.5
+      }
+    },
+    {
+      "ts": "2026-11-01T19:38:08Z",
+      "sha": "76698d60f6e4d80d537b29c56b08921599e37d75",
+      "vm_smoke_run_id": "41342005954",
+      "vm_ipu6_run_id": "41342005959",
+      "coverage": {
+        "lines_pct": 58.8,
+        "functions_pct": 70.1
+      },
+      "mmio": {
+        "unimplemented": 0,
+        "value_mismatch": 11,
+        "extra_in_qemu": 8
+      },
+      "registers": {
+        "doc": 0,
+        "inferred": 36,
+        "guess": 18
+      },
+      "upstream_diff": {
+        "files_differ": 30,
+        "hunks": 304
+      },
+      "target_divergence": 10399,
+      "ladder_coverage": {
+        "ipu4-out-of-tree/ipu4": 69.1,
+        "ipu4p/ipu4p": 47.4,
+        "ipu6/ipu6": 53.2,
+        "ipu4-patches/ipu4": 43.9,
+        "ipu4-patches/ipu4p": 46.7,
+        "ipu4-patches/ipu6": 47.5
+      }
+    },
+    {
+      "ts": "2026-11-01T20:13:13Z",
+      "sha": "09de399c208d2dd4953fa7f67b388d0738c23dfe",
+      "vm_smoke_run_id": "41345125287",
+      "vm_ipu6_run_id": "41345125221",
+      "coverage": {
+        "lines_pct": 58.9,
+        "functions_pct": 70.1
+      },
+      "mmio": {
+        "unimplemented": 0,
+        "value_mismatch": 11,
+        "extra_in_qemu": 8
+      },
+      "registers": {
+        "doc": 0,
+        "inferred": 36,
+        "guess": 18
+      },
+      "upstream_diff": {
+        "files_differ": 30,
+        "hunks": 306
+      },
+      "target_divergence": 10370,
+      "ladder_coverage": {
+        "ipu4-out-of-tree/ipu4": 69.2,
+        "ipu4p/ipu4p": 47.4,
+        "ipu6/ipu6": 53.2,
+        "ipu4-patches/ipu4": 43.9,
+        "ipu4-patches/ipu4p": 46.7,
+        "ipu4-patches/ipu6": 47.5
+      }
+    },
+    {
+      "ts": "2026-11-01T21:26:10Z",
+      "sha": "1b37ec738a4cce8acd2d1c398fd9d705de4876b2",
+      "vm_smoke_run_id": "41351686725",
+      "vm_ipu6_run_id": "41345125221",
+      "coverage": {
+        "lines_pct": 46.2,
+        "functions_pct": 58.5
+      },
+      "mmio": {
+        "unimplemented": 0,
+        "value_mismatch": 11,
+        "extra_in_qemu": 8
+      },
+      "registers": {
+        "doc": 0,
+        "inferred": 36,
+        "guess": 18
+      },
+      "upstream_diff": {
+        "files_differ": 30,
+        "hunks": 306
+      },
+      "target_divergence": 7324,
+      "ladder_coverage": {
+        "ipu4-out-of-tree/ipu4": 69.2,
+        "ipu4p/ipu4p": 47.4,
+        "ipu6/ipu6": 53.2,
+        "ipu4-patches/ipu4": 43.9,
+        "ipu4-patches/ipu4p": 46.7,
+        "ipu4-patches/ipu6": 47.5
+      }
+    },
+    {
+      "ts": "2026-11-01T22:03:28Z",
+      "sha": "b3571f2c49d6d2e93c2b7acd78978e43b3511255",
+      "vm_smoke_run_id": "41352378312",
+      "vm_ipu6_run_id": "41352378341",
+      "coverage": {
+        "lines_pct": 45.7,
+        "functions_pct": 57.4
+      },
+      "mmio": {
+        "unimplemented": 0,
+        "value_mismatch": 11,
+        "extra_in_qemu": 8
+      },
+      "registers": {
+        "doc": 0,
+        "inferred": 36,
+        "guess": 18
+      },
+      "upstream_diff": {
+        "files_differ": 30,
+        "hunks": 294
+      },
+      "target_divergence": 5888,
+      "ladder_coverage": {
+        "ipu4-out-of-tree/ipu4": 53.8,
+        "ipu4p/ipu4p": 47.4,
+        "ipu6/ipu6": 53.2,
+        "ipu4-patches/ipu4": 43.9,
+        "ipu4-patches/ipu4p": 46.7,
+        "ipu4-patches/ipu6": 47.5
+      }
+    },
+    {
+      "ts": "2026-11-01T22:18:52Z",
+      "sha": "49033132ab74128281e9c63e062236b378f38be7",
+      "vm_smoke_run_id": "41356034520",
+      "vm_ipu6_run_id": "41356034492",
+      "coverage": {
+        "lines_pct": 45.6,
+        "functions_pct": 57.4
+      },
+      "mmio": {
+        "unimplemented": 0,
+        "value_mismatch": 11,
+        "extra_in_qemu": 8
+      },
+      "registers": {
+        "doc": 0,
+        "inferred": 36,
+        "guess": 18
+      },
+      "upstream_diff": {
+        "files_differ": 30,
+        "hunks": 294
+      },
+      "target_divergence": 5910,
+      "ladder_coverage": {
+        "ipu4-out-of-tree/ipu4": 55.2,
+        "ipu4p/ipu4p": 47.4,
+        "ipu6/ipu6": 53.2,
+        "ipu4-patches/ipu4": 43.9,
+        "ipu4-patches/ipu4p": 46.7,
+        "ipu4-patches/ipu6": 47.5
+      }
+    },
+    {
+      "ts": "2026-11-01T23:00:18Z",
+      "sha": "fefbc1ac5b229fd4ae734a03602afbf204966a43",
+      "vm_smoke_run_id": "41354539281",
+      "vm_ipu6_run_id": "41354539097",
+      "coverage": {
+        "lines_pct": 45.6,
+        "functions_pct": 57.4
+      },
+      "mmio": {
+        "unimplemented": 0,
+        "value_mismatch": 11,
+        "extra_in_qemu": 8
+      },
+      "registers": {
+        "doc": 0,
+        "inferred": 36,
+        "guess": 18
+      },
+      "upstream_diff": {
+        "files_differ": 30,
+        "hunks": 289
+      },
+      "target_divergence": 5689,
+      "ladder_coverage": {
+        "ipu4-out-of-tree/ipu4": 55.2,
+        "ipu4p/ipu4p": 47.4,
+        "ipu6/ipu6": 53.2,
+        "ipu4-patches/ipu4": 43.9,
+        "ipu4-patches/ipu4p": 46.7,
+        "ipu4-patches/ipu6": 47.5
+      }
+    }
+  ]
+}

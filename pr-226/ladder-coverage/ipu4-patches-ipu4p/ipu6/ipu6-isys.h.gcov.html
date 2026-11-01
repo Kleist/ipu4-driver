@@ -1,0 +1,334 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - all.info - ipu6/ipu6-isys.h</title>
+  <link rel="stylesheet" type="text/css" href="../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../index.html">top level</a> - <a href="index.html">ipu6</a> - ipu6-isys.h<span style="font-size: 80%;"> (source / <a href="ipu6-isys.h.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">all.info</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryMed">80.0&nbsp;%</td>
+            <td class="headerCovTableEntry">5</td>
+            <td class="headerCovTableEntry">4</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-11-01 21:59:02</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">1</td>
+            <td class="headerCovTableEntry">1</td>
+          </tr>
+                  <tr><td><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : /* SPDX-License-Identifier: GPL-2.0-only */</span>
+<span id="L2"><span class="lineNum">       2</span>              : /* Copyright (C) 2013--2024 Intel Corporation */</span>
+<span id="L3"><span class="lineNum">       3</span>              : </span>
+<span id="L4"><span class="lineNum">       4</span>              : #ifndef IPU6_ISYS_H</span>
+<span id="L5"><span class="lineNum">       5</span>              : #define IPU6_ISYS_H</span>
+<span id="L6"><span class="lineNum">       6</span>              : </span>
+<span id="L7"><span class="lineNum">       7</span>              : #include &lt;linux/idr.h&gt;</span>
+<span id="L8"><span class="lineNum">       8</span>              : #include &lt;linux/irqreturn.h&gt;</span>
+<span id="L9"><span class="lineNum">       9</span>              : #include &lt;linux/list.h&gt;</span>
+<span id="L10"><span class="lineNum">      10</span>              : #include &lt;linux/mutex.h&gt;</span>
+<span id="L11"><span class="lineNum">      11</span>              : #include &lt;linux/pm_qos.h&gt;</span>
+<span id="L12"><span class="lineNum">      12</span>              : #include &lt;linux/spinlock_types.h&gt;</span>
+<span id="L13"><span class="lineNum">      13</span>              : #include &lt;linux/types.h&gt;</span>
+<span id="L14"><span class="lineNum">      14</span>              : </span>
+<span id="L15"><span class="lineNum">      15</span>              : #include &lt;media/media-device.h&gt;</span>
+<span id="L16"><span class="lineNum">      16</span>              : #include &lt;media/v4l2-async.h&gt;</span>
+<span id="L17"><span class="lineNum">      17</span>              : #include &lt;media/v4l2-device.h&gt;</span>
+<span id="L18"><span class="lineNum">      18</span>              : #include &lt;media/v4l2-mediabus.h&gt;</span>
+<span id="L19"><span class="lineNum">      19</span>              : </span>
+<span id="L20"><span class="lineNum">      20</span>              : #include &quot;ipu6.h&quot;</span>
+<span id="L21"><span class="lineNum">      21</span>              : #include &quot;ipu4p-fw-isys.h&quot;</span>
+<span id="L22"><span class="lineNum">      22</span>              : #include &quot;ipu6-fw-isys.h&quot;</span>
+<span id="L23"><span class="lineNum">      23</span>              : #include &quot;ipu7-fw-isys.h&quot;</span>
+<span id="L24"><span class="lineNum">      24</span>              : #include &quot;ipu6-isys-csi2.h&quot;</span>
+<span id="L25"><span class="lineNum">      25</span>              : #include &quot;ipu6-isys-video.h&quot;</span>
+<span id="L26"><span class="lineNum">      26</span>              : </span>
+<span id="L27"><span class="lineNum">      27</span>              : struct ipu6_bus_device;</span>
+<span id="L28"><span class="lineNum">      28</span>              : </span>
+<span id="L29"><span class="lineNum">      29</span>              : #define IPU6_ISYS_ENTITY_VERSION        &quot;6&quot;</span>
+<span id="L30"><span class="lineNum">      30</span>              : #define IPU7_ISYS_ENTITY_VERSION        &quot;7&quot;</span>
+<span id="L31"><span class="lineNum">      31</span>              : #define IPU7P5_ISYS_ENTITY_VERSION      &quot;7.5&quot;</span>
+<span id="L32"><span class="lineNum">      32</span>              : #define IPU8_ISYS_ENTITY_VERSION        &quot;8&quot;</span>
+<span id="L33"><span class="lineNum">      33</span>              : </span>
+<span id="L34"><span class="lineNum">      34</span> <span class="tlaGNC tlaBgGNC">         360 : static inline const char *ipu6_isys_entity_version(struct ipu6_device *isp)</span></span>
+<span id="L35"><span class="lineNum">      35</span>              : {</span>
+<span id="L36"><span class="lineNum">      36</span> <span class="tlaGNC">         360 :         if (IS_IPU8(isp))</span></span>
+<span id="L37"><span class="lineNum">      37</span>              :                 return IPU8_ISYS_ENTITY_VERSION;</span>
+<span id="L38"><span class="lineNum">      38</span> <span class="tlaGNC">         360 :         if (IS_IPU7P5(isp))</span></span>
+<span id="L39"><span class="lineNum">      39</span>              :                 return IPU7P5_ISYS_ENTITY_VERSION;</span>
+<span id="L40"><span class="lineNum">      40</span> <span class="tlaGNC">         360 :         if (IS_IPU7_MTL(isp))</span></span>
+<span id="L41"><span class="lineNum">      41</span> <span class="tlaUNC tlaBgUNC">           0 :                 return IPU7_ISYS_ENTITY_VERSION;</span></span>
+<span id="L42"><span class="lineNum">      42</span>              : </span>
+<span id="L43"><span class="lineNum">      43</span>              :         return IPU6_ISYS_ENTITY_VERSION;</span>
+<span id="L44"><span class="lineNum">      44</span>              : }</span>
+<span id="L45"><span class="lineNum">      45</span>              : </span>
+<span id="L46"><span class="lineNum">      46</span>              : /* FW support max 16 streams */</span>
+<span id="L47"><span class="lineNum">      47</span>              : #define IPU6_ISYS_MAX_STREAMS           16</span>
+<span id="L48"><span class="lineNum">      48</span>              : #define ISYS_UNISPART_IRQS      (IPU6_ISYS_UNISPART_IRQ_SW |    \</span>
+<span id="L49"><span class="lineNum">      49</span>              :                                  IPU6_ISYS_UNISPART_IRQ_CSI0 |  \</span>
+<span id="L50"><span class="lineNum">      50</span>              :                                  IPU6_ISYS_UNISPART_IRQ_CSI1)</span>
+<span id="L51"><span class="lineNum">      51</span>              : </span>
+<span id="L52"><span class="lineNum">      52</span>              : /*</span>
+<span id="L53"><span class="lineNum">      53</span>              :  * Current message queue configuration. These must be big enough</span>
+<span id="L54"><span class="lineNum">      54</span>              :  * so that they never gets full. Queues are located in system memory</span>
+<span id="L55"><span class="lineNum">      55</span>              :  */</span>
+<span id="L56"><span class="lineNum">      56</span>              : #define IPU6_ISYS_SIZE_RECV_QUEUE 40</span>
+<span id="L57"><span class="lineNum">      57</span>              : #define IPU6_ISYS_SIZE_SEND_QUEUE 40</span>
+<span id="L58"><span class="lineNum">      58</span>              : #define IPU6_ISYS_SIZE_PROXY_RECV_QUEUE 5</span>
+<span id="L59"><span class="lineNum">      59</span>              : #define IPU6_ISYS_SIZE_PROXY_SEND_QUEUE 5</span>
+<span id="L60"><span class="lineNum">      60</span>              : #define IPU6_ISYS_NUM_RECV_QUEUE 1</span>
+<span id="L61"><span class="lineNum">      61</span>              : </span>
+<span id="L62"><span class="lineNum">      62</span>              : #define IPU6_ISYS_MIN_WIDTH             2U</span>
+<span id="L63"><span class="lineNum">      63</span>              : #define IPU6_ISYS_MIN_HEIGHT            1U</span>
+<span id="L64"><span class="lineNum">      64</span>              : #define IPU6_ISYS_MAX_WIDTH             4672U</span>
+<span id="L65"><span class="lineNum">      65</span>              : #define IPU6_ISYS_MAX_HEIGHT            3416U</span>
+<span id="L66"><span class="lineNum">      66</span>              : </span>
+<span id="L67"><span class="lineNum">      67</span>              : /* IPU4P has 128 physical GDA pages of 1 KiB each. */</span>
+<span id="L68"><span class="lineNum">      68</span>              : #define IPU4P_SRAM_GRANULARITY_SHIFT    10</span>
+<span id="L69"><span class="lineNum">      69</span>              : #define IPU4P_SRAM_GRANULARITY_SIZE     1024</span>
+<span id="L70"><span class="lineNum">      70</span>              : /* the threshold granularity is 2KB on IPU6 */</span>
+<span id="L71"><span class="lineNum">      71</span>              : #define IPU6_SRAM_GRANULARITY_SHIFT     11</span>
+<span id="L72"><span class="lineNum">      72</span>              : #define IPU6_SRAM_GRANULARITY_SIZE      2048</span>
+<span id="L73"><span class="lineNum">      73</span>              : /* the threshold granularity is 1KB on IPU6SE */</span>
+<span id="L74"><span class="lineNum">      74</span>              : #define IPU6SE_SRAM_GRANULARITY_SHIFT   10</span>
+<span id="L75"><span class="lineNum">      75</span>              : #define IPU6SE_SRAM_GRANULARITY_SIZE    1024</span>
+<span id="L76"><span class="lineNum">      76</span>              : </span>
+<span id="L77"><span class="lineNum">      77</span>              : /* Use the 96 KiB usable size for a 128 KiB buffer, as on IPU6SE. */</span>
+<span id="L78"><span class="lineNum">      78</span>              : #define IPU4P_MAX_SRAM_SIZE                     (96 &lt;&lt; 10)</span>
+<span id="L79"><span class="lineNum">      79</span>              : /* IS pixel buffer is 256KB, MaxSRAMSize is 200KB on IPU6 */</span>
+<span id="L80"><span class="lineNum">      80</span>              : #define IPU6_MAX_SRAM_SIZE                      (200 &lt;&lt; 10)</span>
+<span id="L81"><span class="lineNum">      81</span>              : /* IS pixel buffer is 128KB, MaxSRAMSize is 96KB on IPU6SE */</span>
+<span id="L82"><span class="lineNum">      82</span>              : #define IPU6SE_MAX_SRAM_SIZE                    (96 &lt;&lt; 10)</span>
+<span id="L83"><span class="lineNum">      83</span>              : </span>
+<span id="L84"><span class="lineNum">      84</span>              : #define IPU6EP_LTR_VALUE                        200</span>
+<span id="L85"><span class="lineNum">      85</span>              : #define IPU6EP_MIN_MEMOPEN_TH                   0x4</span>
+<span id="L86"><span class="lineNum">      86</span>              : #define IPU6EP_MTL_LTR_VALUE                    1023</span>
+<span id="L87"><span class="lineNum">      87</span>              : #define IPU6EP_MTL_MIN_MEMOPEN_TH               0xc</span>
+<span id="L88"><span class="lineNum">      88</span>              : </span>
+<span id="L89"><span class="lineNum">      89</span>              : struct ipu6_isys_csi2_config {</span>
+<span id="L90"><span class="lineNum">      90</span>              :         u32 nlanes;</span>
+<span id="L91"><span class="lineNum">      91</span>              :         u32 port;</span>
+<span id="L92"><span class="lineNum">      92</span>              :         enum v4l2_mbus_type bus_type;</span>
+<span id="L93"><span class="lineNum">      93</span>              : };</span>
+<span id="L94"><span class="lineNum">      94</span>              : </span>
+<span id="L95"><span class="lineNum">      95</span>              : struct sensor_async_sd {</span>
+<span id="L96"><span class="lineNum">      96</span>              :         struct v4l2_async_connection asc;</span>
+<span id="L97"><span class="lineNum">      97</span>              :         struct ipu6_isys_csi2_config csi2;</span>
+<span id="L98"><span class="lineNum">      98</span>              : };</span>
+<span id="L99"><span class="lineNum">      99</span>              : </span>
+<span id="L100"><span class="lineNum">     100</span>              : /*</span>
+<span id="L101"><span class="lineNum">     101</span>              :  * struct ipu6_isys</span>
+<span id="L102"><span class="lineNum">     102</span>              :  *</span>
+<span id="L103"><span class="lineNum">     103</span>              :  * @media_dev: Media device</span>
+<span id="L104"><span class="lineNum">     104</span>              :  * @v4l2_dev: V4L2 device</span>
+<span id="L105"><span class="lineNum">     105</span>              :  * @adev: ISYS bus device</span>
+<span id="L106"><span class="lineNum">     106</span>              :  * @csi2_rx_ctrl_cached: cached shared value between all CSI2 receivers</span>
+<span id="L107"><span class="lineNum">     107</span>              :  * @streams_lock: serialise access to streams</span>
+<span id="L108"><span class="lineNum">     108</span>              :  * @streams: streams per firmware stream ID</span>
+<span id="L109"><span class="lineNum">     109</span>              :  * @fwctx: fw communication layer context pointer</span>
+<span id="L110"><span class="lineNum">     110</span>              :  * @phy_termcal_val: the termination calibration value, only used for DWC PHY</span>
+<span id="L111"><span class="lineNum">     111</span>              :  * @need_reset: Isys requires d0i0-&gt;i3 transition</span>
+<span id="L112"><span class="lineNum">     112</span>              :  * @mutex: serialise access isys video open/release related operations</span>
+<span id="L113"><span class="lineNum">     113</span>              :  * @stream_mutex: serialise stream start and stop, queueing requests</span>
+<span id="L114"><span class="lineNum">     114</span>              :  * @pdata: platform data pointer</span>
+<span id="L115"><span class="lineNum">     115</span>              :  * @csi2: CSI-2 receivers</span>
+<span id="L116"><span class="lineNum">     116</span>              :  */</span>
+<span id="L117"><span class="lineNum">     117</span>              : struct ipu6_isys {</span>
+<span id="L118"><span class="lineNum">     118</span>              :         struct media_device media_dev;</span>
+<span id="L119"><span class="lineNum">     119</span>              :         struct v4l2_device v4l2_dev;</span>
+<span id="L120"><span class="lineNum">     120</span>              :         struct ipu6_bus_device *adev;</span>
+<span id="L121"><span class="lineNum">     121</span>              : </span>
+<span id="L122"><span class="lineNum">     122</span>              :         u32 isr_csi2_bits;</span>
+<span id="L123"><span class="lineNum">     123</span>              :         u32 csi2_rx_ctrl_cached;</span>
+<span id="L124"><span class="lineNum">     124</span>              :         spinlock_t streams_lock;</span>
+<span id="L125"><span class="lineNum">     125</span>              :         struct ipu6_isys_stream *streams_by_handle[IPU6_ISYS_MAX_STREAMS];</span>
+<span id="L126"><span class="lineNum">     126</span>              :         void *fwctx;</span>
+<span id="L127"><span class="lineNum">     127</span>              :         u32 phy_termcal_val;</span>
+<span id="L128"><span class="lineNum">     128</span>              :         u32 phy_rext_cal;</span>
+<span id="L129"><span class="lineNum">     129</span>              :         bool need_reset;</span>
+<span id="L130"><span class="lineNum">     130</span>              :         bool icache_prefetch;</span>
+<span id="L131"><span class="lineNum">     131</span>              :         bool csi2_cse_ipc_not_supported;</span>
+<span id="L132"><span class="lineNum">     132</span>              :         bool iwake_watermark_enabled;</span>
+<span id="L133"><span class="lineNum">     133</span>              :         unsigned int sensor_type;</span>
+<span id="L134"><span class="lineNum">     134</span>              : </span>
+<span id="L135"><span class="lineNum">     135</span>              :         struct mutex mutex;</span>
+<span id="L136"><span class="lineNum">     136</span>              :         struct mutex stream_mutex;</span>
+<span id="L137"><span class="lineNum">     137</span>              : </span>
+<span id="L138"><span class="lineNum">     138</span>              :         struct ipu6_isys_pdata *pdata;</span>
+<span id="L139"><span class="lineNum">     139</span>              : </span>
+<span id="L140"><span class="lineNum">     140</span>              :         int (*phy_set_power)(struct ipu6_isys *isys,</span>
+<span id="L141"><span class="lineNum">     141</span>              :                              struct ipu6_isys_csi2_config *cfg,</span>
+<span id="L142"><span class="lineNum">     142</span>              :                              const struct ipu6_isys_csi2_timing *timing,</span>
+<span id="L143"><span class="lineNum">     143</span>              :                              bool on);</span>
+<span id="L144"><span class="lineNum">     144</span>              : </span>
+<span id="L145"><span class="lineNum">     145</span>              :         struct ipu6_isys_csi2 *csi2;</span>
+<span id="L146"><span class="lineNum">     146</span>              : </span>
+<span id="L147"><span class="lineNum">     147</span>              :         struct pm_qos_request pm_qos;</span>
+<span id="L148"><span class="lineNum">     148</span>              :         spinlock_t listlock;    /* Protect framebuflist */</span>
+<span id="L149"><span class="lineNum">     149</span>              :         struct list_head framebuflist;</span>
+<span id="L150"><span class="lineNum">     150</span>              :         struct list_head framebuflist_fw;</span>
+<span id="L151"><span class="lineNum">     151</span>              :         struct v4l2_async_notifier notifier;</span>
+<span id="L152"><span class="lineNum">     152</span>              :         struct ida streams;</span>
+<span id="L153"><span class="lineNum">     153</span>              : };</span>
+<span id="L154"><span class="lineNum">     154</span>              : </span>
+<span id="L155"><span class="lineNum">     155</span>              : struct isys_fw_msgs {</span>
+<span id="L156"><span class="lineNum">     156</span>              :         union {</span>
+<span id="L157"><span class="lineNum">     157</span>              :                 u64 dummy;</span>
+<span id="L158"><span class="lineNum">     158</span>              :                 union {</span>
+<span id="L159"><span class="lineNum">     159</span>              :                         struct ipu4p_fw_isys_frame_buff_set frame;</span>
+<span id="L160"><span class="lineNum">     160</span>              :                         struct ipu4p_fw_isys_stream_cfg stream;</span>
+<span id="L161"><span class="lineNum">     161</span>              :                 } ipu4p;</span>
+<span id="L162"><span class="lineNum">     162</span>              :                 union {</span>
+<span id="L163"><span class="lineNum">     163</span>              :                         struct ipu6_fw_isys_frame_buff_set_abi frame;</span>
+<span id="L164"><span class="lineNum">     164</span>              :                         struct ipu6_fw_isys_stream_cfg_data_abi stream;</span>
+<span id="L165"><span class="lineNum">     165</span>              :                 } ipu6;</span>
+<span id="L166"><span class="lineNum">     166</span>              :                 union {</span>
+<span id="L167"><span class="lineNum">     167</span>              :                         struct ipu7_fw_isys_frame_buff_set frame;</span>
+<span id="L168"><span class="lineNum">     168</span>              :                         struct ipu7_fw_isys_stream_cfg stream;</span>
+<span id="L169"><span class="lineNum">     169</span>              :                         /* sizes the union for the larger IPU8 (ABI 1.0.14) layout */</span>
+<span id="L170"><span class="lineNum">     170</span>              :                         struct ipu7_fw_isys_frame_buff_set_ipu8 frame_ipu8;</span>
+<span id="L171"><span class="lineNum">     171</span>              :                         struct ipu7_fw_isys_stream_cfg_ipu8 stream_ipu8;</span>
+<span id="L172"><span class="lineNum">     172</span>              :                 } ipu7;</span>
+<span id="L173"><span class="lineNum">     173</span>              :         };</span>
+<span id="L174"><span class="lineNum">     174</span>              :         struct list_head head;</span>
+<span id="L175"><span class="lineNum">     175</span>              :         dma_addr_t dma_addr;</span>
+<span id="L176"><span class="lineNum">     176</span>              :         u8 ipu4p_stream_handle;</span>
+<span id="L177"><span class="lineNum">     177</span>              :         u8 ipu4p_frame_counter;</span>
+<span id="L178"><span class="lineNum">     178</span>              :         /* Bits mark output pins with buffers awaiting firmware completion. */</span>
+<span id="L179"><span class="lineNum">     179</span>              :         u8 ipu4p_pending_pin_mask;</span>
+<span id="L180"><span class="lineNum">     180</span>              :         bool ipu4p_is_frame;</span>
+<span id="L181"><span class="lineNum">     181</span>              :         bool ipu4p_addr_error;</span>
+<span id="L182"><span class="lineNum">     182</span>              : };</span>
+<span id="L183"><span class="lineNum">     183</span>              : </span>
+<span id="L184"><span class="lineNum">     184</span>              : enum ipu6_isys_iwake_register {</span>
+<span id="L185"><span class="lineNum">     185</span>              :         IPU6_ISYS_IWAKE_GDA_IRQ_CRITICAL_THRESHOLD,</span>
+<span id="L186"><span class="lineNum">     186</span>              :         IPU6_ISYS_IWAKE_GDA_THRESHOLD,</span>
+<span id="L187"><span class="lineNum">     187</span>              :         IPU6_ISYS_IWAKE_GDA_ENABLE,</span>
+<span id="L188"><span class="lineNum">     188</span>              :         IPU6_ISYS_IWAKE_GDA_MEMOPEN_THRESHOLD,</span>
+<span id="L189"><span class="lineNum">     189</span>              : };</span>
+<span id="L190"><span class="lineNum">     190</span>              : </span>
+<span id="L191"><span class="lineNum">     191</span>              : struct ipu6_fw_isys_ops {</span>
+<span id="L192"><span class="lineNum">     192</span>              :         int (*init)(struct ipu6_isys *isys, unsigned int num_streams);</span>
+<span id="L193"><span class="lineNum">     193</span>              :         int (*close)(struct ipu6_isys *isys);</span>
+<span id="L194"><span class="lineNum">     194</span>              :         int (*isr_one)(struct ipu6_bus_device *adev);</span>
+<span id="L195"><span class="lineNum">     195</span>              :         /* Optional; NULL uses the IPU6 proxy-region mapping. */</span>
+<span id="L196"><span class="lineNum">     196</span>              :         int (*set_iwake_register)(struct ipu6_isys *isys,</span>
+<span id="L197"><span class="lineNum">     197</span>              :                                   enum ipu6_isys_iwake_register reg, u32 value);</span>
+<span id="L198"><span class="lineNum">     198</span>              :         int (*send_cmd)(struct ipu6_isys *isys,</span>
+<span id="L199"><span class="lineNum">     199</span>              :                         const unsigned int stream_handle,</span>
+<span id="L200"><span class="lineNum">     200</span>              :                         void *cpu_mapped_buf,</span>
+<span id="L201"><span class="lineNum">     201</span>              :                         dma_addr_t dma_mapped_buf,</span>
+<span id="L202"><span class="lineNum">     202</span>              :                         size_t size, u16 send_type);</span>
+<span id="L203"><span class="lineNum">     203</span>              :         void (*cleanup)(struct ipu6_isys *isys);</span>
+<span id="L204"><span class="lineNum">     204</span>              :         int (*prepare_stream_cfg)(struct ipu6_isys_stream *stream,</span>
+<span id="L205"><span class="lineNum">     205</span>              :                                   struct v4l2_mbus_frame_desc *desc,</span>
+<span id="L206"><span class="lineNum">     206</span>              :                                   struct isys_fw_msgs *msg);</span>
+<span id="L207"><span class="lineNum">     207</span>              :         void (*prepare_buf_set)(struct isys_fw_msgs *msg,</span>
+<span id="L208"><span class="lineNum">     208</span>              :                                 struct ipu6_isys_stream *stream,</span>
+<span id="L209"><span class="lineNum">     209</span>              :                                 struct ipu6_isys_buffer_list *bl);</span>
+<span id="L210"><span class="lineNum">     210</span>              :         int (*stream_open)(struct ipu6_isys *isys,</span>
+<span id="L211"><span class="lineNum">     211</span>              :                            const unsigned int stream_handle,</span>
+<span id="L212"><span class="lineNum">     212</span>              :                            struct isys_fw_msgs *msg);</span>
+<span id="L213"><span class="lineNum">     213</span>              :         int (*stream_start)(struct ipu6_isys *isys,</span>
+<span id="L214"><span class="lineNum">     214</span>              :                             const unsigned int stream_handle,</span>
+<span id="L215"><span class="lineNum">     215</span>              :                             struct isys_fw_msgs *msg, bool capture);</span>
+<span id="L216"><span class="lineNum">     216</span>              :         int (*stream_capture)(struct ipu6_isys *isys,</span>
+<span id="L217"><span class="lineNum">     217</span>              :                               const unsigned int stream_handle,</span>
+<span id="L218"><span class="lineNum">     218</span>              :                               struct isys_fw_msgs *msg);</span>
+<span id="L219"><span class="lineNum">     219</span>              :         int (*stream_flush)(struct ipu6_isys *isys,</span>
+<span id="L220"><span class="lineNum">     220</span>              :                             const unsigned int stream_handle);</span>
+<span id="L221"><span class="lineNum">     221</span>              :         int (*stream_close)(struct ipu6_isys *isys,</span>
+<span id="L222"><span class="lineNum">     222</span>              :                             const unsigned int stream_handle);</span>
+<span id="L223"><span class="lineNum">     223</span>              :         void (*dump_stream_cfg)(struct device *dev, struct isys_fw_msgs *msg);</span>
+<span id="L224"><span class="lineNum">     224</span>              :         void (*dump_frame_buf_set)(struct device *dev, struct isys_fw_msgs *msg,</span>
+<span id="L225"><span class="lineNum">     225</span>              :                                    unsigned int outputs);</span>
+<span id="L226"><span class="lineNum">     226</span>              : };</span>
+<span id="L227"><span class="lineNum">     227</span>              : </span>
+<span id="L228"><span class="lineNum">     228</span>              : struct isys_fw_msgs *ipu6_get_fw_msg_buf(struct ipu6_isys_stream *stream);</span>
+<span id="L229"><span class="lineNum">     229</span>              : void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, struct isys_fw_msgs *msg);</span>
+<span id="L230"><span class="lineNum">     230</span>              : void ipu6_cleanup_fw_msg_bufs(struct ipu6_isys *isys);</span>
+<span id="L231"><span class="lineNum">     231</span>              : </span>
+<span id="L232"><span class="lineNum">     232</span>              : extern const struct v4l2_ioctl_ops ipu6_isys_ioctl_ops;</span>
+<span id="L233"><span class="lineNum">     233</span>              : </span>
+<span id="L234"><span class="lineNum">     234</span>              : void ipu6_isys_update_watermark_setting(struct ipu6_isys *isys);</span>
+<span id="L235"><span class="lineNum">     235</span>              : </span>
+<span id="L236"><span class="lineNum">     236</span>              : int ipu6_isys_mcd_phy_set_power(struct ipu6_isys *isys,</span>
+<span id="L237"><span class="lineNum">     237</span>              :                                 struct ipu6_isys_csi2_config *cfg,</span>
+<span id="L238"><span class="lineNum">     238</span>              :                                 const struct ipu6_isys_csi2_timing *timing,</span>
+<span id="L239"><span class="lineNum">     239</span>              :                                 bool on);</span>
+<span id="L240"><span class="lineNum">     240</span>              : </span>
+<span id="L241"><span class="lineNum">     241</span>              : int ipu6_isys_dwc_phy_set_power(struct ipu6_isys *isys,</span>
+<span id="L242"><span class="lineNum">     242</span>              :                                 struct ipu6_isys_csi2_config *cfg,</span>
+<span id="L243"><span class="lineNum">     243</span>              :                                 const struct ipu6_isys_csi2_timing *timing,</span>
+<span id="L244"><span class="lineNum">     244</span>              :                                 bool on);</span>
+<span id="L245"><span class="lineNum">     245</span>              : </span>
+<span id="L246"><span class="lineNum">     246</span>              : int ipu6_isys_jsl_phy_set_power(struct ipu6_isys *isys,</span>
+<span id="L247"><span class="lineNum">     247</span>              :                                 struct ipu6_isys_csi2_config *cfg,</span>
+<span id="L248"><span class="lineNum">     248</span>              :                                 const struct ipu6_isys_csi2_timing *timing,</span>
+<span id="L249"><span class="lineNum">     249</span>              :                                 bool on);</span>
+<span id="L250"><span class="lineNum">     250</span>              : int ipu4p_isys_phy_set_power(struct ipu6_isys *isys,</span>
+<span id="L251"><span class="lineNum">     251</span>              :                              struct ipu6_isys_csi2_config *cfg,</span>
+<span id="L252"><span class="lineNum">     252</span>              :                              const struct ipu6_isys_csi2_timing *timing,</span>
+<span id="L253"><span class="lineNum">     253</span>              :                              bool on);</span>
+<span id="L254"><span class="lineNum">     254</span>              : void ipu4p_isys_phy_setup(struct ipu6_isys *isys);</span>
+<span id="L255"><span class="lineNum">     255</span>              : void ipu4p_isys_irq_setup(struct ipu6_isys *isys);</span>
+<span id="L256"><span class="lineNum">     256</span>              : irqreturn_t ipu4p_isys_isr(struct ipu6_bus_device *adev);</span>
+<span id="L257"><span class="lineNum">     257</span>              : </span>
+<span id="L258"><span class="lineNum">     258</span>              : #endif /* IPU6_ISYS_H */</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>

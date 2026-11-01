@@ -1,0 +1,140 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - ipu4.info - ipu4/ipu4-compat.h</title>
+  <link rel="stylesheet" type="text/css" href="../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../index.html">top level</a> - <a href="index.html">ipu4</a> - ipu4-compat.h<span style="font-size: 80%;"> (source / <a href="ipu4-compat.h.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">ipu4.info</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryMed">80.0&nbsp;%</td>
+            <td class="headerCovTableEntry">5</td>
+            <td class="headerCovTableEntry">4</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-11-01 21:58:02</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">1</td>
+            <td class="headerCovTableEntry">1</td>
+          </tr>
+                  <tr><td><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : #ifndef IPU4_COMPAT_H</span>
+<span id="L2"><span class="lineNum">       2</span>              : #define IPU4_COMPAT_H</span>
+<span id="L3"><span class="lineNum">       3</span>              : </span>
+<span id="L4"><span class="lineNum">       4</span>              : #include &lt;linux/version.h&gt;</span>
+<span id="L5"><span class="lineNum">       5</span>              : #include &lt;media/media-entity.h&gt;</span>
+<span id="L6"><span class="lineNum">       6</span>              : #include &lt;media/v4l2-subdev.h&gt;</span>
+<span id="L7"><span class="lineNum">       7</span>              : </span>
+<span id="L8"><span class="lineNum">       8</span>              : #include &lt;linux/slab.h&gt;</span>
+<span id="L9"><span class="lineNum">       9</span>              : #ifndef kzalloc_obj</span>
+<span id="L10"><span class="lineNum">      10</span>              : // Typed allocation helpers of 7.0 (backported to 6.12.y and 6.18.y).</span>
+<span id="L11"><span class="lineNum">      11</span>              : #define kzalloc_obj(P) ((typeof(P) *)kzalloc(sizeof(P), GFP_KERNEL))</span>
+<span id="L12"><span class="lineNum">      12</span>              : #define kmalloc_objs(P, COUNT) \</span>
+<span id="L13"><span class="lineNum">      13</span>              :         ((typeof(P) *)kmalloc_array(COUNT, sizeof(P), GFP_KERNEL))</span>
+<span id="L14"><span class="lineNum">      14</span>              : #endif</span>
+<span id="L15"><span class="lineNum">      15</span>              : </span>
+<span id="L16"><span class="lineNum">      16</span>              : #if KERNEL_VERSION(6, 18, 0) &gt; LINUX_VERSION_CODE</span>
+<span id="L17"><span class="lineNum">      17</span>              : // https://github.com/torvalds/linux/commit/683342ce3c0dae068bf0ee157ee12c13088193f7</span>
+<span id="L18"><span class="lineNum">      18</span> <span class="tlaGNC tlaBgGNC">           1 : static __maybe_unused s64 ambu_v4l2_get_link_freq(struct media_pad *src_pad, unsigned int mul,</span></span>
+<span id="L19"><span class="lineNum">      19</span>              :                        unsigned int div) {</span>
+<span id="L20"><span class="lineNum">      20</span> <span class="tlaGNC">           1 :     struct v4l2_subdev *ext_sd = media_entity_to_v4l2_subdev(src_pad-&gt;entity);</span></span>
+<span id="L21"><span class="lineNum">      21</span>              :         </span>
+<span id="L22"><span class="lineNum">      22</span> <span class="tlaGNC">           1 :     if (WARN(!ext_sd, &quot;Failed to get subdev&quot;))</span></span>
+<span id="L23"><span class="lineNum">      23</span> <span class="tlaUNC tlaBgUNC">           0 :                 return -ENODEV;</span></span>
+<span id="L24"><span class="lineNum">      24</span>              : </span>
+<span id="L25"><span class="lineNum">      25</span> <span class="tlaGNC tlaBgGNC">           1 :         return v4l2_get_link_freq(ext_sd-&gt;ctrl_handler, 0, 0);</span></span>
+<span id="L26"><span class="lineNum">      26</span>              : }</span>
+<span id="L27"><span class="lineNum">      27</span>              : #undef v4l2_get_link_freq</span>
+<span id="L28"><span class="lineNum">      28</span>              : #define v4l2_get_link_freq(PAD, MUL, DIV) ambu_v4l2_get_link_freq(PAD, MUL, DIV)</span>
+<span id="L29"><span class="lineNum">      29</span>              : #endif</span>
+<span id="L30"><span class="lineNum">      30</span>              : </span>
+<span id="L31"><span class="lineNum">      31</span>              : #if KERNEL_VERSION(6, 13, 0) &gt; LINUX_VERSION_CODE</span>
+<span id="L32"><span class="lineNum">      32</span>              : // Symbol namespaces are string literals since 6.13; older kernels</span>
+<span id="L33"><span class="lineNum">      33</span>              : // stringify a bare token.</span>
+<span id="L34"><span class="lineNum">      34</span>              : #include &lt;linux/export.h&gt;</span>
+<span id="L35"><span class="lineNum">      35</span>              : #include &lt;linux/module.h&gt;</span>
+<span id="L36"><span class="lineNum">      36</span>              : #undef EXPORT_SYMBOL_NS_GPL</span>
+<span id="L37"><span class="lineNum">      37</span>              : #define EXPORT_SYMBOL_NS_GPL(sym, ns)   __EXPORT_SYMBOL(sym, &quot;GPL&quot;, ns)</span>
+<span id="L38"><span class="lineNum">      38</span>              : #undef MODULE_IMPORT_NS</span>
+<span id="L39"><span class="lineNum">      39</span>              : #define MODULE_IMPORT_NS(ns)    MODULE_INFO(import_ns, ns)</span>
+<span id="L40"><span class="lineNum">      40</span>              : #endif</span>
+<span id="L41"><span class="lineNum">      41</span>              : </span>
+<span id="L42"><span class="lineNum">      42</span>              : #if LINUX_VERSION_CODE &lt; KERNEL_VERSION(6, 14, 0)</span>
+<span id="L43"><span class="lineNum">      43</span>              : // Before 6.14 this was X86_MATCH_VFM_STEPPINGS(), taking a stepping mask</span>
+<span id="L44"><span class="lineNum">      44</span>              : #define X86_MATCH_VFM_STEPS(vfm, min_step, max_step, data) \</span>
+<span id="L45"><span class="lineNum">      45</span>              :         X86_MATCH_VFM_STEPPINGS(vfm, GENMASK(max_step, min_step), data)</span>
+<span id="L46"><span class="lineNum">      46</span>              : #endif // 6.14</span>
+<span id="L47"><span class="lineNum">      47</span>              : </span>
+<span id="L48"><span class="lineNum">      48</span>              : #if KERNEL_VERSION(7, 4, 0) &gt; LINUX_VERSION_CODE</span>
+<span id="L49"><span class="lineNum">      49</span>              : // 7.4 passes the subdev client info to the format and selection pad ops;</span>
+<span id="L50"><span class="lineNum">      50</span>              : // before, the ops tables point at wrappers without it.</span>
+<span id="L51"><span class="lineNum">      51</span>              : struct v4l2_subdev_client_info;</span>
+<span id="L52"><span class="lineNum">      52</span>              : #define IPU4_PAD_OP(fn) fn##_no_ci</span>
+<span id="L53"><span class="lineNum">      53</span>              : #define IPU4_DEFINE_PAD_OP(fn, arg_t)                                   \</span>
+<span id="L54"><span class="lineNum">      54</span>              : static int fn##_no_ci(struct v4l2_subdev *sd,                           \</span>
+<span id="L55"><span class="lineNum">      55</span>              :                       struct v4l2_subdev_state *state, arg_t *arg)      \</span>
+<span id="L56"><span class="lineNum">      56</span>              : {                                                                       \</span>
+<span id="L57"><span class="lineNum">      57</span>              :         return fn(sd, NULL, state, arg);                                \</span>
+<span id="L58"><span class="lineNum">      58</span>              : }</span>
+<span id="L59"><span class="lineNum">      59</span>              : #else</span>
+<span id="L60"><span class="lineNum">      60</span>              : #define IPU4_PAD_OP(fn) fn</span>
+<span id="L61"><span class="lineNum">      61</span>              : #define IPU4_DEFINE_PAD_OP(fn, arg_t)</span>
+<span id="L62"><span class="lineNum">      62</span>              : #endif // 7.4</span>
+<span id="L63"><span class="lineNum">      63</span>              : </span>
+<span id="L64"><span class="lineNum">      64</span>              : #endif // IPU4_COMPAT_H</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>

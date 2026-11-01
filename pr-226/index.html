@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IPU4 driver</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<header class="hero">
+  <h1>IPU4 driver</h1>
+  <p class="tagline">Intel IPU4 support for Linux, as an out-of-tree module (<code>kernel/ipu4/</code>) and as patches on the upstream ipu6 driver (<code>patches/ipu6-ipu4/</code>), tested against QEMU models of IPU4, IPU4P and IPU6.</p>
+  <p class="meta">
+    Last updated <time datetime="2026-11-01T23:00:18Z">2026-11-01T23:00:18Z</time>
+ · commit <a href="https://github.com/Kleist/ipu4-driver/commit/fefbc1ac5b229fd4ae734a03602afbf204966a43"><code>fefbc1a</code></a>    · <a href="https://github.com/Kleist/ipu4-driver">repository</a>
+  </p>
+</header>
+
+<section class="card" id="kernels">
+  <h2>Supported kernels</h2>
+  <p class="meta">
+    <code>kernel/ipu4/</code> builds and passes KUnit on every track in
+    <code>.github/kernel-pins/</code>; the ladder runs on <code>v7.3-rc4</code>.
+<a href="https://github.com/Kleist/ipu4-driver/actions/runs/41356034480">latest ci run on main</a>  </p>
+  <div class="kpi-row">
+    <div class="kpi kernel-track state-success">
+      <div class="kpi-label">Linux 6.12</div>
+      <div class="kpi-value"><code>v6.12.114</code></div>
+      <div class="kpi-sub">build + KUnit: success</div>
+    </div>
+    <div class="kpi kernel-track state-success">
+      <div class="kpi-label">Linux 6.18</div>
+      <div class="kpi-value"><code>v6.18.58</code></div>
+      <div class="kpi-sub">build + KUnit: success</div>
+    </div>
+    <div class="kpi kernel-track state-success">
+      <div class="kpi-label">Linux 7.3</div>
+      <div class="kpi-value"><code>v7.3</code></div>
+      <div class="kpi-sub">build + KUnit: success</div>
+    </div>
+  </div>
+</section>
+
+<section class="card" id="upstream">
+  <h2>Upstream divergence (kernel/ipu4 vs IPU6)</h2>
+  <p>
+    Upstream pin: <code>v6.12.114</code> ·
+    30 files differ ·
+    289 hunks ·
+    +3898 / −2458 lines
+  </p>
+  <h3>Divergence over time</h3>
+  <p class="meta">
+    Lines changed (added + removed) between <code>kernel/ipu4/</code> (and the
+    path the driver had before) and upstream <code>drivers/media/pci/intel/ipu6</code>,
+    local-only files excluded, after every mainline tag (compared with our tree at its date)
+    and every driver commit of ours (compared with the newest tag before it). Markers are
+    mainline releases and the steps that moved the count by 100+
+    lines: rcs, and our commits (click one to open it). Before v6.10 upstream has no ipu6
+    driver, so every line counts. Commit dates are author dates raised to the latest earlier driver
+    commit's date (rebases and cherry-picks keep old author dates).
+Today against upstream master
+    (2026-11-01): <strong>2902</strong> lines.  </p>
+  <canvas id="upstream-trend" height="90"></canvas>
+  <h3>Distance to the convergence target</h3>
+  <p>
+    <strong>5689</strong> lines of unexplained divergence
+    from the target tree: mainline <code>cbbddb6b08cc</code>
++ <code>patches/ipu6-ipu4p</code> (12) + <code>patches/ipu6-fixes</code> (2) + <code>patches/ipu6-ipu4</code> (10)     — outside the permanent delta in <code>tools/out-of-tree/delta.txt</code>. The plan is
+    "Convergence" in <code>tools/notes/ipu4-out-of-tree-plan.md</code>; the trend is
+    the orange line above.
+  </p>
+  <details>
+    <summary>45 files to converge</summary>
+    <table>
+      <thead><tr><th>File</th><th>Status</th><th>Lines</th></tr></thead>
+      <tbody>
+        <tr><td><code>ipu4p-fw-isys.c</code></td><td>missing here</td><td>997</td></tr>
+        <tr><td><code>ipu6-mmu-hw.c</code></td><td>differs</td><td>488</td></tr>
+        <tr><td><code>ipu6-isys-csi2.c</code></td><td>differs</td><td>414</td></tr>
+        <tr><td><code>ipu4p-fw-isys.h</code></td><td>missing here</td><td>406</td></tr>
+        <tr><td><code>ipu6-fw-isys.c</code></td><td>differs</td><td>399</td></tr>
+        <tr><td><code>ipu6-isys.c</code></td><td>differs</td><td>310</td></tr>
+        <tr><td><code>ipu6-fw-isys.h</code></td><td>differs</td><td>291</td></tr>
+        <tr><td><code>ipu6-isys-queue.c</code></td><td>differs</td><td>273</td></tr>
+        <tr><td><code>ipu7-mmu-hw.c</code></td><td>differs</td><td>262</td></tr>
+        <tr><td><code>ipu6.c</code></td><td>differs</td><td>233</td></tr>
+        <tr><td><code>ipu4p-isys-csi-phy.c</code></td><td>missing here</td><td>225</td></tr>
+        <tr><td><code>ipu6-buttress.c</code></td><td>differs</td><td>186</td></tr>
+        <tr><td><code>ipu6-fw-com.c</code></td><td>differs</td><td>120</td></tr>
+        <tr><td><code>ipu7-fw-isys.c</code></td><td>differs</td><td>120</td></tr>
+        <tr><td><code>ipu7-mmu-hw.h</code></td><td>differs</td><td>115</td></tr>
+        <tr><td><code>ipu4p-isys-csi2-regs.h</code></td><td>missing here</td><td>107</td></tr>
+        <tr><td><code>ipu7-fw-isys.h</code></td><td>differs</td><td>97</td></tr>
+        <tr><td><code>ipu6-isys-video.c</code></td><td>differs</td><td>74</td></tr>
+        <tr><td><code>ipu6-isys.h</code></td><td>differs</td><td>65</td></tr>
+        <tr><td><code>ipu4-platform-regs.h</code></td><td>not in target</td><td>63</td></tr>
+        <tr><td><code>ipu4-platform-isys-csi2-reg.h</code></td><td>not in target</td><td>58</td></tr>
+        <tr><td><code>ipu6-platform-buttress-regs.h</code></td><td>differs</td><td>57</td></tr>
+        <tr><td><code>ipu6.h</code></td><td>differs</td><td>57</td></tr>
+        <tr><td><code>ipu6-isys-subdev.c</code></td><td>differs</td><td>40</td></tr>
+        <tr><td><code>ipu7-boot.c</code></td><td>differs</td><td>35</td></tr>
+        <tr><td><code>ipu7-boot.h</code></td><td>differs</td><td>34</td></tr>
+        <tr><td><code>ipu4-platform-buttress-regs.h</code></td><td>not in target</td><td>25</td></tr>
+        <tr><td><code>ipu6-isys-csi2.h</code></td><td>differs</td><td>25</td></tr>
+        <tr><td><code>ipu6-platform-regs.h</code></td><td>differs</td><td>16</td></tr>
+        <tr><td><code>ipu6-bus.c</code></td><td>differs</td><td>15</td></tr>
+        <tr><td><code>ipu6-platform-isys-csi2-reg.h</code></td><td>differs</td><td>15</td></tr>
+        <tr><td><code>ipu7-platform-regs.h</code></td><td>differs</td><td>12</td></tr>
+        <tr><td><code>ipu6-mmu.c</code></td><td>differs</td><td>11</td></tr>
+        <tr><td><code>ipu6-fw-com.h</code></td><td>differs</td><td>10</td></tr>
+        <tr><td><code>ipu6-isys-subdev.h</code></td><td>differs</td><td>6</td></tr>
+        <tr><td><code>ipu7-isys-csi-phy.c</code></td><td>differs</td><td>6</td></tr>
+        <tr><td><code>ipu6-mmu.h</code></td><td>differs</td><td>5</td></tr>
+        <tr><td><code>ipu6-bus.h</code></td><td>differs</td><td>3</td></tr>
+        <tr><td><code>ipu6-buttress.h</code></td><td>differs</td><td>3</td></tr>
+        <tr><td><code>ipu6-cpd.c</code></td><td>differs</td><td>2</td></tr>
+        <tr><td><code>ipu6-isys-queue.h</code></td><td>differs</td><td>2</td></tr>
+        <tr><td><code>ipu6-isys-video.h</code></td><td>differs</td><td>2</td></tr>
+        <tr><td><code>ipu7-fw-com.h</code></td><td>differs</td><td>2</td></tr>
+        <tr><td><code>ipu7-isys-csi2-regs.h</code></td><td>differs</td><td>2</td></tr>
+        <tr><td><code>ipu7-fw-com.c</code></td><td>differs</td><td>1</td></tr>
+      </tbody>
+    </table>
+  </details>
+  <script id="upstream-history-data" type="application/json">{"schema":2,"generated_at":"2026-11-01T23:00:18Z","head":"fefbc1ac5b229fd4ae734a03602afbf204966a43","upstream_path":"drivers/media/pci/intel/ipu6","min_event":100,"points":[{"kind":"release","date":"2023-10-30T02:31:08Z","ts":1698633068000,"sha":"b85c985ff4255477d2ee8b9cbd14b374a1495832","subject":"media: add Kconfig and Makefile for IPU6","ref":"v6.6","ref_date":"2023-10-30T02:31:08Z","divergence":13002,"lines":13002,"files":32,"files_missing_upstream":32,"upstream_only_files":0,"upstream_only_lines":0,"delta":0,"event":true},{"kind":"commit","date":"2023-11-10T08:21:07Z","ts":1699604467000,"sha":"cdf0a9992673f78011bc1e9e31d626df7e9a0c4d","subject":"media: intel/ipu6: Make ipu6_buttress_ctrl const everywhere","ref":"v6.6","ref_date":"2023-10-30T02:31:08Z","divergence":12999,"lines":12999,"files":32,"files_missing_upstream":32,"upstream_only_files":0,"upstream_only_lines":0,"delta":-3,"event":false},{"kind":"commit","date":"2023-11-10T08:21:11Z","ts":1699604471000,"sha":"5729e871546c9f37304b73124fa09b777a7886d1","subject":"EMB-1779: HACK to make IPU4 pci probe work","ref":"v6.6","ref_date":"2023-10-30T02:31:08Z","divergence":13245,"lines":13245,"files":32,"files_missing_upstream":32,"upstream_only_files":0,"upstream_only_lines":0,"delta":246,"event":true},{"kind":"commit","date":"2023-11-10T14:56:39Z","ts":1699628199000,"sha":"98b57d91d5641d0c434803c083599bcd413babc2","subject":"media: intel/ipu6: HACK tracing: Mark locations of writel/readl in mmiotrace","ref":"v6.6","ref_date":"2023-10-30T02:31:08Z","divergence":13283,"lines":13283,"files":32,"files_missing_upstream":32,"upstream_only_files":0,"upstream_only_lines":0,"delta":38,"event":false},{"kind":"commit","date":"2023-11-10T14:57:51Z","ts":1699628271000,"sha":"3d449e5d0e4eff700b5ecb14e32e2cf770575d46","subject":"media: intel/ipu6: Change buttress IRQ write for IPU4","ref":"v6.6","ref_date":"2023-10-30T02:31:08Z","divergence":13291,"lines":13291,"files":32,"files_missing_upstream":32,"upstream_only_files":0,"upstream_only_lines":0,"delta":8,"event":false},{"kind":"commit","date":"2023-11-10T14:58:23Z","ts":1699628303000,"sha":"0ff9d11247b0a6c3d5a51ede2556228ab11c192d","subject":"EMB-1864: Align TLB cache invalidation with 4.19 driver","ref":"v6.6","ref_date":"2023-10-30T02:31:08Z","divergence":13425,"lines":13425,"files":32,"files_missing_upstream":32,"upstream_only_files":0,"upstream_only_lines":0,"delta":134,"event":true},{"kind":"commit","date":"2023-11-10T14:59:30Z","ts":1699628370000,"sha":"1dd4e8dafc62dd38cc50997a0829ce3e2d47dce8","subject":"EMB-1864: Porting isys_probe","ref":"v6.6","ref_date":"2023-10-30T02:31:08Z","divergence":13503,"lines":13503,"files":32,"files_missing_upstream":32,"upstream_only_files":0,"upstream_only_lines":0,"delta":78,"event":false},{"kind":"commit","date":"2023-12-01T13:12:30Z","ts":1701436350000,"sha":"b2067a7ccf88b503cd3d851df443159703d4a1a9","subject":"ambu: Add AMBU_IPU_BRIDGE","ref":"v6.7-rc3","ref_date":"2023-11-27T03:59:33Z","divergence":13507,"lines":13507,"files":32,"files_missing_upstream":32,"upstream_only_files":0,"upstream_only_lines":0,"delta":4,"event":false},{"kind":"commit","date":"2023-12-06T13:04:46Z","ts":1701867886000,"sha":"3af5f9231468c73d1c2d7118a3deaffb3922e30e","subject":"EMB-2014: media: intel/ipu4: Add support for yavta with XBGR32","ref":"v6.7-rc4","ref_date":"2023-12-03T09:52:56Z","divergence":13509,"lines":13509,"files":32,"files_missing_upstream":32,"upstream_only_files":0,"upstream_only_lines":0,"delta":2,"event":false},{"kind":"commit","date":"2023-12-06T13:04:46Z","ts":1701867886000,"sha":"84f3e8e447f316735b0531666f4efed7594cace9","subject":"EMB-2014: media: intel/ipu4: Remove all but one \"Not implemented\" warns","ref":"v6.7-rc4","ref_date":"2023-12-03T09:52:56Z","divergence":13492,"lines":13492,"files":32,"files_missing_upstream":32,"upstream_only_files":0,"upstream_only_lines":0,"delta":-17,"event":false},{"kind":"commit","date":"2023-12-06T13:04:46Z","ts":1701867886000,"sha":"b0325fa01b1e44b7a601075307f44a3435b889f6","subject":"EMB-2014: media: intel/ipu4: Remove phy handling","ref":"v6.7-rc4","ref_date":"2023-12-03T09:52:56Z","divergence":11977,"lines":11977,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-1515,"event":true},{"kind":"commit","date":"2023-12-06T13:04:46Z","ts":1701867886000,"sha":"da2ebec9eb30a2a2ca47856a6d57d5d8c95ebc31","subject":"EMB-2014: media: intel/ipu4: Remove watermark","ref":"v6.7-rc4","ref_date":"2023-12-03T09:52:56Z","divergence":11589,"lines":11589,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-388,"event":true},{"kind":"commit","date":"2023-12-06T13:04:47Z","ts":1701867887000,"sha":"e8287c4f5e8717bf02a6acbaea5ddde26b5e5453","subject":"EMB-2014: media: intel/ipu4: Fix leak of mmu_info->l2_pts","ref":"v6.7-rc4","ref_date":"2023-12-03T09:52:56Z","divergence":11590,"lines":11590,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":1,"event":false},{"kind":"commit","date":"2023-12-06T13:04:47Z","ts":1701867887000,"sha":"26638f4cd0b38082722e4d9ad57346a8d02580ce","subject":"EMB-2014: media: intel/ipu4: Port pdata_init","ref":"v6.7-rc4","ref_date":"2023-12-03T09:52:56Z","divergence":11481,"lines":11481,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-109,"event":true},{"kind":"commit","date":"2023-12-06T13:04:47Z","ts":1701867887000,"sha":"fca13c151096aaad1ecad86d140bcb70b5bf6851","subject":"EMB-2014: media: intel/ipu4: Port fw-com.h/c","ref":"v6.7-rc4","ref_date":"2023-12-03T09:52:56Z","divergence":11478,"lines":11478,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-3,"event":false},{"kind":"commit","date":"2023-12-06T13:04:47Z","ts":1701867887000,"sha":"caf51e89736d842d7b740c3192886abef83dd3c0","subject":"EMB-2014: media: intel/ipu4: Port fw com structs to IPU4","ref":"v6.7-rc4","ref_date":"2023-12-03T09:52:56Z","divergence":11466,"lines":11466,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-12,"event":false},{"kind":"commit","date":"2023-12-06T13:04:47Z","ts":1701867887000,"sha":"d2d61de3f8a5cfd0fc3cab305ed65510d975cfdf","subject":"EMB-2014: media: intel/ipu4: Fix NULL pointer deref in ipu6_isys_put_stream","ref":"v6.7-rc4","ref_date":"2023-12-03T09:52:56Z","divergence":11467,"lines":11467,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":1,"event":false},{"kind":"commit","date":"2023-12-06T13:04:48Z","ts":1701867888000,"sha":"b07ac76c039ec0df972cfbd236c611555a194373","subject":"EMB-2014: media: intel/ipu4: Small tweaks to get to calling STREAM_OPEN","ref":"v6.7-rc4","ref_date":"2023-12-03T09:52:56Z","divergence":11462,"lines":11462,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-5,"event":false},{"kind":"commit","date":"2023-12-06T13:04:48Z","ts":1701867888000,"sha":"2d63f39cf3ed6701576c70067e9752230977d93b","subject":"EMB-2014: media: intel/ipu4: Remove unused sensor_type","ref":"v6.7-rc4","ref_date":"2023-12-03T09:52:56Z","divergence":11452,"lines":11452,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-10,"event":false},{"kind":"commit","date":"2023-12-06T13:04:48Z","ts":1701867888000,"sha":"8718f1d8a5b2fcb0dad57fd355d6b3ecb45d77a2","subject":"EMB-2014: media: intel/ipu4: Port video_open/video_release","ref":"v6.7-rc4","ref_date":"2023-12-03T09:52:56Z","divergence":11507,"lines":11507,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":55,"event":false},{"kind":"commit","date":"2023-12-07T14:10:33Z","ts":1701958233000,"sha":"8770de7fa103d9f2c8bcda10be15f5db6613fa08","subject":"EMB-2014: media: intel/ipu4: Remove unused reg #defines","ref":"v6.7-rc4","ref_date":"2023-12-03T09:52:56Z","divergence":11184,"lines":11184,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-323,"event":true},{"kind":"commit","date":"2023-12-07T14:10:33Z","ts":1701958233000,"sha":"e40d5c310a1ec008bb69e50aa48c5dd858da123c","subject":"EMB-2014: media: intel/ipu4: Fix driver names","ref":"v6.7-rc4","ref_date":"2023-12-03T09:52:56Z","divergence":11177,"lines":11177,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-7,"event":false},{"kind":"commit","date":"2023-12-11T12:24:48Z","ts":1702297488000,"sha":"ba01482a39cd5bdaa3971ecc55743c87b756e886","subject":"EMB-2014: media: intel/ipu4: Remove IPU6 psys_ipdata","ref":"v6.7-rc5","ref_date":"2023-12-10T22:33:40Z","divergence":11094,"lines":11094,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-83,"event":false},{"kind":"commit","date":"2023-12-12T09:03:23Z","ts":1702371803000,"sha":"9c789208759fed2ded7d01eab627d48ad7a1561f","subject":"EMB-2014: media: intel/ipu4: Remove IPU6 isys_ipdata","ref":"v6.7-rc5","ref_date":"2023-12-10T22:33:40Z","divergence":11013,"lines":11013,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-81,"event":false},{"kind":"commit","date":"2023-12-12T09:03:23Z","ts":1702371803000,"sha":"995513795e8b196855a9a3f35cd9fa34d56a47be","subject":"EMB-2014: media: intel/ipu4: hardcode buttress ref_clk as in old driver","ref":"v6.7-rc5","ref_date":"2023-12-10T22:33:40Z","divergence":10987,"lines":10987,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-26,"event":false},{"kind":"commit","date":"2023-12-12T09:03:23Z","ts":1702371803000,"sha":"3b4663cdc006277191c5b6399875110feea2f388","subject":"EMB-2014: media: intel/ipu4: buttress: remove unused variable","ref":"v6.7-rc5","ref_date":"2023-12-10T22:33:40Z","divergence":10985,"lines":10985,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-2,"event":false},{"kind":"commit","date":"2023-12-12T09:03:23Z","ts":1702371803000,"sha":"301949913c20e6254addaf4c658e14c65e1bcd91","subject":"EMB-2014: media: intel/ipu4: Remove non-secure configure_spc","ref":"v6.7-rc5","ref_date":"2023-12-10T22:33:40Z","divergence":10951,"lines":10951,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-34,"event":false},{"kind":"commit","date":"2023-12-12T09:03:23Z","ts":1702371803000,"sha":"1638ed25f97fd701b8c00f809219250ab9f9d3c7","subject":"EMB-2014: media: intel/ipu4: Remove HACKs","ref":"v6.7-rc5","ref_date":"2023-12-10T22:33:40Z","divergence":10944,"lines":10944,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-7,"event":false},{"kind":"commit","date":"2023-12-12T09:03:23Z","ts":1702371803000,"sha":"c174f1ddd4cf0d4aac5b6eabafce33ec388f101c","subject":"EMB-2014: media: intel/ipu4: Remove mmiotrace_printk","ref":"v6.7-rc5","ref_date":"2023-12-10T22:33:40Z","divergence":10943,"lines":10943,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-1,"event":false},{"kind":"commit","date":"2023-12-12T09:03:23Z","ts":1702371803000,"sha":"4036c6039630783016a47d441c57faf3043612ff","subject":"EMB-2014: media: intel/ipu4: Add ipu_dump_state","ref":"v6.7-rc5","ref_date":"2023-12-10T22:33:40Z","divergence":11009,"lines":11009,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":66,"event":false},{"kind":"commit","date":"2023-12-12T09:03:23Z","ts":1702371803000,"sha":"788bc8070a5b88186038c9465cbb3a6f26a6c1e8","subject":"EMB-2014: media: intel/ipu4: Port csi2 ISR","ref":"v6.7-rc5","ref_date":"2023-12-10T22:33:40Z","divergence":11053,"lines":11053,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":44,"event":false},{"kind":"commit","date":"2023-12-12T09:03:23Z","ts":1702371803000,"sha":"cc56c554eb9b0bd6b4202413c03f10a03a0d3732","subject":"EMB-2014: media: intel/ipu4: Port csi_set_stream","ref":"v6.7-rc5","ref_date":"2023-12-10T22:33:40Z","divergence":10987,"lines":10987,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-66,"event":false},{"kind":"commit","date":"2023-12-14T11:19:49Z","ts":1702552789000,"sha":"fd61e2dcd9e492a10db9ae37cdb00bd80a780efe","subject":"EMB-2014: media: intel/ipu4: Port csi error handlers","ref":"v6.7-rc5","ref_date":"2023-12-10T22:33:40Z","divergence":10996,"lines":10996,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":9,"event":false},{"kind":"commit","date":"2024-01-03T10:16:36Z","ts":1704276996000,"sha":"060e1210b847495340376f85c09ac6c4649aa963","subject":"media: intel/ipu6: Only call bus device if irq_mask matches","ref":"v6.7-rc8","ref_date":"2023-12-31T20:51:25Z","divergence":10998,"lines":10998,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":2,"event":false},{"kind":"release","date":"2024-01-07T20:18:38Z","ts":1704658718000,"sha":"060e1210b847495340376f85c09ac6c4649aa963","subject":"media: intel/ipu6: Only call bus device if irq_mask matches","ref":"v6.7","ref_date":"2024-01-07T20:18:38Z","divergence":10998,"lines":10998,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":0,"event":true},{"kind":"commit","date":"2024-01-09T11:30:27Z","ts":1704799827000,"sha":"638d45e119ea93c00111195e80b54b64657385c4","subject":"media: intel/ipu6: Use vb2_video_unregister_device to cleanup queue","ref":"v6.7","ref_date":"2024-01-07T20:18:38Z","divergence":10988,"lines":10988,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-10,"event":false},{"kind":"commit","date":"2024-01-09T11:30:27Z","ts":1704799827000,"sha":"6e23045a71d71190a531ce0330117de2f958d094","subject":"media: intel/ipu6: Prevent ISR calls during PCI unbind/remove","ref":"v6.7","ref_date":"2024-01-07T20:18:38Z","divergence":10989,"lines":10989,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":1,"event":false},{"kind":"commit","date":"2024-01-09T11:42:10Z","ts":1704800530000,"sha":"84a186a51a071286ee0cd53167e306ef0fd4caf4","subject":"media: intel/ipu6: Fix isys unregister order","ref":"v6.7","ref_date":"2024-01-07T20:18:38Z","divergence":10990,"lines":10990,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":1,"event":false},{"kind":"commit","date":"2024-01-10T12:24:14Z","ts":1704889454000,"sha":"f867a83036ad9d6a53eab43d588b4143eb7a239c","subject":"media: intel/ipu6: Simplify ipu6_put_fw_msg_buf","ref":"v6.7","ref_date":"2024-01-07T20:18:38Z","divergence":10986,"lines":10986,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-4,"event":false},{"kind":"commit","date":"2024-01-10T12:48:59Z","ts":1704890939000,"sha":"786bf59d631959431ac0f5be7a11122e2d304e7a","subject":"media: intel/ipu4: Fix freeing of isys_fw_msgs","ref":"v6.7","ref_date":"2024-01-07T20:18:38Z","divergence":10983,"lines":10983,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-3,"event":false},{"kind":"commit","date":"2024-01-11T15:19:08Z","ts":1704986348000,"sha":"9c1dd9acce900612841d1b49ebc80ca576aaefbe","subject":"media: intel/ipu4: Change to single-planar instead of _MPLANE","ref":"v6.7","ref_date":"2024-01-07T20:18:38Z","divergence":10966,"lines":10966,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-17,"event":false},{"kind":"commit","date":"2024-01-30T13:37:16Z","ts":1706621836000,"sha":"c5af2765f32c99cc7029a2c54030bbcb0b68c8b2","subject":"EMB-2127: intel/ipu4: Log SOF/EOF reception of first N frames","ref":"v6.8-rc2","ref_date":"2024-01-29T01:01:12Z","divergence":10977,"lines":10977,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":11,"event":false},{"kind":"commit","date":"2024-02-06T14:11:05Z","ts":1707228665000,"sha":"bdda692389527fc987a21af72f2e414a7aca33d9","subject":"media: intel/ipu6: Unregister isys devices before freeing fw msg buffers","ref":"v6.8-rc3","ref_date":"2024-02-04T12:20:36Z","divergence":10978,"lines":10978,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":1,"event":false},{"kind":"commit","date":"2024-03-08T13:30:11Z","ts":1709904611000,"sha":"31e3b1660f6976baee5a635bb9f16c27119d5466","subject":"media: intel/ipu6: Remove EOF logging","ref":"v6.8-rc7","ref_date":"2024-03-03T21:02:52Z","divergence":10959,"lines":10959,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-19,"event":false},{"kind":"commit","date":"2024-03-08T13:30:46Z","ts":1709904646000,"sha":"96f0b9189ff8429b6cb5bd9fc5a5a4232ce41662","subject":"media: intel/ipu6: Improve ipu_dump_state","ref":"v6.8-rc7","ref_date":"2024-03-03T21:02:52Z","divergence":10955,"lines":10955,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-4,"event":false},{"kind":"release","date":"2024-03-10T20:38:09Z","ts":1710103089000,"sha":"96f0b9189ff8429b6cb5bd9fc5a5a4232ce41662","subject":"media: intel/ipu6: Improve ipu_dump_state","ref":"v6.8","ref_date":"2024-03-10T20:38:09Z","divergence":10955,"lines":10955,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":0,"event":true},{"kind":"commit","date":"2024-03-15T13:08:39Z","ts":1710508119000,"sha":"4ae5fd0ce265367559202f525fb66446736254cb","subject":"media: intel/ipu6: ipu_dump_state print begin/end markers","ref":"v6.8","ref_date":"2024-03-10T20:38:09Z","divergence":10962,"lines":10962,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":7,"event":false},{"kind":"commit","date":"2024-03-21T10:18:51Z","ts":1711016331000,"sha":"015e938ab41e40980047f53be1f4e1167cf9746f","subject":"EMB-2177: media: intel/ipu4: Disable sof_event_by_stream in csi2_isr","ref":"v6.8","ref_date":"2024-03-10T20:38:09Z","divergence":10961,"lines":10961,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-1,"event":false},{"kind":"commit","date":"2024-04-04T10:17:31Z","ts":1712225851000,"sha":"94094c687fda863faf4c9dbd5261768cc8e52420","subject":"media: intel/ipu6: Implement ipu6_isys_fw_get/put","ref":"v6.9-rc2","ref_date":"2024-03-31T21:32:39Z","divergence":10982,"lines":10982,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":21,"event":false},{"kind":"commit","date":"2024-04-04T10:17:31Z","ts":1712225851000,"sha":"e37fb490c48f95e755c4389cffb1e6d32f4c1873","subject":"media: intel/ipu6: Inline isys-queue function pointers","ref":"v6.9-rc2","ref_date":"2024-03-31T21:32:39Z","divergence":10958,"lines":10958,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-24,"event":false},{"kind":"commit","date":"2024-04-04T10:17:31Z","ts":1712225851000,"sha":"d6c0326b4ec6259fbe627ba3178e1ce27e1ccd01","subject":"media: intel/ipu6: Add ipu6_bus_reset_device (unused)","ref":"v6.9-rc2","ref_date":"2024-03-31T21:32:39Z","divergence":10974,"lines":10974,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":16,"event":false},{"kind":"commit","date":"2024-04-04T10:17:31Z","ts":1712225851000,"sha":"7c915601af4599f660d6cca9b9fa29c5878862e3","subject":"media: intel/ipu4: Add unused dump_queue_info","ref":"v6.9-rc2","ref_date":"2024-03-31T21:32:39Z","divergence":11016,"lines":11016,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":42,"event":false},{"kind":"commit","date":"2024-04-04T11:14:24Z","ts":1712229264000,"sha":"d35b29b19b08dccb9ba50740a445255aba8c63a9","subject":"media: intel/ipu4: Implement silent_reset when 'need_reset'","ref":"v6.9-rc2","ref_date":"2024-03-31T21:32:39Z","divergence":11193,"lines":11193,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":177,"event":true},{"kind":"commit","date":"2024-04-09T11:03:32Z","ts":1712660612000,"sha":"7a7a885f5ddf30a2ddee87061e48311969da2d2c","subject":"media: intel/ipu4: Simplify video_open/video_release","ref":"v6.9-rc3","ref_date":"2024-04-07T20:22:46Z","divergence":11160,"lines":11160,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":-33,"event":false},{"kind":"commit","date":"2024-04-12T09:22:47Z","ts":1712913767000,"sha":"822c41f40fd671a9c2eca3c212ac180005943647","subject":"media: intel/ipu4: Add enable_silent_reset module parameter","ref":"v6.9-rc3","ref_date":"2024-04-07T20:22:46Z","divergence":11169,"lines":11169,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":9,"event":false},{"kind":"release","date":"2024-05-12T21:12:29Z","ts":1715548349000,"sha":"822c41f40fd671a9c2eca3c212ac180005943647","subject":"media: intel/ipu4: Add enable_silent_reset module parameter","ref":"v6.9","ref_date":"2024-05-12T21:12:29Z","divergence":11169,"lines":11169,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":0,"event":true},{"kind":"commit","date":"2024-05-17T10:13:49Z","ts":1715940829000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.9","ref_date":"2024-05-12T21:12:29Z","divergence":11181,"lines":11181,"files":29,"files_missing_upstream":29,"upstream_only_files":0,"upstream_only_lines":0,"delta":12,"event":false},{"kind":"rc","date":"2024-05-26T22:20:12Z","ts":1716762012000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.10-rc1","ref_date":"2024-05-26T22:20:12Z","divergence":4601,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":-6580,"event":true},{"kind":"rc","date":"2024-06-09T21:19:43Z","ts":1717967983000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.10-rc3","ref_date":"2024-06-09T21:19:43Z","divergence":4675,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":74,"event":false},{"kind":"rc","date":"2024-07-07T21:23:46Z","ts":1720387426000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.10-rc7","ref_date":"2024-07-07T21:23:46Z","divergence":4677,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":2,"event":false},{"kind":"release","date":"2024-07-14T22:43:32Z","ts":1720997012000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.10","ref_date":"2024-07-14T22:43:32Z","divergence":4677,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":0,"event":true},{"kind":"rc","date":"2024-07-28T21:19:55Z","ts":1722201595000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.11-rc1","ref_date":"2024-07-28T21:19:55Z","divergence":4843,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":166,"event":true},{"kind":"release","date":"2024-09-15T14:57:56Z","ts":1726412276000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.11","ref_date":"2024-09-15T14:57:56Z","divergence":4843,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":0,"event":true},{"kind":"rc","date":"2024-09-29T22:06:19Z","ts":1727647579000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.12-rc1","ref_date":"2024-09-29T22:06:19Z","divergence":4857,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":14,"event":false},{"kind":"release","date":"2024-11-17T22:15:08Z","ts":1731881708000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.12","ref_date":"2024-11-17T22:15:08Z","divergence":4857,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":0,"event":true},{"kind":"rc","date":"2024-12-01T22:28:56Z","ts":1733092136000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.13-rc1","ref_date":"2024-12-01T22:28:56Z","divergence":5624,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":767,"event":true},{"kind":"rc","date":"2024-12-08T22:03:39Z","ts":1733695419000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.13-rc2","ref_date":"2024-12-08T22:03:39Z","divergence":5668,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":44,"event":false},{"kind":"release","date":"2025-01-19T23:51:45Z","ts":1737330705000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.13","ref_date":"2025-01-19T23:51:45Z","divergence":5668,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":0,"event":true},{"kind":"rc","date":"2025-02-02T23:39:26Z","ts":1738539566000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.14-rc1","ref_date":"2025-02-02T23:39:26Z","divergence":5671,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":3,"event":false},{"kind":"release","date":"2025-03-24T14:02:41Z","ts":1742824961000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.14","ref_date":"2025-03-24T14:02:41Z","divergence":5671,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":0,"event":true},{"kind":"rc","date":"2025-04-06T20:11:33Z","ts":1743970293000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.15-rc1","ref_date":"2025-04-06T20:11:33Z","divergence":5686,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":15,"event":false},{"kind":"release","date":"2025-05-25T23:09:23Z","ts":1748214563000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.15","ref_date":"2025-05-25T23:09:23Z","divergence":5686,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":0,"event":true},{"kind":"rc","date":"2025-06-08T20:44:43Z","ts":1749415483000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.16-rc1","ref_date":"2025-06-08T20:44:43Z","divergence":5776,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":90,"event":false},{"kind":"release","date":"2025-07-27T21:26:38Z","ts":1753651598000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.16","ref_date":"2025-07-27T21:26:38Z","divergence":5776,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":0,"event":true},{"kind":"rc","date":"2025-08-10T16:41:16Z","ts":1754844076000,"sha":"ac9aca246dbe944ef20226aa284ac77f934caa51","subject":"ipu6-dma: Debug print when gt_vm_info fails","ref":"v6.17-rc1","ref_date":"2025-08-10T16:41:16Z","divergence":5774,"lines":11181,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":-2,"event":false},{"kind":"commit","date":"2025-09-13T20:09:18Z","ts":1757794158000,"sha":"74f496c33f6dd1b6c18d8f96bafcb51a899fd1c4","subject":"ipu4: Fix unhandled return code","ref":"v6.17-rc5","ref_date":"2025-09-07T21:22:57Z","divergence":5778,"lines":11185,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":4,"event":false},{"kind":"commit","date":"2025-09-16T19:04:48Z","ts":1758049488000,"sha":"efedf435f1fb62790ff771e4f50c23353464bbd1","subject":"EMB-3036: ipu6: Reduce IPU6_FW_CALL_TIMEOUT_JIFFIES (2000ms -> 500ms)","ref":"v6.17-rc6","ref_date":"2025-09-14T21:21:14Z","divergence":5780,"lines":11185,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":2,"event":false},{"kind":"commit","date":"2025-09-16T19:59:25Z","ts":1758052765000,"sha":"1f227f0973cfbcc6248732aaaa34de669341c8e5","subject":"ipu4: Use ambu-ipu-bridge.h from emb.git","ref":"v6.17-rc6","ref_date":"2025-09-14T21:21:14Z","divergence":5781,"lines":11184,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":1,"event":false},{"kind":"commit","date":"2025-09-26T08:12:11Z","ts":1758874331000,"sha":"28ea4043f898215c4a7579594ea2058ffcfc22dc","subject":"EMB-3304: ipu4: Clean up check-patch warnings","ref":"v6.17-rc7","ref_date":"2025-09-21T22:08:52Z","divergence":5821,"lines":11242,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":40,"event":false},{"kind":"commit","date":"2025-09-26T08:12:11Z","ts":1758874331000,"sha":"a13468e997a8e99fa09730621312c5b102d2ea0e","subject":"EMB-3274: ipu4: Make compat header for renamed v4l2_subdev_state_get functions","ref":"v6.17-rc7","ref_date":"2025-09-21T22:08:52Z","divergence":5809,"lines":11244,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":-12,"event":false},{"kind":"release","date":"2025-09-28T21:39:22Z","ts":1759095562000,"sha":"a13468e997a8e99fa09730621312c5b102d2ea0e","subject":"EMB-3274: ipu4: Make compat header for renamed v4l2_subdev_state_get functions","ref":"v6.17","ref_date":"2025-09-28T21:39:22Z","divergence":5809,"lines":11244,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":0,"event":true},{"kind":"rc","date":"2025-10-12T20:42:36Z","ts":1760301756000,"sha":"a13468e997a8e99fa09730621312c5b102d2ea0e","subject":"EMB-3274: ipu4: Make compat header for renamed v4l2_subdev_state_get functions","ref":"v6.18-rc1","ref_date":"2025-10-12T20:42:36Z","divergence":5818,"lines":11244,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":9,"event":false},{"kind":"commit","date":"2025-10-30T20:55:19Z","ts":1761857719000,"sha":"e18f65712e0cf187b1ebb8df239c9c0bc5a19b66","subject":"EMB-3274: ipu4: Missing static on function","ref":"v6.18-rc3","ref_date":"2025-10-26T22:59:49Z","divergence":5816,"lines":11244,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":-2,"event":false},{"kind":"commit","date":"2025-10-30T20:55:19Z","ts":1761857719000,"sha":"9c1797fc10e67178b7655653d74e2a07410ebaee","subject":"EMB-3274: ipu4: Fix .init_cfg for linux 6.10","ref":"v6.18-rc3","ref_date":"2025-10-26T22:59:49Z","divergence":5828,"lines":11266,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":12,"event":false},{"kind":"commit","date":"2025-10-30T20:55:19Z","ts":1761857719000,"sha":"663d2e1ae634dd54ca7a971cc3b849c95daf540a","subject":"EMB-3274: ipu4: Add const to ipu6_bus_device auxdrv","ref":"v6.18-rc3","ref_date":"2025-10-26T22:59:49Z","divergence":5826,"lines":11266,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":-2,"event":false},{"kind":"commit","date":"2025-10-30T21:52:32Z","ts":1761861152000,"sha":"c3e9d748b754016b11670cd3ed9a765b92e5000c","subject":"EMB-3274: ipu4: Align ipu6-platform-regs.h with v6.10","ref":"v6.18-rc3","ref_date":"2025-10-26T22:59:49Z","divergence":5733,"lines":11359,"files":29,"files_missing_upstream":0,"upstream_only_files":3,"upstream_only_lines":1498,"delta":-93,"event":false},{"kind":"commit","date":"2025-10-30T21:56:29Z","ts":1761861389000,"sha":"11c541f3d70968347ccd49bf14e6fcb7777354cd","subject":"EMB-3274: ipu4: Rename ipu6-platform-isys-csi2-reg.h to ipu4*","ref":"v6.18-rc3","ref_date":"2025-10-26T22:59:49Z","divergence":5538,"lines":11306,"files":28,"files_missing_upstream":0,"upstream_only_files":4,"upstream_only_lines":1670,"delta":-195,"event":true},{"kind":"commit","date":"2025-10-30T21:59:54Z","ts":1761861594000,"sha":"2eaa9c5e873fbd9510e42c5fe4b0fd13246817fc","subject":"EMB-3274: ipu4: Align ipu6-platform-buttress-regs.h with v6.10","ref":"v6.18-rc3","ref_date":"2025-10-26T22:59:49Z","divergence":5480,"lines":11366,"files":28,"files_missing_upstream":0,"upstream_only_files":4,"upstream_only_lines":1670,"delta":-58,"event":false},{"kind":"commit","date":"2025-10-30T22:02:53Z","ts":1761861773000,"sha":"676b4591c1b70cf83c398117e7cabec4f7ad918a","subject":"EMB-3274: ipu4: Align ipu6-mmu.h with v6.10","ref":"v6.18-rc3","ref_date":"2025-10-26T22:59:49Z","divergence":5446,"lines":11386,"files":28,"files_missing_upstream":0,"upstream_only_files":4,"upstream_only_lines":1670,"delta":-34,"event":false},{"kind":"commit","date":"2025-10-30T22:49:45Z","ts":1761864585000,"sha":"b64a488090f3a529f322ce41466eee4de120cf86","subject":"EMB-3274: Aligned ipu6-isys-video (and queue and isys) with v6.10","ref":"v6.18-rc3","ref_date":"2025-10-26T22:59:49Z","divergence":4439,"lines":11785,"files":28,"files_missing_upstream":0,"upstream_only_files":4,"upstream_only_lines":1670,"delta":-1007,"event":true},{"kind":"commit","date":"2025-10-31T08:51:21Z","ts":1761900681000,"sha":"ed82274314ff85d11c39dbd17c85ad6d2ac15478","subject":"EMB-3274: ipu4: Add unused phy-files from v6.10","ref":"v6.18-rc3","ref_date":"2025-10-26T22:59:49Z","divergence":4443,"lines":13283,"files":31,"files_missing_upstream":0,"upstream_only_files":1,"upstream_only_lines":172,"delta":4,"event":false},{"kind":"commit","date":"2025-10-31T09:10:16Z","ts":1761901816000,"sha":"69978cc4d3a7f58a711672d16aff27222f3d2e43","subject":"EMB-3274: ipu4: Make ipu4-platform-regs.h it's own file","ref":"v6.18-rc3","ref_date":"2025-10-26T22:59:49Z","divergence":4369,"lines":13265,"files":31,"files_missing_upstream":0,"upstream_only_files":1,"upstream_only_lines":172,"delta":-74,"event":false},{"kind":"commit","date":"2025-10-31T09:13:16Z","ts":1761901996000,"sha":"9862a1181b9c58eadd4c668f262f691624ef49f9","subject":"EMB-3274: ipu4: Move ipu4 platform buttress regs to separate file","ref":"v6.18-rc3","ref_date":"2025-10-26T22:59:49Z","divergence":4359,"lines":13255,"files":31,"files_missing_upstream":0,"upstream_only_files":1,"upstream_only_lines":172,"delta":-10,"event":false},{"kind":"commit","date":"2025-11-03T20:15:18Z","ts":1762200918000,"sha":"4cba887b55a4cfae71e0ed886c15b8adc5ab2939","subject":"EMB-3274: ipu4: Align ipu6.c includes with upstream 6.10","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":4343,"lines":13275,"files":31,"files_missing_upstream":0,"upstream_only_files":1,"upstream_only_lines":172,"delta":-16,"event":false},{"kind":"commit","date":"2025-11-03T20:15:18Z","ts":1762200918000,"sha":"438af56839644ce1e7c3d0956877789156bb3874","subject":"EMB-3274: ipu4: Remove readl/writel location marking","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":4303,"lines":13235,"files":31,"files_missing_upstream":0,"upstream_only_files":1,"upstream_only_lines":172,"delta":-40,"event":false},{"kind":"commit","date":"2025-11-03T20:19:51Z","ts":1762201191000,"sha":"d9d7e66ab5a3cb1224349bd810f5c433b2688b4b","subject":"EMB-3274: ipu4: Remove ipu_dump_state","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":4233,"lines":13159,"files":31,"files_missing_upstream":0,"upstream_only_files":1,"upstream_only_lines":172,"delta":-70,"event":false},{"kind":"commit","date":"2025-11-03T21:13:33Z","ts":1762204413000,"sha":"33d1b47883242d8e882c2193c18c702beabec75e","subject":"EMB-3274: ipu4: Align isys with upstream 6.10","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":4145,"lines":13437,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-88,"event":false},{"kind":"commit","date":"2025-11-03T21:13:33Z","ts":1762204413000,"sha":"f32dbc881cc889f80d56a751ecf8cb5644bf8b8c","subject":"EMB-3274: ipu4: Include ipu4 regs files from ipu6 regs files","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":4141,"lines":13437,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-4,"event":false},{"kind":"commit","date":"2025-11-03T21:13:33Z","ts":1762204413000,"sha":"0c765772f38ba384279ca670cbe8e7da3a7182bc","subject":"EMB-3274: ipu4: Remove WARN not implemented for non-secure mode","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":4111,"lines":13471,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-30,"event":false},{"kind":"commit","date":"2025-11-03T21:13:33Z","ts":1762204413000,"sha":"5815c528a9c936ca874d7d4499a8658aa9dd0d6f","subject":"EMB-3274: ipu4: Align firmware request with upstream 6.10","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":4069,"lines":13429,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-42,"event":false},{"kind":"commit","date":"2025-11-03T21:19:39Z","ts":1762204779000,"sha":"0c9697d8556d7dff74b897040673ae5c943e59e2","subject":"EMB-3274: ipu4: Split isys_isr in ipu4 and ipu6 variants","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":4068,"lines":13494,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-1,"event":false},{"kind":"commit","date":"2025-11-03T21:21:25Z","ts":1762204885000,"sha":"e2c915f5fa8a84ef522c60181decf9c7e10ba9bb","subject":"EMB-3274: ipu4: Re-introduce unused isys watermark code","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":3807,"lines":13763,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-261,"event":true},{"kind":"commit","date":"2025-11-03T21:34:06Z","ts":1762205646000,"sha":"3d8bd3b48a2fee3fe5b2e1e304784463a9d00845","subject":"EMB-3274: ipu4: Align ipu6-bus w. upstream 6.10","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":3784,"lines":13782,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-23,"event":false},{"kind":"commit","date":"2025-11-03T21:35:20Z","ts":1762205720000,"sha":"1f6f008dcbff4bfa38b3ea393cf249a4db7db33a","subject":"EMB-3274: ipu4: Align buttress w. upstream 6.10","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":3711,"lines":13809,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-73,"event":false},{"kind":"commit","date":"2025-11-04T05:06:35Z","ts":1762232795000,"sha":"9b39af205a21aba5d8e30cc03f68769cf48cd27d","subject":"EMB-3274: ipu4: Align csi2 w. upstream 6.10","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":3549,"lines":13993,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-162,"event":true},{"kind":"commit","date":"2025-11-04T07:55:09Z","ts":1762242909000,"sha":"32f275bd66161215db0dddfcba63f3f4e381e05a","subject":"EMB-3274: ipu4: Align ipu6-fw-isys.h w. upstream 6.10","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":3502,"lines":14360,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-47,"event":false},{"kind":"commit","date":"2025-11-04T12:23:47Z","ts":1762259027000,"sha":"3bf73ed2a826b08f84bf67fe4c582f8a6002916c","subject":"EMB-3274: ipu4: Align ipu6-dma 100% w. upstream 6.10","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":3464,"lines":14354,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-38,"event":false},{"kind":"commit","date":"2025-11-04T12:28:32Z","ts":1762259312000,"sha":"31103c5c69969b76624e24b463e6a7055a8989e8","subject":"EMB-3274: ipu4: Align buttress regs/irqs w. upstream 6.10","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":3441,"lines":14353,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-23,"event":false},{"kind":"commit","date":"2025-11-04T12:38:18Z","ts":1762259898000,"sha":"c9193c06397961ffa9df89f74f016e10fa2eb9d3","subject":"EMB-3274: ipu4: Align ipu6-cpd.h 100% w. upstream 6.10","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":3427,"lines":14361,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-14,"event":false},{"kind":"commit","date":"2025-11-04T13:50:41Z","ts":1762264241000,"sha":"7919afb412ac8e9791acec3633824644fb5a78c7","subject":"EMB-3274: ipu4: Align ipu6-isys-subdev/queue w. upstream 6.10","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":3380,"lines":14376,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-47,"event":false},{"kind":"commit","date":"2025-11-06T20:52:05Z","ts":1762462325000,"sha":"3ab30c6ee6052193a2008d97b3e597ebc50a3b69","subject":"EMB-3274: ipu4: Move ipu4_csi_offsets","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":3374,"lines":14372,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-6,"event":false},{"kind":"commit","date":"2025-11-06T20:52:05Z","ts":1762462325000,"sha":"95761b51087b6ef1f9c727fac2faf62ac93456ea","subject":"EMB-3274: ipu4: Align isys/psys pdata w. upstream 6.10","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":3152,"lines":14618,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-222,"event":true},{"kind":"commit","date":"2025-11-06T20:52:05Z","ts":1762462325000,"sha":"ebccc2f76afafabc52ec72b1fd14b2dde3cfc914","subject":"EMB-3274: ipu4: Reduce ipu6.h/.c difference to upstream 6.10","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":3129,"lines":14619,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-23,"event":false},{"kind":"commit","date":"2025-11-06T20:52:05Z","ts":1762462325000,"sha":"09c73e2a1b54da4e8f3e76690afd2a1cdf89648e","subject":"EMB-3274: ipu4: Only load this driver IPU4 PCI ID","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":3123,"lines":14613,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-6,"event":false},{"kind":"commit","date":"2025-11-06T20:52:05Z","ts":1762462325000,"sha":"e0001b8f49c74dac9530a66271bd600afa36f43b","subject":"auxbus: make to_auxiliary_drv accept and return a constant pointer","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":3121,"lines":14613,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-2,"event":false},{"kind":"commit","date":"2025-11-06T20:52:05Z","ts":1762462325000,"sha":"8c201c80fa85da089455c8888a94f869d2126006","subject":"media: ipu6: Rework CSI-2 sub-device streaming control","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":2987,"lines":14565,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-134,"event":true},{"kind":"commit","date":"2025-11-06T20:52:05Z","ts":1762462325000,"sha":"126aafcfd6d3f66ace5344a748bbb85534493820","subject":"media: ipu6: Print CSR messages using debug level","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":2983,"lines":14565,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-4,"event":false},{"kind":"commit","date":"2025-11-06T20:52:05Z","ts":1762462325000,"sha":"ad4d6a9755258c65296b10320fd9acf1e2ede0f7","subject":"dma-mapping: don't return errors from dma_set_max_seg_size","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":2978,"lines":14562,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-5,"event":false},{"kind":"commit","date":"2025-11-07T12:53:01Z","ts":1762519981000,"sha":"3165772e75afe3d61ff157b2df2dda423a26a254","subject":"media: intel/ipu6: make use of dev_err_cast_probe()","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":2958,"lines":14558,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-20,"event":false},{"kind":"commit","date":"2025-11-07T12:53:01Z","ts":1762519981000,"sha":"41b68265c3719d1d422e784acb84e32aca0fdf19","subject":"media: ipu6: Fix DMA and physical address debugging messages for 32-bit","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":2933,"lines":14565,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-25,"event":false},{"kind":"commit","date":"2025-11-07T12:53:01Z","ts":1762519981000,"sha":"a00fa0de99c0f07bd7ce56fc7707846a8fb214fe","subject":"media: ipu6: not override the dma_ops of device in driver","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":2701,"lines":14589,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-232,"event":true},{"kind":"commit","date":"2025-11-07T12:53:01Z","ts":1762519981000,"sha":"7d8920ed509653a03f09c24380c7e29291c991d3","subject":"media: intel/ipu6: do not handle interrupts when device is disabled","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":2685,"lines":14597,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-16,"event":false},{"kind":"commit","date":"2025-11-07T19:08:38Z","ts":1762542518000,"sha":"8d08c16284f759075643ac4eca333d83bbc6e579","subject":"EMB-3274: ipu4: Add pm_runtime_get_if_active(DEV) helper","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":2687,"lines":14599,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":2,"event":false},{"kind":"commit","date":"2025-11-07T19:08:38Z","ts":1762542518000,"sha":"2fae27b2204b005956d371b62a789a3233d4ec2f","subject":"media: ipu6: use the IPU6 DMA mapping APIs to do mapping (needs VIDEOBUF_DMA_SG","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":2603,"lines":14639,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-84,"event":false},{"kind":"commit","date":"2025-11-07T19:08:38Z","ts":1762542518000,"sha":"3f35062930d0a7bd0ccef54ec0b76db18a992029","subject":"media: intel/ipu6: remove cpu latency qos request on error","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":2602,"lines":14640,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-1,"event":false},{"kind":"commit","date":"2025-11-07T19:08:38Z","ts":1762542518000,"sha":"2fb69de9f114064fa7f5847962af990b198bdd77","subject":"media: intel/ipu6: set the dev_parent of video device to pdev","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":2601,"lines":14641,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-1,"event":false},{"kind":"commit","date":"2025-11-07T19:08:38Z","ts":1762542518000,"sha":"b9ea70dc1f9d140ef6072b55feedf225ae417e44","subject":"media: intel/ipu6: Fix dma mask for non-secure mode","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":2597,"lines":14641,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-4,"event":false},{"kind":"commit","date":"2025-11-07T19:08:38Z","ts":1762542518000,"sha":"a8b2a0c9bb922249ab2b9cac09fb1dcf1be15d4f","subject":"media: ipu6: Remove workaround for Meteor Lake ES2","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":2592,"lines":14636,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-5,"event":false},{"kind":"commit","date":"2025-11-07T19:08:38Z","ts":1762542518000,"sha":"b7779d5dc9533c8e503ad30603e4ce4438bab036","subject":"media: ipu6: isys: Use correct pads for xlate_streams()","ref":"v6.18-rc4","ref_date":"2025-11-02T19:28:02Z","divergence":2580,"lines":14636,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-12,"event":false},{"kind":"commit","date":"2025-11-27T12:49:08Z","ts":1764247748000,"sha":"1e06652fa9265ce3ff236d5b6747f86a0806717b","subject":"EMB-3547: ipu4: Include ipu4-compat in ipu6.h","ref":"v6.18-rc7","ref_date":"2025-11-23T22:53:16Z","divergence":2582,"lines":14638,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":2,"event":false},{"kind":"commit","date":"2025-11-27T12:49:08Z","ts":1764247748000,"sha":"f40e0543fb754ffc157d4c2ec1e0485d3f77c7b7","subject":"media: intel/ipu6: Don't print user-triggerable errors to kernel log","ref":"v6.18-rc7","ref_date":"2025-11-23T22:53:16Z","divergence":2578,"lines":14638,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-4,"event":false},{"kind":"commit","date":"2025-11-27T12:49:08Z","ts":1764247748000,"sha":"d43b6de1d343fe9c72a3cbad36a3df4fa4edc970","subject":"media: ipu6: fix the wrong type casting and 64-bit division","ref":"v6.18-rc7","ref_date":"2025-11-23T22:53:16Z","divergence":2543,"lines":14639,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-35,"event":false},{"kind":"commit","date":"2025-11-27T12:49:08Z","ts":1764247748000,"sha":"48318f86648c78feebb9c54a7e57fac9ede623d4","subject":"media: pci: drop vb2_ops_wait_prepare/finish","ref":"v6.18-rc7","ref_date":"2025-11-23T22:53:16Z","divergence":2541,"lines":14637,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-2,"event":false},{"kind":"commit","date":"2025-11-27T12:49:08Z","ts":1764247748000,"sha":"e083bf6e8c1b62e0169b01ea78920fd9b807daee","subject":"media: ipu6: use the IPU6 DMA mapping APIs to do mapping","ref":"v6.18-rc7","ref_date":"2025-11-23T22:53:16Z","divergence":2543,"lines":14639,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":2,"event":false},{"kind":"commit","date":"2025-11-27T12:49:08Z","ts":1764247748000,"sha":"1e5dc8764e2d13178dbf36bc70c7e6c03de56b1a","subject":"media: ipu6: use PFN_UP() and sg_virt() for code simplicity","ref":"v6.18-rc7","ref_date":"2025-11-23T22:53:16Z","divergence":2533,"lines":14639,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-10,"event":false},{"kind":"commit","date":"2025-11-27T12:49:08Z","ts":1764247748000,"sha":"3d3ae2c730154e65ebb722189ed8dc97066c5878","subject":"media: intel/ipu6: remove buttress ish structure","ref":"v6.18-rc7","ref_date":"2025-11-23T22:53:16Z","divergence":2496,"lines":14610,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-37,"event":false},{"kind":"commit","date":"2025-11-27T12:49:08Z","ts":1764247748000,"sha":"daa3fcd17e71fc43785465d9cecccc3a5d51b752","subject":"media: ipu6: move the l2_unmap() up before l2_map()","ref":"v6.18-rc7","ref_date":"2025-11-23T22:53:16Z","divergence":2474,"lines":14610,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-22,"event":false},{"kind":"commit","date":"2025-11-27T12:49:08Z","ts":1764247748000,"sha":"e9bc8724e60e2333e7c1573c5243472e4e34551f","subject":"media: ipu6: optimize the IPU6 MMU mapping flow","ref":"v6.18-rc7","ref_date":"2025-11-23T22:53:16Z","divergence":2330,"lines":14604,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-144,"event":true},{"kind":"commit","date":"2025-11-27T12:49:08Z","ts":1764247748000,"sha":"90a09b37233276d997c158fff7b8f0a7bd7c1958","subject":"media: ipu6: optimize the IPU6 MMU unmapping flow","ref":"v6.18-rc7","ref_date":"2025-11-23T22:53:16Z","divergence":2215,"lines":14565,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-115,"event":true},{"kind":"commit","date":"2025-11-27T12:49:08Z","ts":1764247748000,"sha":"91a49d6ec9f071e225cb202ef8e7522166496039","subject":"media: ipu6: make the ipu6_mmu_unmap() as a void function","ref":"v6.18-rc7","ref_date":"2025-11-23T22:53:16Z","divergence":2192,"lines":14564,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-23,"event":false},{"kind":"commit","date":"2025-11-27T12:49:08Z","ts":1764247748000,"sha":"3860567055eeba03179d1d24fc4550a0d539b861","subject":"media: intel/ipu6: move some boot messages to debug level","ref":"v6.18-rc7","ref_date":"2025-11-23T22:53:16Z","divergence":2182,"lines":14564,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-10,"event":false},{"kind":"commit","date":"2025-11-27T12:49:08Z","ts":1764247748000,"sha":"e8e815a37930b6311015a6d3013543ed886618dc","subject":"media: pci: ipu6: drop vb2_ops_wait_prepare/finish","ref":"v6.18-rc7","ref_date":"2025-11-23T22:53:16Z","divergence":2180,"lines":14562,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-2,"event":false},{"kind":"commit","date":"2025-11-27T12:49:08Z","ts":1764247748000,"sha":"17ca8376ca9131d2e4c6d3b2e4efa7268ca54fae","subject":"media: intel/ipu6: Obtain link frequency from the remote subdev pad","ref":"v6.18-rc7","ref_date":"2025-11-23T22:53:16Z","divergence":2168,"lines":14556,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-12,"event":false},{"kind":"release","date":"2025-11-30T22:42:10Z","ts":1764542530000,"sha":"17ca8376ca9131d2e4c6d3b2e4efa7268ca54fae","subject":"media: intel/ipu6: Obtain link frequency from the remote subdev pad","ref":"v6.18","ref_date":"2025-11-30T22:42:10Z","divergence":2168,"lines":14556,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":0,"event":true},{"kind":"rc","date":"2025-12-14T04:05:07Z","ts":1765685107000,"sha":"17ca8376ca9131d2e4c6d3b2e4efa7268ca54fae","subject":"media: intel/ipu6: Obtain link frequency from the remote subdev pad","ref":"v6.19-rc1","ref_date":"2025-12-14T04:05:07Z","divergence":2224,"lines":14556,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":56,"event":false},{"kind":"release","date":"2026-02-08T21:03:27Z","ts":1770584607000,"sha":"17ca8376ca9131d2e4c6d3b2e4efa7268ca54fae","subject":"media: intel/ipu6: Obtain link frequency from the remote subdev pad","ref":"v6.19","ref_date":"2026-02-08T21:03:27Z","divergence":2224,"lines":14556,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":0,"event":true},{"kind":"rc","date":"2026-02-22T21:18:59Z","ts":1771795139000,"sha":"17ca8376ca9131d2e4c6d3b2e4efa7268ca54fae","subject":"media: intel/ipu6: Obtain link frequency from the remote subdev pad","ref":"v7.0-rc1","ref_date":"2026-02-22T21:18:59Z","divergence":2483,"lines":14556,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":259,"event":true},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"fe53ae0da455b82bc0b4b47729fc8812eecb08b0","subject":"media: ipu6: Drop unused ipu6_dma_get_sgtable()","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2447,"lines":14520,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-36,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"7a0189e29a965b62b1e06ebd4fdb035c0eb41b1e","subject":"media: intel/ipu6: Remove unused IPU6_BUS_NAME","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2445,"lines":14518,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-2,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"f97690c2d2645b5732e24419c9d1662423b8468b","subject":"media: intel/ipu6: Remove ipu6_buttress_ctrl started field","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2444,"lines":14517,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-1,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"34e1d16238487e2687b70ccb46759c7a27e837ef","subject":"media: intel/ipu6: Constify ipu6_buttress_ctrl structure","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2438,"lines":14515,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-6,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"811d5f247acac776afc5f2ecfab45d2028331f47","subject":"media: intel/ipu6: Remove unused ipu6_isys_subdev_link_validate()","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2434,"lines":14511,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-4,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"1c97649b599742713db9102a74d20561329bd708","subject":"media: intel/ipu6: Add missing new line character in error message","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2432,"lines":14511,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-2,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"c19b0ab7024202d3d36e316485e6ee7d76c7a4b6","subject":"media: intel/ipu6: Make two functions static","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2425,"lines":14508,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-7,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"fc309157f30dc290d936b3681fee685d1081204a","subject":"media: intel/ipu6: Use timestamp value directly","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2408,"lines":14505,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-17,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"64855352560ff320b7b9e80e87711eebadc67d33","subject":"media: intel/ipu6: Abstract buf ready function","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2388,"lines":14513,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-20,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"b8dfea78ca0182337bf136438012c0d5435b2aa4","subject":"media: intel/ipu6: Remove unused dev field from ipu6_isys_queue","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2386,"lines":14511,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-2,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"310564afaa5df973f65fbbd883641e610807c389","subject":"media: intel/ipu6: Replace deprecated PCI functions","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2378,"lines":14511,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-8,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"56c426126e8467d850fdd2397c667ddda9d81b93","subject":"media: intel/ipu6: Minor dma_mask clenaup","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2374,"lines":14507,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-4,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"a0dd79f682cea3f2f49a32a4023fd6f13deaa627","subject":"media: intel/ipu6: Remove unused ipu6_isys_csi2_pdata","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2372,"lines":14505,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-2,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"861dd7f19e5f1892737538b477bdc23c5c4b01db","subject":"media: intel/ipu6: Remove pin_ready function pointer","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2352,"lines":14497,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-20,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"27b6134044cab057e043d94a8e91d1007a7ebdb0","subject":"media: intel/ipu6: Remove line_align","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2345,"lines":14492,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-7,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"24fe9aa30918c590e4b7600e51a4b4bd7ddd6bc1","subject":"media: intel/ipu6: Change deprecated lock comment","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2340,"lines":14489,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-5,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"c0d3315398409667203f6d869c8198506f86ad76","subject":"media: ipu6: isys: Set minimum height to 1","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2338,"lines":14489,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-2,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"4b0c2806cd615f009c7db3b8a756bb19c763fb89","subject":"media: ipu6: isys: Don't set V4L2_FL_USES_V4L2_FH manually","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2337,"lines":14488,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-1,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"1fd0843a39600c77ed0d9eb030c919e41d01359f","subject":"media: ipu6: isys: Use v4l2_ctrl_subdev_subscribe_event()","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2335,"lines":14488,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-2,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"a95c979f2a9ad4646e30c3bc346b759849a4ca72","subject":"media: ipu6: isys: Set embedded data type correctly for metadata formats","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2329,"lines":14494,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-6,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"f889b09da871f414bf97e69dfabe65d4abe3fe2d","subject":"media: ipu6: isys: Use %pe format specifier","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2325,"lines":14494,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-4,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"81e1612d4e9d4183ccb1612866ba5186cca64251","subject":"media: ipu6: isys: Add support for monochrome media bus formats","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2273,"lines":14528,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-52,"event":false},{"kind":"commit","date":"2026-03-11T14:49:21Z","ts":1773240561000,"sha":"1ae35d3a6bef0646931b7d9f45e8467b719ec4fe","subject":"ipu4: Remove debug log that doesn't compile","ref":"v7.0-rc3","ref_date":"2026-03-08T23:56:54Z","divergence":2270,"lines":14525,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-3,"event":false},{"kind":"release","date":"2026-04-12T20:48:06Z","ts":1776026886000,"sha":"1ae35d3a6bef0646931b7d9f45e8467b719ec4fe","subject":"ipu4: Remove debug log that doesn't compile","ref":"v7.0","ref_date":"2026-04-12T20:48:06Z","divergence":2270,"lines":14525,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":0,"event":true},{"kind":"commit","date":"2026-04-18T22:04:15Z","ts":1776549855000,"sha":"a635bf43bd0e4ddc4a863c209893d27ecd1bff59","subject":"tools: wire CONFIG_VIDEO_INTEL_IPU4 + run KUnit suites for real","ref":"v7.0","ref_date":"2026-04-12T20:48:06Z","divergence":2895,"lines":14638,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":625,"event":true},{"kind":"commit","date":"2026-04-19T12:44:26Z","ts":1776602666000,"sha":"62b3f45411d4e57f05fac3b97752d38e50be2a4d","subject":"tools: M2 \u2014 QEMU builds with ipu4 device, VM boot verifies enumeration","ref":"v7.0","ref_date":"2026-04-12T20:48:06Z","divergence":2899,"lines":14642,"files":32,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":4,"event":false},{"kind":"commit","date":"2026-04-19T19:20:01Z","ts":1776626401000,"sha":"e2f20b84a06d45e457eb057f38cdbb2f33b45cbb","subject":"kernel/ipu4: M4.5 \u2014 virt-sensor bypasses ambu-bridge","ref":"v7.0","ref_date":"2026-04-12T20:48:06Z","divergence":3219,"lines":14962,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":320,"event":true},{"kind":"commit","date":"2026-04-20T16:18:45Z","ts":1776701925000,"sha":"b498320d788c939637cfe820ad14c9fbb658cbd2","subject":"kernel/ipu4: M5b-3 \u2014 auto-install CSI2 active route on sensor bind","ref":"v7.0","ref_date":"2026-04-12T20:48:06Z","divergence":3283,"lines":15026,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":64,"event":false},{"kind":"commit","date":"2026-04-20T19:07:14Z","ts":1776712034000,"sha":"e6bf34e8901812dc52c3191258496d74d16eaf3d","subject":"kernel/ipu4: M5c-1 \u2014 skip fw_isys_open when virt-sensor is the source","ref":"v7.0","ref_date":"2026-04-12T20:48:06Z","divergence":3297,"lines":15040,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":14,"event":false},{"kind":"commit","date":"2026-04-20T21:15:11Z","ts":1776719711000,"sha":"7c11061c7acde9a7eb7a61fd0d5dff574821e543","subject":"kernel/ipu4: M5c-2 \u2014 software streaming path so STREAMON + DQBUF work","ref":"v7.0","ref_date":"2026-04-12T20:48:06Z","divergence":3402,"lines":15145,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":105,"event":true},{"kind":"commit","date":"2026-04-21T06:15:33Z","ts":1776752133000,"sha":"677ac2e11f17cb9251cc481a53ddb4b0be0cf997","subject":"tests/streamon: M5c-3 \u2014 fill + verify a deterministic frame pattern","ref":"v7.0","ref_date":"2026-04-12T20:48:06Z","divergence":3414,"lines":15157,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":12,"event":false},{"kind":"commit","date":"2026-04-25T05:46:40Z","ts":1777096000000,"sha":"c7a069a957e09246d9fd350bce6ca16f86e43a25","subject":"qemu/ipu4 + driver: Step 1 \u2014 firmware-boot syscom handshake","ref":"v7.0","ref_date":"2026-04-12T20:48:06Z","divergence":3417,"lines":15160,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":3,"event":false},{"kind":"commit","date":"2026-04-25T11:50:40Z","ts":1777117840000,"sha":"7b778551255748366869835d6e1438e5a047f3bf","subject":"qemu/ipu4 + driver: Step 2 \u2014 STREAMON firmware command parser","ref":"v7.0","ref_date":"2026-04-12T20:48:06Z","divergence":3360,"lines":15103,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":-57,"event":false},{"kind":"commit","date":"2026-04-25T19:06:42Z","ts":1777144002000,"sha":"1609ae24aa8e3d918bbb3fc439505c5594cb9efc","subject":"qemu/ipu4 + driver: Step 5 \u2014 PWR_STATE FSM, drop fw_get workaround","ref":"v7.0","ref_date":"2026-04-12T20:48:06Z","divergence":3332,"lines":15075,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":-28,"event":false},{"kind":"commit","date":"2026-04-26T09:53:49Z","ts":1777197229000,"sha":"bd31fd7d285e2b39c84cfc2f058804bb2a6b568b","subject":"Merge origin/main into qemu-kunit-setup","ref":"v7.0","ref_date":"2026-04-12T20:48:06Z","divergence":2706,"lines":14961,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":-626,"event":true},{"kind":"commit","date":"2026-04-26T14:04:24Z","ts":1777212264000,"sha":"d2238b7d1cb866128da173be00c6f0a30dc364cc","subject":"ipu4: include ipu4-compat.h where MODULE_IMPORT_NS uses INTEL_IPU6","ref":"v7.0","ref_date":"2026-04-12T20:48:06Z","divergence":2707,"lines":14962,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":1,"event":false},{"kind":"rc","date":"2026-04-26T21:19:00Z","ts":1777238340000,"sha":"d2238b7d1cb866128da173be00c6f0a30dc364cc","subject":"ipu4: include ipu4-compat.h where MODULE_IMPORT_NS uses INTEL_IPU6","ref":"v7.1-rc1","ref_date":"2026-04-26T21:19:00Z","divergence":2709,"lines":14962,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":2,"event":false},{"kind":"commit","date":"2026-05-11T18:15:31Z","ts":1778523331000,"sha":"5f08b802aafbc1545543e337f5cada0e981b57ae","subject":"test: pin ipu4 buttress_ctrl struct bindings in kunit","ref":"v7.1-rc3","ref_date":"2026-05-10T21:08:09Z","divergence":2722,"lines":14975,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":13,"event":false},{"kind":"release","date":"2026-06-14T14:58:38Z","ts":1781449118000,"sha":"5f08b802aafbc1545543e337f5cada0e981b57ae","subject":"test: pin ipu4 buttress_ctrl struct bindings in kunit","ref":"v7.1","ref_date":"2026-06-14T14:58:38Z","divergence":2722,"lines":14975,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":0,"event":true},{"kind":"rc","date":"2026-06-28T19:01:31Z","ts":1782673291000,"sha":"5f08b802aafbc1545543e337f5cada0e981b57ae","subject":"test: pin ipu4 buttress_ctrl struct bindings in kunit","ref":"v7.2-rc1","ref_date":"2026-06-28T19:01:31Z","divergence":2746,"lines":14975,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":24,"event":false},{"kind":"release","date":"2026-08-16T21:32:26Z","ts":1786915946000,"sha":"5f08b802aafbc1545543e337f5cada0e981b57ae","subject":"test: pin ipu4 buttress_ctrl struct bindings in kunit","ref":"v7.2","ref_date":"2026-08-16T21:32:26Z","divergence":2746,"lines":14975,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":0,"event":true},{"kind":"rc","date":"2026-08-30T20:34:40Z","ts":1788122080000,"sha":"5f08b802aafbc1545543e337f5cada0e981b57ae","subject":"test: pin ipu4 buttress_ctrl struct bindings in kunit","ref":"v7.3-rc1","ref_date":"2026-08-30T20:34:40Z","divergence":2757,"lines":14975,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":11,"event":false},{"kind":"commit","date":"2026-10-14T09:13:34Z","ts":1791969214000,"sha":"e627bf3af6c5e3ba7cf7f85b8af388b22476e138","subject":"virt-sensor: optionally report a CSI-2 frame descriptor","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":2783,"lines":15001,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":26,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"10aafc70cfc310326ab7e7e7dfc89248132608b9","subject":"virt-sensor: offer Bayer, greyscale and YUV formats","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":2823,"lines":15041,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":40,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"4406d7f1976c45963b8cadab1aa3211b5c3c627d","subject":"media: ipu6: Add helpers for IPU runtime variation","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":2886,"lines":15012,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":63,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"84d02895b138f2ba5ba2c423354b033ee2f98e9f","subject":"media: ipu6: Rename pointer to firmware context","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":2947,"lines":15013,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":61,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"16630eeaeb5ef833bfbaaa6a7368fb2c08ea8913","subject":"media: ipu6: Rename buttress_ipc pointer","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":2984,"lines":15014,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":37,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"0575c3d200ad3988b1b35d1bf0a7b27f9754cd5a","subject":"media: ipu6: Cleanup ipu6_mmu_init()","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":3003,"lines":15007,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":19,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"6eb624630744a425f6c3b32fc718a714f5cd8959","subject":"media: ipu6: Simplify firmware com arguments","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":3015,"lines":15007,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":12,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"e8fed8e6376e1fdff53c408e6cce62c8d59c07a1","subject":"media: ipu6: Remove duplicate warnings in cpd validation","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":3044,"lines":14992,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":29,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"600c4142b64d888679e679596c5105a0048083c5","subject":"media: ipu6: Remove unused ipu6 firmware struct","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":3059,"lines":14977,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":15,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"538aa84cf34a4fa30e69f1f6ad7d63a0c428cc9e","subject":"media: ipu6: Add helper to identify ipu7","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":3065,"lines":14983,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":6,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"e35b3acf679860a477e199f7d99c7674283a0518","subject":"media: ipu6: Prepare buttress for ipu7 support","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":3227,"lines":15055,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":162,"event":true},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"4ec989ff626789bb7ec251ff81da6e89ea68829a","subject":"media: ipu6: Use single struct for registers","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":3318,"lines":15052,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":91,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"21cc8d260d1d433f6ed2fab91f323d926c024212","subject":"media: ipu6: Rename IPU subsys ID","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":3329,"lines":15051,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":11,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"82f18eb80d56980f7962a632cc23b5c716fc20f5","subject":"media: ipu6: Add ipu7 buttress support","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":3860,"lines":15436,"files":34,"files_missing_upstream":2,"upstream_only_files":0,"upstream_only_lines":0,"delta":531,"event":true},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"539c6f634312f7285e9402328296876b88183b03","subject":"media: ipu6: Prepare mmu driver for hw variation","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":4765,"lines":15619,"files":35,"files_missing_upstream":3,"upstream_only_files":0,"upstream_only_lines":0,"delta":905,"event":true},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"c5649524b50ecd2f07d3faf13169784b7f25aaa2","subject":"media: ipu6: Add ipu7 mmu support","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":4942,"lines":15792,"files":36,"files_missing_upstream":4,"upstream_only_files":0,"upstream_only_lines":0,"delta":177,"event":true},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"b1b4d0a23fc7f77e80aa8b2e86a0cb25fa3315ac","subject":"media: ipu6: Add ipu7 cpd handling","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":5150,"lines":15974,"files":36,"files_missing_upstream":4,"upstream_only_files":0,"upstream_only_lines":0,"delta":208,"event":true},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"0b5492fb6254a6109664837de539d1c0a78cbaaa","subject":"media: ipu6: Add check for pkg_dir before freeing","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":5155,"lines":15975,"files":36,"files_missing_upstream":4,"upstream_only_files":0,"upstream_only_lines":0,"delta":5,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"35ac02eb48400edf852b694cb8e853eb36a1a487","subject":"media: ipu6: Rename isys fw msg union","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":5169,"lines":15975,"files":36,"files_missing_upstream":4,"upstream_only_files":0,"upstream_only_lines":0,"delta":14,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"e855197c753c4cff7a4c3bf7f310a8235ce3f381","subject":"media: ipu6: Move isys isr handlers to fw file","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":5669,"lines":15975,"files":36,"files_missing_upstream":4,"upstream_only_files":0,"upstream_only_lines":0,"delta":500,"event":true},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"f721abdd6c55a7e4d0aa982c94e08386957dcade","subject":"media: ipu6: Move hw specific buffer handling down","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":5691,"lines":15981,"files":36,"files_missing_upstream":4,"upstream_only_files":0,"upstream_only_lines":0,"delta":22,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"3031d71ce2f59134f030f9ca48eecf7f2bc750d7","subject":"media: ipu6: Isolate hw specific buffer handling","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":6092,"lines":16036,"files":36,"files_missing_upstream":4,"upstream_only_files":0,"upstream_only_lines":0,"delta":401,"event":true},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"5a8715336f0195c14f025821adc776b615f3849e","subject":"media: ipu6: Add isys firmware ops","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":6167,"lines":16063,"files":36,"files_missing_upstream":4,"upstream_only_files":0,"upstream_only_lines":0,"delta":75,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"978a8ae975eb0275265b3f19b8612a32079e2a33","subject":"media: ipu6: Add ipu7 fw start/stop functionality","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":6225,"lines":16121,"files":38,"files_missing_upstream":6,"upstream_only_files":0,"upstream_only_lines":0,"delta":58,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"319fc623be5d357ff7830ac6fe381b92e74679b7","subject":"media: ipu6: Add ipu7 fw com methods","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":6276,"lines":16172,"files":39,"files_missing_upstream":7,"upstream_only_files":0,"upstream_only_lines":0,"delta":51,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"07ef7aa50e35d2853ccaf0092f46802db2c925d0","subject":"media: ipu6: Add ipu7 fw isys ops","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":6572,"lines":16462,"files":40,"files_missing_upstream":8,"upstream_only_files":0,"upstream_only_lines":0,"delta":296,"event":true},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"e20e1c944641dc62c858af822f4e87f67c81118a","subject":"media: ipu6: Add ipu7 csi2 register definitions","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":7761,"lines":17651,"files":41,"files_missing_upstream":9,"upstream_only_files":0,"upstream_only_lines":0,"delta":1189,"event":true},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"93e14832aff3fd9602a9729b0ebc570abd4473f3","subject":"media: ipu6: Add ipu7 isr handler","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":7820,"lines":17710,"files":41,"files_missing_upstream":9,"upstream_only_files":0,"upstream_only_lines":0,"delta":59,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"5b839ffbb0d58f6f21b340a454ad480c3448e5eb","subject":"media: ipu6: Add ipu7 csi phy driver","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":7854,"lines":17744,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":34,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"7b3a4ad3f283e9a75d579937f0d28a9da8f17cb1","subject":"media: ipu6: Split ipu6 csi2 stream enable/disable","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":7970,"lines":17750,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":116,"event":true},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"cf14b76d04ca8ca727e6a939f743729e87ed9e28","subject":"media: ipu6: Add support for ipu7 csi2 receiver","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":8089,"lines":17859,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":119,"event":true},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"7f67d9c53038af3c4208aa16b479658d29449eb5","subject":"media: ipu6: Parse bus type for ipu7","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":8099,"lines":17869,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":10,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"541df1c55de74333bf8cdc3999bf3a2a451ecfe4","subject":"media: ipu6: Enable ipu7 isys interrupts","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":8150,"lines":17910,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":51,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"baf728805a0aa2b6fb4aa667d76bc7385552dec5","subject":"media: ipu6: Skip watermark configuration for ipu7","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":8160,"lines":17914,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":10,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"ab72cc405e5cefb15878a0b503070fd5c93dc29e","subject":"media: ipu6: The SPC init is valid only for ipu6","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":8170,"lines":17920,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":10,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"433a2059ede5aaee91c0eab8b6a54b2890d70133","subject":"media: ipu6: The VC arbitration mechanism is ipu6 only","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":8177,"lines":17925,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":7,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"38d982730919497cd7673df13f17ac52dd9a9c04","subject":"media: ipu6: Move buttress mem alloc out from probe","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":8193,"lines":17937,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":16,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"733b9e3b2ad022afcd0900f0bc799588b78f809b","subject":"media: ipu6: Read correct SKU ID for ipu7","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":8199,"lines":17941,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":6,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"0249a22500e38c6d4f7260710db9234275c1d018","subject":"media: ipu6: Add support for fixed iova region","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":8221,"lines":17957,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":22,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"f2e0f0a40ce6524c9dc0974ebdb3c0c4b1f7c4f0","subject":"media: ipu6: Make fw mapping function reusable","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":8281,"lines":17957,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":60,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"f979b656ca4201a3870f8da771d51c65aa397bbc","subject":"media: ipu6: Move isys fw mapping to pci_probe","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":8364,"lines":17966,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":83,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"351716cd74062deaf7385c15d8aca30815e71c4d","subject":"media: ipu6: Map ipu7 firmware","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":8430,"lines":18032,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":66,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"d68d86c84dd58bff051ec38e15850221f9b6ac54","subject":"media: ipu6: Set model name for ipu7","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":8436,"lines":18038,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":6,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"235d42a4a0f89de965c5781460d635e3e0fe0df7","subject":"media: ipu6: Add ipu7.5 buttress support","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":8532,"lines":18128,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":96,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"48095573d02c91e85a95c20068874594e09cbde5","subject":"media: ipu6: Add ipu7.5 mmu initialization data","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":8631,"lines":18227,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":99,"event":false},{"kind":"commit","date":"2026-10-14T10:37:01Z","ts":1791974221000,"sha":"a8ed19648c9e6d1ee76408fa4a75bfface52fb61","subject":"media: ipu6: Enable support for IPU 7 and IPU 7.5","ref":"v7.3-rc7","ref_date":"2026-10-12T03:04:55Z","divergence":8639,"lines":18235,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":8,"event":false},{"kind":"release","date":"2026-10-18T23:14:58Z","ts":1792365298000,"sha":"a8ed19648c9e6d1ee76408fa4a75bfface52fb61","subject":"media: ipu6: Enable support for IPU 7 and IPU 7.5","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":8639,"lines":18235,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":0,"event":true},{"kind":"commit","date":"2026-11-01T10:31:52Z","ts":1793529112000,"sha":"b1052315be913184215a7d375733954883966343","subject":"ipu4: Fix the probe error paths","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":8621,"lines":18231,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":-18,"event":false},{"kind":"commit","date":"2026-11-01T10:32:05Z","ts":1793529125000,"sha":"a9a9d400c8beb0ee1cbb497422de5db1ce7275d8","subject":"ipu4: Fix two slips in ipu6-mmu.c","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":8617,"lines":18231,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":-4,"event":false},{"kind":"commit","date":"2026-11-01T10:32:12Z","ts":1793529132000,"sha":"6103386473d60382451f5a2a36b82922e0d56b44","subject":"ipu4: Drop unused and duplicate IPU4 defines from ipu6.h","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":8614,"lines":18228,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":-3,"event":false},{"kind":"commit","date":"2026-11-01T10:32:17Z","ts":1793529137000,"sha":"8e9b77c9805355e88bc5cebad63b99bc15de473d","subject":"ipu4: Match upstream's copyright lines","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":8604,"lines":18228,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":-10,"event":false},{"kind":"commit","date":"2026-11-01T10:32:25Z","ts":1793529145000,"sha":"486c498c78befb58cf6cf10b88809fecf2fecf5f","subject":"ipu4: Resync ipu6-isys-dwc-phy.c with upstream","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":8580,"lines":18240,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":-24,"event":false},{"kind":"commit","date":"2026-11-01T10:33:13Z","ts":1793529193000,"sha":"5359ca5d542aa2688faa877100ff51ba91a5914a","subject":"ipu4: Resync link frequency lookup and probe calls with upstream","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":8562,"lines":18238,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":-18,"event":false},{"kind":"commit","date":"2026-11-01T11:07:33Z","ts":1793531253000,"sha":"3794e8effcb2558e6a93ac3e3c370a1b46a433a7","subject":"ipu4: Use upstream's typed allocation helpers","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":8546,"lines":18238,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":-16,"event":false},{"kind":"commit","date":"2026-11-01T11:08:16Z","ts":1793531296000,"sha":"b46a8ea0f7e71a62c40399519629a4d1cf67c93d","subject":"ipu4: Use string literal symbol namespaces","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":8486,"lines":18238,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":-60,"event":false},{"kind":"commit","date":"2026-11-01T11:10:20Z","ts":1793531420000,"sha":"ac506267eafb81042c2e0ae9b800c5c0d879768a","subject":"ipu4: Drop support for kernels before 6.12","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":8440,"lines":18202,"files":42,"files_missing_upstream":10,"upstream_only_files":0,"upstream_only_lines":0,"delta":-46,"event":false},{"kind":"commit","date":"2026-11-01T14:46:10Z","ts":1793544370000,"sha":"e5ee44c3c11a94f8e9da5c7d7b3c5c9046805068","subject":"ipu4: Drop the built-in virt sensor","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":7958,"lines":17720,"files":40,"files_missing_upstream":8,"upstream_only_files":0,"upstream_only_lines":0,"delta":-482,"event":true},{"kind":"commit","date":"2026-11-01T14:59:02Z","ts":1793545142000,"sha":"6190a1ca6b3cf2d5e425771139e4267e530045a4","subject":"ipu4: Drop the empty pkg_dir entry skip in configure_spc","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":7941,"lines":17703,"files":40,"files_missing_upstream":8,"upstream_only_files":0,"upstream_only_lines":0,"delta":-17,"event":false},{"kind":"commit","date":"2026-11-01T15:16:22Z","ts":1793546182000,"sha":"12b3ef88d3b39d1eff778a951d54ac2126e0cf53","subject":"ambu-ipu-bridge: Attach the sensor graph at module load","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":7893,"lines":17659,"files":40,"files_missing_upstream":8,"upstream_only_files":0,"upstream_only_lines":0,"delta":-48,"event":false},{"kind":"commit","date":"2026-11-01T16:01:38Z","ts":1793548898000,"sha":"8ca50efd999568873b47ab8cec4d7d95ad5e1fa1","subject":"ipu4: Use upstream's per-CSI-2 video topology","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":7736,"lines":17652,"files":40,"files_missing_upstream":8,"upstream_only_files":0,"upstream_only_lines":0,"delta":-157,"event":true},{"kind":"commit","date":"2026-11-01T16:16:33Z","ts":1793549793000,"sha":"3dafd0d8efab662ebeeba8580178ee4345dab1a5","subject":"ipu4: Start streaming at STREAMON again, as upstream","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":7699,"lines":17637,"files":40,"files_missing_upstream":8,"upstream_only_files":0,"upstream_only_lines":0,"delta":-37,"event":false},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"3a48e2b05fb0b089bdc0da681480c8488d998e52","subject":"ipu4: Build the IPU7 sources, as upstream","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":10887,"lines":20825,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":3188,"event":true},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"94d4684ba9e2515fddd84d2cdaf96f5dd9eb28a3","subject":"media: v4l2-subdev: Add struct v4l2_subdev_client_info pointer to pad ops","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":10901,"lines":20833,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":14,"event":false},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"91c6d837474b7588c4d95b24512a42023133508b","subject":"media: ipu6: Fix releasing resources at failing streamon","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":10916,"lines":20834,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":15,"event":false},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"1bb73a3be449c2bda99f512d8904a437d734853a","subject":"media: ipu6: Move streaming control to CSI-2 receiver driver","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":11051,"lines":20833,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":135,"event":true},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"9c2edf37af934c73de9602eb5ac5f1098a1a0f98","subject":"media: ipu6: Stream number on CSI-2 receiver source pads is always 0","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":11102,"lines":20794,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":51,"event":false},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"1ece7579dc8fdf6fd4e6eb4a99cf9287ba970004","subject":"media: ipu6: Rename misnamed out_free_watermark label in video init","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":11106,"lines":20794,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":4,"event":false},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"b86d236a35ad78be82add2d3e19b63adb1e1e91c","subject":"media: ipu6: Always request a capture ack","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":11112,"lines":20790,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":6,"event":false},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"484ffc1f3bf1ac662d206cd19041e989017d0718","subject":"media: ipu6: Clean up link frequency calculation","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":11134,"lines":20788,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":22,"event":false},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"279b16b8a37f5a776430b9ec76e5985921141c06","subject":"media: ipu6: Get watermark configuration directly from ipdata","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":11148,"lines":20782,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":14,"event":false},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"d1258b2de38052b90f58725b03746a7b1aa26d5f","subject":"media: ipu6: Collect IPU streams into CSI-2 receiver sub-device context","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":11156,"lines":20790,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":8,"event":false},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"e3f2411fce4270206083bd7479ce01f496709c0a","subject":"media: ipu6: Start streaming once all streams have started, stop when not","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":11289,"lines":20913,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":133,"event":true},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"4e514be1a77cb1e5b2bac9ada7fbf8c5540d380f","subject":"media: ipu6: Add lockdep checks for CSI-2 streaming enable and disable","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":11293,"lines":20917,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":4,"event":false},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"d5861b5f6b2b2ce4305dfd8eda6dbeaea8ccd7dc","subject":"media: ipu6: Remove nr_queues and nr_streaming fields in ipu6_isys_stream","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":11342,"lines":20906,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":49,"event":false},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"1c0eed917e7ac7da482a3c11252aef69c4e40f64","subject":"media: ipu6: Collect enabled stream IDs","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":11364,"lines":20914,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":22,"event":false},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"22b568d088a638fe419932133aae1a82858c9f90","subject":"media: ipu6: Rework watermark calculation","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":11555,"lines":20875,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":191,"event":true},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"696df537071df24170e084573be9d9c119cb076f","subject":"media: ipu6: Rework watermark setting","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":11658,"lines":20816,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":103,"event":true},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"8ff2bcd458c4f912e35596af8a7a36eaae904ffd","subject":"media: ipu6: Bridge the gap between streams in V4L2 and IPU6 firmware","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":12131,"lines":20689,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":473,"event":true},{"kind":"commit","date":"2026-11-01T19:35:54Z","ts":1793561754000,"sha":"6a6afd2ef663a42236f243dee73fbbd17ccad188","subject":"media: ipu6: Drop {get,put}_streams_opened()","ref":"v7.3","ref_date":"2026-10-18T23:14:58Z","divergence":12147,"lines":20663,"files":45,"files_missing_upstream":13,"upstream_only_files":0,"upstream_only_lines":0,"delta":16,"event":false},{"kind":"rc","date":"2026-11-01T21:26:31Z","ts":1793568391000,"sha":"6a6afd2ef663a42236f243dee73fbbd17ccad188","subject":"media: ipu6: Drop {get,put}_streams_opened()","ref":"v7.4-rc1","ref_date":"2026-11-01T21:26:31Z","divergence":3087,"lines":20663,"files":45,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-9060,"event":true},{"kind":"commit","date":"2026-11-01T21:46:34Z","ts":1793569594000,"sha":"15db8d773a473afe19521132151dc9281b704294","subject":"ipu4: Fix the silent reset after the streams rework","ref":"v7.4-rc1","ref_date":"2026-11-01T21:26:31Z","divergence":3109,"lines":20681,"files":45,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":22,"event":false},{"kind":"commit","date":"2026-11-01T21:46:34Z","ts":1793569594000,"sha":"bd36b44e69191b4c1d70de040b36de4096fc728e","subject":"media: ipu6: Serialise access to stream pointers by isys stream_lock","ref":"v7.4-rc1","ref_date":"2026-11-01T21:26:31Z","divergence":3069,"lines":20695,"files":45,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-40,"event":false},{"kind":"commit","date":"2026-11-01T21:46:34Z","ts":1793569594000,"sha":"508003df095034d18c798edca4493a6cdaed09f1","subject":"media: ipu6: Move firmware init/cleanup to RPM callbacks","ref":"v7.4-rc1","ref_date":"2026-11-01T21:26:31Z","divergence":2968,"lines":20688,"files":45,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-101,"event":true},{"kind":"commit","date":"2026-11-01T21:46:34Z","ts":1793569594000,"sha":"31367e0eb4620dd433d9dec93baf3152433f0d4a","subject":"media: ipu6: Don't track power status, rely on runtime PM","ref":"v7.4-rc1","ref_date":"2026-11-01T21:26:31Z","divergence":2908,"lines":20664,"files":45,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-60,"event":false},{"kind":"commit","date":"2026-11-01T21:46:34Z","ts":1793569594000,"sha":"dbb346f9e03d5d34c081f84a254ea18fcbd766b8","subject":"media: ipu6: Reset need_reset in ISYS suspend","ref":"v7.4-rc1","ref_date":"2026-11-01T21:26:31Z","divergence":2904,"lines":20668,"files":45,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-4,"event":false},{"kind":"commit","date":"2026-11-01T21:46:34Z","ts":1793569594000,"sha":"1804311b84451a565d9dbdb3743a87f2137bdb81","subject":"media: ipu6: Warn if the active list isn't empty when returning buffers","ref":"v7.4-rc1","ref_date":"2026-11-01T21:26:31Z","divergence":2902,"lines":20670,"files":45,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":-2,"event":false},{"kind":"head","date":"2026-11-01T22:58:40Z","ts":1793573920000,"sha":"fefbc1ac5b229fd4ae734a03602afbf204966a43","subject":"","ref":"v7.4-rc1","ref_date":"2026-11-01T21:26:31Z","divergence":2902,"lines":20670,"files":45,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"delta":0,"event":true}],"master":{"divergence":2902,"lines":20670,"files":45,"files_missing_upstream":0,"upstream_only_files":0,"upstream_only_lines":0,"sha":"6628e7d4c6b25c8d18f1345e3a20d21829aae7e4","date":"2026-11-01T21:26:31Z"},"target":{"divergence":5689,"files":[{"name":"ipu4p-fw-isys.c","status":"missing here","lines":997},{"name":"ipu6-mmu-hw.c","status":"differs","lines":488},{"name":"ipu6-isys-csi2.c","status":"differs","lines":414},{"name":"ipu4p-fw-isys.h","status":"missing here","lines":406},{"name":"ipu6-fw-isys.c","status":"differs","lines":399},{"name":"ipu6-isys.c","status":"differs","lines":310},{"name":"ipu6-fw-isys.h","status":"differs","lines":291},{"name":"ipu6-isys-queue.c","status":"differs","lines":273},{"name":"ipu7-mmu-hw.c","status":"differs","lines":262},{"name":"ipu6.c","status":"differs","lines":233},{"name":"ipu4p-isys-csi-phy.c","status":"missing here","lines":225},{"name":"ipu6-buttress.c","status":"differs","lines":186},{"name":"ipu6-fw-com.c","status":"differs","lines":120},{"name":"ipu7-fw-isys.c","status":"differs","lines":120},{"name":"ipu7-mmu-hw.h","status":"differs","lines":115},{"name":"ipu4p-isys-csi2-regs.h","status":"missing here","lines":107},{"name":"ipu7-fw-isys.h","status":"differs","lines":97},{"name":"ipu6-isys-video.c","status":"differs","lines":74},{"name":"ipu6-isys.h","status":"differs","lines":65},{"name":"ipu4-platform-regs.h","status":"not in target","lines":63},{"name":"ipu4-platform-isys-csi2-reg.h","status":"not in target","lines":58},{"name":"ipu6-platform-buttress-regs.h","status":"differs","lines":57},{"name":"ipu6.h","status":"differs","lines":57},{"name":"ipu6-isys-subdev.c","status":"differs","lines":40},{"name":"ipu7-boot.c","status":"differs","lines":35},{"name":"ipu7-boot.h","status":"differs","lines":34},{"name":"ipu4-platform-buttress-regs.h","status":"not in target","lines":25},{"name":"ipu6-isys-csi2.h","status":"differs","lines":25},{"name":"ipu6-platform-regs.h","status":"differs","lines":16},{"name":"ipu6-bus.c","status":"differs","lines":15},{"name":"ipu6-platform-isys-csi2-reg.h","status":"differs","lines":15},{"name":"ipu7-platform-regs.h","status":"differs","lines":12},{"name":"ipu6-mmu.c","status":"differs","lines":11},{"name":"ipu6-fw-com.h","status":"differs","lines":10},{"name":"ipu6-isys-subdev.h","status":"differs","lines":6},{"name":"ipu7-isys-csi-phy.c","status":"differs","lines":6},{"name":"ipu6-mmu.h","status":"differs","lines":5},{"name":"ipu6-bus.h","status":"differs","lines":3},{"name":"ipu6-buttress.h","status":"differs","lines":3},{"name":"ipu6-cpd.c","status":"differs","lines":2},{"name":"ipu6-isys-queue.h","status":"differs","lines":2},{"name":"ipu6-isys-video.h","status":"differs","lines":2},{"name":"ipu7-fw-com.h","status":"differs","lines":2},{"name":"ipu7-isys-csi2-regs.h","status":"differs","lines":2},{"name":"ipu7-fw-com.c","status":"differs","lines":1}],"pin":"cbbddb6b08cc9900a87cccaa9b22bbe06aa4f50a","series":{"ipu6-ipu4p":12,"ipu6-fixes":2,"ipu6-ipu4":10}}}</script>
+  <h3>Upstream-watch state</h3>
+  <ul class="watch-state">
+    <li><code>linux-6.12.y</code> last seen at <code>7aba70ab2e8d</code></li>
+    <li><code>master</code> last seen at <code>0fcb05b72344</code></li>
+  </ul>
+  <p class="meta">0 patch-ids deduped to date</p>
+</section>
+
+<details class="card" id="ladder">
+  <summary><h2>Test ladder (vm-ipu6)</h2></summary>
+  <p class="meta">
+    Each leg is a driver under a QEMU model:
+    <code>ipu4-out-of-tree</code>, <code>ipu4p</code> and <code>ipu6</code> are the unmodified
+    baselines, <code>ipu4-patches</code> is the upstreamable series under all three models.
+    <span class="gated">gated</span> tests fail CI unless they pass.
+    <a href="https://github.com/Kleist/ipu4-driver/blob/main/tools/notes/ipu6-ipu4-plan.md">Plan</a> ·
+<a href="https://github.com/Kleist/ipu4-driver/actions/runs/41354539097">latest vm-ipu6 run</a>  </p>
+  <div class="kpi-row">
+    <div class="kpi ladder-variant ladder-ok">
+      <div class="kpi-label">ipu4-out-of-tree/ipu4</div>
+      <div class="kpi-value">22 / 22</div>
+      <div class="kpi-sub">tests passing · gated 22 / 22 pass</div>
+      <div class="kpi-sub"><a href="https://github.com/Kleist/ipu4-driver/actions/runs/41354539097">2026-11-01 21:58</a> · <code>6105fce</code></div>
+<div class="kpi-sub">driver lines <a href="ladder-coverage/ipu4-out-of-tree-ipu4/">55.2%</a> (2618 / 4741)</div><div class="kpi-sub">base <code>v7.3-rc4</code></div>    </div>
+    <div class="kpi ladder-variant ladder-ok">
+      <div class="kpi-label">ipu4p/ipu4p</div>
+      <div class="kpi-value">21 / 22</div>
+      <div class="kpi-sub">tests passing · gated 21 / 21 pass</div>
+      <div class="kpi-sub"><a href="https://github.com/Kleist/ipu4-driver/actions/runs/41354539097">2026-11-01 21:58</a> · <code>6105fce</code></div>
+<div class="kpi-sub">driver lines <a href="ladder-coverage/ipu4p-ipu4p/">47.4%</a> (2748 / 5800)</div><div class="kpi-sub">base <code>v7.3</code> + IPU4P series (12) + mainline fixes (2)</div>    </div>
+    <div class="kpi ladder-variant ladder-ok">
+      <div class="kpi-label">ipu6/ipu6</div>
+      <div class="kpi-value">21 / 22</div>
+      <div class="kpi-sub">tests passing · gated 21 / 21 pass</div>
+      <div class="kpi-sub"><a href="https://github.com/Kleist/ipu4-driver/actions/runs/41354539097">2026-11-01 21:58</a> · <code>6105fce</code></div>
+<div class="kpi-sub">driver lines <a href="ladder-coverage/ipu6-ipu6/">53.2%</a> (2757 / 5178)</div><div class="kpi-sub">base <code>v7.3</code> + mainline fixes (2)</div>    </div>
+    <div class="kpi ladder-variant ladder-ok">
+      <div class="kpi-label">ipu4-patches/ipu4</div>
+      <div class="kpi-value">20 / 22</div>
+      <div class="kpi-sub">tests passing · gated 20 / 20 pass</div>
+      <div class="kpi-sub"><a href="https://github.com/Kleist/ipu4-driver/actions/runs/41354539097">2026-11-01 22:00</a> · <code>6105fce</code></div>
+<div class="kpi-sub">driver lines <a href="ladder-coverage/ipu4-patches-ipu4/">43.9%</a> (2597 / 5921)</div><div class="kpi-sub">base <code>v7.3</code> + IPU4P series (12) + mainline fixes (2) + 10 IPU4 patches</div>    </div>
+    <div class="kpi ladder-variant ladder-ok">
+      <div class="kpi-label">ipu4-patches/ipu4p</div>
+      <div class="kpi-value">21 / 22</div>
+      <div class="kpi-sub">tests passing · gated 21 / 21 pass</div>
+      <div class="kpi-sub"><a href="https://github.com/Kleist/ipu4-driver/actions/runs/41354539097">2026-11-01 21:59</a> · <code>6105fce</code></div>
+<div class="kpi-sub">driver lines <a href="ladder-coverage/ipu4-patches-ipu4p/">46.7%</a> (2767 / 5921)</div><div class="kpi-sub">base <code>v7.3</code> + IPU4P series (12) + mainline fixes (2) + 10 IPU4 patches</div>    </div>
+    <div class="kpi ladder-variant ladder-ok">
+      <div class="kpi-label">ipu4-patches/ipu6</div>
+      <div class="kpi-value">21 / 22</div>
+      <div class="kpi-sub">tests passing · gated 21 / 21 pass</div>
+      <div class="kpi-sub"><a href="https://github.com/Kleist/ipu4-driver/actions/runs/41354539097">2026-11-01 21:59</a> · <code>6105fce</code></div>
+<div class="kpi-sub">driver lines <a href="ladder-coverage/ipu4-patches-ipu6/">47.5%</a> (2811 / 5921)</div><div class="kpi-sub">base <code>v7.3</code> + IPU4P series (12) + mainline fixes (2) + 10 IPU4 patches</div>    </div>
+  </div>
+  <div class="table-scroll">
+  <table class="reg-table ladder-table">
+    <thead><tr><th>Test</th><th>ipu4-out-of-tree/ipu4</th><th>ipu4p/ipu4p</th><th>ipu6/ipu6</th><th>ipu4-patches/ipu4</th><th>ipu4-patches/ipu4p</th><th>ipu4-patches/ipu6</th></tr></thead>
+    <tbody>
+    <tr>
+      <td><code>series-applies</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">4s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">9s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">8s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">9s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">9s</span></td>
+    </tr>
+    <tr>
+      <td><code>build</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">7s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">11s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">12s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">23s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">14s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">17s</span></td>
+    </tr>
+    <tr>
+      <td><code>checkpatch</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">9s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">8s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">7s</span></td>
+    </tr>
+    <tr>
+      <td><code>vm-boot</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">12s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">35s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">38s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">40s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">40s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">34s</span></td>
+    </tr>
+    <tr>
+      <td><code>module-load</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">7s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">8s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">8s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+    </tr>
+    <tr>
+      <td><code>pci-reauth</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>probe-identify</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">4s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+    </tr>
+    <tr>
+      <td><code>probe-buttress</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>auth-error</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">4s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">4s</span></td>
+    </tr>
+    <tr>
+      <td><code>probe-mmu</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">1s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>isys-resume</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>isys-irq</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>v4l2-query</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>fw-open</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">4s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+    </tr>
+    <tr>
+      <td><code>stream-on</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>stream-start-error</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">3s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">4s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">5s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">6s</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span> <span class="dur">4s</span></td>
+    </tr>
+    <tr>
+      <td><code>stream-requeue</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>silent-reset</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-fail">fail</td>
+      <td class="ladder-cell res-fail">fail</td>
+      <td class="ladder-cell res-fail">fail</td>
+      <td class="ladder-cell res-fail">fail</td>
+      <td class="ladder-cell res-fail">fail</td>
+    </tr>
+    <tr>
+      <td><code>stream-pattern</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>stream-formats</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>frame-desc</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    <tr>
+      <td><code>csi2-sof-irq</code></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-fail">fail</td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+      <td class="ladder-cell res-pass">pass <span class="gated" title="listed in enabled-tests: fails CI unless PASS">gated</span></td>
+    </tr>
+    </tbody>
+  </table>
+  </div>
+  <h3>Driver line coverage per leg</h3>
+  <p class="meta">Probe and stream boots of each leg (<code>IPU4_GCOV=1</code>, <code>tools/coverage/ladder.sh</code>). The ipu4p and ipu4-patches trees also count the IPU7/IPU4P code in the driver directory, so compare a driver across variants rather than drivers against each other.</p>
+  <canvas id="ladder-coverage-trend" height="80"></canvas>
+  <h3>Base and series (ipu4-patches/ipu4 run)</h3>
+  <ul class="series">
+    <li>Mainline <code>torvalds/linux</code>
+<code>v7.3</code> @ <a href="https://github.com/torvalds/linux/commit/cbbddb6b08cc9900a87cccaa9b22bbe06aa4f50a"><code>cbbddb6b08cc</code></a></li>
+    <li>+ IPU4P series (<a href="https://github.com/ruslanbay/ipu4-drivers/tree/upstream">ruslanbay/ipu4-drivers upstream</a>): 12 patches in <a href="https://github.com/Kleist/ipu4-driver/tree/main/patches/ipu6-ipu4p"><code>patches/ipu6-ipu4p/</code></a></li>
+    <li>+ mainline fixes (<a href="https://github.com/Kleist/ipu4-driver/tree/main/patches/ipu6-fixes">patches/ipu6-fixes</a>): 2 patches in <a href="https://github.com/Kleist/ipu4-driver/tree/main/patches/ipu6-fixes"><code>patches/ipu6-fixes/</code></a></li>
+    <li>+ IPU4 series: 10 patches in <a href="https://github.com/Kleist/ipu4-driver/tree/main/patches/ipu6-ipu4"><code>patches/ipu6-ipu4/</code></a></li>
+  </ul>
+  <ol class="series">
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/6105fce00ddc140effa8ad2c5859bc7dbcbe70a0/patches/ipu6-ipu4/0001-media-ipu6-Identify-IPU4-devices.patch">media: ipu6: Identify IPU4 devices</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/6105fce00ddc140effa8ad2c5859bc7dbcbe70a0/patches/ipu6-ipu4/0002-media-ipu6-Add-IPU4-buttress-support.patch">media: ipu6: Add IPU4 buttress support</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/6105fce00ddc140effa8ad2c5859bc7dbcbe70a0/patches/ipu6-ipu4/0003-media-ipu6-Add-IPU4-MMU-support.patch">media: ipu6: Add IPU4 MMU support</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/6105fce00ddc140effa8ad2c5859bc7dbcbe70a0/patches/ipu6-ipu4/0004-media-ipu6-Support-the-IPU4-TSC-sync-handshake.patch">media: ipu6: Support the IPU4 TSC sync handshake</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/6105fce00ddc140effa8ad2c5859bc7dbcbe70a0/patches/ipu6-ipu4/0005-media-ipu6-Add-IPU4-ISYS-and-CSI-2-register-definiti.patch">media: ipu6: Add IPU4 ISYS and CSI-2 register definitions</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/6105fce00ddc140effa8ad2c5859bc7dbcbe70a0/patches/ipu6-ipu4/0006-media-ipu6-Add-IPU4-ISYS-interrupt-handling.patch">media: ipu6: Add IPU4 ISYS interrupt handling</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/6105fce00ddc140effa8ad2c5859bc7dbcbe70a0/patches/ipu6-ipu4/0007-media-ipu6-Support-the-IPU4-SysCom-queue-layout.patch">media: ipu6: Support the IPU4 SysCom queue layout</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/6105fce00ddc140effa8ad2c5859bc7dbcbe70a0/patches/ipu6-ipu4/0008-media-ipu6-Run-IPU4-without-iWake.patch">media: ipu6: Run IPU4 without iWake</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/6105fce00ddc140effa8ad2c5859bc7dbcbe70a0/patches/ipu6-ipu4/0009-media-ipu6-Add-IPU4-CSI-2-receiver-support.patch">media: ipu6: Add IPU4 CSI-2 receiver support</a></li>
+    <li><a href="https://github.com/Kleist/ipu4-driver/blob/6105fce00ddc140effa8ad2c5859bc7dbcbe70a0/patches/ipu6-ipu4/0010-media-ipu6-Enable-IPU4-PCI-device.patch">media: ipu6: Enable IPU4 PCI device</a></li>
+  </ol>
+</details>
+
+<details class="card" id="harness">
+  <summary><h2>Out-of-tree QEMU harness (vm-smoke)</h2></summary>
+  <p class="meta">Coverage and silicon-vs-QEMU MMIO divergence of <code>kernel/ipu4/</code> on 6.12, and register handlers of the IPU4 model.</p>
+  <section class="sub">
+    <h3>Code coverage</h3>
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-label">lines</div>
+        <div class="kpi-value">45.6%</div>
+        <div class="kpi-sub">2160 / 4733</div>
+      </div>
+      <div class="kpi"><div class="kpi-label">functions</div>
+        <div class="kpi-value">57.4%</div>
+        <div class="kpi-sub">189 / 329</div>
+      </div>
+    </div>
+    <p><a href="coverage/index.html">Browse the full lcov report →</a></p>
+    <canvas id="coverage-trend" height="80"></canvas>
+  </section>
+  
+  <section class="sub">
+    <h3>MMIO divergence (silicon vs QEMU)</h3>
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-label">unimplemented</div>
+        <div class="kpi-value">0</div>
+        <div class="kpi-sub">silicon-touched, QEMU silent</div>
+      </div>
+      <div class="kpi"><div class="kpi-label">value mismatch</div>
+        <div class="kpi-value">11</div>
+        <div class="kpi-sub">read divergence</div>
+      </div>
+      <div class="kpi"><div class="kpi-label">extra in QEMU</div>
+        <div class="kpi-value">8</div>
+        <div class="kpi-sub">benign / informational</div>
+      </div>
+    </div>
+    <p>
+      silicon: 1088 accesses ·
+      qemu: 657 accesses ·
+      <a href="mmio/report.txt">full report.txt →</a>
+    </p>
+    <canvas id="mmio-trend" height="80"></canvas>
+  </section>
+  
+  <section class="sub">
+    <h3>Register coverage (54 handlers in <code>hw/misc/ipu4.c</code>)</h3>
+    <div class="kpi-row">
+      <div class="kpi conf-doc"><div class="kpi-label">doc</div>
+        <div class="kpi-value">0</div>
+      </div>
+      <div class="kpi conf-inferred"><div class="kpi-label">inferred</div>
+        <div class="kpi-value">36</div>
+      </div>
+      <div class="kpi conf-guess"><div class="kpi-label">guess</div>
+        <div class="kpi-value">18</div>
+      </div>
+    </div>
+    <details>
+      <summary>Show register table</summary>
+      <table class="reg-table">
+        <thead><tr><th>Offset</th><th>Block</th><th>Driver caller</th><th>Confidence</th></tr></thead>
+        <tbody>
+        <tr class="conf-inferred">
+          <td><code>0x008</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c WDT kick</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x00c</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c BTRS_CTRL</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x030</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c FW_RESET_CTL</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x034</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c IS_FREQ_CTL</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x038</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c PS_FREQ_CTL</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x05c</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c PWR_STATE poll</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x078</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c FW_SOURCE_BASE_LO</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x07c</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c FW_SOURCE_BASE_HI</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x080</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c FW_SOURCE_SIZE</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x088</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c FABRIC_CMD</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x090</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c ISR_STATUS</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x094</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c ISR_ENABLED_STATUS</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x098</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c ISR_ENABLE</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x09c</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c ISR_CLEAR</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x100</code></td>
+          <td>CSE IPC</td>
+          <td>ipu6-buttress.c IU2CSEDB0</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x104</code></td>
+          <td>CSE IPC</td>
+          <td>ipu6-buttress.c IU2CSEDATA0</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x108</code></td>
+          <td>CSE IPC</td>
+          <td>ipu6-buttress.c IU2CSECSR</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x164</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c TSC_LO</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x168</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c TSC_HI</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x300</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c SECURITY_CTL</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x304</code></td>
+          <td>CSE IPC</td>
+          <td>ipu6-buttress.c CSE2IUDB0</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x308</code></td>
+          <td>CSE IPC</td>
+          <td>ipu6-buttress.c CSE2IUDATA0</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x30c</code></td>
+          <td>CSE IPC</td>
+          <td>ipu6-buttress.c CSE2IUCSR</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x314</code></td>
+          <td>Buttress</td>
+          <td>ipu6-buttress.c SKU</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x4000</code></td>
+          <td>Buttress</td>
+          <td>ipu6-fw-com.c FW boot param SYSCOM_CONFIG_ID (ipu6 variant)</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x4004</code></td>
+          <td>Buttress</td>
+          <td>ipu6-fw-com.c FW boot param SYSCOM_STATE_ID (ipu6 variant)</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x17c000</code></td>
+          <td>ISYS</td>
+          <td>ipu6-isys.c unispart IRQ_EDGE</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x17c004</code></td>
+          <td>ISYS</td>
+          <td>ipu6-isys.c unispart IRQ_MASK</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x17c008</code></td>
+          <td>ISYS</td>
+          <td>ipu6-isys.c unispart IRQ_STATUS</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x166308</code></td>
+          <td>ISYS (ipu4p variant)</td>
+          <td>ipu4p-isys-csi2-regs.h CSI port 0 IRQ CTRL STATUS</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x166408-0x16640c</code></td>
+          <td>ISYS (ipu4p variant)</td>
+          <td>ipu4p-isys-csi2-regs.h CSI port 0 IRQ CTRL0 STATUS/CLEAR</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x166d08</code></td>
+          <td>ISYS (ipu4p variant)</td>
+          <td>ipu4p-isys-csi2-regs.h SIP0 IRQ STATUS</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x17c00c</code></td>
+          <td>ISYS</td>
+          <td>ipu6-isys.c unispart IRQ_CLEAR</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x17c010</code></td>
+          <td>ISYS</td>
+          <td>ipu6-isys.c unispart IRQ_ENABLE</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x17c014</code></td>
+          <td>ISYS</td>
+          <td>ipu6-isys.c unispart IRQ_LEVEL_NOT_PULSE</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x17c414</code></td>
+          <td>ISYS</td>
+          <td>ipu6-isys.c unispart SW_IRQ</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x17c418</code></td>
+          <td>ISYS</td>
+          <td>ipu6-isys.c unispart SW_IRQ_MUX</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x164000-0x164fff</code></td>
+          <td>CSI2 port 0</td>
+          <td>ipu6-isys-csi2.c per-port block</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x165000-0x165fff</code></td>
+          <td>CSI2 port 1</td>
+          <td>ipu6-isys-csi2.c per-port block</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x166000-0x166fff</code></td>
+          <td>CSI2 port 2</td>
+          <td>ipu6-isys-csi2.c per-port block</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x167000-0x167fff</code></td>
+          <td>CSI2 port 3</td>
+          <td>ipu6-isys-csi2.c per-port block</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x16c000-0x16c7ff</code></td>
+          <td>CSI2 port 4</td>
+          <td>ipu6-isys-csi2.c per-port block</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x16c800-0x16cfff</code></td>
+          <td>CSI2 port 5</td>
+          <td>ipu6-isys-csi2.c per-port block</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x100000</code></td>
+          <td>ISYS</td>
+          <td>ipu6-fw-isys.c ISYS SPC_STATUS_CTRL</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x108000-0x1080ff</code></td>
+          <td>ISYS</td>
+          <td>ipu6-fw-com.c DMEM syscom window</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x400000</code></td>
+          <td>PSYS</td>
+          <td>ipu6-fw-isys.c PSYS SPC_STATUS_CTRL</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x1e0000-0x1e04ff</code></td>
+          <td>MMU</td>
+          <td>ipu6-mmu.c ISYS MMU page-table window</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-inferred">
+          <td><code>0x4b0000-0x4b09ff</code></td>
+          <td>MMU</td>
+          <td>ipu6-mmu.c PSYS MMU page-table window</td>
+          <td>inferred</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x200000-0x2000ff</code></td>
+          <td>ISYS DMEM (ipu6 variant)</td>
+          <td>ipu6-fw-com.c SysCom registers</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x210000</code></td>
+          <td>ISYS SPC (ipu6 variant)</td>
+          <td>ipu6-fw-isys.c query_sp / start_sp</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x220088 / 0x22008c, 0x238208</code></td>
+          <td>CSI-2 port 0 / CSI top (ipu6 variant)</td>
+          <td>ipu6-isys.c isys_isr, ipu6-isys-csi2.c ipu6_isys_register_errors</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x238008 / 0x23800c (+8 per PHY)</code></td>
+          <td>CSI-2 hub (ipu6 variant)</td>
+          <td>ipu6-isys-mcd-phy.c GPREG_PHY_CTL / PHY_STATUS</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x27c008 / 0x27c00c</code></td>
+          <td>ISYS UNISPART (ipu6 variant)</td>
+          <td>ipu6-isys.c isys_isr</td>
+          <td>guess</td>
+        </tr>
+        <tr class="conf-guess">
+          <td><code>0x2e0004</code></td>
+          <td>ISYS MMU0 (ipu6 variant)</td>
+          <td>ipu6-mmu.c REG_L1_PHYS</td>
+          <td>guess</td>
+        </tr>
+        </tbody>
+      </table>
+    </details>
+  </section>
+</details>
+
+<footer>
+  Generated by <code>tools/dashboard/build.sh</code>. Sources: <code>.github/kernel-pins/</code>, <code>tools/notes/registers.md</code>, <code>tools/notes/upstream-watch-state.json</code>, <code>tools/coverage/summary.json</code>, <code>tools/tests/out/compare-mmio/report.json</code>, <code>tools/tests/out/ipu6-ladder/results.json</code> (vm-ipu6), GitHub Actions API.
+</footer>
+
+<script id="history-data" type="application/json">{"schema":1,"points":[{"ts":"2026-11-01T15:43:48Z","sha":"73d256174e519b51af0713ffcdb8f8ff4962ee6e","vm_smoke_run_id":"41321886363","vm_ipu6_run_id":"41321886433","coverage":{"lines_pct":56.9,"functions_pct":67.8},"mmio":{"unimplemented":0,"value_mismatch":11,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":30,"hunks":299},"target_divergence":10560,"ladder_coverage":{"ipu4-out-of-tree/ipu4":66.8,"ipu4p/ipu4p":47.4,"ipu6/ipu6":53.2,"ipu4-patches/ipu4":43.9,"ipu4-patches/ipu4p":46.7,"ipu4-patches/ipu6":47.5}},{"ts":"2026-11-01T16:26:49Z","sha":"36007e8da72931d05ced32ec1976a233ddf672a7","vm_smoke_run_id":"41323830203","vm_ipu6_run_id":"41323830204","coverage":{"lines_pct":59.0,"functions_pct":70.3},"mmio":{"unimplemented":0,"value_mismatch":11,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":30,"hunks":299},"target_divergence":10512,"ladder_coverage":{"ipu4-out-of-tree/ipu4":69.2,"ipu4p/ipu4p":47.4,"ipu6/ipu6":53.2,"ipu4-patches/ipu4":43.9,"ipu4-patches/ipu4p":46.7,"ipu4-patches/ipu6":47.5}},{"ts":"2026-11-01T19:30:49Z","sha":"47100369e7fd413d8c75680e35a0305a9ffa404a","vm_smoke_run_id":"41341339183","vm_ipu6_run_id":"41341339178","coverage":{"lines_pct":59.0,"functions_pct":70.3},"mmio":{"unimplemented":0,"value_mismatch":11,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":30,"hunks":299},"target_divergence":10512,"ladder_coverage":{"ipu4-out-of-tree/ipu4":69.2,"ipu4p/ipu4p":47.4,"ipu6/ipu6":53.2,"ipu4-patches/ipu4":43.9,"ipu4-patches/ipu4p":46.7,"ipu4-patches/ipu6":47.5}},{"ts":"2026-11-01T19:38:08Z","sha":"76698d60f6e4d80d537b29c56b08921599e37d75","vm_smoke_run_id":"41342005954","vm_ipu6_run_id":"41342005959","coverage":{"lines_pct":58.8,"functions_pct":70.1},"mmio":{"unimplemented":0,"value_mismatch":11,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":30,"hunks":304},"target_divergence":10399,"ladder_coverage":{"ipu4-out-of-tree/ipu4":69.1,"ipu4p/ipu4p":47.4,"ipu6/ipu6":53.2,"ipu4-patches/ipu4":43.9,"ipu4-patches/ipu4p":46.7,"ipu4-patches/ipu6":47.5}},{"ts":"2026-11-01T20:13:13Z","sha":"09de399c208d2dd4953fa7f67b388d0738c23dfe","vm_smoke_run_id":"41345125287","vm_ipu6_run_id":"41345125221","coverage":{"lines_pct":58.9,"functions_pct":70.1},"mmio":{"unimplemented":0,"value_mismatch":11,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":30,"hunks":306},"target_divergence":10370,"ladder_coverage":{"ipu4-out-of-tree/ipu4":69.2,"ipu4p/ipu4p":47.4,"ipu6/ipu6":53.2,"ipu4-patches/ipu4":43.9,"ipu4-patches/ipu4p":46.7,"ipu4-patches/ipu6":47.5}},{"ts":"2026-11-01T21:26:10Z","sha":"1b37ec738a4cce8acd2d1c398fd9d705de4876b2","vm_smoke_run_id":"41351686725","vm_ipu6_run_id":"41345125221","coverage":{"lines_pct":46.2,"functions_pct":58.5},"mmio":{"unimplemented":0,"value_mismatch":11,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":30,"hunks":306},"target_divergence":7324,"ladder_coverage":{"ipu4-out-of-tree/ipu4":69.2,"ipu4p/ipu4p":47.4,"ipu6/ipu6":53.2,"ipu4-patches/ipu4":43.9,"ipu4-patches/ipu4p":46.7,"ipu4-patches/ipu6":47.5}},{"ts":"2026-11-01T22:03:28Z","sha":"b3571f2c49d6d2e93c2b7acd78978e43b3511255","vm_smoke_run_id":"41352378312","vm_ipu6_run_id":"41352378341","coverage":{"lines_pct":45.7,"functions_pct":57.4},"mmio":{"unimplemented":0,"value_mismatch":11,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":30,"hunks":294},"target_divergence":5888,"ladder_coverage":{"ipu4-out-of-tree/ipu4":53.8,"ipu4p/ipu4p":47.4,"ipu6/ipu6":53.2,"ipu4-patches/ipu4":43.9,"ipu4-patches/ipu4p":46.7,"ipu4-patches/ipu6":47.5}},{"ts":"2026-11-01T22:18:52Z","sha":"49033132ab74128281e9c63e062236b378f38be7","vm_smoke_run_id":"41356034520","vm_ipu6_run_id":"41356034492","coverage":{"lines_pct":45.6,"functions_pct":57.4},"mmio":{"unimplemented":0,"value_mismatch":11,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":30,"hunks":294},"target_divergence":5910,"ladder_coverage":{"ipu4-out-of-tree/ipu4":55.2,"ipu4p/ipu4p":47.4,"ipu6/ipu6":53.2,"ipu4-patches/ipu4":43.9,"ipu4-patches/ipu4p":46.7,"ipu4-patches/ipu6":47.5}},{"ts":"2026-11-01T23:00:18Z","sha":"fefbc1ac5b229fd4ae734a03602afbf204966a43","vm_smoke_run_id":"41354539281","vm_ipu6_run_id":"41354539097","coverage":{"lines_pct":45.6,"functions_pct":57.4},"mmio":{"unimplemented":0,"value_mismatch":11,"extra_in_qemu":8},"registers":{"doc":0,"inferred":36,"guess":18},"upstream_diff":{"files_differ":30,"hunks":289},"target_divergence":5689,"ladder_coverage":{"ipu4-out-of-tree/ipu4":55.2,"ipu4p/ipu4p":47.4,"ipu6/ipu6":53.2,"ipu4-patches/ipu4":43.9,"ipu4-patches/ipu4p":46.7,"ipu4-patches/ipu6":47.5}}]}</script>
+<script>
+(function () {
+  const upEl = document.getElementById('upstream-history-data');
+  const upCanvas = document.getElementById('upstream-trend');
+  if (upEl && upCanvas) {
+    const up = JSON.parse(upEl.textContent);
+    const pts = up.points.map(p => ({ x: p.ts, y: p.divergence, p }));
+    const ev = c => c.raw && c.raw.p.event;
+    const kindOf = c => (c.raw ? c.raw.p.kind : '');
+    const isTag = k => k === 'release' || k === 'rc' || k === 'tag';
+    const signed = n => (n > 0 ? '+' : n < 0 ? '\u2212' : '\u00b1') + Math.abs(n);
+    const day = ts => new Date(ts).toISOString().slice(0, 10);
+    const runs = (JSON.parse(document.getElementById('history-data').textContent) || {}).points || [];
+    const targetPts = runs.filter(r => r.target_divergence != null).map(r => ({
+      x: Date.parse(r.ts), y: r.target_divergence,
+      p: { kind: 'target', ref: 'target tree', ts: Date.parse(r.ts), sha: r.sha || '',
+           subject: '', divergence: r.target_divergence } }));
+    new Chart(upCanvas, {
+      type: 'line',
+      data: {
+        datasets: [
+          { label: 'kernel/ipu4 vs upstream', data: pts, borderColor: '#74a9ff',
+            pointRadius: c => (!ev(c) ? 0 : kindOf(c) === 'release' ? 6 : 4),
+            pointHitRadius: c => (ev(c) ? 6 : 0),
+            pointHoverRadius: c => (ev(c) ? 8 : 0),
+            pointStyle: c => (isTag(kindOf(c)) ? 'rectRot' : 'circle'),
+            pointBackgroundColor: c => (isTag(kindOf(c)) ? '#d8c46a' : '#74a9ff'),
+            stepped: false, tension: 0 },
+          ...(targetPts.length ? [{ label: 'vs target tree (per pages run)', data: targetPts,
+            borderColor: '#e0a35e', pointRadius: 2, tension: 0 }] : []),
+          ...(up.master ? [{ label: 'HEAD vs upstream master', showLine: false,
+            data: [{ x: Date.parse(up.master.date), y: up.master.divergence,
+                     p: Object.assign({ kind: 'master', ref: 'master', ts: Date.parse(up.master.date),
+                                        sha: up.master.sha, subject: '' }, up.master) }],
+            pointStyle: 'star', pointRadius: 9, borderColor: '#e08e6e', backgroundColor: '#e08e6e' }] : []),
+        ],
+      },
+      options: {
+        responsive: true,
+        parsing: false,
+        onClick: (e, els) => {
+          const p = els.length && els[0].element.$context.raw.p;
+          if (!p || p.kind === 'target') return;
+          if (isTag(p.kind)) window.open('https://github.com/torvalds/linux/tree/' + p.ref + '/' + up.upstream_path, '_blank');
+          else window.open('https://github.com/Kleist/ipu4-driver/commit/' + p.sha, '_blank');
+        },
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: { callbacks: {
+            title: items => {
+              const p = items[0].raw.p;
+              if (p.kind === 'target') return 'target tree (' + day(p.ts) + ')';
+              if (p.kind === 'master') return 'HEAD vs upstream master ' + p.sha.slice(0, 12) + ' (' + day(p.ts) + ')';
+              if (isTag(p.kind)) return 'upstream ' + p.ref + ' (' + day(p.ts) + ')';
+              return (p.kind === 'head' ? 'HEAD ' : '') + p.sha.slice(0, 12) + ' (' + day(p.ts) + ')';
+            },
+            label: item => {
+              const p = item.raw.p;
+              if (p.kind === 'target') return [p.divergence + ' lines vs the target tree', 'pages run on ' + p.sha.slice(0, 12)];
+              const out = [];
+              if (p.kind === 'commit') out.push(p.subject);
+              if (p.delta != null && p.kind !== 'master') out.push(signed(p.delta) + ' lines \u2192 ' + p.divergence + ' vs ' + p.ref);
+              else out.push(p.divergence + ' lines vs ' + p.ref);
+              out.push(p.files + ' files, ' + p.lines + ' lines; ' + p.files_missing_upstream + ' not upstream');
+              if (p.upstream_only_files) out.push(p.upstream_only_files + ' upstream-only files (' + p.upstream_only_lines + ' lines)');
+              if (isTag(p.kind)) out.push('our tree at ' + p.sha.slice(0, 12) + ': ' + p.subject);
+              return out;
+            },
+          } },
+        },
+        scales: {
+          x: { type: 'linear', ticks: { callback: v => day(v), maxTicksLimit: 12 } },
+          y: { beginAtZero: true, title: { display: true, text: 'lines' } },
+        },
+      },
+    });
+  }
+
+  const raw = document.getElementById('history-data').textContent;
+  const history = JSON.parse(raw);
+  const points = (history && history.points) || [];
+  if (!points.length) return;
+  const labels = points.map(p => p.ts.slice(0, 10));
+
+  const lineCfg = (canvasId, datasets) => {
+    const el = document.getElementById(canvasId);
+    if (!el) return;
+    new Chart(el, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' } },
+        scales: { y: { beginAtZero: false } },
+      },
+    });
+  };
+
+  lineCfg('coverage-trend', [
+    { label: 'lines %', data: points.map(p => (p.coverage || {}).lines_pct ?? null), borderColor: '#5ec27e', tension: 0.2 },
+    { label: 'functions %', data: points.map(p => (p.coverage || {}).functions_pct ?? null), borderColor: '#74a9ff', tension: 0.2 },
+  ]);
+  // One colour per QEMU variant; dashed = the variant's baseline driver,
+  // solid = ipu4-patches.
+  const variantColors = { ipu4: '#5ec27e', ipu4p: '#b48ee0', ipu6: '#74a9ff' };
+  const legs = [];
+  points.forEach(p => Object.keys(p.ladder_coverage || {}).forEach(l => {
+    if (!legs.includes(l)) legs.push(l);
+  }));
+  legs.sort((a, b) => a.split('/')[1].localeCompare(b.split('/')[1]) ||
+    a.startsWith('ipu4-patches/') - b.startsWith('ipu4-patches/'));
+  // Every pages run re-reads the newest vm-ipu6 run, so keep one point per
+  // vm-ipu6 run (older points without a run id: per change of values), plus
+  // the newest, and plot them on a time axis.
+  const covKey = p => p.vm_ipu6_run_id || JSON.stringify(p.ladder_coverage);
+  const covPts = points.filter(p => Object.keys(p.ladder_coverage || {}).length)
+    .filter((p, i, a) => i === 0 || i === a.length - 1 || covKey(p) !== covKey(a[i - 1]));
+  const stamp = ts => new Date(ts).toISOString().slice(0, 16).replace('T', ' ');
+  const covEl = document.getElementById('ladder-coverage-trend');
+  if (covEl && covPts.length) new Chart(covEl, {
+    type: 'line',
+    data: { datasets: legs.map(l => ({
+      label: l,
+      data: covPts.filter(p => p.ladder_coverage[l] != null)
+        .map(p => ({ x: Date.parse(p.ts), y: p.ladder_coverage[l], sha: p.sha || '' })),
+      borderColor: variantColors[l.split('/')[1]] || '#d8c46a',
+      backgroundColor: variantColors[l.split('/')[1]] || '#d8c46a',
+      borderDash: l.startsWith('ipu4-patches/') ? [] : [5, 4],
+      pointRadius: 3,
+    })) },
+    options: {
+      responsive: true,
+      parsing: false,
+      plugins: {
+        legend: { position: 'bottom' },
+        tooltip: { callbacks: {
+          title: items => stamp(items[0].raw.x) + ' · ' + items[0].raw.sha.slice(0, 7),
+          label: item => item.dataset.label + ': ' + item.raw.y.toFixed(1) + '%',
+        } },
+      },
+      scales: {
+        x: { type: 'linear', ticks: { callback: v => stamp(v), maxTicksLimit: 8 } },
+        y: { title: { display: true, text: 'driver lines %' } },
+      },
+    },
+  });
+  lineCfg('mmio-trend', [
+    { label: 'unimplemented', data: points.map(p => (p.mmio || {}).unimplemented ?? null), borderColor: '#e08e6e', tension: 0.2 },
+    { label: 'value mismatch', data: points.map(p => (p.mmio || {}).value_mismatch ?? null), borderColor: '#d8c46a', tension: 0.2 },
+  ]);
+})();
+</script>
+</body>
+</html>
