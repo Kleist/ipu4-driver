@@ -10,8 +10,6 @@ intel-ipu4-objs				+= ipu6.o \
 					ipu6-cpd.o \
 					ipu6-fw-com.o
 
-intel-ipu4-$(CONFIG_VIDEO_IPU4_VIRT_SENSOR) += virt-sensor.o
-
 obj-m		+= intel-ipu4.o
 
 intel-ipu4-isys-objs			+= ipu6-isys.o \
@@ -25,8 +23,8 @@ obj-m		+= intel-ipu4-isys.o
 
 obj-m		+= ambu-ipu-bridge.o
 
-HDR := ${intel-ipu4-objs:.o=.h} ${intel-ipu4-isys-objs:.o=.h} ambu-ipu-bridge.h virt-sensor.h
-SRC := ${intel-ipu4-objs:.o=.c} ${intel-ipu4-isys-objs:.o=.c} ambu-ipu-bridge.c virt-sensor.c
+HDR := ${intel-ipu4-objs:.o=.h} ${intel-ipu4-isys-objs:.o=.h} ambu-ipu-bridge.h
+SRC := ${intel-ipu4-objs:.o=.c} ${intel-ipu4-isys-objs:.o=.c} ambu-ipu-bridge.c
 
 all:
 	$(MAKE) -j $(nproc) -C ${KERNEL_SRC} M=$$PWD

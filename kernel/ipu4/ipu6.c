@@ -26,7 +26,6 @@
 #include <media/ipu6-pci-table.h>
 #else
 #include "ambu-ipu-bridge.h"
-#include "virt-sensor.h"
 #endif
 
 #include "ipu6.h"
@@ -537,11 +536,7 @@ ipu6_isys_init(struct pci_dev *pdev, struct device *parent,
 			return ERR_PTR(-EINVAL);
 		}
 
-#if IS_ENABLED(CONFIG_VIDEO_IPU4_VIRT_SENSOR)
-		ret = ipu4_virt_sensor_install(pdev);
-#else
 		ret = ambu_ipu_bridge_init(dev);
-#endif
 		if (ret) {
 			if (ret != -EPROBE_DEFER)
 				dev_err_probe(dev, ret, "IPU6 bridge init failed\n");
@@ -978,11 +973,7 @@ out_free_irq:
 out_ipu6_rpm_put:
 	pm_runtime_put_sync(&isp->psys->auxdev.dev);
 out_ipu_bridge_uninit:
-#if IS_ENABLED(CONFIG_VIDEO_IPU4_VIRT_SENSOR)
-	ipu4_virt_sensor_remove(pdev);
-#else
 	ambu_ipu_bridge_uninit(&pdev->dev);
-#endif
 out_ipu6_bus_del_devices:
 	dir = IS_IPU7(isp) ? DMA_BIDIRECTIONAL : DMA_TO_DEVICE;
 	if (!IS_ERR_OR_NULL(isp->psys)) {
@@ -1045,11 +1036,7 @@ static void ipu6_pci_remove(struct pci_dev *pdev)
 	ipu6_mmu_cleanup(psys_mmu);
 	ipu6_mmu_cleanup(isys_mmu);
 
-#if IS_ENABLED(CONFIG_VIDEO_IPU4_VIRT_SENSOR)
-	ipu4_virt_sensor_remove(pdev);
-#else
 	ambu_ipu_bridge_uninit(&pdev->dev);
-#endif
 }
 
 static void ipu6_pci_reset_prepare(struct pci_dev *pdev)

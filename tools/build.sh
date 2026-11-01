@@ -72,7 +72,6 @@ else
 		--enable KUNIT \
 		--disable VIDEO_INTEL_IPU6 \
 		--module VIDEO_INTEL_IPU4 \
-		--enable  VIDEO_IPU4_VIRT_SENSOR \
 		--disable VIDEO_INTEL_IPU4_KUNIT_TESTS
 	# KUnit tests are built only in the kunit kernel built by kunit.py
 	# (.kunitconfig has CONFIG_VIDEO_INTEL_IPU4_KUNIT_TESTS=y, with the
