@@ -875,10 +875,9 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	isys_base = isp->base + isys_ipdata.hw_variant.offset;
 	psys_base = isp->base + psys_ipdata.hw_variant.offset;
 
-	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(39));
+	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(39));
 	if (ret)
-		return dev_err_probe(&pdev->dev, ret,
-				     "Failed to set DMA mask\n");
+		return dev_err_probe(dev, ret, "Failed to set DMA mask\n");
 
 	dma_set_max_seg_size(dev, UINT_MAX);
 
@@ -935,12 +934,11 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (ret)
 		goto out_ipu6_rpm_put;
 
-	ret = devm_request_threaded_irq(&pdev->dev, pdev->irq,
-					ipu6_buttress_isr,
+	ret = devm_request_threaded_irq(dev, pdev->irq, ipu6_buttress_isr,
 					ipu6_buttress_isr_threaded,
 					IRQF_SHARED, IPU4_NAME, isp);
 	if (ret) {
-		dev_err_probe(&pdev->dev, ret, "Requesting irq failed\n");
+		dev_err_probe(dev, ret, "Requesting irq failed\n");
 		goto out_ipu6_rpm_put;
 	}
 
