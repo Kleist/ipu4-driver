@@ -698,7 +698,7 @@ int ipu6_map_fw_region(struct ipu6_bus_device *sys, const void *data,
 
 	n_pages = PFN_UP(size);
 
-	pages = kmalloc_array(n_pages, sizeof(*pages), GFP_KERNEL);
+	pages = kmalloc_objs(*pages, n_pages);
 	if (!pages)
 		return -ENOMEM;
 

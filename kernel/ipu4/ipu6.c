@@ -554,7 +554,7 @@ ipu6_isys_init(struct pci_dev *pdev, struct device *parent,
 	if (!devm_ctrl)
 		return ERR_PTR(-ENOMEM);
 
-	pdata = kzalloc(sizeof(*pdata), GFP_KERNEL);
+	pdata = kzalloc_obj(*pdata);
 	if (!pdata)
 		return ERR_PTR(-ENOMEM);
 
@@ -600,7 +600,7 @@ ipu6_psys_init(struct pci_dev *pdev, struct device *parent,
 	if (!devm_ctrl)
 		return ERR_PTR(-ENOMEM);
 
-	pdata = kzalloc(sizeof(*pdata), GFP_KERNEL);
+	pdata = kzalloc_obj(*pdata);
 	if (!pdata)
 		return ERR_PTR(-ENOMEM);
 
