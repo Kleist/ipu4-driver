@@ -6,11 +6,8 @@
 #                                   frame descriptor delivered the
 #                                   model's pattern
 
-fd_param=
-for p in /sys/module/virt_sensor/parameters/frame_desc \
-	/sys/module/intel_ipu4/parameters/virt_sensor_frame_desc; do
-	[ -e "$p" ] && fd_param=$p
-done
+fd_param=/sys/module/virt_sensor/parameters/frame_desc
+[ -e "$fd_param" ] || fd_param=
 fd_video=
 fd_subdev=
 for n in /sys/class/video4linux/*; do

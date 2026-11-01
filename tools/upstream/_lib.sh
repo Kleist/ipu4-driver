@@ -20,8 +20,6 @@ IPU4_LOCAL_ONLY=(
 	ipu4-platform-buttress-regs.h
 	ipu4-platform-isys-csi2-reg.h
 	ipu4-platform-regs.h
-	virt-sensor.c
-	virt-sensor.h
 )
 
 is_local_only() {
