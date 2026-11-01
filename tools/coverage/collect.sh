@@ -67,6 +67,10 @@ overlay_gcda() {
 	echo "$overlaid"
 }
 
+# Counters from an earlier run (a cached tree) would pair with a rebuilt
+# .gcno, or count a module this run never loaded.
+find "$IPU4_DRV" "$KUNIT_DRV" -name '*.gcda' -delete 2>/dev/null || true
+
 streamon_overlaid="$(overlay_gcda "$GCOV_TAR" "$WORK/streamon")"
 kunit_overlaid=0
 if [[ -n "$KUNIT_TAR" ]]; then
