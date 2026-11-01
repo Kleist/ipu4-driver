@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Copyright (C) 2023 Intel Corporation */
+/* Copyright (C) 2023--2024 Intel Corporation */
 
 #ifndef IPU6_PLATFORM_BUTTRESS_REGS_H
 #define IPU6_PLATFORM_BUTTRESS_REGS_H
