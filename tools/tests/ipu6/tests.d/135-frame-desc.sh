@@ -8,14 +8,15 @@ ladder_test frame-desc stream-on
 # from the format, as the stream boot's virt sensor makes it do. On the
 # module-load boot (snippet tools/rootfs/init.ipu6-modules.d/
 # 135-frame-desc.loaded.sh) the guest turns on the virt sensor's
-# frame_desc parameter and streams one frame: the driver must log the
-# descriptor ("Framedesc: stream 0") and the frame must hold the model's
-# pattern.
+# frame_desc parameter and streams one frame: the descriptor must be
+# logged ("Framedesc: stream 0" by the driver, or "stream 0, code ..."
+# by the v4l2 core, as the 7.4 ipu6 driver no longer logs it) and the
+# frame must hold the model's pattern.
 test_frame-desc() {
 	local log="$ROOT/tools/tests/out/ipu6-module-load.serial"
 	if [[ -z "${WANT[module-load]:-}" ]]; then
 		test_module-load > /dev/null || return 1
 	fi
-	grep -E "^MODLOAD:frame-desc|Framedesc|^STREAM:(fail|pattern)" "$log"
+	grep -E "^MODLOAD:frame-desc|Framedesc|stream 0, code|^STREAM:(fail|pattern)" "$log"
 	grep -q '^MODLOAD:frame-desc ok' "$log" && grep -q '^MODLOAD: PASS' "$log"
 }
