@@ -1,0 +1,45 @@
+From 7abda0a0934ed51e276b073927955604ad2fdfaa Mon Sep 17 00:00:00 2001
+From: Andreas Helbech Kleist <andreaskleist@gmail.com>
+Date: Sun, 1 Nov 2026 08:34:36 +0000
+Subject: [PATCH 2/2] media: ipu6: Don't close unopened ISYS firmware on
+ runtime suspend
+
+The ISYS firmware is opened in isys_runtime_pm_resume() and closed in
+isys_runtime_pm_suspend(), but the device can be runtime suspended
+without the resume callback having run: after the PCI device is reset
+and the driver rebound, the ISYS probe is deferred and the device later
+suspends with no firmware context, and ipu6_fw_com_close() dereferences
+NULL.
+
+Only close the firmware if it was opened.
+
+Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
+---
+ drivers/media/pci/intel/ipu6/ipu6-isys.c | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys.c b/drivers/media/pci/intel/ipu6/ipu6-isys.c
+index c00ae9eb6..ef1100c2c 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-isys.c
++++ b/drivers/media/pci/intel/ipu6/ipu6-isys.c
+@@ -883,10 +883,14 @@ static int isys_runtime_pm_suspend(struct device *dev)
+ 	struct ipu6_device *isp = adev->isp;
+ 	int ret = 0;
+ 
+-	isys->adev->auxdrv_data->fw_ops->close(isys);
++	/* Runtime active does not imply the firmware was opened. */
+ 	if (isys->fwctx) {
+-		dev_warn(&isys->adev->auxdev.dev, "failed to close fw isys\n");
+-		ret = -EIO;
++		isys->adev->auxdrv_data->fw_ops->close(isys);
++		if (isys->fwctx) {
++			dev_warn(&isys->adev->auxdev.dev,
++				 "failed to close fw isys\n");
++			ret = -EIO;
++		}
+ 	}
+ 
+ 	mutex_lock(&isys->mutex);
+-- 
+2.43.0
+

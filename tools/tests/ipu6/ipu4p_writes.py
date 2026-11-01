@@ -66,11 +66,12 @@ def isys_resume():
     # completes at the first poll).
     writes.append((0x88, 0x1))
     ranges.append((0x88, 0x8c))
-    # ipu4p_isys_irq_setup(), ipu4p-isys-csi2-regs.h, ISYS base 0x100000:
-    # per IRQ block, the mask into EDGE, MASK, ENABLE and LEVEL_NOT_PULSE
-    # (+0x00, +0x04, +0x10, +0x14), then CLEAR (+0x0c) = 0xffffffff;
-    # then UNISPART SW_IRQ_REG and SW_IRQ_MUX_REG = 0. The suspend
-    # writes no LTR/DID on IPU4P.
+    # ipu4p_isys_irq_setup(), ipu4p-isys-csi2-regs.h, ISYS base 0x100000,
+    # over the IRQ blocks below: ENABLE (+0x10) and MASK (+0x04) = 0 per
+    # block; then the mask into EDGE (+0x00) and LEVEL_NOT_PULSE (+0x14)
+    # and CLEAR (+0x0c) = 0xffffffff per block; then UNISPART SW_IRQ_REG
+    # and SW_IRQ_MUX_REG = 0; then, in reverse block order, the mask into
+    # MASK and ENABLE. The suspend writes no LTR/DID on IPU4P.
     unispart = 1 << 22 | 1 << 3 | 1 << 4  # IRQ_SW | CSI2(0) | CSI2(1)
     blocks = [
         (0x17c000, unispart),  # UNISPART
@@ -79,12 +80,16 @@ def isys_resume():
         (0x166d00, 1 << 3),    # SIP0, SIP0_CSI2_IRQ
         (0x16ed00, 0x7f),      # SIP1, SIP1_CSI2_IRQ_MASK
     ]
-    for base, mask in blocks:
-        writes += [(base + off, mask) for off in (0x00, 0x04, 0x10, 0x14)]
-        writes.append((base + 0x0c, 0xffffffff))
+    for base, _ in blocks:
+        writes += [(base + 0x10, 0), (base + 0x04, 0)]
         ranges.append((base, base + 0x18))
+    for base, mask in blocks:
+        writes += [(base, mask), (base + 0x14, mask),
+                   (base + 0x0c, 0xffffffff)]
     writes += [(0x17c414, 0), (0x17c418, 0)]
     ranges.append((0x17c414, 0x17c41c))
+    for base, mask in reversed(blocks):
+        writes += [(base + 0x04, mask), (base + 0x10, mask)]
     return writes, ranges
 
 

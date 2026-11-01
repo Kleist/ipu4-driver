@@ -1,4 +1,4 @@
-From 1712d9f2854af8d88389197d5a45113feadf9483 Mon Sep 17 00:00:00 2001
+From 619ba14d6b299f1142b61cdbe5f67dc310a85c35 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sun, 11 Oct 2026 05:21:57 +0000
 Subject: [PATCH 08/10] media: ipu6: Run IPU4 without iWake
@@ -17,21 +17,32 @@ LTR/DID values are already left alone at ISYS suspend on IPU4.
 
 Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
 ---
- drivers/media/pci/intel/ipu6/ipu6-isys-video.c | 3 ++-
- 1 file changed, 2 insertions(+), 1 deletion(-)
+ drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
 
-diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys-video.c b/drivers/media/pci/intel/ipu6/ipu6-isys-video.c
-index d9cab5b5d..fcab2285f 100644
---- a/drivers/media/pci/intel/ipu6/ipu6-isys-video.c
-+++ b/drivers/media/pci/intel/ipu6/ipu6-isys-video.c
-@@ -729,7 +729,8 @@ void ipu6_isys_update_stream_watermark(struct ipu6_isys_video *av, bool state)
- 		&av->isys->iwake_watermark;
- 	struct ipu6_device *isp = av->isys->adev->isp;
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
+index 4ce2e9b36..85354905f 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
++++ b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
+@@ -359,7 +359,9 @@ static void ipu6_isys_csi2_setup_watermark(struct ipu6_isys_csi2 *csi2,
+ 	s64 link_freq;
+ 	int ret;
  
--	if (IS_IPU7(isp) ||
+-	if (IS_IPU7(csi2->asd.isys->adev->isp) ||
 +	/* IPU4 runs without iWake: no watermark proxy writes, no LTR/DID. */
-+	if (IS_IPU7(isp) || IS_IPU4(isp) ||
- 	    !av->watermark.pixel_rate)
++	if (IS_IPU4(csi2->asd.isys->adev->isp) ||
++	    IS_IPU7(csi2->asd.isys->adev->isp) ||
+ 	    IS_IPU8(csi2->asd.isys->adev->isp))
+ 		return;
+ 
+@@ -414,7 +416,8 @@ static void ipu6_isys_csi2_setup_watermark(struct ipu6_isys_csi2 *csi2,
+ 
+ static void ipu6_isys_csi2_clear_watermark(struct ipu6_isys_csi2 *csi2)
+ {
+-	if (IS_IPU7(csi2->asd.isys->adev->isp) ||
++	if (IS_IPU4(csi2->asd.isys->adev->isp) ||
++	    IS_IPU7(csi2->asd.isys->adev->isp) ||
+ 	    IS_IPU8(csi2->asd.isys->adev->isp))
  		return;
  
 -- 

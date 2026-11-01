@@ -1,4 +1,4 @@
-From 1b3f6bfc2eef90c7581d5198f626f84c4d0075e6 Mon Sep 17 00:00:00 2001
+From d1c9004a754b98ed8b94d7f54f3c36141cb5ab1b Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 19:32:04 +0000
 Subject: [PATCH 03/10] media: ipu6: Add IPU4 MMU support
@@ -25,16 +25,16 @@ The IPU4 CSI-2 port count is set when the ISYS support is added.
 
 Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
 ---
- drivers/media/pci/intel/ipu6/ipu6-mmu-hw.c | 26 ++++++++++++++++++++++
+ drivers/media/pci/intel/ipu6/ipu6-mmu-hw.c | 40 ++++++++++++++++++++--
  drivers/media/pci/intel/ipu6/ipu6-mmu.c    |  2 +-
- drivers/media/pci/intel/ipu6/ipu6.c        |  3 ++-
- 3 files changed, 29 insertions(+), 2 deletions(-)
+ drivers/media/pci/intel/ipu6/ipu6.c        |  3 +-
+ 3 files changed, 40 insertions(+), 5 deletions(-)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-mmu-hw.c b/drivers/media/pci/intel/ipu6/ipu6-mmu-hw.c
-index ca2b23741..d46503709 100644
+index e05fc3f77..7fb2d5264 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-mmu-hw.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-mmu-hw.c
-@@ -217,6 +217,26 @@ static struct ipu6_mmu_hw ipu4p_psys_mmu_hwdata[] = {
+@@ -97,6 +97,26 @@ static const struct ipu6_mmu_hw ipu4p_psys_mmu_hwdata[] = {
  	},
  };
  
@@ -58,49 +58,56 @@ index ca2b23741..d46503709 100644
 +static_assert(ARRAY_SIZE(ipu4_psys_l1_block_sz) ==
 +	      ARRAY_SIZE(ipu4p_psys_mmu_hwdata));
 +
- struct ipu6_mmu_hwdata {
- 	struct ipu6_mmu_hw *hwdata;
- 	unsigned int nr_mmus;
-@@ -362,6 +382,7 @@ static int __ipu6_mmu_init_hw_data(struct ipu6_mmu *mmu, struct device *dev,
+ static const struct ipu6_mmu_hw ipu6_isys_mmu_hwdata[] = {
+ 	{
+ 		.offset = IPU6_ISYS_IOMMU0_OFFSET,
+@@ -366,9 +386,23 @@ static int __ipu_mmu_init_hw_data(struct ipu6_mmu *mmu, struct device *dev,
  static int __ipu4p_mmu_init_hw_data(struct ipu6_mmu *mmu, struct device *dev,
  				    void __iomem *base)
  {
+-	return __ipu_mmu_init_hw_data(mmu, dev, base, ipu4p_mmu_hwdata_lookup,
+-				      IPU4P_MMU_MAX_TLB_L1_STREAMS,
+-				      IPU4P_MMU_MAX_TLB_L2_STREAMS);
 +	struct ipu6_device *isp = pci_get_drvdata(to_pci_dev(dev));
- 	const struct ipu6_mmu_hwdata *lookup;
- 	struct ipu6_mmu_hw *mmu_hw, *src;
- 	unsigned int i, nr_mmus;
-@@ -384,6 +405,11 @@ static int __ipu4p_mmu_init_hw_data(struct ipu6_mmu *mmu, struct device *dev,
++	unsigned int i;
++	int ret;
++
++	ret = __ipu_mmu_init_hw_data(mmu, dev, base, ipu4p_mmu_hwdata_lookup,
++				     IPU4P_MMU_MAX_TLB_L1_STREAMS,
++				     IPU4P_MMU_MAX_TLB_L2_STREAMS);
++	if (ret || !IS_IPU4(isp))
++		return ret;
++
++	for (i = 0; i < mmu->nr_mmus; i++)
++		memcpy(mmu->ipu6_mmu_hw[i].l1_block_sz,
++		       mmu->mmid == IPU_ISYS ? ipu4_isys_l1_block_sz[i] :
++					       ipu4_psys_l1_block_sz[i],
++		       sizeof(mmu->ipu6_mmu_hw[i].l1_block_sz));
++
++	return 0;
+ }
  
- 		mmu_hw[i] = src[i];
- 		mmu_hw[i].base = base + src[i].offset;
-+		if (IS_IPU4(isp))
-+			memcpy(mmu_hw[i].l1_block_sz,
-+			       mmu->mmid == IPU_ISYS ? ipu4_isys_l1_block_sz[i] :
-+						       ipu4_psys_l1_block_sz[i],
-+			       sizeof(mmu_hw[i].l1_block_sz));
- 	}
- 
- 	mmu->nr_mmus = nr_mmus;
+ static int __ipu6_mmu_init_hw_data(struct ipu6_mmu *mmu, struct device *dev,
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-mmu.c b/drivers/media/pci/intel/ipu6/ipu6-mmu.c
-index 93e3be1ef..dc3169cdf 100644
+index 824408b21..4e6d4ed4f 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-mmu.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-mmu.c
-@@ -686,7 +686,7 @@ struct ipu6_mmu *ipu6_mmu_init(struct device *dev,
+@@ -684,7 +684,7 @@ struct ipu6_mmu *ipu6_mmu_init(struct device *dev,
+ 	if (!mmu)
+ 		return ERR_PTR(-ENOMEM);
  
- 	if (IS_IPU7(isp))
- 		mmu->ops = &ipu7_mmu_ops;
--	else if (IS_IPU4P(isp))
-+	else if (IS_IPU4(isp) || IS_IPU4P(isp))
+-	if (IS_IPU4P(isp))
++	if (IS_IPU4(isp) || IS_IPU4P(isp))
  		mmu->ops = &ipu4p_mmu_ops;
- 	else
- 		mmu->ops = &ipu6_mmu_ops;
+ 	else if (IS_IPU7(isp) || IS_IPU8(isp))
+ 		mmu->ops = &ipu7_mmu_ops;
 diff --git a/drivers/media/pci/intel/ipu6/ipu6.c b/drivers/media/pci/intel/ipu6/ipu6.c
-index 7c5dcd7ce..baa9745da 100644
+index 8b274dc10..9d188c9c2 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6.c
-@@ -451,7 +451,8 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
- 		isys_ipdata.csi2.nports = 4;
- 	}
+@@ -422,7 +422,8 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
+ 	psys_ipdata.hw_variant.spc_offset = IPU6_PSYS_SPC_OFFSET;
+ 	isys_ipdata.csi2.fw_access_port_ofs = CSI_REG_HUB_FW_ACCESS_PORT_OFS;
  
 -	if (IS_IPU4P(isp)) {
 +	/* IPU4 has the IPU4P subsystem layout and firmware stream limits */

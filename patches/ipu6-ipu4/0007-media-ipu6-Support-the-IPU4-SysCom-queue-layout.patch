@@ -1,4 +1,4 @@
-From cbc9c59e63f3ab60d02e66bcb8d266d63b11e056 Mon Sep 17 00:00:00 2001
+From c8d62b7b4a1a61d528ca8557ba70525c343ea2eb Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sun, 11 Oct 2026 00:17:04 +0000
 Subject: [PATCH 07/10] media: ipu6: Support the IPU4 SysCom queue layout
@@ -21,31 +21,31 @@ Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
  3 files changed, 11 insertions(+), 2 deletions(-)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.c b/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.c
-index 6fbbe6376..218a7ff7c 100644
+index b82053f15..e3ff55c4d 100644
 --- a/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.c
 +++ b/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.c
-@@ -143,6 +143,7 @@ static int ipu4p_isys_fwcom_cfg_init(struct ipu6_isys *isys,
+@@ -258,6 +258,7 @@ ipu4p_fw_isys_fwcom_cfg_init(struct ipu6_isys *isys,
  	fwcom_cfg->specific_addr = isys_fw_cfg;
  	fwcom_cfg->specific_size = sizeof(*isys_fw_cfg);
  	fwcom_cfg->dmem_syscom = true;
 +	fwcom_cfg->syscom_no_dual_ctx = IS_IPU4(isys->adev->isp);
  
  	return 0;
- }
+ 
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-fw-com.c b/drivers/media/pci/intel/ipu6/ipu6-fw-com.c
-index e1bc047bd..ad17a2e50 100644
+index fc2fe6f3f..14cd5b2f5 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-fw-com.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-fw-com.c
-@@ -126,6 +126,8 @@ enum ipu4p_regmem_id {
+@@ -110,6 +110,8 @@ enum ipu4p_regmem_id {
+ 	IPU4P_SYSCOM_CONFIG_REG = 1,
+ 	IPU4P_SYSCOM_STATE_REG = 2,
  	IPU4P_SYSCOM_COMMAND_REG = 3,
- 	IPU4P_SYSCOM_IRQ_REG = 4,
- 	IPU4P_SYSCOM_VTL0_ADDR_MASK = 5,
 +	/* IPU4 firmware has no dual contexts; its queues start here. */
 +	IPU4_SYSCOM_QPR_BASE_REG = 6,
- 	/* CNL B0 ISYS firmware reserves registers 6-7 for dual contexts. */
+ 	/* Registers 6-7 reserved by ISYS firmware for dual contexts. */
  	IPU4P_SYSCOM_QPR_BASE_REG = 8,
  };
-@@ -254,8 +256,12 @@ void *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
+@@ -251,8 +253,12 @@ void *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
  
  	/* initialize input queues */
  	offset += specific_size;
@@ -61,10 +61,10 @@ index e1bc047bd..ad17a2e50 100644
  	res.vied_address = ctx->dma_addr + offset;
  	for (i = 0; i < cfg->num_input_queues; i++)
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-fw-com.h b/drivers/media/pci/intel/ipu6/ipu6-fw-com.h
-index 226a4713d..fba7af4a5 100644
+index 0323d8e48..50c000c74 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-fw-com.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6-fw-com.h
-@@ -30,6 +30,8 @@ struct ipu6_fw_com_cfg {
+@@ -32,6 +32,8 @@ struct ipu6_fw_com_cfg {
  
  	unsigned int buttress_boot_offset;
  	bool dmem_syscom;

@@ -1,25 +1,24 @@
-From 6ee6a47a4a50d3766ae58a107b687d8cab3f100b Mon Sep 17 00:00:00 2001
+From 07aeb5071e664f512e07b20fe837574c3506d969 Mon Sep 17 00:00:00 2001
 From: Ruslan Bay <ruslanbey@proton.me>
-Date: Sat, 10 Oct 2026 13:06:20 +0200
-Subject: [PATCH 04/12] media: ipu6: Add IPU4P ISYS firmware ABI definitions
+Date: Thu, 29 Oct 2026 00:00:30 +0100
+Subject: [RFC PATCH v2 04/12] media: ipu6: Add IPU4P ISYS firmware ABI
+ definitions
 
-Add IPU4P ISYS firmware ABI structures, enums, constants, and limits
-used by the firmware interface. Explicitly align 64-bit fields to keep
-the wire layout stable on 32-bit x86 builds.
+Define the IPU4P ISYS firmware message types, queue tokens and data
+structures.
 
 Signed-off-by: Ruslan Bay <ruslanbey@proton.me>
 ---
- drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h | 408 +++++++++++++++++++
- drivers/media/pci/intel/ipu6/ipu6-isys.h     |   5 +
- 2 files changed, 413 insertions(+)
+ drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h | 398 +++++++++++++++++++
+ 1 file changed, 398 insertions(+)
  create mode 100644 drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h b/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h
 new file mode 100644
-index 000000000..afc288b93
+index 00000000000..d2d5962b218
 --- /dev/null
 +++ b/drivers/media/pci/intel/ipu6/ipu4p-fw-isys.h
-@@ -0,0 +1,408 @@
+@@ -0,0 +1,398 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +/* Copyright (C) 2026 Intel Corporation */
 +
@@ -27,17 +26,8 @@ index 000000000..afc288b93
 +#define IPU4P_FW_ISYS_H
 +
 +#include <linux/build_bug.h>
-+#include <linux/irqreturn.h>
 +#include <linux/stddef.h>
 +#include <linux/types.h>
-+
-+struct ipu6_bus_device;
-+struct ipu6_fw_isys_ops;
-+struct ipu6_isys;
-+struct ipu6_isys_video;
-+struct ipu6_isys_stream;
-+struct ipu6_isys_buffer_list;
-+struct isys_fw_msgs;
 +
 +#define IPU4P_ISYS_MAX_STREAMS			8U
 +#define IPU4P_MAX_IPINS				4U
@@ -60,7 +50,6 @@ index 000000000..afc288b93
 +
 +#define IPU4P_ISYS_CROPPING_LOCATION_MAX	4U
 +#define IPU4P_ISYS_RESOLUTION_INFO_MAX		2U
-+#define IPU4P_ISYS_QUEUE_TYPE_MAX		3U
 +
 +enum ipu4p_fw_isys_resp_type {
 +	IPU4P_FW_ISYS_RESP_TYPE_STREAM_OPEN_DONE = 0,
@@ -325,13 +314,13 @@ index 000000000..afc288b93
 +};
 +
 +struct ipu4p_fw_isys_output_pin_payload {
-+	__aligned_u64 out_buf_id;
++	u64 out_buf_id;
 +	u32 addr;
 +	u32 compress;
 +};
 +
 +struct ipu4p_fw_isys_param_pin {
-+	__aligned_u64 param_buf_id;
++	u64 param_buf_id;
 +	u32 addr;
 +};
 +
@@ -354,7 +343,7 @@ index 000000000..afc288b93
 +};
 +
 +struct ipu4p_fw_isys_resp_info {
-+	__aligned_u64 buf_id;
++	u64 buf_id;
 +	struct ipu4p_fw_isys_output_pin_payload pin;
 +	struct ipu4p_fw_isys_param_pin process_group_light;
 +	struct ipu4p_fw_isys_error_info error_info;
@@ -378,7 +367,7 @@ index 000000000..afc288b93
 +};
 +
 +struct ipu4p_fw_isys_send_token {
-+	__aligned_u64 buf_handle;
++	u64 buf_handle;
 +	u32 payload;
 +	u16 send_type;
 +	u16 stream_id;
@@ -405,15 +394,15 @@ index 000000000..afc288b93
 +
 +struct ipu4p_fw_isys_fw_config {
 +	struct ipu4p_fw_isys_buffer_partition buffer_partition;
-+	u32 num_send_queues[IPU4P_ISYS_QUEUE_TYPE_MAX];
-+	u32 num_recv_queues[IPU4P_ISYS_QUEUE_TYPE_MAX];
++	u32 num_send_queues[N_IPU4P_FW_ISYS_QUEUE_TYPE];
++	u32 num_recv_queues[N_IPU4P_FW_ISYS_QUEUE_TYPE];
 +};
 +
-+/*
-+ * These structures are copied directly to and from the IPU4P firmware queues.
-+ * Keep the 64-bit fields 8-byte aligned; the firmware ABI depends on the
-+ * exact sizes and offsets below.
-+ */
++/* Keep these assertions in sync with the IPU4P firmware ABI. */
++static_assert(sizeof(struct ipu4p_fw_isys_output_pin_payload) == 16);
++static_assert(offsetof(struct ipu4p_fw_isys_output_pin_payload, addr) == 8);
++static_assert(sizeof(struct ipu4p_fw_isys_send_token) == 16);
++static_assert(offsetof(struct ipu4p_fw_isys_send_token, payload) == 8);
 +static_assert(sizeof(struct ipu4p_fw_isys_output_pin_info) == 28);
 +static_assert(offsetof(struct ipu4p_fw_isys_output_pin_info, link_id) == 24);
 +static_assert(offsetof(struct ipu4p_fw_isys_output_pin_info,
@@ -422,35 +411,12 @@ index 000000000..afc288b93
 +static_assert(offsetof(struct ipu4p_fw_isys_stream_cfg, output_pins) == 132);
 +static_assert(offsetof(struct ipu4p_fw_isys_stream_cfg, compfmt) == 300);
 +static_assert(offsetof(struct ipu4p_fw_isys_stream_cfg, src) == 310);
-+static_assert(sizeof(struct ipu4p_fw_isys_frame_buff_set) == 120);
-+static_assert(sizeof(struct ipu4p_fw_isys_resp_info) == 64);
-+
-+extern const struct ipu6_fw_isys_ops ipu4p_fw_isys_ops;
++static_assert(offsetof(struct ipu4p_fw_isys_frame_buff_set,
++		       process_group_light) == 96);
++static_assert(offsetof(struct ipu4p_fw_isys_resp_info,
++		       process_group_light) == 24);
 +
 +#endif /* IPU4P_FW_ISYS_H */
-diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys.h b/drivers/media/pci/intel/ipu6/ipu6-isys.h
-index 8674c041b..3a91f6a34 100644
---- a/drivers/media/pci/intel/ipu6/ipu6-isys.h
-+++ b/drivers/media/pci/intel/ipu6/ipu6-isys.h
-@@ -19,6 +19,7 @@
- #include "ipu6.h"
- #include "ipu6-fw-isys.h"
- #include "ipu7-fw-isys.h"
-+#include "ipu4p-fw-isys.h"
- #include "ipu6-isys-csi2.h"
- #include "ipu6-isys-video.h"
- 
-@@ -179,6 +180,10 @@ struct isys_fw_msgs {
- 			struct ipu7_fw_isys_frame_buff_set frame;
- 			struct ipu7_fw_isys_stream_cfg stream;
- 		} ipu7;
-+		union {
-+			struct ipu4p_fw_isys_frame_buff_set frame;
-+			struct ipu4p_fw_isys_stream_cfg stream;
-+		} ipu4p;
- 	};
- 	struct list_head head;
- 	dma_addr_t dma_addr;
 -- 
-2.43.0
+2.56.0
 

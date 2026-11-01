@@ -1,29 +1,29 @@
-From f20637c4fe864d0ccc51d46cf6f65f44ad9ebf46 Mon Sep 17 00:00:00 2001
+From cc3bab43892e99464551c445fb5fda6c9ea182ec Mon Sep 17 00:00:00 2001
 From: Ruslan Bay <ruslanbey@proton.me>
-Date: Fri, 9 Oct 2026 22:53:13 +0200
-Subject: [PATCH 03/12] media: ipu6: Add IPU4P buttress support
+Date: Thu, 29 Oct 2026 00:00:26 +0100
+Subject: [RFC PATCH v2 03/12] media: ipu6: Add IPU4P buttress support
 
-IPU4P uses different power FSM controls and frequency divisor
-placement from IPU6, and has a different bootloader status register.
+IPU4P uses different power-state fields and frequency-control layouts
+from IPU6, and has a different bootloader status register.
 
-Add IPU4P-specific power management and firmware authentication handling
-to the IPU6 buttress driver.
+Add IPU4P-specific power management and firmware authentication
+handling.
 
 Signed-off-by: Ruslan Bay <ruslanbey@proton.me>
 ---
- drivers/media/pci/intel/ipu6/ipu6-buttress.c  | 48 +++++++++++++++++--
- .../intel/ipu6/ipu6-platform-buttress-regs.h  | 20 ++++++++
- .../media/pci/intel/ipu6/ipu6-platform-regs.h |  6 +++
- drivers/media/pci/intel/ipu6/ipu6.c           | 40 ++++++++++++++++
- drivers/media/pci/intel/ipu6/ipu6.h           |  1 +
+ drivers/media/pci/intel/ipu6/ipu6-buttress.c  | 59 ++++++++++++++++---
+ .../intel/ipu6/ipu6-platform-buttress-regs.h  | 18 ++++++
+ .../media/pci/intel/ipu6/ipu6-platform-regs.h |  6 ++
+ drivers/media/pci/intel/ipu6/ipu6.c           | 40 +++++++++++++
+ drivers/media/pci/intel/ipu6/ipu6.h           |  2 +
  include/media/ipu6-pci-table.h                |  1 +
- 6 files changed, 113 insertions(+), 3 deletions(-)
+ 6 files changed, 119 insertions(+), 7 deletions(-)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-buttress.c b/drivers/media/pci/intel/ipu6/ipu6-buttress.c
-index 105de1744..ae63a9238 100644
+index f1d236054cf..b1d2f762d29 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-buttress.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6-buttress.c
-@@ -601,6 +601,43 @@ static int __ipu6_power(struct device *dev,
+@@ -450,6 +450,44 @@ irqreturn_t ipu6_buttress_isr_threaded(int irq, void *isp_ptr)
  	return ret;
  }
  
@@ -38,16 +38,17 @@ index 105de1744..ae63a9238 100644
 +		val = 0;
 +		pwr_sts = ctrl->pwr_sts_off << ctrl->pwr_sts_shift;
 +	} else {
-+		u32 shift = (ctrl->subsys_id == IPU_ISYS) ?
-+			    IPU4P_BUTTRESS_IS_FREQ_CTL_RATIO_SHIFT :
-+			    IPU4P_BUTTRESS_PS_FREQ_CTL_RATIO_SHIFT;
-+
-+		val = BUTTRESS_FREQ_CTL_START |
-+		      (ctrl->ratio << shift) |
-+		      FIELD_PREP(BUTTRESS_FREQ_CTL_QOS_FLOOR_MASK, ctrl->qos_floor);
-+
-+		if (ctrl->subsys_id == IPU_PSYS)
-+			val |= BIT(IPU4P_BUTTRESS_PS_FREQ_CTL_OVRD_SHIFT);
++		val = BUTTRESS_FREQ_CTL_START;
++		if (ctrl->subsys_id == IPU_ISYS) {
++			val |= FIELD_PREP(IPU4P_BUTTRESS_IS_FREQ_CTL_RATIO_MASK,
++					  ctrl->ratio);
++			val |= FIELD_PREP(BUTTRESS_FREQ_CTL_QOS_FLOOR_MASK,
++					  ctrl->qos_floor);
++		} else {
++			val |= FIELD_PREP(IPU4P_BUTTRESS_PS_FREQ_CTL_RATIO_MASK,
++					  ctrl->ratio);
++			val |= IPU4P_BUTTRESS_PS_FREQ_CTL_OVRD;
++		}
 +
 +		pwr_sts = ctrl->pwr_sts_on << ctrl->pwr_sts_shift;
 +	}
@@ -64,28 +65,45 @@ index 105de1744..ae63a9238 100644
 +	return ret;
 +}
 +
- int ipu6_buttress_power(struct device *dev,
- 			const struct ipu6_buttress_ctrl *ctrl, bool on)
+ static int ipu7_isys_d2d_power(struct ipu6_device *isp, bool on)
  {
-@@ -615,6 +652,8 @@ int ipu6_buttress_power(struct device *dev,
- 	if (IS_IPU7(isp))
+ 	u32 target = on ? IPU7_BUTTRESS_D2D_PWR_ACK : 0U;
+@@ -632,7 +670,9 @@ int ipu6_buttress_power(struct device *dev,
+ 
+ 	mutex_lock(&isp->buttress.power_mutex);
+ 
+-	if (IS_IPU7(isp) || IS_IPU8(isp))
++	if (IS_IPU4P(isp))
++		ret = __ipu4p_power(dev, ctrl, on);
++	else if (IS_IPU7(isp) || IS_IPU8(isp))
  		ret = on ? __ipu7_power_on(dev, ctrl) :
  			   __ipu7_power_off(dev, ctrl);
-+	else if (IS_IPU4P(isp))
-+		ret = __ipu4p_power(dev, ctrl, on);
  	else
- 		ret = __ipu6_power(dev, ctrl, on);
+@@ -774,6 +814,7 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
+ {
+ 	struct ipu6_buttress *b = &isp->buttress;
+ 	struct ipu6_psys_pdata *psys_pdata;
++	void __iomem *base;
+ 	u32 data, mask, done, fail;
+ 	int ret;
  
-@@ -824,6 +863,8 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
+@@ -842,9 +883,12 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
+ 		goto out_unlock;
+ 	}
  
- 	void __iomem *base = IS_IPU7(isp) ?
- 			     isp->base + IPU7_BUTTRESS_REG_FW_BOOT_PARAMS7 :
-+			     IS_IPU4P(isp) ?
-+			     psys_pdata->base + IPU4P_BOOTLOADER_STATUS_OFFSET :
- 			     psys_pdata->base + BOOTLOADER_STATUS_OFFSET;
+-	void __iomem *base = (IS_IPU7(isp) || IS_IPU8(isp)) ?
+-			     isp->base + IPU7_BUTTRESS_REG_FW_BOOT_PARAMS7 :
+-			     psys_pdata->base + BOOTLOADER_STATUS_OFFSET;
++	if (IS_IPU4P(isp))
++		base = psys_pdata->base + IPU4P_BOOTLOADER_STATUS_OFFSET;
++	else if (IS_IPU7(isp) || IS_IPU8(isp))
++		base = isp->base + IPU7_BUTTRESS_REG_FW_BOOT_PARAMS7;
++	else
++		base = psys_pdata->base + BOOTLOADER_STATUS_OFFSET;
  
  	ret = readl_poll_timeout(base, data, data == BOOTLOADER_MAGIC_KEY, 500,
-@@ -1089,9 +1130,10 @@ int ipu6_buttress_init(struct ipu6_device *isp)
+ 				 BUTTRESS_CSE_BOOTLOAD_TIMEOUT_US);
+@@ -1154,9 +1198,10 @@ int ipu6_buttress_init(struct ipu6_device *isp)
  		ipu7_buttress_setup(isp);
  		b->ref_clk = 384;
  	} else {
@@ -100,14 +118,13 @@ index 105de1744..ae63a9238 100644
  		writel(b->regs->irq_all, isp->base + b->regs->irq_clear);
  		writel(b->regs->irq_all, isp->base + b->regs->irq_enable);
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h b/drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h
-index 57e661cc2..6679a7d35 100644
+index 4c4ca95c7d5..153bf93f93f 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6-platform-buttress-regs.h
-@@ -330,4 +330,24 @@ enum {
- /* IPU7.5 */
- #define IPU7_BUTTRESS_SEL_PB_TIMESTAMP		BIT(9)
+@@ -6,6 +6,24 @@
  
-+/* IPU4P */
+ #include <linux/bits.h>
+ 
 +#define IPU4P_BUTTRESS_PWR_STATE_IS_PWR_FSM_SHIFT	20
 +#define IPU4P_BUTTRESS_PWR_STATE_IS_PWR_FSM_MASK	GENMASK(24, 20)
 +#define IPU4P_BUTTRESS_PWR_STATE_IS_PWR_FSM_IDLE	0x0
@@ -118,43 +135,59 @@ index 57e661cc2..6679a7d35 100644
 +#define IPU4P_BUTTRESS_PWR_STATE_PS_PWR_FSM_IDLE	0x0
 +#define IPU4P_BUTTRESS_PWR_STATE_PS_PWR_FSM_PS_PWR_UP	0x10
 +
-+#define IPU4P_BUTTRESS_IS_FREQ_CTL_RATIO_SHIFT		1
-+#define IPU4P_BUTTRESS_PS_FREQ_CTL_OVRD_SHIFT		7
-+#define IPU4P_BUTTRESS_PS_FREQ_CTL_RATIO_SHIFT		8
++#define IPU4P_BUTTRESS_IS_FREQ_CTL_RATIO_MASK		GENMASK(7, 1)
++#define IPU4P_BUTTRESS_PS_FREQ_CTL_RATIO_MASK		GENMASK(15, 8)
++#define IPU4P_BUTTRESS_PS_FREQ_CTL_OVRD		BIT(7)
 +
 +#define IPU4P_IS_FREQ_CTL_DIVISOR			4
-+#define IPU4P_PS_FREQ_CTL_DEFAULT_RATIO			0x12
-+
++#define IPU4P_PS_FREQ_CTL_DEFAULT_RATIO		0x12
 +#define IPU4P_BOOTLOADER_STATUS_OFFSET			0x8000
 +
- #endif /* IPU6_PLATFORM_BUTTRESS_REGS_H */
+ /* IS_WORKPOINT_REQ */
+ #define IPU6_BUTTRESS_REG_IS_FREQ_CTL		0x34
+ /* PS_WORKPOINT_REQ */
 diff --git a/drivers/media/pci/intel/ipu6/ipu6-platform-regs.h b/drivers/media/pci/intel/ipu6/ipu6-platform-regs.h
-index f08e7e8fd..526b02309 100644
+index 01a7abddd6d..8006af84201 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6-platform-regs.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6-platform-regs.h
-@@ -16,10 +16,16 @@
+@@ -14,12 +14,14 @@
+  */
+ #define IPU6_UNIFIED_OFFSET			0
  
++#define IPU4P_ISYS_OFFSET			0x00100000
  #define IPU4P_ISYS_IOMMU0_OFFSET		0x000e0000
  #define IPU4P_ISYS_IOMMU1_OFFSET		0x000e0100
-+#define IPU4P_ISYS_OFFSET			0x00100000
-+#define IPU4P_ISYS_SPC_OFFSET			0x00000000
-+#define IPU4P_ISYS_DMEM_OFFSET			0x00008000
+ #define IPU6_ISYS_IOMMU0_OFFSET		0x2e0000
+ #define IPU6_ISYS_IOMMU1_OFFSET		0x2e0500
+ #define IPU6_ISYS_IOMMUI_OFFSET		0x2e0a00
  
++#define IPU4P_PSYS_OFFSET			0x00400000
  #define IPU4P_PSYS_IOMMU0_OFFSET		0x000b0000
  #define IPU4P_PSYS_IOMMU1_OFFSET		0x000b0100
  #define IPU4P_PSYS_IOMMU1R_OFFSET		0x000b0600
-+#define IPU4P_PSYS_OFFSET			0x00400000
-+#define IPU4P_PSYS_SPC_OFFSET			0x00000000
-+#define IPU4P_PSYS_DMEM_OFFSET			0x00008000
+@@ -37,12 +39,16 @@
  
- #define IPU4P_MMU_L1_STREAM_ID_REG_OFFSET	0x0c
- #define IPU4P_MMU_L2_STREAM_ID_REG_OFFSET	0x4c
+ #define IPU6_MMU_INFO_OFFSET		0x8
+ 
++#define IPU4P_ISYS_SPC_OFFSET			0x00000000
+ #define IPU6_ISYS_SPC_OFFSET		0x210000
+ 
++#define IPU4P_PSYS_SPC_OFFSET			0x00000000
+ #define IPU6SE_PSYS_SPC_OFFSET		0x110000
+ #define IPU6_PSYS_SPC_OFFSET		0x118000
+ 
++#define IPU4P_ISYS_DMEM_OFFSET			0x00008000
+ #define IPU6_ISYS_DMEM_OFFSET		0x200000
++#define IPU4P_PSYS_DMEM_OFFSET			0x00008000
+ #define IPU6_PSYS_DMEM_OFFSET		0x100000
+ 
+ #define IPU6_REG_ISYS_UNISPART_IRQ_EDGE			0x27c000
 diff --git a/drivers/media/pci/intel/ipu6/ipu6.c b/drivers/media/pci/intel/ipu6/ipu6.c
-index 43d951735..789477e38 100644
+index cdf812c0296..1432c2a1f6f 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6.c
-@@ -140,6 +140,28 @@ static const struct ipu6_buttress_ctrl ipu7_psys_buttress_ctrl = {
- 	.pwr_sts_off = IPU6_BUTTRESS_PWR_STATE_DN_DONE,
+@@ -96,6 +96,28 @@ static struct ipu6_psys_internal_pdata psys_ipdata = {
+ 	},
  };
  
 +static const struct ipu6_buttress_ctrl ipu4p_isys_buttress_ctrl = {
@@ -179,14 +212,13 @@ index 43d951735..789477e38 100644
 +	.pwr_sts_off = IPU4P_BUTTRESS_PWR_STATE_PS_PWR_FSM_IDLE,
 +};
 +
- static const struct ipu6_buttress_registers ipu6_buttress_regs = {
- 	/* Registers */
- 	.irq_status	= BUTTRESS_REG_ISR_STATUS,
-@@ -375,6 +397,15 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
- 		isys_ipdata.csi2.gpreg = IPU7_IS_IO_CSI2_GPREGS_BASE;
- 		isys_ipdata.csi2.nports = 4;
- 	}
-+
+ static const struct ipu6_buttress_ctrl ipu6_isys_buttress_ctrl = {
+ 	.subsys_id = IPU_ISYS,
+ 	.ratio = IPU6_IS_FREQ_CTL_DEFAULT_RATIO,
+@@ -347,6 +369,15 @@ static void ipu6_internal_pdata_init(struct ipu6_device *isp)
+ 	psys_ipdata.hw_variant.spc_offset = IPU6_PSYS_SPC_OFFSET;
+ 	isys_ipdata.csi2.fw_access_port_ofs = CSI_REG_HUB_FW_ACCESS_PORT_OFS;
+ 
 +	if (IS_IPU4P(isp)) {
 +		isys_ipdata.hw_variant.offset = IPU4P_ISYS_OFFSET;
 +		isys_ipdata.hw_variant.spc_offset = IPU4P_ISYS_SPC_OFFSET;
@@ -195,19 +227,20 @@ index 43d951735..789477e38 100644
 +		psys_ipdata.hw_variant.spc_offset = IPU4P_PSYS_SPC_OFFSET;
 +		psys_ipdata.hw_variant.dmem_offset = IPU4P_PSYS_DMEM_OFFSET;
 +	}
- }
- 
- static struct ipu6_bus_device *
-@@ -631,6 +662,15 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
++
+ 	if (IS_IPU6EP(isp)) {
+ 		isys_ipdata.ltr = IPU6EP_LTR_VALUE;
+ 		isys_ipdata.memopen_threshold = IPU6EP_MIN_MEMOPEN_TH;
+@@ -660,6 +691,15 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
  	psys_ctrl = &ipu6_psys_buttress_ctrl;
  
  	switch (id->device) {
 +	case PCI_DEVICE_ID_INTEL_IPU4P:
 +		isp->hw_ver = IPU_VERSION_4P;
++		isp->model_name = IPU4P_MEDIA_DEV_MODEL_NAME;
 +		isp->cpd_fw_name = IPU4P_FIRMWARE_NAME;
 +		isp->cpd_metadata_cmpnt_size =
 +			sizeof(struct ipu6se_cpd_metadata_cmpnt);
-+		isp->buttress.regs = &ipu6_buttress_regs;
 +		isys_ctrl = &ipu4p_isys_buttress_ctrl;
 +		psys_ctrl = &ipu4p_psys_buttress_ctrl;
 +		break;
@@ -215,29 +248,35 @@ index 43d951735..789477e38 100644
  		isp->hw_ver = IPU_VERSION_6;
  		isp->cpd_fw_name = IPU6_FIRMWARE_NAME;
 diff --git a/drivers/media/pci/intel/ipu6/ipu6.h b/drivers/media/pci/intel/ipu6/ipu6.h
-index 2afbd70ca..84a50fba1 100644
+index c70ae6bb1d9..ccf001c2db9 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6.h
-@@ -26,6 +26,7 @@ struct ipu6_bus_device;
- #define IPU6EPADLN_FIRMWARE_NAME	"intel/ipu/ipu6epadln_fw.bin"
- #define IPU7_FIRMWARE_NAME		"intel/ipu/ipu7_fw.bin"
- #define IPU7P5_FIRMWARE_NAME		"intel/ipu/ipu7ptl_fw.bin"
-+#define IPU4P_FIRMWARE_NAME		"intel/ipu/ipu4p_fw.bin"
+@@ -15,11 +15,13 @@ struct pci_dev;
+ struct ipu6_bus_device;
  
- #define IPU_VERSION_6		BIT(0) /* TGL */
- #define IPU_VERSION_6SE		BIT(1) /* JSL */
+ #define IPU6_NAME			"intel-ipu6"
++#define IPU4P_MEDIA_DEV_MODEL_NAME	"ipu4p"
+ #define IPU6_MEDIA_DEV_MODEL_NAME	"ipu6"
+ #define IPU7_MEDIA_DEV_MODEL_NAME	"ipu7"
+ #define IPU7P5_MEDIA_DEV_MODEL_NAME	"ipu7.5"
+ #define IPU8_MEDIA_DEV_MODEL_NAME	"ipu8"
+ 
++#define IPU4P_FIRMWARE_NAME		"intel/ipu/ipu4p_fw.bin"
+ #define IPU6SE_FIRMWARE_NAME		"intel/ipu/ipu6se_fw.bin"
+ #define IPU6EP_FIRMWARE_NAME		"intel/ipu/ipu6ep_fw.bin"
+ #define IPU6_FIRMWARE_NAME		"intel/ipu/ipu6_fw.bin"
 diff --git a/include/media/ipu6-pci-table.h b/include/media/ipu6-pci-table.h
-index cacb8a317..7369d4662 100644
+index 4c7e724ea15..e04ff2a8b2a 100644
 --- a/include/media/ipu6-pci-table.h
 +++ b/include/media/ipu6-pci-table.h
-@@ -16,6 +16,7 @@
- #define PCI_DEVICE_ID_INTEL_IPU6EP_MTL		0x7d19
- #define PCI_DEVICE_ID_INTEL_IPU7		0x645d
- #define PCI_DEVICE_ID_INTEL_IPU7P5		0xb05d
-+#define PCI_DEVICE_ID_INTEL_IPU4P		0x8a19
+@@ -8,6 +8,7 @@
  
- static const struct pci_device_id ipu6_pci_tbl[] = {
- 	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_IPU6) },
+ #include <linux/pci.h>
+ 
++#define PCI_DEVICE_ID_INTEL_IPU4P		0x8a19
+ #define PCI_DEVICE_ID_INTEL_IPU6		0x9a19
+ #define PCI_DEVICE_ID_INTEL_IPU6SE		0x4e19
+ #define PCI_DEVICE_ID_INTEL_IPU6EP_ADLP		0x465d
 -- 
-2.43.0
+2.56.0
 

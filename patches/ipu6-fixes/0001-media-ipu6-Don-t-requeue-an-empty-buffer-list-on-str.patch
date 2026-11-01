@@ -1,0 +1,38 @@
+From 47da19229a44ee7448e2776607a446069cbfb0dc Mon Sep 17 00:00:00 2001
+From: Andreas Helbech Kleist <andreaskleist@gmail.com>
+Date: Sun, 1 Nov 2026 08:13:02 +0000
+Subject: [PATCH 1/2] media: ipu6: Don't requeue an empty buffer list on stream
+ start failure
+
+ipu6_isys_start_stream_firmware() moves the buffer list to the active
+queue once the stream is opened. When the firmware then fails to start
+the stream, or a later step of ipu6_isys_csi2_enable_streams() fails,
+the error path queues the now empty list back to the incoming queue and
+ipu6_isys_buffer_list_queue() warns about it.
+
+Only requeue the list if it still holds buffers.
+
+Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
+---
+ drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
+index d9c3d3577..d34eb29f9 100644
+--- a/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
++++ b/drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c
+@@ -788,7 +788,10 @@ static int ipu6_isys_csi2_enable_streams(struct v4l2_subdev *sd,
+ 		ipu6_isys_csi2_stream_disable(csi2);
+ 
+ err_requeue_buffers:
+-	ipu6_isys_buffer_list_queue(&bl, IPU6_ISYS_BUFFER_LIST_FL_INCOMING, 0);
++	/* The buffers are on the active queue once the stream is open. */
++	if (bl.nbufs)
++		ipu6_isys_buffer_list_queue(&bl,
++					    IPU6_ISYS_BUFFER_LIST_FL_INCOMING, 0);
+ 
+ err_stop_stream_firmware:
+ 	ipu6_isys_stop_stream_firmware(stream);
+-- 
+2.43.0
+

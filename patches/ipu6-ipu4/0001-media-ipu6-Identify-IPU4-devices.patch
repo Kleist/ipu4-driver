@@ -1,4 +1,4 @@
-From ae3229c701813b0ac5a45df98c18646488690844 Mon Sep 17 00:00:00 2001
+From f16d0984b6e26f6a1ef6c0e5d6b576acc420a535 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sat, 10 Oct 2026 11:55:28 +0000
 Subject: [PATCH 01/10] media: ipu6: Identify IPU4 devices
@@ -9,8 +9,10 @@ buttress power control, MMU stream layout, SysCom queue layout and
 CSI-2 receiver interrupts.
 
 Add an IPU_VERSION_4 hardware version with an IS_IPU4() helper, the
-PCI device ID and the firmware name, and identify the device in probe.
-IPU4 firmware uses the same CPD metadata component layout as IPU6SE and
+PCI device ID, the firmware and media device model names, and identify
+the device in probe. Keep the version flags in generation order, with
+IPU4 at BIT(0); as that needs a ninth bit, widen hw_ver to u16. IPU4
+firmware uses the same CPD metadata component layout as IPU6SE and
 IPU4P, and is loaded as intel/ipu/ipu4_fw.bin, following the IPU4P
 naming.
 
@@ -21,62 +23,96 @@ added to the PCI ID table, so the driver does not bind to it.
 
 Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
 ---
- drivers/media/pci/intel/ipu6/ipu6.c | 6 ++++++
- drivers/media/pci/intel/ipu6/ipu6.h | 3 +++
- include/media/ipu6-pci-table.h      | 1 +
- 3 files changed, 10 insertions(+)
+ drivers/media/pci/intel/ipu6/ipu6.c |  7 +++++++
+ drivers/media/pci/intel/ipu6/ipu6.h | 24 ++++++++++++++----------
+ include/media/ipu6-pci-table.h      |  1 +
+ 3 files changed, 22 insertions(+), 10 deletions(-)
 
 diff --git a/drivers/media/pci/intel/ipu6/ipu6.c b/drivers/media/pci/intel/ipu6/ipu6.c
-index 3ebf2ff76..76c8b82aa 100644
+index 2e79b4a00..f6a15932e 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6.c
 +++ b/drivers/media/pci/intel/ipu6/ipu6.c
-@@ -670,6 +670,12 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+@@ -700,6 +700,13 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
  	psys_ctrl = &ipu6_psys_buttress_ctrl;
  
  	switch (id->device) {
 +	case PCI_DEVICE_ID_INTEL_IPU4:
 +		isp->hw_ver = IPU_VERSION_4;
++		isp->model_name = IPU4_MEDIA_DEV_MODEL_NAME;
 +		isp->cpd_fw_name = IPU4_FIRMWARE_NAME;
 +		isp->cpd_metadata_cmpnt_size =
 +			sizeof(struct ipu6se_cpd_metadata_cmpnt);
 +		break;
  	case PCI_DEVICE_ID_INTEL_IPU4P:
  		isp->hw_ver = IPU_VERSION_4P;
- 		isp->cpd_fw_name = IPU4P_FIRMWARE_NAME;
+ 		isp->model_name = IPU4P_MEDIA_DEV_MODEL_NAME;
 diff --git a/drivers/media/pci/intel/ipu6/ipu6.h b/drivers/media/pci/intel/ipu6/ipu6.h
-index 84a50fba1..594c3290b 100644
+index ccf001c2d..9f9baf788 100644
 --- a/drivers/media/pci/intel/ipu6/ipu6.h
 +++ b/drivers/media/pci/intel/ipu6/ipu6.h
-@@ -27,6 +27,7 @@ struct ipu6_bus_device;
- #define IPU7_FIRMWARE_NAME		"intel/ipu/ipu7_fw.bin"
- #define IPU7P5_FIRMWARE_NAME		"intel/ipu/ipu7ptl_fw.bin"
- #define IPU4P_FIRMWARE_NAME		"intel/ipu/ipu4p_fw.bin"
+@@ -15,12 +15,14 @@ struct pci_dev;
+ struct ipu6_bus_device;
+ 
+ #define IPU6_NAME			"intel-ipu6"
++#define IPU4_MEDIA_DEV_MODEL_NAME	"ipu4"
+ #define IPU4P_MEDIA_DEV_MODEL_NAME	"ipu4p"
+ #define IPU6_MEDIA_DEV_MODEL_NAME	"ipu6"
+ #define IPU7_MEDIA_DEV_MODEL_NAME	"ipu7"
+ #define IPU7P5_MEDIA_DEV_MODEL_NAME	"ipu7.5"
+ #define IPU8_MEDIA_DEV_MODEL_NAME	"ipu8"
+ 
 +#define IPU4_FIRMWARE_NAME		"intel/ipu/ipu4_fw.bin"
+ #define IPU4P_FIRMWARE_NAME		"intel/ipu/ipu4p_fw.bin"
+ #define IPU6SE_FIRMWARE_NAME		"intel/ipu/ipu6se_fw.bin"
+ #define IPU6EP_FIRMWARE_NAME		"intel/ipu/ipu6ep_fw.bin"
+@@ -31,15 +33,17 @@ struct ipu6_bus_device;
+ #define IPU7P5_FIRMWARE_NAME		"intel/ipu/ipu7ptl_fw.bin"
+ #define IPU8_FIRMWARE_NAME		"intel/ipu/ipu8_fw.bin"
  
- #define IPU_VERSION_6		BIT(0) /* TGL */
- #define IPU_VERSION_6SE		BIT(1) /* JSL */
-@@ -35,7 +36,9 @@ struct ipu6_bus_device;
- #define IPU_VERSION_7		BIT(4) /* LNL */
- #define IPU_VERSION_7P5		BIT(5) /* PTL */
- #define IPU_VERSION_4P		BIT(6) /* ICL */
-+#define IPU_VERSION_4		BIT(7) /* APL */
- 
+-#define IPU_VERSION_4P		BIT(0) /* ICL */
+-#define IPU_VERSION_6		BIT(1) /* TGL */
+-#define IPU_VERSION_6SE		BIT(2) /* JSL */
+-#define IPU_VERSION_6EP		BIT(3) /* ADL/RPL */
+-#define IPU_VERSION_6EP_MTL	BIT(4) /* MTL */
+-#define IPU_VERSION_7		BIT(5) /* LNL */
+-#define IPU_VERSION_7P5		BIT(6) /* PTL */
+-#define IPU_VERSION_8		BIT(7) /* NVL */
+-
++#define IPU_VERSION_4		BIT(0) /* APL */
++#define IPU_VERSION_4P		BIT(1) /* ICL */
++#define IPU_VERSION_6		BIT(2) /* TGL */
++#define IPU_VERSION_6SE		BIT(3) /* JSL */
++#define IPU_VERSION_6EP		BIT(4) /* ADL/RPL */
++#define IPU_VERSION_6EP_MTL	BIT(5) /* MTL */
++#define IPU_VERSION_7		BIT(6) /* LNL */
++#define IPU_VERSION_7P5		BIT(7) /* PTL */
++#define IPU_VERSION_8		BIT(8) /* NVL */
++
 +#define IS_IPU4(isp)		((isp)->hw_ver & IPU_VERSION_4)
  #define IS_IPU4P(isp)		((isp)->hw_ver & IPU_VERSION_4P)
  #define IS_IPU6_TGL(isp)	((isp)->hw_ver & IPU_VERSION_6)
  #define IS_IPU6SE(isp)		((isp)->hw_ver & IPU_VERSION_6SE)
+@@ -80,7 +84,7 @@ struct ipu6_device {
+ 	void __iomem *pb_base;
+ 	bool need_ipc_reset;
+ 	bool secure_mode;
+-	u8 hw_ver;
++	u16 hw_ver;
+ 	bool bus_ready_to_probe;
+ 	u32 *fw_code_region;
+ };
 diff --git a/include/media/ipu6-pci-table.h b/include/media/ipu6-pci-table.h
-index 09b2ea58b..17ec5b15e 100644
+index 233365f21..8c0bcdb59 100644
 --- a/include/media/ipu6-pci-table.h
 +++ b/include/media/ipu6-pci-table.h
-@@ -17,6 +17,7 @@
- #define PCI_DEVICE_ID_INTEL_IPU7		0x645d
- #define PCI_DEVICE_ID_INTEL_IPU7P5		0xb05d
- #define PCI_DEVICE_ID_INTEL_IPU4P		0x8a19
-+#define PCI_DEVICE_ID_INTEL_IPU4		0x5a88
+@@ -8,6 +8,7 @@
  
- static const struct pci_device_id ipu6_pci_tbl[] = {
- 	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_IPU6) },
+ #include <linux/pci.h>
+ 
++#define PCI_DEVICE_ID_INTEL_IPU4		0x5a88
+ #define PCI_DEVICE_ID_INTEL_IPU4P		0x8a19
+ #define PCI_DEVICE_ID_INTEL_IPU6		0x9a19
+ #define PCI_DEVICE_ID_INTEL_IPU6SE		0x4e19
 -- 
 2.43.0
 

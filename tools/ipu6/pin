@@ -1,11 +1,13 @@
 # shellcheck shell=bash
 # Pinned base tree for the ipu6 flavor (IPU4_FLAVOR=ipu6): a mainline tag.
-# Sourced by tools/ipu6/*.sh. patches/ipu6-ipu7/, patches/ipu6-ipu4p/
-# and patches/ipu6-ipu4/ are applied on top. Bumped weekly to the
-# newest mainline tag by tools/ipu6/bump-pin.sh.
+# Sourced by tools/ipu6/*.sh. patches/ipu6-ipu4p/ and patches/ipu6-ipu4/
+# are applied on top. Bumped weekly to the newest mainline tag by
+# tools/ipu6/bump-pin.sh.
 #
 # The GitHub mirror, as kernel.org is not reachable from CI. SHA is the
-# tag's commit.
+# tag's commit, except until v7.4-rc1: then it is a 7.4 merge-window
+# commit that has the IPU7/IPU8 support the IPU4P series needs, and the
+# first bump moves it to v7.4-rc1.
 IPU6_LINUX_URL="${IPU4_IPU6_LINUX_URL:-https://github.com/torvalds/linux.git}"
 IPU6_LINUX_TAG="v7.3"
-IPU6_LINUX_SHA="${IPU4_IPU6_LINUX_SHA:-c03c1a14507dfaf8b856c2608f9ac216021fc222}"
+IPU6_LINUX_SHA="${IPU4_IPU6_LINUX_SHA:-cbbddb6b08cc9900a87cccaa9b22bbe06aa4f50a}"

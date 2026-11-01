@@ -14,12 +14,13 @@ repo's QEMU IPU4 model on every PR.
 
 | What | Value |
 |---|---|
-| Tree | mainline (`https://github.com/torvalds/linux.git`), tag in `tools/ipu6/pin`, bumped weekly by `tools/ipu6/bump-pin.sh` |
-| Base series | `patches/ipu6-ipu7/`: Antti Laakso's IPU7-in-ipu6 series ([lore][antti]); `patches/ipu6-ipu4p/`: Ruslan's 12 IPU4P patches (RFC; [lore][ruslan] for the earlier posting) |
+| Tree | mainline (`https://github.com/torvalds/linux.git`), tag in `tools/ipu6/pin`, bumped weekly by `tools/ipu6/bump-pin.sh`; it has Antti Laakso's IPU7-in-ipu6 series ([lore][antti]) and IPU8 since the 7.4 merge window |
+| Base series | `patches/ipu6-ipu4p/`: Ruslan's 12 IPU4P patches (RFC v2; [lore][ruslan] for v1); `patches/ipu6-fixes/`: pending fixes for mainline bugs the ladder hits |
 
-The base series was exported from Ruslan's `ipu4p-upstream` branch
-at `81fdd59f2689`, his October RFC (the earlier `340985596` is kept as
-`ipu4p-backup`). Later revisions are picked up by re-exporting it, not
+The base series is copied from the `upstream` branch of
+[ruslanbay/ipu4-drivers](https://github.com/ruslanbay/ipu4-drivers/tree/upstream)
+(`patches/v2-00*.patch` at `f0b3dfa4873`, based on media-committers
+`next`). Later revisions are picked up by copying them, not
 automatically.
 
 [antti]: https://lore.kernel.org/all/20260907113004.2489993-1-sakari.ailus@linux.intel.com/
@@ -61,6 +62,17 @@ automatically.
 - **Stay in this track's files.** Other tracks (QEMU variants) run in
   parallel with their own plans; see "Tracks and file ownership" below
   for which files each owns and how shared files are changed.
+
+## TODO
+
+- [ ] (Andreas) Send the two mainline fixes in `patches/ipu6-fixes/` to
+  linux-media (they apply on mainline as is), each with a `Fixes:` tag
+  for the 7.4 commit that introduced it, and drop them once mainline has
+  them:
+  - `0001-media-ipu6-Don-t-requeue-an-empty-buffer-list-on-str.patch`
+    (7.4 stream rework, the failed-start error path);
+  - `0002-media-ipu6-Don-t-close-unopened-ISYS-firmware-on-run.patch`
+    (7.4 moved the firmware open/close into ISYS runtime PM).
 
 ## Decisions
 
@@ -165,6 +177,7 @@ split, or gated by the existing graded markers (`IPU4_PROBE_REQUIRED`,
 | 13 | ~~`media: ipu6: Handle the IPU4 CSI-2 frame interrupts`~~ (decision 3, dropped in the review-fixes step); before it, a shared-core PR puts the QEMU model's CSI-2 ports at the ISYS base (`ipu6-ipu4/core-csi2-irq`) | `csi2-sof-irq` | merged (#141, core fix #140) |
 | 14 | ~~`media: ipu6: Enable IPU4 PCI device`~~ | — | moved to PR 8a (after PR 13 the only step left is PR 15) |
 | Review fixes | Fold in the maintainer-style review: SysCom flag instead of `IS_IPU4()` in fw-com, IPU4P MMU tables with IPU4 L1 block-size overrides, one IPU4/IPU4P pdata block (stream limits folded into the MMU patch, old 0007 gone), `ipu4_isys_unispart_irq_csi2()` and only used defines, shared IPU4/IPU4P error reporting, lane-count check, power lock around the stream-stop error collection, no PHY hook for IPU4; frame interrupt patch dropped | `csi2-sof-irq` no longer gated on `ipu4-patches / ipu4` | |
+| IPU4P v2 | Rebase onto Ruslan's IPU4P RFC v2 on the 7.4 merge-window mainline (IPU7/IPU8 merged, `patches/ipu6-ipu7/` dropped): IPU4 at `IPU_VERSION_4` = BIT(0) with `hw_ver` widened to `u16`, IPU4 model name `ipu4`, the IPU4 MMU block sizes as an override after the shared `__ipu_mmu_init_hw_data()`, the ISR on `pm_runtime_get_if_active()`, LTR/DID and watermark skipped where upstream now does it, `synchronize_irq()` instead of the power lock at stream stop; new base series `patches/ipu6-fixes/`, applied under every ipu6-flavor tree (baselines included), with fixes for two mainline 7.4 bugs the ladder hits: `media: ipu6: Don't requeue an empty buffer list on stream start failure` (`stream-start-error`) and `media: ipu6: Don't close unopened ISYS firmware on runtime suspend` (NULL dereference after `pci-reauth`'s rebind, which fails `module-load`) | — | |
 | 15 | Cover letter draft + `get_maintainer.pl` output | — | |
 | Pages | Dashboard section "IPU4 port (upstream ipu6)": `ladder.sh` writes `results.json`, `vm-ipu6` uploads it per variant, Pages shows a test × variant matrix | — | merged (#109) |
 
@@ -183,7 +196,7 @@ driver and under `ipu4-patches`. A track owns its driver's gate files,
 | Track | Plan | Driver | Owns |
 |---|---|---|---|
 | IPU4 (out-of-tree baseline) | [`tools/notes/ipu4-out-of-tree-plan.md`](ipu4-out-of-tree-plan.md) | `ipu4-out-of-tree`: `kernel/ipu4/` on v7.3-rc4 | `enabled-tests.ipu4-out-of-tree.*` |
-| IPU4P variant (baseline) | [`tools/notes/ipu4p-variant-plan.md`](ipu4p-variant-plan.md) | `ipu4p`: mainline pin + `patches/ipu6-ipu7/` + `patches/ipu6-ipu4p/` | `enabled-tests.ipu4p.*` |
+| IPU4P variant (baseline) | [`tools/notes/ipu4p-variant-plan.md`](ipu4p-variant-plan.md) | `ipu4p`: mainline pin + `patches/ipu6-ipu4p/` | `enabled-tests.ipu4p.*` |
 | IPU6 variant (baseline) | [`tools/notes/ipu6-variant-plan.md`](ipu6-variant-plan.md) | `ipu6`: mainline pin, no series (`tools/ipu6/pin.upstream`) | `enabled-tests.ipu6.*` |
 | IPU4 port (this plan) | `tools/notes/ipu6-ipu4-plan.md` | `ipu4-patches`: the `ipu4p` tree + the series | `patches/ipu6-ipu4/`, `enabled-tests.ipu4-patches.*` |
 
@@ -923,3 +936,21 @@ last; each entry names the PR that found it.
   `csi2-sof-irq` keeps checking silicon's frame-interrupt writes on the
   out-of-tree leg; on `ipu4-patches / ipu4` it now fails by design and
   is left out of the gate.
+- (IPU4P v2) Upstream reworked the code under the series between v7.3
+  and the 7.4 merge window: IPU8 took the last free bit of the `u8`
+  `hw_ver` (IPU4P v2 renumbered the versions in generation order, IPU4P
+  at BIT(0)), `isys->power`/`power_lock` are gone (ISRs take
+  `pm_runtime_get_if_active()`), `set_iwake_ltrdid()` returns early for
+  IPU4P itself and runs at resume for every non-IPU7/8 IPU, the stream
+  watermark moved to `ipu6_isys_csi2_{setup,clear}_watermark()`, and the
+  IPU4P MMU init shares `__ipu_mmu_init_hw_data()` over `const` tables.
+  The IPU4 patches follow each of those; behaviour on the model is meant
+  to be unchanged.
+- (IPU4P v2) Since 7.4 the ISYS firmware is opened in runtime resume and
+  closed in runtime suspend. After `pci-reauth` resets and rebinds the
+  PCI driver, the ISYS probe defers (`bus_ready_to_probe`) and the
+  device is later runtime suspended without its resume callback having
+  run, so the close dereferences a NULL firmware context. It only
+  shows with a slow guest (`IPU4_GCOV=1`, as in CI); fixed in
+  `patches/ipu6-fixes/`, which every ipu6-flavor tree applies, so the
+  baselines run mainline as it will be.
