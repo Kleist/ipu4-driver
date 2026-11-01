@@ -7,5 +7,7 @@ ipu6-flavor tree: on the mainline pin for the `ipu6` baseline, after
 (before `patches/ipu6-ipu4/`). They apply on mainline as is.
 
 Upstream-quality `git format-patch` output, like `patches/ipu6-ipu4/`.
-Send each to linux-media and drop it once mainline has it (TODO in
-[`tools/notes/ipu6-ipu4-plan.md`](../../tools/notes/ipu6-ipu4-plan.md)).
+Send them to linux-media and drop each once mainline has it (TODO in
+[`tools/notes/ipu6-ipu4-plan.md`](../../tools/notes/ipu6-ipu4-plan.md));
+how to send them with b4 is in
+[`patches/ipu6-ipu4/README.md`](../ipu6-ipu4/README.md#submitting-with-b4).
