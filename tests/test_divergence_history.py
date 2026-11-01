@@ -185,3 +185,99 @@ def test_fetch_and_main(ours, linux, tmp_path):
     assert dh.main(["--repo", str(ours), "--linux", str(clone), "--out", str(out)]) == 0
     data = json.loads(out.read_text())
     assert data["schema"] == 1 and data["points"][-1]["kind"] == "head"
+
+
+def make_patch(tmp_path, name, before, after):
+    """A git-format patch that changes ``before`` into ``after`` ({path: text|None})."""
+    repo = init(tmp_path / f"p-{name}")
+    commit(repo, {p: t for p, t in before.items() if t is not None} or {"x": "x\n"},
+           "base", T0)
+    for p, t in after.items():
+        if t is None:
+            run(repo, "rm", "-q", p)
+        else:
+            (repo / p).parent.mkdir(parents=True, exist_ok=True)
+            (repo / p).write_text(t)
+            run(repo, "add", p)
+    commit(repo, {}, name, T0 + 1)
+    return run(repo, "format-patch", "-1", "--stdout")
+
+
+@pytest.fixture
+def root(tmp_path, linux):
+    """A repo root with the pin on v6.10, the three series and the allow-list."""
+    r = tmp_path / "root"
+    (r / "tools" / "ipu6").mkdir(parents=True)
+    (r / "tools" / "out-of-tree").mkdir(parents=True)
+    sha = run(linux, "rev-parse", "v6.10")
+    (r / "tools" / "ipu6" / "pin").write_text(
+        f'IPU6_LINUX_SHA="${{IPU4_IPU6_LINUX_SHA:-{sha}}}"\n')
+    (r / "tools" / "out-of-tree" / "delta.txt").write_text(
+        "# comment\nambu-*.[ch]  # board\n\nipu4-compat.h\n")
+    p4p = make_patch(tmp_path, "ipu4p",
+                     {f"{UP}/ipu6.c": "1\n2\n", "Kconfig": "k\n"},
+                     {f"{UP}/ipu6.c": "1\n2\n3\n", f"{UP}/ipu4p-fw.c": "p\nq\n",
+                      "Kconfig": "k2\n"})
+    fix = make_patch(tmp_path, "fix", {f"{UP}/ipu7-only.c": "u\nv\n"},
+                     {f"{UP}/ipu7-only.c": None})
+    for d, text in (("ipu6-ipu4p", p4p), ("ipu6-fixes", fix), ("ipu6-ipu4", None)):
+        (r / "patches" / d).mkdir(parents=True)
+        if text:
+            (r / "patches" / d / "0001-x.patch").write_text(text + "\n")
+    return r
+
+
+def test_pin_and_allowed_delta(root, linux):
+    assert dh.pin_sha(root) == run(linux, "rev-parse", "v6.10")
+    assert dh.allowed_delta(root) == ["ambu-*.[ch]", "ipu4-compat.h"]
+
+
+def test_target_tree(root, linux, tmp_path):
+    work = tmp_path / "work"
+    files = dh.target_tree(root, linux, work)
+    assert set(files) == {"ipu6-isys.c", "ipu6.c", "ipu4p-fw.c"}
+    assert (work / UP / "ipu6.c").read_text() == "1\n2\n3\n"
+    assert not (work / "Kconfig").exists()
+
+
+def test_build_with_target(ours, linux, root):
+    data = dh.build(ours, "HEAD", linux, {"ambu-ipu-bridge.c"}, root)
+    t = data["target"]
+    assert t["pin"] == run(linux, "rev-parse", "v6.10")
+    assert t["series"] == {"ipu6-ipu4p": 1, "ipu6-fixes": 1, "ipu6-ipu4": 0}
+    by_name = {f["name"]: f for f in t["files"]}
+    # ipu6.c matches the patched target; ambu-ipu-bridge.c is allowed.
+    assert set(by_name) == {"virt.c", "ipu4p-fw.c"}
+    assert by_name["virt.c"]["status"] == "not in target"
+    assert by_name["ipu4p-fw.c"] == {"name": "ipu4p-fw.c", "status": "missing here",
+                                     "lines": 2}
+    assert t["divergence"] == 3
+
+
+def test_target_divergence_counts_changed_shared_files():
+    class Mem:
+        def __init__(self, d):
+            self.d = d
+
+        def lines(self, k):
+            return self.d[k]
+
+    t = dh.target_divergence({"a.c": "a"}, {"a.c": "a.c"}, Mem({"a": ["1", "x"]}),
+                             Mem({"a.c": ["1", "2"]}), [])
+    assert t == {"divergence": 2, "files": [{"name": "a.c", "status": "differs", "lines": 2}]}
+
+
+def test_main_target_fetch(ours, linux, root, tmp_path, monkeypatch):
+    run(linux, "config", "uploadpack.allowfilter", "true")
+    run(linux, "config", "uploadpack.allowanysha1inwant", "true")
+    clone = tmp_path / "tags2"
+    sha = dh.pin_sha(root)
+    dh.fetch_linux(clone, url=f"file://{linux}", extra=[sha])
+    assert dh.source_files(clone, sha, UP)
+    monkeypatch.setattr(dh, "build", lambda *a: {"points": [], "target": str(a[4])})
+    out = tmp_path / "t.json"
+    monkeypatch.setattr(dh, "pin_sha", lambda r: sha)
+    monkeypatch.setattr(dh, "fetch_linux", lambda *a, **k: None)
+    assert dh.main(["--repo", str(ours), "--linux", str(clone), "--target", "--fetch",
+                    "--out", str(out)]) == 0
+    assert json.loads(out.read_text())["target"] == str(_REPO_ROOT)

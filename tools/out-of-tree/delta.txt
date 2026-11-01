@@ -1,0 +1,9 @@
+# Permanent delta of kernel/ipu4/ against the target tree (mainline pin +
+# patches/ipu6-ipu4p + patches/ipu6-fixes + patches/ipu6-ipu4), see
+# "Convergence" in tools/notes/ipu4-out-of-tree-plan.md. One file name or
+# fnmatch pattern per line; every other difference counts as unexplained.
+
+# Ambu board support: sensor description for the product hardware.
+ambu-ipu-bridge.[ch]
+# Shims for the kernels the out-of-tree build supports (6.12 and later).
+ipu4-compat.h

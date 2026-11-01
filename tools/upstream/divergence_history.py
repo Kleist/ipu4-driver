@@ -17,8 +17,13 @@ Writes ``tools/notes/upstream-diff/history.json`` (gitignored), which
 ``tools/dashboard/build_payload.py`` embeds in the page.
 
 Usage:
-  tools/upstream/divergence_history.py --linux DIR [--fetch] [--repo DIR]
-                                       [--rev REV] [--out FILE]
+  tools/upstream/divergence_history.py --linux DIR [--fetch] [--target]
+                                       [--repo DIR] [--rev REV] [--out FILE]
+
+With --target it also reports the divergence from the target tree of
+tools/notes/ipu4-out-of-tree-plan.md (the ladder's ipu4-patches driver:
+mainline pin + IPU4P + fixes + IPU4 series), outside the permanent delta
+listed in tools/out-of-tree/delta.txt.
 """
 from __future__ import annotations
 
@@ -26,10 +31,12 @@ import argparse
 import bisect
 import datetime as _dt
 import difflib
+import fnmatch
 import json
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 UPSTREAM_REL = "drivers/media/pci/intel/ipu6"
@@ -40,6 +47,9 @@ LINUX_URL = "https://github.com/torvalds/linux.git"
 TAG_RE = re.compile(r"^v(\d+)\.(\d+)(?:-rc(\d+))?$")
 # Paths that hold copies of driver files but are not the driver.
 NOT_DRIVER = ("tools/", "patches/")
+# The target tree: the ipu4-patches driver of the ladder, i.e. the mainline
+# pin (tools/ipu6/pin) with these series applied in order.
+TARGET_SERIES = ("ipu6-ipu4p", "ipu6-fixes", "ipu6-ipu4")
 
 
 def git(repo: Path, *args: str, input: str | None = None) -> str:
@@ -148,6 +158,16 @@ class Blobs:
         return self.cache[oid]
 
 
+class Files:
+    """Reads files below a directory, with the same interface as Blobs."""
+
+    def __init__(self, base: Path):
+        self.base = base
+
+    def lines(self, name: str) -> list[str]:
+        return (self.base / name).read_text(errors="replace").splitlines()
+
+
 def source_files(repo: Path, rev: str, path: str) -> dict:
     """{name: blob oid} of the .c/.h files directly in ``path`` at ``rev``."""
     out = git(repo, "ls-tree", f"{rev}:{path}") if path else ""
@@ -250,7 +270,70 @@ def divergence(ours: dict, theirs: dict, our_blobs: Blobs, up_blobs: Blobs,
     }
 
 
-def fetch_linux(linux: Path, url: str = LINUX_URL) -> None:
+def pin_sha(root: Path) -> str:
+    """The commit tools/ipu6/pin names."""
+    text = (root / "tools" / "ipu6" / "pin").read_text()
+    return re.search(r"IPU6_LINUX_SHA=.*?([0-9a-f]{40})", text).group(1)
+
+
+def allowed_delta(root: Path) -> list[str]:
+    """File patterns of the permanent delta (tools/out-of-tree/delta.txt)."""
+    text = (root / "tools" / "out-of-tree" / "delta.txt").read_text()
+    return [ln.split("#", 1)[0].strip() for ln in text.splitlines()
+            if ln.split("#", 1)[0].strip()]
+
+
+def target_tree(root: Path, linux: Path, work: Path) -> dict:
+    """Build the target's ipu6 directory in ``work``: the pin's files with
+    TARGET_SERIES applied. Returns {name: name} of its .c/.h files."""
+    out = work / UPSTREAM_REL
+    out.mkdir(parents=True)
+    for line in git(linux, "ls-tree", f"{pin_sha(root)}:{UPSTREAM_REL}").splitlines():
+        meta, name = line.split("\t", 1)
+        oid = meta.split()[2]
+        data = subprocess.run(["git", "-C", str(linux), "cat-file", "blob", oid],
+                              check=True, capture_output=True).stdout
+        (out / name).write_bytes(data)
+    for series in TARGET_SERIES:
+        for patch in sorted((root / "patches" / series).glob("*.patch")):
+            subprocess.run(["git", "apply", f"--include={UPSTREAM_REL}/*",
+                            str(patch)], cwd=work, check=True,
+                           capture_output=True)
+    return {f.name: f.name for f in out.iterdir()
+            if f.name.endswith((".c", ".h"))}
+
+
+def target_divergence(ours: dict, target: dict, our_blobs, target_files,
+                      allowed: list[str]) -> dict:
+    """Divergence from the target tree, outside the allowed delta.
+
+    Shared files count their changed lines, our files the target lacks and
+    target files we lack count every line. Returns the total and the
+    per-file worklist, largest first.
+    """
+    def is_allowed(name):
+        return any(fnmatch.fnmatch(name, pat) for pat in allowed)
+
+    files = []
+    for name, oid in ours.items():
+        if is_allowed(name):
+            continue
+        mine = our_blobs.lines(oid)
+        if name in target:
+            n = changed_lines(mine, target_files.lines(target[name]))
+            if n:
+                files.append({"name": name, "status": "differs", "lines": n})
+        else:
+            files.append({"name": name, "status": "not in target", "lines": len(mine)})
+    for name in target:
+        if name not in ours and not is_allowed(name):
+            files.append({"name": name, "status": "missing here",
+                          "lines": len(target_files.lines(target[name]))})
+    files.sort(key=lambda f: (-f["lines"], f["name"]))
+    return {"divergence": sum(f["lines"] for f in files), "files": files}
+
+
+def fetch_linux(linux: Path, url: str = LINUX_URL, extra=()) -> None:
     """Fetch the mainline tags from FIRST_RELEASE on (tips only, no history)
     and master into ``linux``, then the ipu6 driver's blobs in one go."""
     if not (linux / "HEAD").exists():
@@ -267,9 +350,9 @@ def fetch_linux(linux: Path, url: str = LINUX_URL) -> None:
             names.append(name)
     specs = [f"+refs/tags/{n}:refs/tags/{n}" for n in names]
     git(linux, "fetch", "-q", "--no-tags", "--depth=1", "--filter=blob:none", "origin",
-        *specs, "+refs/heads/master:refs/heads/master")
+        *specs, "+refs/heads/master:refs/heads/master", *extra)
     oids = set()
-    for ref in names + ["master"]:
+    for ref in names + ["master", *extra]:
         try:
             oids.update(source_files(linux, ref, UPSTREAM_REL).values())
         except subprocess.CalledProcessError:
@@ -287,7 +370,7 @@ def iso(ts: int) -> str:
         "%Y-%m-%dT%H:%M:%SZ")
 
 
-def build(repo: Path, rev: str, linux: Path, skip: set) -> dict:
+def build(repo: Path, rev: str, linux: Path, skip: set, root: Path | None = None) -> dict:
     driver, subjects, head_eff = our_history(repo, rev)
     head_sha = git(repo, "rev-parse", rev).strip()
     tags = upstream_tags(linux)
@@ -330,6 +413,16 @@ def build(repo: Path, rev: str, linux: Path, skip: set) -> dict:
         m["sha"] = git(linux, "rev-parse", "master").strip()
         m["date"] = iso(int(git(linux, "log", "-1", "--format=%ct", "master")))
         master = m
+    target = None
+    if root is not None:
+        with tempfile.TemporaryDirectory() as work:
+            files = target_tree(root, linux, Path(work))
+            target = target_divergence(ours_at(head_sha), files, our_blobs,
+                                       Files(Path(work) / UPSTREAM_REL),
+                                       allowed_delta(root))
+        target["pin"] = pin_sha(root)
+        target["series"] = {s: len(list((root / "patches" / s).glob("*.patch")))
+                            for s in TARGET_SERIES}
     return {
         "schema": 1,
         "generated_at": iso(int(_dt.datetime.now(_dt.timezone.utc).timestamp())),
@@ -337,6 +430,7 @@ def build(repo: Path, rev: str, linux: Path, skip: set) -> dict:
         "upstream_path": UPSTREAM_REL,
         "points": points,
         "master": master,
+        "target": target,
     }
 
 
@@ -349,13 +443,17 @@ def main(argv=None) -> int:
                    help="git dir with the mainline tags (see --fetch)")
     p.add_argument("--fetch", action="store_true",
                    help=f"fetch the tags and ipu6 blobs from {LINUX_URL} first")
+    p.add_argument("--target", action="store_true",
+                   help="also diff against the target tree (pin + "
+                        + " + ".join(TARGET_SERIES) + ")")
     p.add_argument("--out", type=Path,
                    default=root / "tools" / "notes" / "upstream-diff" / "history.json")
     args = p.parse_args(argv)
 
     if args.fetch:
-        fetch_linux(args.linux)
-    data = build(args.repo, args.rev, args.linux, local_only(root))
+        fetch_linux(args.linux, extra=[pin_sha(root)] if args.target else [])
+    data = build(args.repo, args.rev, args.linux, local_only(root),
+                 root if args.target else None)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(data, indent=1) + "\n")
     print(f"{len(data['points'])} points -> {args.out}", file=sys.stderr)
