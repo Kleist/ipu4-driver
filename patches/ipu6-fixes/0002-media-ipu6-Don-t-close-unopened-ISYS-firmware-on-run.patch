@@ -1,4 +1,4 @@
-From 7abda0a0934ed51e276b073927955604ad2fdfaa Mon Sep 17 00:00:00 2001
+From 533ddb7663784fa51a5a0f580b140867558566ac Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sun, 1 Nov 2026 08:34:36 +0000
 Subject: [PATCH 2/2] media: ipu6: Don't close unopened ISYS firmware on
@@ -13,6 +13,7 @@ NULL.
 
 Only close the firmware if it was opened.
 
+Fixes: 70e3fac3ec78 ("media: ipu6: Move firmware init/cleanup to RPM callbacks")
 Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
 ---
  drivers/media/pci/intel/ipu6/ipu6-isys.c | 10 +++++++---

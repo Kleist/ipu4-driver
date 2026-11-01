@@ -1,4 +1,4 @@
-From 47da19229a44ee7448e2776607a446069cbfb0dc Mon Sep 17 00:00:00 2001
+From 6385cd46a4fc783b33acf5cd873b7183de6f7656 Mon Sep 17 00:00:00 2001
 From: Andreas Helbech Kleist <andreaskleist@gmail.com>
 Date: Sun, 1 Nov 2026 08:13:02 +0000
 Subject: [PATCH 1/2] media: ipu6: Don't requeue an empty buffer list on stream
@@ -12,6 +12,7 @@ ipu6_isys_buffer_list_queue() warns about it.
 
 Only requeue the list if it still holds buffers.
 
+Fixes: eb68e9f1c6eb ("media: ipu6: Bridge the gap between streams in V4L2 and IPU6 firmware")
 Signed-off-by: Andreas Helbech Kleist <andreaskleist@gmail.com>
 ---
  drivers/media/pci/intel/ipu6/ipu6-isys-csi2.c | 5 ++++-
