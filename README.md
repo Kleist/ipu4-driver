@@ -8,7 +8,7 @@ The driver does not work on any publicly available hardware as-is: at minimum th
 
 ## Two forms of the driver
 
-- **Out-of-tree module** (`kernel/ipu4/`): the IPU6 driver with IPU4 differences behind `#ifdef IPU6` (never defined; marks the upstream code) or in parallel `ipu4_*` functions. Builds `intel-ipu4.ko` and `intel-ipu4-isys.ko` against 6.6 – 7.3 via the shims in `ipu4-compat.h`. Known to work on silicon.
+- **Out-of-tree module** (`kernel/ipu4/`): the IPU6 driver with IPU4 differences behind `#ifdef IPU6` (never defined; marks the upstream code) or in parallel `ipu4_*` functions. Builds `intel-ipu4.ko` and `intel-ipu4-isys.ko` against 6.12 – 7.3 via the shims in `ipu4-compat.h`. Known to work on silicon.
 - **Upstreamable patch series** (`patches/ipu6-ipu4/`): IPU4 support added to the upstream `ipu6` driver as mailable patches. They apply on mainline (`tools/ipu6/pin`, bumped weekly), which has the IPU7/IPU8 support since 7.4, after Ruslan Bay's IPU4P series, not yet in mainline (`patches/ipu6-ipu4p/`, RFC v2 from [ruslanbay/ipu4-drivers `upstream`](https://github.com/ruslanbay/ipu4-drivers/tree/upstream)). Work in progress.
 
 ## Testing

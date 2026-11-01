@@ -4,13 +4,10 @@
  *
  * Each accessor branches on av->aq.vbq.type and reads either pix_fmt
  * (V4L2_BUF_TYPE_VIDEO_CAPTURE) or meta_fmt (V4L2_BUF_TYPE_META_CAPTURE)
- * with a 0-fallback for any other type. The width/height/bytesperline
- * trio also gates the meta-side read on KERNEL_VERSION(6, 10, 0); this
- * suite exercises whichever branch the kernel-under-test compiled.
+ * with a 0-fallback for any other type.
  */
 
 #include <kunit/test.h>
-#include <linux/version.h>
 #include <linux/videodev2.h>
 
 #include "ipu6-isys-video.h"
@@ -30,11 +27,9 @@ static struct ipu6_isys_video *make_video(struct kunit *test, u32 type)
 	av->pix_fmt.height = 720;
 	av->meta_fmt.dataformat = V4L2_META_FMT_GENERIC_8;
 	av->meta_fmt.buffersize = 0x4000;
-#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
 	av->meta_fmt.bytesperline = 64;
 	av->meta_fmt.width = 32;
 	av->meta_fmt.height = 16;
-#endif
 	return av;
 }
 
@@ -61,21 +56,12 @@ static void test_meta_capture_width_height_bpl_versioned(struct kunit *test)
 {
 	struct ipu6_isys_video *av = make_video(test, V4L2_BUF_TYPE_META_CAPTURE);
 
-#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
 	/* 6.10+: v4l2_meta_format gained width/height/bytesperline.
 	 * The accessor must read them through.
 	 */
 	KUNIT_EXPECT_EQ(test, ipu6_isys_get_bytes_per_line(av), 64u);
 	KUNIT_EXPECT_EQ(test, ipu6_isys_get_frame_width(av), 32u);
 	KUNIT_EXPECT_EQ(test, ipu6_isys_get_frame_height(av), 16u);
-#else
-	/* Pre-6.10: meta_fmt has none of those fields, so the accessor
-	 * falls through the META branch and returns 0.
-	 */
-	KUNIT_EXPECT_EQ(test, ipu6_isys_get_bytes_per_line(av), 0u);
-	KUNIT_EXPECT_EQ(test, ipu6_isys_get_frame_width(av), 0u);
-	KUNIT_EXPECT_EQ(test, ipu6_isys_get_frame_height(av), 0u);
-#endif
 }
 
 static void test_unrecognized_type_returns_zero(struct kunit *test)

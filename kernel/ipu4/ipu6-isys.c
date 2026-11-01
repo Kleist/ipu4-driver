@@ -643,7 +643,7 @@ static void isys_iwake_watermark_cleanup(struct ipu6_isys *isys)
  * this; the busybox initramfs has no media manager, so we install
  * the default sink=0/0 -> source=1/0 route on the CSI2 subdev at
  * sensor-bind time. The same route is already installed into the
- * subdev's "try" state by ipu6_isys_subdev_init_cfg(); this mirrors
+ * subdev's "try" state by ipu6_isys_subdev_init_state(); this mirrors
  * it into the active state.
  */
 static void isys_install_virt_sensor_route(struct v4l2_subdev *csi2_sd)
