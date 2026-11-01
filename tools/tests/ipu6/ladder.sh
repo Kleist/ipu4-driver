@@ -23,7 +23,6 @@
 #                                         tools/out-of-tree/pin (v7.3-rc4)
 #                                         in tools/linux-ipu4-oot/
 #   ipu4p             IPU4P  ipu6         tools/ipu6/pin + the base series
-#                                         patches/ipu6-ipu7/,
 #                                         patches/ipu6-ipu4p/ and
 #                                         patches/ipu6-fixes/ (when present),
 #                                         in tools/linux-ipu6-ruslan/
@@ -60,7 +59,7 @@ ipu4-out-of-tree)
 ipu4p)
 	LINUX_DIR="$ROOT/tools/linux-ipu6-ruslan"
 	PIN="$ROOT/tools/ipu6/pin"
-	BASE_PATCH_DIRS=(ipu6-ipu7 ipu6-ipu4p ipu6-fixes)
+	BASE_PATCH_DIRS=(ipu6-ipu4p ipu6-fixes)
 	VARIANT=ipu4p
 	;;
 ipu6)
@@ -72,7 +71,7 @@ ipu6)
 ipu4-patches)
 	LINUX_DIR="$ROOT/tools/linux-ipu6"
 	PIN="$ROOT/tools/ipu6/pin"
-	BASE_PATCH_DIRS=(ipu6-ipu7 ipu6-ipu4p ipu6-fixes)
+	BASE_PATCH_DIRS=(ipu6-ipu4p ipu6-fixes)
 	PATCH_DIR="$ROOT/patches/ipu6-ipu4"
 	VARIANT=ipu4
 	;;

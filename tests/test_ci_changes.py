@@ -41,7 +41,6 @@ def classify(*paths):
         ("tools/bootstrap.sh", {"kunit", "vm_smoke", "ipu6"}),
         ("patches/ipu6-ipu4/0001-x.patch", {"ipu6"}),
         ("patches/ipu6-ipu4p/0001-x.patch", {"ipu6"}),
-        ("patches/ipu6-ipu7/0001-x.patch", {"ipu6"}),
         ("patches/ipu6-fixes/0001-x.patch", {"ipu6"}),
         ("tools/tests/ipu6/ladder.sh", {"ipu6"}),
         ("tools/coverage/ladder.sh", {"ipu6"}),
