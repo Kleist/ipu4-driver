@@ -92,10 +92,10 @@ the behaviour guard.
 
 | PR | Content | State |
 |---|---|---|
-| O4 | Divergence history on the dashboard: `tools/upstream/divergence_history.py`, one point per release since v6.6 and up to 10 driver commits in between | in review |
-| O4b | Divergence against the target tree (not just mainline) + allow-list of the permanent delta (`tools/out-of-tree/delta.txt`); "unexplained divergence" as the progress number, with a per-file worklist | ready, after O4 |
-| O5 | Bugs and stale code: double `kfree(pdata)`, lost `out_ipu6_rpm_put`, `ERR_PTR` psys in the probe cleanup, `TBL_PHYS_ADDR(…;)`, `ISP_L2PT_PTES`, duplicate defines, copyright years, older-upstream leftovers | ready, after O4b |
-| O6 | Compat into `ipu4-compat.h` with floor 6.12: string namespaces, `kzalloc_obj`, PCI IDs; drop 6.6/6.10-gated code | |
+| O4 | Divergence history on the dashboard: `tools/upstream/divergence_history.py`, one point per release since v6.6 and up to 10 driver commits in between | merged (#210) |
+| O4b | Divergence against the target tree (not just mainline) + allow-list of the permanent delta (`tools/out-of-tree/delta.txt`); "unexplained divergence" as the progress number, with a per-file worklist | merged (#212) |
+| O5 | Bugs and stale code: double `kfree(pdata)`, lost `out_ipu6_rpm_put`, `ERR_PTR` psys in the probe cleanup, `TBL_PHYS_ADDR(…;)`, `ISP_L2PT_PTES`, duplicate defines, copyright years, older-upstream leftovers | merged (#213) |
+| O6 | Compat into `ipu4-compat.h` with floor 6.12: string namespaces, `kzalloc_obj`; drop 6.6/6.10-gated code | in review |
 | O7 | Harness out of the driver: `tools/virt-sensor/` + `streamon.c` s_fmt instead of the built-in sensor and route install; fix the stub firmware instead of skipping empty `pkg_dir` | |
 | O8 | `ambu-ipu-bridge` as a pre-probe module that installs the fwnode graph (no hook in `ipu6.c`) | |
 | O9 | Upstream video topology (per-CSI2 video nodes, upstream setup/prepare signatures) | |
@@ -161,3 +161,9 @@ the behaviour guard.
   `stream_mutex` only around `set_streaming` (upstream: `guard()` for the
   whole function), tied to lazy STREAMON (O10); the `ipu6-fw-com.c` style
   differences go with its DMEM layout rewrite (O18).
+- (O6) The IPU6/IPU7 PCI IDs stay in `ipu6.h`: `<media/ipu6-pci-table.h>`
+  also defines `ipu6_pci_tbl`, which would bind IPU6 devices and clashes
+  with the IPU4-only table; the IPU4 series adds IPU4 to that header,
+  which an out-of-tree module can't. The namespace shim covers 6.13 too
+  (the old one started at 6.14, so 6.13 did not build). Target distance
+  11189 → 11057.
