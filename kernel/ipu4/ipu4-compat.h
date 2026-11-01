@@ -5,6 +5,14 @@
 #include <media/media-entity.h>
 #include <media/v4l2-subdev.h>
 
+#include <linux/slab.h>
+#ifndef kzalloc_obj
+// Typed allocation helpers of 7.0 (backported to 6.12.y and 6.18.y).
+#define kzalloc_obj(P) ((typeof(P) *)kzalloc(sizeof(P), GFP_KERNEL))
+#define kmalloc_objs(P, COUNT) \
+	((typeof(P) *)kmalloc_array(COUNT, sizeof(P), GFP_KERNEL))
+#endif
+
 #if KERNEL_VERSION(6, 18, 0) > LINUX_VERSION_CODE
 // https://github.com/torvalds/linux/commit/683342ce3c0dae068bf0ee157ee12c13088193f7
 static __maybe_unused s64 ambu_v4l2_get_link_freq(struct media_pad *src_pad, unsigned int mul,

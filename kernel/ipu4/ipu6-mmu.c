@@ -469,7 +469,7 @@ static struct ipu6_mmu_info *ipu6_mmu_alloc(struct ipu6_device *isp)
 	struct ipu6_mmu_info *mmu_info;
 	int ret;
 
-	mmu_info = kzalloc(sizeof(*mmu_info), GFP_KERNEL);
+	mmu_info = kzalloc_obj(*mmu_info);
 	if (!mmu_info)
 		return NULL;
 
@@ -539,7 +539,7 @@ static struct ipu6_dma_mapping *alloc_dma_mapping(struct ipu6_device *isp)
 	struct ipu6_dma_mapping *dmap;
 	unsigned long base_pfn;
 
-	dmap = kzalloc(sizeof(*dmap), GFP_KERNEL);
+	dmap = kzalloc_obj(*dmap);
 	if (!dmap)
 		return NULL;
 
