@@ -29,8 +29,8 @@ PRIMARY = "ipu4-patches/ipu4"
 # results.json written before legs existed only name the QEMU variant.
 _OLD_VARIANT_LEG = {"ipu4": "ipu4-patches/ipu4", "ipu6": "ipu6/ipu6"}
 
-# The not-yet-mainline series the ipu4p and ipu4-patches trees apply on
-# the mainline pin before patches/ipu6-ipu4/.
+# The not-yet-mainline series the ipu6-flavor trees apply on the mainline
+# pin before patches/ipu6-ipu4/.
 BASE_SERIES = {
     "patches/ipu6-ipu7": (
         "IPU7 series", "lore",
@@ -38,6 +38,9 @@ BASE_SERIES = {
     "patches/ipu6-ipu4p": (
         "IPU4P series", "ruslanbay/linux ipu4p-upstream",
         "https://github.com/ruslanbay/linux/tree/ipu4p-upstream"),
+    "patches/ipu6-fixes": (
+        "mainline fixes", "patches/ipu6-fixes",
+        "https://github.com/Kleist/ipu4-driver/tree/main/patches/ipu6-fixes"),
 }
 
 RESULTS = ("PASS", "FAIL", "SKIP", "NOT-IMPLEMENTED", "NOT-RUN")
