@@ -89,7 +89,7 @@ classify() {
 		HIT[pytest]=true ;;
 	tools/trace/* | postprocess_trace.py)
 		HIT[pytest]=true; HIT[vm_smoke]=true ;;
-	tools/dashboard/*.py)
+	tools/dashboard/*.py | tools/upstream/*.py)
 		HIT[pytest]=true ;;
 
 	# Remaining fork VM-test inputs (streamon / probe / mmiotrace /

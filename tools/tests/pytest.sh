@@ -27,6 +27,7 @@ exec pytest tests/ \
 	--cov=parse_registers \
 	--cov=parse_kernels \
 	--cov=parse_ladder \
+	--cov=divergence_history \
 	--cov-report=term-missing \
 	--cov-fail-under=90 \
 	"$@"

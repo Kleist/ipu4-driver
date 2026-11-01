@@ -19,6 +19,7 @@ source = [
     "parse_registers",
     "parse_kernels",
     "parse_ladder",
+    "divergence_history",
 ]
 
 [tool.coverage.report]
