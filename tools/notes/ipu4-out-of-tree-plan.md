@@ -78,6 +78,11 @@ carry and build every target file (IPU6 PHYs, `ipu7-*.c`, IPU8,
 `ipu4p-*.c`); lazy STREAMON and the 500 ms firmware timeout converge to
 upstream.
 
+Steps run back to back: while a step's PR is in review, the next one is
+prepared on a local branch; as soon as the PR merges, that branch is
+rebased onto the new `main`, re-checked, pushed and its PR opened without
+waiting to be asked (still one open PR at a time, as `CLAUDE.md` says).
+
 Upstream commits and series patches come in with `git am --3way
 --directory=kernel/ipu4`, keeping authorship and `(cherry picked from …)`,
 with an `[IPU4: …]` / `[out-of-tree: …]` note only where an edit was
