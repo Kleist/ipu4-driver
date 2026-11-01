@@ -171,6 +171,9 @@ static int virt_sensor_enum_frame_size(struct v4l2_subdev *sd,
 
 /* One fixed size; an unknown code gets the default format. */
 static int virt_sensor_set_fmt(struct v4l2_subdev *sd,
+#ifdef VIRT_SENSOR_SUBDEV_CLIENT_INFO
+			       const struct v4l2_subdev_client_info *ci,
+#endif
 			       struct v4l2_subdev_state *state,
 			       struct v4l2_subdev_format *fmt)
 {
