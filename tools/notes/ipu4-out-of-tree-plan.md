@@ -94,7 +94,7 @@ the behaviour guard.
 |---|---|---|
 | O4 | Divergence history on the dashboard: `tools/upstream/divergence_history.py`, one point per release since v6.6 and up to 10 driver commits in between | in review |
 | O4b | Divergence against the target tree (not just mainline) + allow-list of the permanent delta (`tools/out-of-tree/delta.txt`); "unexplained divergence" as the progress number, with a per-file worklist | ready, after O4 |
-| O5 | Bugs and stale code: double `kfree(pdata)`, lost `out_ipu6_rpm_put`, `TBL_PHYS_ADDR(…;)`, `ISP_L2PT_PTES`, duplicate defines, copyright years, older-upstream leftovers | |
+| O5 | Bugs and stale code: double `kfree(pdata)`, lost `out_ipu6_rpm_put`, `ERR_PTR` psys in the probe cleanup, `TBL_PHYS_ADDR(…;)`, `ISP_L2PT_PTES`, duplicate defines, copyright years, older-upstream leftovers | ready, after O4b |
 | O6 | Compat into `ipu4-compat.h` with floor 6.12: string namespaces, `kzalloc_obj`, PCI IDs; drop 6.6/6.10-gated code | |
 | O7 | Harness out of the driver: `tools/virt-sensor/` + `streamon.c` s_fmt instead of the built-in sensor and route install; fix the stub firmware instead of skipping empty `pkg_dir` | |
 | O8 | `ambu-ipu-bridge` as a pre-probe module that installs the fwnode graph (no hook in `ipu6.c`) | |
@@ -156,3 +156,8 @@ the behaviour guard.
   (`ipu7-*.c`, `ipu4p-*`), ~4600 in the ISYS core (`ipu6-isys*.c`,
   `ipu6-fw-isys.*`, `ipu6-mmu-hw.c`), ~550 in files the target lacks
   (`virt-sensor.*`, `ipu4-platform-*.h`).
+- (O5) Target distance 11262 → 11189. Two "stale" differences are not
+  cosmetic and wait for later steps: `ipu6_isys_stream_start()` holds
+  `stream_mutex` only around `set_streaming` (upstream: `guard()` for the
+  whole function), tied to lazy STREAMON (O10); the `ipu6-fw-com.c` style
+  differences go with its DMEM layout rewrite (O18).
