@@ -88,7 +88,7 @@ the behaviour guard.
 | PR | Content | State |
 |---|---|---|
 | O4 | Divergence history on the dashboard: `tools/upstream/divergence_history.py`, one point per release since v6.6 and up to 10 driver commits in between | in review |
-| O4b | Divergence against the target tree (not just mainline) + allow-list of the permanent delta; "unexplained divergence" as the progress number | |
+| O4b | Divergence against the target tree (not just mainline) + allow-list of the permanent delta (`tools/out-of-tree/delta.txt`); "unexplained divergence" as the progress number, with a per-file worklist | ready, after O4 |
 | O5 | Bugs and stale code: double `kfree(pdata)`, lost `out_ipu6_rpm_put`, `TBL_PHYS_ADDR(…;)`, `ISP_L2PT_PTES`, duplicate defines, copyright years, older-upstream leftovers | |
 | O6 | Compat into `ipu4-compat.h` with floor 6.12: string namespaces, `kzalloc_obj`, PCI IDs; drop 6.6/6.10-gated code | |
 | O7 | Harness out of the driver: `tools/virt-sensor/` + `streamon.c` s_fmt instead of the built-in sensor and route install; fix the stub firmware instead of skipping empty `pkg_dir` | |
@@ -145,3 +145,9 @@ the behaviour guard.
 - (O4) Fetching the ~150 mainline tags since v6.6 at depth 1 without blobs,
   then the ipu6 blobs, takes about a minute and 44 MB; full tag history
   would be 2.1 GB.
+- (O4b) Starting point against the target tree (mainline `cbbddb6b` + 12
+  IPU4P + 2 fixes + 10 IPU4 patches): 11262 lines of unexplained
+  divergence over 49 files — ~5000 in target files not carried yet
+  (`ipu7-*.c`, `ipu4p-*`), ~4600 in the ISYS core (`ipu6-isys*.c`,
+  `ipu6-fw-isys.*`, `ipu6-mmu-hw.c`), ~550 in files the target lacks
+  (`virt-sensor.*`, `ipu4-platform-*.h`).
