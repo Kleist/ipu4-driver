@@ -72,17 +72,12 @@ fi
 # because `all` passes its own -j, which drops the jobserver ("make:
 # warning: -j0 forced in submake") and so would trip the build test's
 # warning scan. KBUILD_MODPOST_WARN: no vmlinux here, see
-# tools/ipu6/build.sh. The QEMU model has no sensor, so the module gets
-# its built-in virt sensor, as CONFIG_VIDEO_IPU4_VIRT_SENSOR=y does in
-# the fork harness's in-tree build (tools/build.sh). IPU4_GCOV=1 as in
-# tools/ipu6/build.sh.
+# tools/ipu6/build.sh. IPU4_GCOV=1 as in tools/ipu6/build.sh.
 gcov=()
 [[ "${IPU4_GCOV:-0}" == 1 ]] && gcov=(GCOV_PROFILE=y)
 build() {
 	make -j"$JOBS" M="$DRV_DIR" KBUILD_MODPOST_WARN=1 \
 		"${gcov[@]}" \
-		CONFIG_VIDEO_IPU4_VIRT_SENSOR=y \
-		KCFLAGS=-DCONFIG_VIDEO_IPU4_VIRT_SENSOR=1 \
 		${IPU4_IPU6_W:+W="$IPU4_IPU6_W"}
 }
 if [[ -n "${IPU4_IPU6_BUILD_LOG:-}" ]]; then

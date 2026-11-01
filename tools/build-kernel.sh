@@ -45,3 +45,9 @@ echo ">>> built $BZ ($(stat -c%s "$BZ") bytes)"
 if [[ "${IPU4_GCOV:-0}" == 1 && "${IPU4_FLAVOR:-fork}" != fork ]]; then
 	"$HERE/build.sh"
 fi
+
+# The harness's virtual sensor, which the fork inits load before the
+# driver; the other flavors' ladder tests build it themselves.
+if [[ "${IPU4_FLAVOR:-fork}" == fork ]]; then
+	IPU4_IPU6_LINUX_DIR="$LINUX_DIR" "$ROOT/tools/virt-sensor/build.sh"
+fi

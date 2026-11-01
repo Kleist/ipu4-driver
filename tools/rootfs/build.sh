@@ -8,8 +8,9 @@
 #
 # IPU4_FLAVOR=ipu6 takes the kernel modules and gen_init_cpio from
 # tools/linux-ipu6/ (driver: drivers/media/pci/intel/ipu6), adds the
-# harness's tools/virt-sensor/out/virt-sensor.ko when built, stages the
-# synthesized CPD firmware as /lib/firmware/intel/ipu/ipu4_fw.bin, and writes
+# harness's tools/virt-sensor/out/<tree>/virt-sensor.ko when built (as
+# the other flavors do), stages the synthesized CPD firmware as
+# /lib/firmware/intel/ipu/ipu4_fw.bin, and writes
 # tools/rootfs/out-ipu6/rootfs.cpio.gz, so the two flavors' images
 # never overwrite each other. IPU4_FLAVOR=out-of-tree takes the modules
 # from tools/linux-ipu4-oot/ and kernel/ipu4/ (tools/out-of-tree/build.sh)
@@ -26,6 +27,7 @@ fork)
 	LINUX_DIR="$ROOT/tools/linux"
 	DRV_DIR="$LINUX_DIR/drivers/media/pci/intel/ipu4"
 	OUT="$HERE/out"
+	EXTRA_KOS=("$ROOT/tools/virt-sensor/out/linux/virt-sensor.ko")
 	# Firmware path the fork driver requests (relative to /lib/firmware).
 	FW_NAME="ipu4_cpd_b0.bin"
 	;;
@@ -34,7 +36,7 @@ ipu6)
 	DRV_DIR="$LINUX_DIR/drivers/media/pci/intel/ipu6"
 	OUT="$HERE/out-ipu6"
 	# Harness-only virtual sensor (tools/virt-sensor/build.sh).
-	EXTRA_KOS=("$ROOT/tools/virt-sensor/out/virt-sensor.ko")
+	EXTRA_KOS=("$ROOT/tools/virt-sensor/out/${LINUX_DIR##*/}/virt-sensor.ko")
 	# IPU4_FIRMWARE_NAME in patches/ipu6-ipu4/.
 	FW_NAME="intel/ipu/ipu4_fw.bin"
 	# Same blob under the name the ipu4p QEMU variant's IPU4P (8086:8a19)
@@ -48,6 +50,7 @@ out-of-tree)
 	LINUX_DIR="${IPU4_IPU6_LINUX_DIR:-$ROOT/tools/linux-ipu4-oot}"
 	DRV_DIR="$ROOT/kernel/ipu4"
 	OUT="$HERE/out-out-of-tree"
+	EXTRA_KOS=("$ROOT/tools/virt-sensor/out/${LINUX_DIR##*/}/virt-sensor.ko")
 	# IPU4_FIRMWARE_NAME in kernel/ipu4/ipu6.h.
 	FW_NAME="ipu4_cpd_b0.bin"
 	;;
