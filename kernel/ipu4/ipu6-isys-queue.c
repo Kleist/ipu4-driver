@@ -982,9 +982,7 @@ int ipu6_isys_queue_init(struct ipu6_isys_queue *aq)
 	aq->vbq.lock = &av->mutex;
 	aq->vbq.mem_ops = &vb2_dma_sg_memops;
 	aq->vbq.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
 	aq->vbq.min_queued_buffers = 1;
-#endif
 	aq->vbq.timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 
 	ret = vb2_queue_init(&aq->vbq);

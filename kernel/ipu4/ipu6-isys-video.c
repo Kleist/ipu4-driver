@@ -108,7 +108,6 @@ const struct ipu6_isys_pixelformat ipu6_isys_pfmts[] = {
 	  IPU6_FW_ISYS_FRAME_FORMAT_RGB565 },
 	{ V4L2_PIX_FMT_BGR24, 24, 24, MEDIA_BUS_FMT_RGB888_1X24,
 	  IPU6_FW_ISYS_FRAME_FORMAT_RGBA888 },
-#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
 	{ V4L2_META_FMT_GENERIC_8, 8, 8, MEDIA_BUS_FMT_META_8,
 	  IPU6_FW_ISYS_FRAME_FORMAT_RAW8, true },
 	{ V4L2_META_FMT_GENERIC_CSI2_10, 10, 10, MEDIA_BUS_FMT_META_10,
@@ -117,7 +116,6 @@ const struct ipu6_isys_pixelformat ipu6_isys_pfmts[] = {
 	  IPU6_FW_ISYS_FRAME_FORMAT_RAW12, true },
 	{ V4L2_META_FMT_GENERIC_CSI2_16, 16, 16, MEDIA_BUS_FMT_META_16,
 	  IPU6_FW_ISYS_FRAME_FORMAT_RAW16, true },
-#endif
 	{ V4L2_PIX_FMT_XBGR32, 32, 24, MEDIA_BUS_FMT_RGB888_1X24,
 	 IPU6_FW_ISYS_FRAME_FORMAT_RGBA888},
 };
@@ -293,7 +291,6 @@ static int ipu6_isys_vidioc_g_fmt_vid_cap(struct file *file, void *fh,
 	return 0;
 }
 
-#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
 static int ipu6_isys_vidioc_g_fmt_meta_cap(struct file *file, void *fh,
 					   struct v4l2_format *f)
 {
@@ -303,7 +300,6 @@ static int ipu6_isys_vidioc_g_fmt_meta_cap(struct file *file, void *fh,
 
 	return 0;
 }
-#endif
 
 static void ipu6_isys_try_fmt_cap(struct ipu6_isys_video *av, u32 type,
 				  u32 *format, u32 *width, u32 *height,
@@ -364,7 +360,6 @@ static int ipu6_isys_vidioc_try_fmt_vid_cap(struct file *file, void *fh,
 	return 0;
 }
 
-#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
 static int __ipu6_isys_vidioc_try_fmt_meta_cap(struct ipu6_isys_video *av,
 					       struct v4l2_format *f)
 {
@@ -385,7 +380,6 @@ static int ipu6_isys_vidioc_try_fmt_meta_cap(struct file *file, void *fh,
 
 	return 0;
 }
-#endif
 
 static int ipu6_isys_vidioc_s_fmt_vid_cap(struct file *file, void *fh,
 				      struct v4l2_format *f)
@@ -398,7 +392,6 @@ static int ipu6_isys_vidioc_s_fmt_vid_cap(struct file *file, void *fh,
 	return 0;
 }
 
-#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
 static int ipu6_isys_vidioc_s_fmt_meta_cap(struct file *file, void *fh,
 					   struct v4l2_format *f)
 {
@@ -412,7 +405,6 @@ static int ipu6_isys_vidioc_s_fmt_meta_cap(struct file *file, void *fh,
 
 	return 0;
 }
-#endif
 
 static int ipu6_isys_vidioc_reqbufs(struct file *file, void *priv,
 				    struct v4l2_requestbuffers *p)
@@ -1045,11 +1037,9 @@ static const struct v4l2_ioctl_ops ipu6_v4l2_ioctl_ops = {
 	.vidioc_g_fmt_vid_cap = ipu6_isys_vidioc_g_fmt_vid_cap,
 	.vidioc_s_fmt_vid_cap = ipu6_isys_vidioc_s_fmt_vid_cap,
 	.vidioc_try_fmt_vid_cap = ipu6_isys_vidioc_try_fmt_vid_cap,
-#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
 	.vidioc_g_fmt_meta_cap = ipu6_isys_vidioc_g_fmt_meta_cap,
 	.vidioc_s_fmt_meta_cap = ipu6_isys_vidioc_s_fmt_meta_cap,
 	.vidioc_try_fmt_meta_cap = ipu6_isys_vidioc_try_fmt_meta_cap,
-#endif
 	.vidioc_reqbufs = ipu6_isys_vidioc_reqbufs,
 	.vidioc_create_bufs = ipu6_isys_vidioc_create_bufs,
 	.vidioc_prepare_buf = vb2_ioctl_prepare_buf,
@@ -1236,7 +1226,6 @@ int ipu6_isys_video_init(struct ipu6_isys_video *av)
 			.height = 1080,
 		},
 	};
-#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
 	struct v4l2_format format_meta = {
 		.type = V4L2_BUF_TYPE_META_CAPTURE,
 		.fmt.meta = {
@@ -1244,7 +1233,6 @@ int ipu6_isys_video_init(struct ipu6_isys_video *av)
 			.height = 4,
 		},
 	};
-#endif
 	int ret;
 
 	mutex_init(&av->mutex);
@@ -1273,10 +1261,8 @@ int ipu6_isys_video_init(struct ipu6_isys_video *av)
 
 	__ipu6_isys_vidioc_try_fmt_vid_cap(av, &format);
 	av->pix_fmt = format.fmt.pix;
-#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
 	__ipu6_isys_vidioc_try_fmt_meta_cap(av, &format_meta);
 	av->meta_fmt = format_meta.fmt.meta;
-#endif
 
 	video_set_drvdata(&av->vdev, av);
 
@@ -1333,10 +1319,8 @@ u32 ipu6_isys_get_bytes_per_line(struct ipu6_isys_video *av)
 	if (av->aq.vbq.type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return av->pix_fmt.bytesperline;
 
-#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
 	if (av->aq.vbq.type == V4L2_BUF_TYPE_META_CAPTURE)
 		return av->meta_fmt.bytesperline;
-#endif
 
 	return 0;
 }
@@ -1346,10 +1330,8 @@ u32 ipu6_isys_get_frame_width(struct ipu6_isys_video *av)
 	if (av->aq.vbq.type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return av->pix_fmt.width;
 
-#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
 	if (av->aq.vbq.type == V4L2_BUF_TYPE_META_CAPTURE)
 		return av->meta_fmt.width;
-#endif
 
 	return 0;
 }
@@ -1359,10 +1341,8 @@ u32 ipu6_isys_get_frame_height(struct ipu6_isys_video *av)
 	if (av->aq.vbq.type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return av->pix_fmt.height;
 
-#if KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE
 	if (av->aq.vbq.type == V4L2_BUF_TYPE_META_CAPTURE)
 		return av->meta_fmt.height;
-#endif
 
 	return 0;
 }

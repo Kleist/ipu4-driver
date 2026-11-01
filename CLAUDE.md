@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-Out-of-tree Linux kernel driver for Intel IPU4, forked from the upstream IPU6 driver (`drivers/media/pci/intel/ipu6/`, upstreamed in 6.10). Tested against stable kernels 6.6.111 and 6.12.47, and v7.3-rc4 (the base of the upstream-ipu6 pins). The driver does not work on any public hardware as-is — `ambu_ipu_bridge_*` calls must be replaced before the device probes.
+Out-of-tree Linux kernel driver for Intel IPU4, forked from the upstream IPU6 driver (`drivers/media/pci/intel/ipu6/`, upstreamed in 6.10). Builds against 6.12 and later; tested against the 6.12 and 6.18 stable kernels and v7.3-rc4 (the base of the upstream-ipu6 pins). The driver does not work on any public hardware as-is — `ambu_ipu_bridge_*` calls must be replaced before the device probes.
 
 There are two parallel layouts for the driver right now (see STATUS.md for the migration plan):
 
@@ -20,7 +20,7 @@ Backports from upstream should be performed with `git cherry-pick -x` and fixing
 
 Do not restructure or "clean up" IPU6 code. Do not rename `ipu6_*` symbols. Keep diffs minimal and localized.
 
-`kernel/ipu4/ipu4-compat.h` holds `LINUX_VERSION_CODE`-gated shims for 6.6 / 6.10 / 6.11 / 6.14 / 6.18 kernel API changes. The cascade is upper-bound-open, so kernels newer than the highest shim (currently 6.18) ride on the no-shim path — v7.3-rc4 falls through cleanly. Add new shims here rather than `#ifdef`-ing callers.
+`kernel/ipu4/ipu4-compat.h` holds `LINUX_VERSION_CODE`-gated shims for kernel API changes since 6.12 (6.13 / 6.14 / 6.18 / 7.0), so the source can stay as upstream writes it. The cascade is upper-bound-open: kernels newer than the highest shim ride on the no-shim path. Add new shims here rather than `#ifdef`-ing callers.
 
 ## Commits and PRs
 
