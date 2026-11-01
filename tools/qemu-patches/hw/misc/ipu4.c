@@ -943,7 +943,8 @@ static void ipu4_post_response(Ipu4State *s, uint8_t resp_type,
  */
 static void ipu4_post_pin_data_ready(Ipu4State *s, uint8_t stream_handle,
                                      uint8_t pin_id, uint32_t pin_addr,
-                                     uint64_t pin_buf_id, uint64_t buf_handle)
+                                     uint64_t pin_buf_id, uint64_t buf_handle,
+                                     uint8_t frame_counter)
 {
     /* buf_handle echoes the capture token's, as firmware does; the driver
      * releases its capture message with it. */
@@ -952,6 +953,7 @@ static void ipu4_post_pin_data_ready(Ipu4State *s, uint8_t stream_handle,
         .type = IPU4_FW_RESP_STREAM_PIN_DATA_READY,
         .stream_handle = stream_handle,
         .pin_id = pin_id,
+        .frame_counter = frame_counter,
         .pin = {
             .out_buf_id = pin_buf_id,
             .addr = pin_addr,
@@ -973,17 +975,20 @@ static void ipu4_post_pin_data_ready(Ipu4State *s, uint8_t stream_handle,
  *
  * The frame_buff_set layout (kernel/ipu4/ipu6-fw-isys.h:688) starts
  * with output_pins[IPU4_MAX_OPINS=6], each 16 bytes packed —
- * Ipu4FwOutputPin in this file. We only read the first 96 bytes;
- * process_group_light + the trailing u8 flags don't gate frame
- * delivery in our model.
+ * Ipu4FwOutputPin in this file. process_group_light and the u8 flags
+ * after it don't gate frame delivery in our model; the last flag,
+ * frame_counter, is echoed in PIN_DATA_READY as firmware does (the
+ * IPU4P series matches responses to frames by it).
  */
 #define IPU4_MAX_OPINS 6
+#define IPU4_FRAME_BUFF_SET_FRAME_COUNTER 118
 
 static void ipu4_deliver_frame(Ipu4State *s, uint8_t stream,
                                uint32_t frame_buff_set_iova,
                                uint64_t buf_handle)
 {
     Ipu4FwOutputPin pins[IPU4_MAX_OPINS];
+    uint8_t frame_counter = 0;
     unsigned int i;
 
     if (!ipu4_dma_read_iova(s, frame_buff_set_iova, pins, sizeof(pins))) {
@@ -992,6 +997,11 @@ static void ipu4_deliver_frame(Ipu4State *s, uint8_t stream,
                       "iova=0x%x — driver will not see frames\n",
                       frame_buff_set_iova);
         return;
+    }
+    if (!ipu4_dma_read_iova(s, frame_buff_set_iova +
+                            IPU4_FRAME_BUFF_SET_FRAME_COUNTER,
+                            &frame_counter, sizeof(frame_counter))) {
+        frame_counter = 0;
     }
 
     /* Step-5b IRQ event cycling: silicon's CSI2 RX hardware fires a
@@ -1030,7 +1040,7 @@ static void ipu4_deliver_frame(Ipu4State *s, uint8_t stream,
                                     IPU4_FRAME_PATTERN_BYTES, 0);
         ipu4_post_pin_data_ready(s, stream, (uint8_t)i,
                                  pins[i].addr, pins[i].out_buf_id,
-                                 buf_handle);
+                                 buf_handle, frame_counter);
     }
 }
 
