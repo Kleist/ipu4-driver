@@ -25,14 +25,17 @@ elif [ -z "$fd_video" ] || [ -z "$fd_subdev" ]; then
 	say "frame-desc fail (no CSI2 0 subdev or capture node)"
 else
 	echo 1 > "$fd_param"
-	# The driver logs the descriptor it got at debug level.
+	# The descriptor the driver got, logged at debug level by the
+	# driver (out-of-tree, ipu6 before 7.4) or by the v4l2 core.
 	echo 'format "Framedesc" +p' > /proc/dynamic_debug/control 2>/dev/null
+	echo 'file v4l2-subdev.c format "stream %u, code" +p' \
+		> /proc/dynamic_debug/control 2>/dev/null
 	if streamon "$fd_video" /dev/media0 "$fd_subdev" | grep '^STREAM:pattern_ok' &&
-	   dmesg | grep -q 'Framedesc: stream 0'; then
+	   dmesg | grep -qE 'Framedesc: stream 0|	stream 0, code .*, vc 0'; then
 		say "frame-desc ok"
 	else
 		say "frame-desc fail (no pattern or no descriptor)"
 	fi
 	echo 0 > "$fd_param"
-	dmesg | grep 'Framedesc'
+	dmesg | grep -E 'Framedesc|	stream 0, code'
 fi
