@@ -30,7 +30,6 @@ struct ipu6_bus_device;
 #define IPU7P5_FIRMWARE_NAME		"intel/ipu/ipu7ptl_fw.bin"
 
 #define IPU4_FIRMWARE_NAME               "ipu4_cpd_b0.bin"
-#define IPU4_ISYS_NUM_STREAMS            8       /* Max 8 */
 
 #define PCI_DEVICE_ID_INTEL_IPU4		0x5a88
 
@@ -44,8 +43,6 @@ struct ipu6_bus_device;
 #define PCI_DEVICE_ID_INTEL_IPU7P5		0xb05d
 
 #define IPU4_NAME			"intel-ipu4"
-#define IPU4_MEDIA_DEV_MODEL_NAME	"ipu4"
-#define IPU4_PCI_ID	0x5a88
 #define IPU4_MEDIA_DEV_MODEL_NAME	"ipu4"
 
 #define IPU_VERSION_6		BIT(0) /* TGL */
