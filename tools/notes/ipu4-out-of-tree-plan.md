@@ -62,6 +62,49 @@ nothing.
 | O2 | Driver names per flavor for the guest inits; built-in virt sensor; tests adapted to the driver | every implemented test | in review |
 | O3 | Fix the W=1 warnings in `kernel/ipu4/`; `build` at W=1 like the ipu6 legs | — | |
 
+## Convergence onto mainline + IPU4P + IPU4 patches
+
+Goal: `kernel/ipu4/<f>` equals `drivers/media/pci/intel/ipu6/<f>` of the
+**target tree** — `tools/linux-ipu6/` as `tools/ipu6/bootstrap.sh` builds
+it: the mainline pin (all of the 7.4 merge window's IPU6 commits) +
+`patches/ipu6-ipu4p/` (Ruslan's RFC v2) + `patches/ipu6-ipu4/` — for every
+file, except a small isolated permanent delta: the Ambu features (silent
+reset, `ambu-ipu-bridge`, extra logging), compat shims for kernels
+6.12–7.3 confined to `ipu4-compat.h`, and the out-of-tree build glue
+(`Makefile`, `intel-ipu4*` module names).
+
+Decided: switch to upstream's per-CSI2 video topology; kernel floor 6.12;
+carry and build every target file (IPU6 PHYs, `ipu7-*.c`, IPU8,
+`ipu4p-*.c`); lazy STREAMON and the 500 ms firmware timeout converge to
+upstream.
+
+Upstream commits and series patches come in with `git am --3way
+--directory=kernel/ipu4`, keeping authorship and `(cherry picked from …)`,
+with an `[IPU4: …]` / `[out-of-tree: …]` note only where an edit was
+needed. Each commit builds warning-free on 6.12, 6.18 and 7.3-rc4 and
+keeps KUnit, `vm-smoke` and this leg green; the MMIO-vs-silicon tests are
+the behaviour guard.
+
+| PR | Content | State |
+|---|---|---|
+| O4 | Divergence history on the dashboard: `tools/upstream/divergence_history.py`, one point per release since v6.6 and up to 10 driver commits in between | in review |
+| O4b | Divergence against the target tree (not just mainline) + allow-list of the permanent delta; "unexplained divergence" as the progress number | |
+| O5 | Bugs and stale code: double `kfree(pdata)`, lost `out_ipu6_rpm_put`, `TBL_PHYS_ADDR(…;)`, `ISP_L2PT_PTES`, duplicate defines, copyright years, older-upstream leftovers | |
+| O6 | Compat into `ipu4-compat.h` with floor 6.12: string namespaces, `kzalloc_obj`, PCI IDs; drop 6.6/6.10-gated code | |
+| O7 | Harness out of the driver: `tools/virt-sensor/` + `streamon.c` s_fmt instead of the built-in sensor and route install; fix the stub firmware instead of skipping empty `pkg_dir` | |
+| O8 | `ambu-ipu-bridge` as a pre-probe module that installs the fwnode graph (no hook in `ipu6.c`) | |
+| O9 | Upstream video topology (per-CSI2 video nodes, upstream setup/prepare signatures) | |
+| O10 | Streaming behaviour: drop lazy STREAMON, firmware timeout back to 2 s | |
+| O11 | Build every file: `ipu7-*.c`, IPU6 PHYs; drop the IPU7 `#ifdef IPU6` guards | |
+| O12–O14 | Upstream commits 46–88: streams/watermark rework, RPM rework (silent reset redesigned on runtime PM, in its own file), fixes + IPU8 | |
+| O15 | Ruslan's IPU4P v2 (`patches/ipu6-ipu4p/`) on top, IPU4 code still in place | |
+| O16 | IPU4 identity + buttress → series 0002, 0003, 0005 | |
+| O17 | MMU → series 0004 (check dropped ZLW writes against silicon) | |
+| O18 | Firmware layer → series 0008 + `ipu4p-fw-isys.[ch]` (drops the IPU4 ABI copy) | |
+| O19 | ISR, CSI-2, iWake → series 0006, 0007, 0009, 0010 (`csi2-sof-irq` enabled for `ipu4-patches` first) | |
+| O20 | PCI enable (series 0011), leftovers, KUnit exports; only the allow-listed delta remains | |
+| O21 | Stay converged: `watch.sh` with real 3-way merges; IPU4P refreshes re-applied the same way | |
+
 ## Learnings
 
 - (O1) `kernel/ipu4/` does not build at W=1: its Makefile's `-Werror` turns
@@ -95,3 +138,10 @@ nothing.
   compared range: PSYS MMU (`probe-mmu`), the ISYS MMU at probe and resume
   plus UNISPART (`isys-irq`, 76 writes), SysCom, CSI-2 receiver and
   CSI2PART (`fw-open`, `stream-on`, `csi2-sof-irq`).
+- (O4) The repository's root is GitHub's "Initial commit" (2025-12-03); the
+  driver's 2023–2025 history was rebased onto it. Ceiling commit dates over
+  all ancestors would lift the whole import to 2025-12-03, so the history
+  chart ceils over driver-touching ancestors only (path-simplified history).
+- (O4) Fetching the ~150 mainline tags since v6.6 at depth 1 without blobs,
+  then the ipu6 blobs, takes about a minute and 44 MB; full tag history
+  would be 2.1 GB.
