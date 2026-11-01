@@ -101,8 +101,9 @@ the behaviour guard.
 | O8 | `ambu-ipu-bridge` as a pre-probe module that installs the fwnode graph (no hook in `ipu6.c`) | merged (#219) |
 | O9 | Upstream video topology (per-CSI2 video nodes, upstream setup/prepare signatures) | merged (#220) |
 | O10 | Streaming behaviour: drop lazy STREAMON, firmware timeout back to 2 s | merged (#222) |
-| O11 | Build the `ipu7-*.c` sources; drop the IPU7 `#ifdef IPU6` guards | in review |
-| O12–O14 | Upstream commits 46–88: streams/watermark rework, RPM rework (silent reset redesigned on runtime PM, in its own file), fixes + IPU8 | |
+| O11 | Build the `ipu7-*.c` sources; drop the IPU7 `#ifdef IPU6` guards | merged (#223) |
+| O12 | Upstream commits 46–63: streams/watermark rework | in review |
+| O13–O14 | Upstream commits 64–88: RPM rework (silent reset redesigned on runtime PM, in its own file), fixes + IPU8 | |
 | O15 | Ruslan's IPU4P v2 (`patches/ipu6-ipu4p/`) on top, IPU4 code still in place | |
 | O16 | IPU4 identity + buttress → series 0002, 0003, 0005 | |
 | O17 | MMU → series 0004 (check dropped ZLW writes against silicon) | |
@@ -206,3 +207,14 @@ the behaviour guard.
   `ipu6-platform-isys-csi2-reg.h`, which holds IPU4 registers here; they
   move to O19. Files without `ipu4-compat.h` export with a quoted
   namespace on 6.12, so `ipu7-fw-com.c` includes it.
+- (O12) Ported with `git am --3way` per commit and a ladder run per
+  commit: the tip alone hid that 56–61 failed (`module-load`). Two
+  upstream bugs bite before their fix: streaming from a sensor without
+  `get_frame_desc()` fails from 56 (fixed upstream in 67, 58348f64125,
+  folded into 56), and the error path requeues an empty buffer list from
+  48 (ipu6-fixes 0001, folded into 48 and carried through 62). 7.4's pad
+  ops take the client info; `IPU4_PAD_OP` wraps them for older kernels.
+  IPU4 skips the CSI-2 watermark (no iWake; an empty
+  `ipu6_isys_update_watermark_setting()` stands in), caps stream handles
+  at `ipdata->max_streams` (8) and keeps SOF/EOF from the firmware
+  responses only. Target distance 7324 → 5888, mainline 4513 → 3087.
