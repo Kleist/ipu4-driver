@@ -4,6 +4,8 @@
 #include <linux/device.h>
 #include <linux/i2c.h>
 #include <linux/mei_cl_bus.h>
+#include <linux/module.h>
+#include <linux/pci.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/property.h>
@@ -261,7 +263,7 @@ static int ipu_bridge_sensors_are_ready(void)
 	return true;
 }
 
-int ambu_ipu_bridge_init(struct device *dev)
+static int ambu_ipu_bridge_init(struct device *dev)
 {
 	struct fwnode_handle *fwnode;
 	struct ipu_bridge *bridge;
@@ -329,19 +331,41 @@ err_free_bridge:
 	static_bridge = NULL;
 	return ret;
 }
-EXPORT_SYMBOL_NS_GPL(ambu_ipu_bridge_init, "INTEL_IPU_BRIDGE");
 
-void ambu_ipu_bridge_uninit(struct device *dev)
+static void ambu_ipu_bridge_uninit(struct device *dev)
 {
-	/* Probe skips init when the device already has a fwnode graph. */
-	if (!static_bridge)
-		return;
-
 	dev->fwnode->secondary = NULL;
 	ipu_bridge_unregister_sensors(static_bridge);
 	software_node_unregister(&static_bridge->ipu_hid_node);
 	kfree(static_bridge);
 	static_bridge = NULL;
 }
-EXPORT_SYMBOL_NS_GPL(ambu_ipu_bridge_uninit, "INTEL_IPU_BRIDGE");
+
+/* The IPU4 the sensors are wired to; its graph must exist before it probes. */
+static struct pci_dev *ambu_ipu;
+
+static int __init ambu_ipu_bridge_module_init(void)
+{
+	int ret;
+
+	ambu_ipu = pci_get_device(PCI_VENDOR_ID_INTEL, 0x5a88, NULL);
+	if (!ambu_ipu)
+		return -ENODEV;
+
+	ret = ambu_ipu_bridge_init(&ambu_ipu->dev);
+	if (ret) {
+		pci_dev_put(ambu_ipu);
+		return ret;
+	}
+	return 0;
+}
+module_init(ambu_ipu_bridge_module_init);
+
+static void __exit ambu_ipu_bridge_module_exit(void)
+{
+	ambu_ipu_bridge_uninit(&ambu_ipu->dev);
+	pci_dev_put(ambu_ipu);
+}
+module_exit(ambu_ipu_bridge_module_exit);
+MODULE_DESCRIPTION("Ambu sensor graph for the IPU4");
 MODULE_LICENSE("GPL v2");
