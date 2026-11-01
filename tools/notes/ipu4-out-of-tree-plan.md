@@ -99,8 +99,8 @@ the behaviour guard.
 | O7 | Harness out of the driver: `tools/virt-sensor/` + `streamon.c` s_fmt instead of the built-in sensor and route install | merged (#216) |
 | O7b | Drop the empty `pkg_dir` entry skip in `ipu6_pkg_dir_configure_spc()` | merged (#217) |
 | O8 | `ambu-ipu-bridge` as a pre-probe module that installs the fwnode graph (no hook in `ipu6.c`) | merged (#219) |
-| O9 | Upstream video topology (per-CSI2 video nodes, upstream setup/prepare signatures) | in review |
-| O10 | Streaming behaviour: drop lazy STREAMON, firmware timeout back to 2 s | |
+| O9 | Upstream video topology (per-CSI2 video nodes, upstream setup/prepare signatures) | merged (#220) |
+| O10 | Streaming behaviour: drop lazy STREAMON, firmware timeout back to 2 s | in review |
 | O11 | Build every file: `ipu7-*.c`, IPU6 PHYs; drop the IPU7 `#ifdef IPU6` guards | |
 | O12–O14 | Upstream commits 46–88: streams/watermark rework, RPM rework (silent reset redesigned on runtime PM, in its own file), fixes + IPU8 | |
 | O15 | Ruslan's IPU4P v2 (`patches/ipu6-ipu4p/`) on top, IPU4 code still in place | |
@@ -194,3 +194,8 @@ the behaviour guard.
   in it. `NR_OF_CSI2_SRC_PADS` stays 4 on IPU4 for now (24 capture nodes;
   the target has 8). Ambu userspace: a capture node now has one fixed
   link, to its own receiver. Target distance 10512 → 10399.
+- (O10) The ipu6-fixes "Don't requeue an empty buffer list" patch targets
+  the csi2 `enable_streams` path of upstream's streams rework (46+); it
+  comes in with O12. Ambu userspace must queue buffers before STREAMON:
+  without them the stream no longer starts later from `buf_queue`.
+  Target distance 10399 → 10370.
