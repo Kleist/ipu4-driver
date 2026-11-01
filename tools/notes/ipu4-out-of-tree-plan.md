@@ -102,8 +102,11 @@ the behaviour guard.
 | O9 | Upstream video topology (per-CSI2 video nodes, upstream setup/prepare signatures) | merged (#220) |
 | O10 | Streaming behaviour: drop lazy STREAMON, firmware timeout back to 2 s | merged (#222) |
 | O11 | Build the `ipu7-*.c` sources; drop the IPU7 `#ifdef IPU6` guards | merged (#223) |
-| O12 | Upstream commits 46–63: streams/watermark rework | in review |
-| O13–O14 | Upstream commits 64–88: RPM rework (silent reset redesigned on runtime PM, in its own file), fixes + IPU8 | |
+| O12 | Upstream commits 46–63: streams/watermark rework | merged (#224) |
+| O12b | `silent-reset` ladder test (out-of-tree leg), so O13 is checked against it | in review |
+| O13 | Upstream commits 64–69: RPM rework | ready, after O12b |
+| O13b | Silent reset redesigned on runtime PM, in its own file (`ambu-silent-reset.c`) | |
+| O14 | Upstream commits 70–88: fixes + IPU8 | |
 | O15 | Ruslan's IPU4P v2 (`patches/ipu6-ipu4p/`) on top, IPU4 code still in place | |
 | O16 | IPU4 identity + buttress → series 0002, 0003, 0005 | |
 | O17 | MMU → series 0004 (check dropped ZLW writes against silicon) | |
@@ -218,3 +221,11 @@ the behaviour guard.
   `ipu6_isys_update_watermark_setting()` stands in), caps stream handles
   at `ipdata->max_streams` (8) and keeps SOF/EOF from the firmware
   responses only. Target distance 7324 → 5888, mainline 4513 → 3087.
+- (O12b) No test exercised the silent reset before. The QEMU model
+  delivers a frame per capture command at once, so `streamon` pauses
+  after its first frame (`STREAMON_PAUSE`) to hold a stream open while
+  the test sets `force_need_reset` and opens a second node. It found the
+  silent reset broken since O12: the restart freed the stream whose
+  mutex it held, and stream on needs a queued buffer, which the
+  application holds at that point. Fixed in the same PR (stream_mutex
+  only; with no buffer queued, stream on at the next `buf_queue`).
