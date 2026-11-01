@@ -95,8 +95,9 @@ the behaviour guard.
 | O4 | Divergence history on the dashboard: `tools/upstream/divergence_history.py`, one point per release since v6.6 and up to 10 driver commits in between | merged (#210) |
 | O4b | Divergence against the target tree (not just mainline) + allow-list of the permanent delta (`tools/out-of-tree/delta.txt`); "unexplained divergence" as the progress number, with a per-file worklist | merged (#212) |
 | O5 | Bugs and stale code: double `kfree(pdata)`, lost `out_ipu6_rpm_put`, `ERR_PTR` psys in the probe cleanup, `TBL_PHYS_ADDR(…;)`, `ISP_L2PT_PTES`, duplicate defines, copyright years, older-upstream leftovers | merged (#213) |
-| O6 | Compat into `ipu4-compat.h` with floor 6.12: string namespaces, `kzalloc_obj`; drop 6.6/6.10-gated code | in review |
-| O7 | Harness out of the driver: `tools/virt-sensor/` + `streamon.c` s_fmt instead of the built-in sensor and route install; fix the stub firmware instead of skipping empty `pkg_dir` | |
+| O6 | Compat into `ipu4-compat.h` with floor 6.12: string namespaces, `kzalloc_obj`; drop 6.6/6.10-gated code | merged (#214) |
+| O7 | Harness out of the driver: `tools/virt-sensor/` + `streamon.c` s_fmt instead of the built-in sensor and route install | in review |
+| O7b | Fix the stub firmware instead of skipping empty `pkg_dir`; the ipu6 legs' done signal instead of "IPU4 PCI driver ready" | |
 | O8 | `ambu-ipu-bridge` as a pre-probe module that installs the fwnode graph (no hook in `ipu6.c`) | |
 | O9 | Upstream video topology (per-CSI2 video nodes, upstream setup/prepare signatures) | |
 | O10 | Streaming behaviour: drop lazy STREAMON, firmware timeout back to 2 s | |
@@ -166,4 +167,13 @@ the behaviour guard.
   with the IPU4-only table; the IPU4 series adds IPU4 to that header,
   which an out-of-tree module can't. The namespace shim covers 6.13 too
   (the old one started at 6.14, so 6.13 did not build). Target distance
-  11189 → 11057.
+  11189 → 11057. The typed allocation helpers are backported to 6.12.y
+  and 6.18.y (CI's pins), so the shim tests `#ifndef kzalloc_obj`, not
+  the version; build against the pins (GitHub mirror `gregkh/linux`),
+  not plain v6.12.
+- (O7) With the graph supplied by `tools/virt-sensor/`, probe skips
+  `ambu_ipu_bridge_init()`, so uninit must tolerate that (the O2 oops);
+  the CSI-2 subdev's active state already has the default route, so
+  `streamon`'s subdev s_fmt replaces the bind-time route install. The
+  sensor builds from a copy per kernel tree (6.12 has no `MO=`). Target
+  distance 11057 → 10577.
