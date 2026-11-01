@@ -138,10 +138,11 @@
   <p class="meta">
     Lines changed (added + removed) between <code>kernel/ipu4/</code> (and the
     path the driver had before) and upstream <code>{{ upstream.history.upstream_path }}</code>,
-    local-only files excluded. Big markers are mainline releases, compared with our tree at
-    the release date; dots are up to ten of our commits per release interval, compared with
-    the newest tag (release or -rc) before them. Before v6.10 upstream has no ipu6 driver, so
-    every line counts. Commit dates are author dates raised to the latest earlier driver
+    local-only files excluded, after every mainline tag (compared with our tree at its date)
+    and every driver commit of ours (compared with the newest tag before it). Markers are
+    mainline releases and the steps that moved the count by {{ upstream.history.min_event or 100 }}+
+    lines: rcs, and our commits (click one to open it). Before v6.10 upstream has no ipu6
+    driver, so every line counts. Commit dates are author dates raised to the latest earlier driver
     commit's date (rebases and cherry-picks keep old author dates).
     {% if upstream.history.master %}Today against upstream master
     ({{ upstream.history.master.date[:10] }}): <strong>{{ upstream.history.master.divergence }}</strong> lines.{% endif %}
@@ -279,6 +280,10 @@
   if (upEl && upCanvas) {
     const up = JSON.parse(upEl.textContent);
     const pts = up.points.map(p => ({ x: p.ts, y: p.divergence, p }));
+    const ev = c => c.raw && c.raw.p.event;
+    const kindOf = c => (c.raw ? c.raw.p.kind : '');
+    const isTag = k => k === 'release' || k === 'rc' || k === 'tag';
+    const signed = n => (n > 0 ? '+' : n < 0 ? '\u2212' : '\u00b1') + Math.abs(n);
     const day = ts => new Date(ts).toISOString().slice(0, 10);
     const runs = (JSON.parse(document.getElementById('history-data').textContent) || {}).points || [];
     const targetPts = runs.filter(r => r.target_divergence != null).map(r => ({
@@ -290,9 +295,11 @@
       data: {
         datasets: [
           { label: 'kernel/ipu4 vs upstream', data: pts, borderColor: '#74a9ff',
-            pointRadius: c => (c.raw && c.raw.p.kind === 'tag' ? 6 : 2),
-            pointStyle: c => (c.raw && c.raw.p.kind === 'tag' ? 'rectRot' : 'circle'),
-            pointBackgroundColor: c => (c.raw && c.raw.p.kind === 'tag' ? '#d8c46a' : '#74a9ff'),
+            pointRadius: c => (!ev(c) ? 0 : kindOf(c) === 'release' ? 6 : 4),
+            pointHitRadius: c => (ev(c) ? 6 : 0),
+            pointHoverRadius: c => (ev(c) ? 8 : 0),
+            pointStyle: c => (isTag(kindOf(c)) ? 'rectRot' : 'circle'),
+            pointBackgroundColor: c => (isTag(kindOf(c)) ? '#d8c46a' : '#74a9ff'),
             stepped: false, tension: 0 },
           ...(targetPts.length ? [{ label: 'vs target tree (per pages run)', data: targetPts,
             borderColor: '#e0a35e', pointRadius: 2, tension: 0 }] : []),
@@ -306,6 +313,12 @@
       options: {
         responsive: true,
         parsing: false,
+        onClick: (e, els) => {
+          const p = els.length && els[0].element.$context.raw.p;
+          if (!p || p.kind === 'target') return;
+          if (isTag(p.kind)) window.open('https://github.com/torvalds/linux/tree/' + p.ref + '/' + up.upstream_path, '_blank');
+          else window.open('https://github.com/{{ repo }}/commit/' + p.sha, '_blank');
+        },
         plugins: {
           legend: { position: 'bottom' },
           tooltip: { callbacks: {
@@ -313,16 +326,19 @@
               const p = items[0].raw.p;
               if (p.kind === 'target') return 'target tree (' + day(p.ts) + ')';
               if (p.kind === 'master') return 'HEAD vs upstream master ' + p.sha.slice(0, 12) + ' (' + day(p.ts) + ')';
-              return p.kind === 'tag' ? p.ref + ' (' + day(p.ts) + ')'
-                : p.sha.slice(0, 12) + ' ' + day(p.ts);
+              if (isTag(p.kind)) return 'upstream ' + p.ref + ' (' + day(p.ts) + ')';
+              return (p.kind === 'head' ? 'HEAD ' : '') + p.sha.slice(0, 12) + ' (' + day(p.ts) + ')';
             },
             label: item => {
               const p = item.raw.p;
               if (p.kind === 'target') return [p.divergence + ' lines vs the target tree', 'pages run on ' + p.sha.slice(0, 12)];
-              const out = [p.divergence + ' lines vs ' + p.ref,
-                p.files + ' files, ' + p.lines + ' lines; ' + p.files_missing_upstream + ' not upstream'];
+              const out = [];
+              if (p.kind === 'commit') out.push(p.subject);
+              if (p.delta != null && p.kind !== 'master') out.push(signed(p.delta) + ' lines \u2192 ' + p.divergence + ' vs ' + p.ref);
+              else out.push(p.divergence + ' lines vs ' + p.ref);
+              out.push(p.files + ' files, ' + p.lines + ' lines; ' + p.files_missing_upstream + ' not upstream');
               if (p.upstream_only_files) out.push(p.upstream_only_files + ' upstream-only files (' + p.upstream_only_lines + ' lines)');
-              if (p.subject) out.push(p.kind === 'tag' ? 'tree at ' + p.sha.slice(0, 12) + ': ' + p.subject : p.subject);
+              if (isTag(p.kind)) out.push('our tree at ' + p.sha.slice(0, 12) + ': ' + p.subject);
               return out;
             },
           } },

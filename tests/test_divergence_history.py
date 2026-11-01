@@ -99,12 +99,6 @@ def test_effective_dates_ceil_to_ancestors():
     assert dh.effective_dates(commits) == {"a": 10, "b": 10, "c": 10, "d": 30}
 
 
-def test_sample():
-    assert dh.sample([1, 2, 3], 10) == [1, 2, 3]
-    s = dh.sample(list(range(25)), 10)
-    assert len(s) == 10 and s[-1] == 24 and s == sorted(set(s))
-
-
 def test_changed_lines():
     assert dh.changed_lines(["a", "b"], ["a", "b"]) == 0
     assert dh.changed_lines(["a", "x", "c"], ["a", "b", "c"]) == 2
@@ -118,24 +112,33 @@ def test_latest_at():
     assert dh.latest_at(dated, 100) == "d"
 
 
-def test_pick_points():
+def test_timeline():
     tags = [(0, "v6.5"), (10, "v6.6"), (15, "v6.7-rc1"), (20, "v6.7")]
-    commits = [(5, "c0")] + [(10 + i, f"c{i}") for i in range(1, 9)] + [(25, "c9")]
-    pts = dh.pick_points(tags, commits, (25, "c9"))
-    kinds = [(k, sha, ref) for k, _, sha, ref in pts]
-    assert kinds[0] == ("tag", "c0", "v6.6")  # v6.5 is before FIRST_RELEASE
-    assert ("commit", "c6", "v6.7-rc1") in kinds and ("commit", "c4", "v6.6") in kinds
-    assert ("tag", "c8", "v6.7") in kinds
-    assert kinds[-1] == ("head", "c9", "v6.7")
-    assert ("commit", "c9", "v6.7") not in kinds  # head is not repeated
+    commits = [(5, "c0"), (12, "c1"), (15, "c2"), (25, "c3")]
+    steps = dh.timeline(tags, commits, (25, "c3"))
+    assert steps == [
+        ("release", 10, "c0", "v6.6"),  # v6.5 is before FIRST_RELEASE
+        ("commit", 12, "c1", "v6.6"),
+        ("rc", 15, "c1", "v6.7-rc1"),   # tags before commits of the same date
+        ("commit", 15, "c2", "v6.7-rc1"),
+        ("release", 20, "c2", "v6.7"),
+        ("head", 25, "c3", "v6.7"),     # head is not repeated as a commit
+    ]
+    # c0 predates every tag, v6.6 predates the driver in this history.
+    assert dh.timeline(tags, [(30, "c")], (30, "c")) == [("head", 30, "c", "v6.7")]
 
 
-def test_pick_points_caps_commits_per_interval(monkeypatch):
-    monkeypatch.setattr(dh, "MAX_BETWEEN", 3)
-    tags = [(10, "v6.6"), (100, "v6.7")]
-    commits = [(10 + i, f"c{i}") for i in range(1, 20)]
-    pts = dh.pick_points(tags, commits, (200, "head"))
-    assert sum(1 for p in pts if p[0] == "commit") == 3
+def test_mark_events():
+    def pt(kind, div):
+        return {"kind": kind, "divergence": div}
+    pts = dh.mark_events([pt("release", 500), pt("commit", 450), pt("rc", 450),
+                          pt("commit", 300), pt("rc", 420), pt("release", 420),
+                          pt("head", 420)], min_event=100)
+    assert [(p["kind"], p["delta"], p["event"]) for p in pts] == [
+        ("release", 0, True), ("commit", -50, False),  # unchanged rc dropped
+        ("commit", -150, True), ("rc", 120, True),
+        ("release", 0, True), ("head", 0, True),
+    ]
 
 
 def test_local_only():
@@ -146,16 +149,19 @@ def test_local_only():
 def test_build(ours, linux):
     data = dh.build(ours, "HEAD", linux, {"ambu-ipu-bridge.c"})
     pts = {(p["kind"], p["ref"]): p for p in data["points"]}
+    assert data["schema"] == 2
     # v6.6: our import (author date T0-5d, below the unrelated root's date)
     # with no upstream driver yet: every line counts.
-    v66 = pts[("tag", "v6.6")]
+    v66 = pts[("release", "v6.6")]
     assert v66["subject"] == "import"
     assert v66["divergence"] == v66["lines"] == 5
     assert v66["files_missing_upstream"] == 2
-    # "align" (author T0+30d) compares with the rc before it, still no driver.
-    assert pts[("commit", "v6.10-rc1")]["subject"] == "align"
+    # "align" (author T0+30d) compares with the rc before it: with no
+    # upstream driver every line still counts, so it is dropped as unchanged.
+    assert not [p for p in data["points"] if p["subject"] == "align"
+                and p["kind"] == "commit"]
     # v6.10: tree after the move (author T0+45d > the tag); before it, align.
-    v610 = pts[("tag", "v6.10")]
+    v610 = pts[("release", "v6.10")]
     assert v610["subject"] == "align" and v610["divergence"] == 0
     assert v610["upstream_only_files"] == 1 and v610["upstream_only_lines"] == 2
     # The cherry-pick's T0+48d author date is raised to the harness commit's
@@ -184,7 +190,7 @@ def test_fetch_and_main(ours, linux, tmp_path):
     out = tmp_path / "h.json"
     assert dh.main(["--repo", str(ours), "--linux", str(clone), "--out", str(out)]) == 0
     data = json.loads(out.read_text())
-    assert data["schema"] == 1 and data["points"][-1]["kind"] == "head"
+    assert data["schema"] == 2 and data["points"][-1]["kind"] == "head"
 
 
 def make_patch(tmp_path, name, before, after):

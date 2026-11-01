@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Upstream-divergence history of the out-of-tree driver, for the dashboard.
 
-For every mainline release tag from v6.6 on, and for up to ten of our
-driver commits between two releases, count how many lines the driver
-tree (``kernel/ipu4/``, or wherever ``ipu6-isys.c`` lived before it moved
-there) differs from upstream ``drivers/media/pci/intel/ipu6/``.
+Walks a timeline of mainline tags from v6.6 on and our driver commits,
+counting how many lines the driver tree (``kernel/ipu4/``, or wherever
+``ipu6-isys.c`` lived before it moved there) differs from upstream
+``drivers/media/pci/intel/ipu6/`` after each. Steps that move the count by
+at least MIN_EVENT lines are marked as events, with the tag or commit that
+caused them; releases and the head are always events.
 
 Dates come from git. A commit's date is its author date, raised to the
 latest date of its ancestors when it is older (rebases and cherry-picks
 keep the original author date), so the series never runs backwards. A
-release tag is compared with our tree as it was at the tag's date; one of
-our commits is compared with the newest tag, release or -rc, from before
-it. Before v6.10 upstream has no ipu6 driver, so every line counts.
+tag is compared with our tree as it was at the tag's date; one of our
+commits is compared with the newest tag, release or -rc, from before it. Before v6.10 upstream has no ipu6 driver, so every line counts.
 
 Writes ``tools/notes/upstream-diff/history.json`` (gitignored), which
 ``tools/dashboard/build_payload.py`` embeds in the page.
@@ -42,7 +43,7 @@ from pathlib import Path
 UPSTREAM_REL = "drivers/media/pci/intel/ipu6"
 MARKER = "ipu6-isys.c"
 FIRST_RELEASE = (6, 6)
-MAX_BETWEEN = 10
+MIN_EVENT = 100  # lines a step must move the divergence to be an event
 LINUX_URL = "https://github.com/torvalds/linux.git"
 TAG_RE = re.compile(r"^v(\d+)\.(\d+)(?:-rc(\d+))?$")
 # Paths that hold copies of driver files but are not the driver.
@@ -84,15 +85,6 @@ def effective_dates(commits) -> dict:
     return eff
 
 
-def sample(items, n: int):
-    """Up to n items spread evenly over ``items``, always keeping the last."""
-    if len(items) <= n:
-        return list(items)
-    step = len(items) / n
-    return [items[min(len(items) - 1, round((i + 1) * step) - 1)]
-            for i in range(n)]
-
-
 def changed_lines(ours: list[str], theirs: list[str]) -> int:
     """Lines added plus lines removed to get from theirs to ours."""
     n = 0
@@ -103,40 +95,58 @@ def changed_lines(ours: list[str], theirs: list[str]) -> int:
     return n
 
 
-def latest_at(dated, ts):
-    """Last element of ``dated`` (sorted by [0]) with date <= ts, or None."""
-    i = bisect.bisect_right([d for d, _ in dated], ts)  # last of equal dates
+def latest_at(dated, ts, strict: bool = False):
+    """Last element of ``dated`` (sorted by [0]) with date <= ts (< ts if
+    ``strict``), or None."""
+    find = bisect.bisect_left if strict else bisect.bisect_right
+    i = find([d for d, _ in dated], ts)
     return dated[i - 1][1] if i else None
 
 
-def pick_points(tags, commits, head):
-    """Plan the graph's points.
+def timeline(tags, commits, head):
+    """Every state of (our tree, upstream tag) in date order.
 
     ``tags``: [(ts, name)] sorted by date, releases and rcs.
     ``commits``: [(eff_ts, sha)] of driver-touching commits, sorted.
     ``head``: (eff_ts, sha) of the revision being reported.
-    Returns [(kind, ts, sha, tag_name)]: one "tag" point per release from
-    FIRST_RELEASE (our tree at the tag's date), up to MAX_BETWEEN "commit"
-    points after each release (compared with the newest tag before them)
-    and a final "head" point.
+    Returns [(kind, ts, sha, tag_name)]: a "release" or "rc" step for each
+    tag from FIRST_RELEASE on once our driver exists (our tree just before
+    the tag's date), a "commit" step for each of our commits after the
+    first such release (against the newest tag up to its date) and a final
+    "head" step.
     """
-    releases = [(ts, t) for ts, t in tags
-                if tag_version(t)[2] is None
-                and tag_version(t)[:2] >= FIRST_RELEASE]
-    points = []
-    for i, (ts, t) in enumerate(releases):
-        ours = latest_at(commits, ts)
-        if ours:
-            points.append(("tag", ts, ours, t))
-        end = releases[i + 1][0] if i + 1 < len(releases) else float("inf")
-        between = [(c_ts, sha) for c_ts, sha in commits if ts < c_ts <= end]
-        for c_ts, sha in sample(between, MAX_BETWEEN):
-            if sha != head[1]:
-                points.append(("commit", c_ts, sha, latest_at(tags, c_ts)))
+    steps = []
+    first = next((ts for ts, t in tags if tag_version(t)[2] is None
+                  and tag_version(t)[:2] >= FIRST_RELEASE), None)
+    for ts, t in tags:
+        v = tag_version(t)
+        ours = latest_at(commits, ts, strict=True)
+        if v[:2] >= FIRST_RELEASE and ours:
+            steps.append((ts, 0, "release" if v[2] is None else "rc", ours, t))
+    for ts, sha in commits:
+        ref = latest_at(tags, ts)
+        if first is not None and ts > first and ref and sha != head[1]:
+            steps.append((ts, 1, "commit", sha, ref))
+    steps.sort(key=lambda s: (s[0], s[1]))
     ref = latest_at(tags, head[0])
     if ref:
-        points.append(("head", head[0], head[1], ref))
-    return points
+        steps.append((head[0], 2, "head", head[1], ref))
+    return [(kind, ts, sha, ref) for ts, _, kind, sha, ref in steps]
+
+
+def mark_events(points, min_event: int = MIN_EVENT):
+    """Set each point's ``delta`` (change from the previous step) and
+    ``event``; drop steps that change nothing, except releases and head."""
+    out, prev = [], None
+    for p in points:
+        p["delta"] = p["divergence"] - prev if prev is not None else 0
+        prev = p["divergence"]
+        if p["delta"] == 0 and out and p["kind"] in ("rc", "commit"):
+            continue
+        p["event"] = (not out or p["kind"] in ("release", "head")
+                      or abs(p["delta"]) >= min_event)
+        out.append(p)
+    return out
 
 
 # --- git access -------------------------------------------------------------
@@ -243,6 +253,9 @@ def upstream_tags(linux: Path):
     return sorted(tags)
 
 
+_CHANGED = {}  # (our oid, upstream oid) -> changed lines
+
+
 def divergence(ours: dict, theirs: dict, our_blobs: Blobs, up_blobs: Blobs,
                skip: set) -> dict:
     """Changed lines between our files and upstream's, plus a breakdown."""
@@ -255,7 +268,10 @@ def divergence(ours: dict, theirs: dict, our_blobs: Blobs, up_blobs: Blobs,
         mine = our_blobs.lines(oid)
         lines += len(mine)
         if name in theirs:
-            total += changed_lines(mine, up_blobs.lines(theirs[name]))
+            key = (oid, theirs[name])
+            if key not in _CHANGED:
+                _CHANGED[key] = changed_lines(mine, up_blobs.lines(theirs[name]))
+            total += _CHANGED[key]
         else:
             missing += 1
             total += len(mine)
@@ -393,7 +409,7 @@ def build(repo: Path, rev: str, linux: Path, skip: set, root: Path | None = None
         return up_files[ref]
 
     points = []
-    for kind, ts, sha, ref in pick_points(tags, driver, (head_eff, head_sha)):
+    for kind, ts, sha, ref in timeline(tags, driver, (head_eff, head_sha)):
         point = {
             "kind": kind,
             "date": iso(ts),
@@ -406,6 +422,7 @@ def build(repo: Path, rev: str, linux: Path, skip: set, root: Path | None = None
         point.update(divergence(ours_at(sha), upstream_at(ref), our_blobs,
                                 up_blobs, skip))
         points.append(point)
+    points = mark_events(points)
     master = None
     if git(linux, "for-each-ref", "refs/heads/master").strip():
         m = divergence(ours_at(head_sha), upstream_at("master"), our_blobs,
@@ -424,10 +441,11 @@ def build(repo: Path, rev: str, linux: Path, skip: set, root: Path | None = None
         target["series"] = {s: len(list((root / "patches" / s).glob("*.patch")))
                             for s in TARGET_SERIES}
     return {
-        "schema": 1,
+        "schema": 2,
         "generated_at": iso(int(_dt.datetime.now(_dt.timezone.utc).timestamp())),
         "head": head_sha,
         "upstream_path": UPSTREAM_REL,
+        "min_event": MIN_EVENT,
         "points": points,
         "master": master,
         "target": target,
