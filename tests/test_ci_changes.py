@@ -40,6 +40,7 @@ def classify(*paths):
         (".github/kernel-pins/6.18.json", {"kunit", "vm_smoke"}),
         ("tools/qemu-patches/hw/misc/ipu4.c", {"vm_smoke", "ipu6"}),
         ("data/trace.txt", {"vm_smoke", "ipu6"}),
+        ("tools/virt-sensor/virt-sensor.c", {"vm_smoke", "ipu6"}),
         ("tools/bootstrap.sh", {"kunit", "vm_smoke", "ipu6"}),
         ("patches/ipu6-ipu4/0001-x.patch", {"ipu6"}),
         ("patches/ipu6-ipu4p/0001-x.patch", {"ipu6"}),

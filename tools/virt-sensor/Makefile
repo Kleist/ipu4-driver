@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Virtual CSI-2 sensor for the ipu6-flavor QEMU harness. Built out of tree
-# against the pinned kernel by tools/virt-sensor/build.sh:
+# Virtual CSI-2 sensor for the QEMU harness. Built out of tree against a
+# guest kernel by tools/virt-sensor/build.sh, from a copy in out/<tree>/:
 #
-#   make -C tools/linux-ipu6 M=$PWD/tools/virt-sensor MO=<out> modules
+#   make -C tools/linux-ipu6 M=$PWD/tools/virt-sensor/out/linux-ipu6 modules
 
 obj-m += virt-sensor.o
 

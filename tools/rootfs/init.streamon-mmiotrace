@@ -59,7 +59,7 @@ echo "MMIOTRACE: tracer armed (current_tracer=$active)"
 # ---- Driver load (shape from init.streamon) ----
 for m in v4l2-async v4l2-fwnode \
 	videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
-	ambu-ipu-bridge intel-ipu4; do
+	virt-sensor ambu-ipu-bridge intel-ipu4; do
 	ko=/lib/modules/$m.ko
 	[ -f "$ko" ] || continue
 	insmod "$ko" dyndbg=+p 2>&1 || true
@@ -75,13 +75,21 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
 	sleep 1
 done
 
+# The CSI-2 receiver subdev of port 0 (the virt-sensor's), by name:
+# streamon sets its sink pad to the sensor's format.
+csi2_subdev=
+for n in /sys/class/video4linux/v4l-subdev*; do
+	[ "$(cat "$n/name" 2>/dev/null)" = "Intel IPU4 CSI2 0" ] &&
+		csi2_subdev="/dev/${n##*/}"
+done
+
 # Run the streamon workload if /dev/video0 came up; tolerate failure
 # so the mmiotrace capture still drops to the 9p share even if the
 # streaming path has a regression. A pure-probe capture is still
 # strictly more useful than no capture — the "unimplemented" list
 # stays the conservative shape.
 if [ -e /dev/video0 ]; then
-	/bin/streamon /dev/video0 || true
+	/bin/streamon /dev/video0 /dev/media0 $csi2_subdev || true
 else
 	echo "STREAM:skip (no /dev/video0; capturing probe-only trace)"
 fi

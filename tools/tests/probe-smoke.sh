@@ -5,8 +5,8 @@
 #
 #   M3: probe reached ipu6_cpd_copy_binary() (probe:fw_load).
 #   M4: CPD blob accepted (probe:fw_valid).
-#   M4.5: virt-sensor replaces ambu-bridge so probe moves past the
-#         fwnode-graph check (probe:virt_sensor).
+#   M4.5: virt-sensor (tools/virt-sensor/, loaded before the driver)
+#         supplies the fwnode graph, so probe moves past its check.
 #   M5:   PWR_STATE constant in hw/misc/ipu4.c unblocks the buttress
 #         power-FSM polls, probe completes, v4l2 core registers
 #         /dev/video* (probe:video_node, the current default).
@@ -39,7 +39,6 @@ markers=(
 	"probe:entered|PCI bar\[0\] = "
 	"probe:ipc_reset|IPC reset done"
 	"probe:fw_load|FW version:"
-	"probe:virt_sensor|virt-sensor installed"
 	"probe:bound|PROBE_OK: driver bound"
 	"probe:video_node|PROBE_OK: video=/dev/video"
 )

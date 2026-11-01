@@ -69,7 +69,8 @@ classify() {
 
 	# QEMU model + guest image inputs shared by both VM flows.
 	tools/qemu-patches/* | tools/build-qemu.sh | tools/build-kernel.sh | \
-	tools/firmware/* | data/* | tools/tests/vm-smoke.sh | tools/tests/streamon.c)
+	tools/firmware/* | data/* | tools/tests/vm-smoke.sh | tools/tests/streamon.c | \
+	tools/virt-sensor/*)
 		HIT[vm_smoke]=true; HIT[ipu6]=true ;;
 	# ladder.sh checks probe writes against the silicon trace.
 	tools/trace/check_writes.py)
@@ -80,7 +81,7 @@ classify() {
 		;;
 	# ipu6 and out-of-tree flavors (the ladder).
 	patches/ipu6-ipu4/* | patches/ipu6-ipu4p/* | patches/ipu6-fixes/* | tools/ipu6/* | tools/out-of-tree/* | \
-	tools/tests/ipu6/* | tools/virt-sensor/*)
+	tools/tests/ipu6/*)
 		HIT[ipu6]=true ;;
 	# Line coverage of a ladder leg (IPU4_GCOV=1); the rest of
 	# tools/coverage/ is the fork's.
