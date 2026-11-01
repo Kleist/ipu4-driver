@@ -648,7 +648,7 @@ bool ipu6_buttress_auth_done(struct ipu6_device *isp)
 
 	return val == BUTTRESS_SECURITY_CTL_AUTH_DONE;
 }
-EXPORT_SYMBOL_NS_GPL(ipu6_buttress_auth_done, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu6_buttress_auth_done, "INTEL_IPU6");
 
 int ipu6_buttress_reset_authentication(struct ipu6_device *isp)
 {
@@ -741,7 +741,7 @@ out:
 
 	return ret;
 }
-EXPORT_SYMBOL_NS_GPL(ipu6_map_fw_region, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu6_map_fw_region, "INTEL_IPU6");
 
 void ipu6_unmap_fw_region(struct ipu6_bus_device *sys,
 			  enum dma_data_direction dir)
@@ -752,7 +752,7 @@ void ipu6_unmap_fw_region(struct ipu6_bus_device *sys,
 	dma_unmap_sgtable(&pdev->dev, &sys->fw_sgt, dir, 0);
 	sg_free_table(&sys->fw_sgt);
 }
-EXPORT_SYMBOL_NS_GPL(ipu6_unmap_fw_region, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu6_unmap_fw_region, "INTEL_IPU6");
 
 int ipu6_buttress_authenticate(struct ipu6_device *isp)
 {
@@ -884,7 +884,7 @@ out_unlock:
 
 	return ret;
 }
-EXPORT_SYMBOL_NS_GPL(ipu6_buttress_authenticate, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu6_buttress_authenticate, "INTEL_IPU6");
 
 static int ipu6_buttress_send_tsc_request(struct ipu6_device *isp)
 {
@@ -966,7 +966,7 @@ int ipu6_buttress_start_tsc_sync(struct ipu6_device *isp)
 
 	return __ipu6_start_tsc_sync(isp);
 }
-EXPORT_SYMBOL_NS_GPL(ipu6_buttress_start_tsc_sync, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu6_buttress_start_tsc_sync, "INTEL_IPU6");
 
 void ipu6_buttress_tsc_read(struct ipu6_device *isp, u64 *val)
 {
@@ -989,7 +989,7 @@ void ipu6_buttress_tsc_read(struct ipu6_device *isp, u64 *val)
 	}
 	local_irq_restore(flags);
 }
-EXPORT_SYMBOL_NS_GPL(ipu6_buttress_tsc_read, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu6_buttress_tsc_read, "INTEL_IPU6");
 
 u64 ipu6_buttress_tsc_ticks_to_ns(u64 ticks, const struct ipu6_device *isp)
 {
@@ -1004,7 +1004,7 @@ u64 ipu6_buttress_tsc_ticks_to_ns(u64 ticks, const struct ipu6_device *isp)
 	 */
 	return div_u64(ns, IPU4_BUTTRESS_TSC_CLOCK_FREQUENCY);
 }
-EXPORT_SYMBOL_NS_GPL(ipu6_buttress_tsc_ticks_to_ns, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu6_buttress_tsc_ticks_to_ns, "INTEL_IPU6");
 
 /* trigger uc control to wakeup fw */
 void ipu7_buttress_wakeup_isys(const struct ipu6_device *isp)
@@ -1015,7 +1015,7 @@ void ipu7_buttress_wakeup_isys(const struct ipu6_device *isp)
 	val |= IPU7_UCX_CTL_WAKEUP;
 	writel(val, isp->base + IPU7_BUTTRESS_REG_ISYS_UCX_CTRL_STATUS);
 }
-EXPORT_SYMBOL_NS_GPL(ipu7_buttress_wakeup_isys, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu7_buttress_wakeup_isys, "INTEL_IPU6");
 
 u32 ipu7_buttress_get_isys_freq(struct ipu6_device *isp)
 {
@@ -1026,7 +1026,7 @@ u32 ipu7_buttress_get_isys_freq(struct ipu6_device *isp)
 
 	return val * 50 / 3;
 }
-EXPORT_SYMBOL_NS_GPL(ipu7_buttress_get_isys_freq, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu7_buttress_get_isys_freq, "INTEL_IPU6");
 
 static const struct x86_cpu_id ipu7_misc_cfg_exclusion[] = {
 	X86_MATCH_VFM_STEPS(INTEL_PANTHERLAKE_L, 0x1, 0x1, 0),

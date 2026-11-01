@@ -88,4 +88,4 @@ kunit_test_suite(ipu4_format_suite);
 
 MODULE_DESCRIPTION("KUnit tests for IPU4 pixel format lookup");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS(INTEL_IPU6);
+MODULE_IMPORT_NS("INTEL_IPU6");

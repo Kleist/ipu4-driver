@@ -329,7 +329,7 @@ err_free_bridge:
 	static_bridge = NULL;
 	return ret;
 }
-EXPORT_SYMBOL_NS_GPL(ambu_ipu_bridge_init, INTEL_IPU_BRIDGE);
+EXPORT_SYMBOL_NS_GPL(ambu_ipu_bridge_init, "INTEL_IPU_BRIDGE");
 
 void ambu_ipu_bridge_uninit(struct device *dev)
 {
@@ -339,5 +339,5 @@ void ambu_ipu_bridge_uninit(struct device *dev)
 	kfree(static_bridge);
 	static_bridge = NULL;
 }
-EXPORT_SYMBOL_NS_GPL(ambu_ipu_bridge_uninit, INTEL_IPU_BRIDGE);
+EXPORT_SYMBOL_NS_GPL(ambu_ipu_bridge_uninit, "INTEL_IPU_BRIDGE");
 MODULE_LICENSE("GPL v2");

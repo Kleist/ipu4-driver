@@ -26,6 +26,7 @@
 #include "ipu6.h"
 #include "ipu6-buttress.h"
 #include "ipu6-platform-buttress-regs.h"
+#include "ipu4-compat.h"
 
 static void test_zero_ticks_is_zero_ns(struct kunit *test)
 {
@@ -147,4 +148,4 @@ kunit_test_suite(ipu4_buttress_math_suite);
 
 MODULE_DESCRIPTION("KUnit tests for IPU4 buttress TSC arithmetic");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS(INTEL_IPU6);
+MODULE_IMPORT_NS("INTEL_IPU6");

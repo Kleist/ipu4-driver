@@ -264,7 +264,7 @@ struct ipu6_fw_com_context *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
 
 	return ctx;
 }
-EXPORT_SYMBOL_NS_GPL(ipu6_fw_com_prepare, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu6_fw_com_prepare, "INTEL_IPU6");
 
 int ipu6_fw_com_open(struct ipu6_fw_com_context *ctx)
 {
@@ -287,7 +287,7 @@ int ipu6_fw_com_open(struct ipu6_fw_com_context *ctx)
 
 	return 0;
 }
-EXPORT_SYMBOL_NS_GPL(ipu6_fw_com_open, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu6_fw_com_open, "INTEL_IPU6");
 
 int ipu6_fw_com_close(struct ipu6_fw_com_context *ctx)
 {
@@ -303,7 +303,7 @@ int ipu6_fw_com_close(struct ipu6_fw_com_context *ctx)
 
 	return 0;
 }
-EXPORT_SYMBOL_NS_GPL(ipu6_fw_com_close, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu6_fw_com_close, "INTEL_IPU6");
 
 int ipu6_fw_com_release(struct ipu6_fw_com_context *ctx, unsigned int force)
 {
@@ -316,7 +316,7 @@ int ipu6_fw_com_release(struct ipu6_fw_com_context *ctx, unsigned int force)
 	kfree(ctx);
 	return 0;
 }
-EXPORT_SYMBOL_NS_GPL(ipu6_fw_com_release, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu6_fw_com_release, "INTEL_IPU6");
 
 bool ipu6_fw_com_ready(struct ipu6_fw_com_context *ctx)
 {
@@ -326,7 +326,7 @@ bool ipu6_fw_com_ready(struct ipu6_fw_com_context *ctx)
 
 	return state == SYSCOM_STATE_READY;
 }
-EXPORT_SYMBOL_NS_GPL(ipu6_fw_com_ready, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu6_fw_com_ready, "INTEL_IPU6");
 
 void *ipu6_send_get_token(struct ipu6_fw_com_context *ctx, int q_nbr)
 {
@@ -354,7 +354,7 @@ void *ipu6_send_get_token(struct ipu6_fw_com_context *ctx, int q_nbr)
 
 	return (void *)((uintptr_t)q->host_address + index * q->token_size);
 }
-EXPORT_SYMBOL_NS_GPL(ipu6_send_get_token, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu6_send_get_token, "INTEL_IPU6");
 
 void ipu6_send_put_token(struct ipu6_fw_com_context *ctx, int q_nbr)
 {
@@ -367,7 +367,7 @@ void ipu6_send_put_token(struct ipu6_fw_com_context *ctx, int q_nbr)
 
 	writel(wr, q_dmem + FW_COM_WR_REG);
 }
-EXPORT_SYMBOL_NS_GPL(ipu6_send_put_token, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu6_send_put_token, "INTEL_IPU6");
 
 void *ipu6_recv_get_token(struct ipu6_fw_com_context *ctx, int q_nbr)
 {
@@ -391,7 +391,7 @@ void *ipu6_recv_get_token(struct ipu6_fw_com_context *ctx, int q_nbr)
 
 	return (void *)((uintptr_t)q->host_address + rd * q->token_size);
 }
-EXPORT_SYMBOL_NS_GPL(ipu6_recv_get_token, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu6_recv_get_token, "INTEL_IPU6");
 
 void ipu6_recv_put_token(struct ipu6_fw_com_context *ctx, int q_nbr)
 {
@@ -406,4 +406,4 @@ void ipu6_recv_put_token(struct ipu6_fw_com_context *ctx, int q_nbr)
 
 	writel(rd, q_dmem + FW_COM_RD_REG);
 }
-EXPORT_SYMBOL_NS_GPL(ipu6_recv_put_token, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu6_recv_put_token, "INTEL_IPU6");
