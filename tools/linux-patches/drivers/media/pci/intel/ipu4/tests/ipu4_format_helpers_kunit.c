@@ -14,6 +14,7 @@
 #include <media/v4l2-mediabus.h>
 
 #include "ipu6-isys-subdev.h"
+#include "ipu4-compat.h"
 
 static void test_bpp_24(struct kunit *test)
 {
@@ -139,4 +140,4 @@ kunit_test_suite(ipu4_format_helpers_suite);
 
 MODULE_DESCRIPTION("KUnit tests for IPU4 mbus-code conversion helpers");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS(INTEL_IPU6);
+MODULE_IMPORT_NS("INTEL_IPU6");

@@ -28,9 +28,15 @@ static __maybe_unused s64 ambu_v4l2_get_link_freq(struct media_pad *src_pad, uns
 #define v4l2_get_link_freq(PAD, MUL, DIV) ambu_v4l2_get_link_freq(PAD, MUL, DIV)
 #endif
 
-#if KERNEL_VERSION(6, 14, 0) <= LINUX_VERSION_CODE
-#define INTEL_IPU_BRIDGE "INTEL_IPU_BRIDGE"
-#define INTEL_IPU6 "INTEL_IPU6"
+#if KERNEL_VERSION(6, 13, 0) > LINUX_VERSION_CODE
+// Symbol namespaces are string literals since 6.13; older kernels
+// stringify a bare token.
+#include <linux/export.h>
+#include <linux/module.h>
+#undef EXPORT_SYMBOL_NS_GPL
+#define EXPORT_SYMBOL_NS_GPL(sym, ns)	__EXPORT_SYMBOL(sym, "GPL", ns)
+#undef MODULE_IMPORT_NS
+#define MODULE_IMPORT_NS(ns)	MODULE_INFO(import_ns, ns)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)

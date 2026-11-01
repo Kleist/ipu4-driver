@@ -373,7 +373,7 @@ err_free:
 	kfree(vs);
 	return ret;
 }
-EXPORT_SYMBOL_NS_GPL(ipu4_virt_sensor_install, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu4_virt_sensor_install, "INTEL_IPU6");
 
 void ipu4_virt_sensor_remove(struct pci_dev *pdev)
 {
@@ -390,4 +390,4 @@ void ipu4_virt_sensor_remove(struct pci_dev *pdev)
 	kfree(vs);
 	g_virt_sensor = NULL;
 }
-EXPORT_SYMBOL_NS_GPL(ipu4_virt_sensor_remove, INTEL_IPU6);
+EXPORT_SYMBOL_NS_GPL(ipu4_virt_sensor_remove, "INTEL_IPU6");

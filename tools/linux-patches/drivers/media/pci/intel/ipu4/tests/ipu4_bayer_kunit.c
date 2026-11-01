@@ -12,6 +12,7 @@
 #include <media/v4l2-mediabus.h>
 
 #include "ipu6-isys-subdev.h"
+#include "ipu4-compat.h"
 
 struct bayer_rotation_case {
 	u32 in;
@@ -97,4 +98,4 @@ kunit_test_suite(ipu4_bayer_suite);
 
 MODULE_DESCRIPTION("KUnit tests for IPU4 Bayer-order helpers");
 MODULE_LICENSE("GPL");
-MODULE_IMPORT_NS(INTEL_IPU6);
+MODULE_IMPORT_NS("INTEL_IPU6");
