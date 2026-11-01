@@ -75,6 +75,9 @@ classify() {
 	tools/trace/check_writes.py)
 		HIT[pytest]=true; HIT[vm_smoke]=true; HIT[ipu6]=true ;;
 
+	# Read only by the dashboard (tools/upstream/divergence_history.py).
+	tools/out-of-tree/delta.txt)
+		;;
 	# ipu6 and out-of-tree flavors (the ladder).
 	patches/ipu6-ipu4/* | patches/ipu6-ipu4p/* | patches/ipu6-fixes/* | tools/ipu6/* | tools/out-of-tree/* | \
 	tools/tests/ipu6/* | tools/virt-sensor/*)

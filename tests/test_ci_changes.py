@@ -35,6 +35,7 @@ def classify(*paths):
         ("kernel/ipu4/ipu6-isys.c", {"kunit", "vm_smoke", "ipu6"}),
         ("tools/build.sh", {"kunit", "vm_smoke", "ipu6"}),
         ("tools/out-of-tree/build.sh", {"ipu6"}),
+        ("tools/out-of-tree/delta.txt", set()),
         ("tools/linux-patches/drivers/x.patch", {"kunit", "vm_smoke"}),
         (".github/kernel-pins/6.18.json", {"kunit", "vm_smoke"}),
         ("tools/qemu-patches/hw/misc/ipu4.c", {"vm_smoke", "ipu6"}),
