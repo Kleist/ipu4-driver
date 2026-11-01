@@ -790,9 +790,10 @@ static void isys_unregister_devices(struct ipu6_isys *isys)
 static int isys_runtime_pm_resume(struct device *dev)
 {
 	struct ipu6_bus_device *adev = to_ipu6_bus_device(dev);
+	const struct ipu6_fw_isys_ops *fw_ops = adev->auxdrv_data->fw_ops;
 	struct ipu6_isys *isys = ipu6_bus_get_drvdata(adev);
+	const struct ipu6_isys_internal_pdata *ipdata = isys->pdata->ipdata;
 	struct ipu6_device *isp = adev->isp;
-	unsigned long flags;
 	int ret;
 
 	if (!isys)
@@ -806,11 +807,7 @@ static int isys_runtime_pm_resume(struct device *dev)
 
 	ret = ipu6_buttress_start_tsc_sync(isp);
 	if (ret)
-		return ret;
-
-	spin_lock_irqsave(&isys->power_lock, flags);
-	isys->power = 1;
-	spin_unlock_irqrestore(&isys->power_lock, flags);
+		goto err_mmu_hw_cleanup;
 
 	if (IS_IPU7(isp)) {
 		ipu7_isys_setup_hw(isys);
@@ -821,22 +818,62 @@ static int isys_runtime_pm_resume(struct device *dev)
 #endif
 	}
 
-	return 0;
+	ipu6_configure_spc(adev->isp, &ipdata->hw_variant,
+			   IPU6_CPD_PKG_DIR_ISYS_SERVER_IDX, isys->pdata->base,
+			   adev->pkg_dir, adev->pkg_dir_dma_addr);
+
+	/*
+	 * Buffers could have been left to wrong queue at last closure.
+	 * Move them now back to empty buffer queue.
+	 */
+	ipu6_cleanup_fw_msg_bufs(isys);
+
+	if (isys->fwctx) {
+		/*
+		 * Something went wrong in previous shutdown. As we are now
+		 * restarting isys we can safely delete old context.
+		 */
+		dev_warn(&adev->auxdev.dev, "clearing old context\n");
+		fw_ops->cleanup(isys);
+	}
+
+	ret = fw_ops->init(isys, ipdata->num_parallel_streams);
+	if (!ret)
+		return 0;
+
+	isys->phy_termcal_val = 0;
+	cpu_latency_qos_update_request(&isys->pm_qos, PM_QOS_DEFAULT_VALUE);
+
+#ifdef IPU6
+	if (!IS_IPU7(isp))
+		set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_OFF);
+#endif
+
+err_mmu_hw_cleanup:
+	ipu6_mmu_hw_cleanup(adev->mmu);
+
+	return ret;
 }
 
 static int isys_runtime_pm_suspend(struct device *dev)
 {
 	struct ipu6_bus_device *adev = to_ipu6_bus_device(dev);
 	struct ipu6_isys *isys;
-	unsigned long flags;
+	int ret = 0;
 
 	isys = dev_get_drvdata(dev);
 	if (!isys)
 		return 0;
 
-	spin_lock_irqsave(&isys->power_lock, flags);
-	isys->power = 0;
-	spin_unlock_irqrestore(&isys->power_lock, flags);
+	/* Runtime active does not imply the firmware was opened. */
+	if (isys->fwctx) {
+		isys->adev->auxdrv_data->fw_ops->close(isys);
+		if (isys->fwctx) {
+			dev_warn(&isys->adev->auxdev.dev,
+				 "failed to close fw isys\n");
+			ret = -EIO;
+		}
+	}
 
 	mutex_lock(&isys->mutex);
 	isys->need_reset = false;
@@ -851,7 +888,7 @@ static int isys_runtime_pm_suspend(struct device *dev)
 
 	ipu6_mmu_hw_cleanup(adev->mmu);
 
-	return 0;
+	return ret;
 }
 
 static int isys_suspend(struct device *dev)
@@ -1025,8 +1062,6 @@ static int isys_probe(struct auxiliary_device *auxdev,
 #endif
 
 	spin_lock_init(&isys->streams_lock);
-	spin_lock_init(&isys->power_lock);
-	isys->power = 0;
 	isys->phy_termcal_val = 0;
 
 	mutex_init(&isys->mutex);

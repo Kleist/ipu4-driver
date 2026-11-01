@@ -5,6 +5,7 @@
 
 #include <linux/cleanup.h>
 #include <linux/cacheflush.h>
+#include <linux/pm_runtime.h>
 
 #include "ipu6-bus.h"
 #include "ipu6-dma.h"
@@ -549,10 +550,8 @@ static int ipu7_isys_isr_one(struct ipu6_bus_device *adev)
 	struct ipu7_fw_isys_msg_err err_info;
 	struct isys_fw_msgs *isys_fw_msg;
 	struct ipu7_insys_resp *resp;
+	unsigned long flags;
 	u64 ts;
-
-	if (!isys->fwctx)
-		return 1;
 
 	resp = ipu7_fw_isys_get_resp(isys);
 	if (!resp)
@@ -596,8 +595,10 @@ static int ipu7_isys_isr_one(struct ipu6_bus_device *adev)
 	if (resp->stream_id >= IPU7_ISYS_MAX_STREAMS) {
 		dev_err(dev, "bad stream handle %u\n",
 			resp->stream_id);
-		goto leave;
+		goto leave_nounlock;
 	}
+
+	spin_lock_irqsave(&isys->streams_lock, flags);
 
 	stream = resp->stream_id < IPU6_ISYS_MAX_STREAMS ?
 		isys->streams_by_handle[resp->stream_id] : NULL;
@@ -681,6 +682,9 @@ static int ipu7_isys_isr_one(struct ipu6_bus_device *adev)
 	}
 
 leave:
+	spin_unlock_irqrestore(&isys->streams_lock, flags);
+
+leave_nounlock:
 	ipu7_fw_isys_put_resp(isys);
 
 	return 0;
@@ -746,11 +750,11 @@ irqreturn_t ipu7_isys_isr(struct ipu6_bus_device *adev)
 	void __iomem *base = isys->pdata->base;
 	u32 status_sw, status_csi;
 	u32 csi_offset, sw_offset;
+	int pm_status;
 
-	guard(spinlock)(&isys->power_lock);
-
-	if (!isys->power)
-		return IRQ_NONE;
+	pm_status = pm_runtime_get_if_active(&adev->auxdev.dev);
+	if (!pm_status)
+		return 0;
 
 	csi_offset = IPU7_IS_IO_CSI2_LEGACY_IRQ_CTRL_BASE;
 	sw_offset = IPU7_IS_UC_CTRL_BASE;
@@ -758,8 +762,11 @@ irqreturn_t ipu7_isys_isr(struct ipu6_bus_device *adev)
 	status_csi = readl(base + csi_offset + IPU7_IRQ_CTL_STATUS);
 	status_sw = readl(base + sw_offset + IPU7_TO_SW_IRQ_CNTL_STATUS);
 
-	if (!status_csi && !status_sw)
+	if (!status_csi && !status_sw) {
+		if (pm_status > 0)
+			pm_runtime_put(&adev->auxdev.dev);
 		return IRQ_NONE;
+	}
 
 	do {
 		writel(status_sw, base + sw_offset + IPU7_TO_SW_IRQ_CNTL_CLEAR);
@@ -781,6 +788,9 @@ irqreturn_t ipu7_isys_isr(struct ipu6_bus_device *adev)
 
 	writel(IPU7_IS_UC_TO_SW_IRQ_MASK,
 	       base + sw_offset + IPU7_TO_SW_IRQ_CNTL_MASK_N);
+
+	if (pm_status > 0)
+		pm_runtime_put(&adev->auxdev.dev);
 
 	return IRQ_HANDLED;
 }

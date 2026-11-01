@@ -690,7 +690,7 @@ void ipu6_isys_close_stream_firmware(struct ipu6_isys_stream *stream)
 	else
 		dev_dbg(dev, "close stream: complete\n");
 
-	scoped_guard(spinlock_irqsave, &stream->isys->power_lock) {
+	scoped_guard(spinlock_irqsave, &stream->isys->streams_lock) {
 		stream->isys->streams_by_handle[stream->stream_handle] = NULL;
 		csi2->streams_by_vc[stream->vc] = NULL;
 	}
@@ -765,9 +765,8 @@ ipu6_isys_alloc_stream_firmware(struct ipu6_isys_csi2 *csi2,
 	stream->asd = &csi2->asd;
 	stream->vc = vc;
 
-	scoped_guard(spinlock_irqsave, &stream->isys->power_lock) {
-		stream->isys->streams_by_handle[stream->stream_handle] =
-			stream;
+	scoped_guard(spinlock_irqsave, &stream->isys->streams_lock) {
+		stream->isys->streams_by_handle[stream->stream_handle] = stream;
 		csi2->streams_by_vc[stream->vc] = stream;
 	}
 
@@ -883,64 +882,6 @@ static const struct v4l2_file_operations isys_fops = {
 	.open = video_open,
 	.release = vb2_fop_release,
 };
-
-int ipu6_isys_fw_get(struct ipu6_isys *isys)
-{
-	struct ipu6_bus_device *adev = isys->adev;
-	int ret;
-
-	ret = pm_runtime_resume_and_get(&adev->auxdev.dev);
-	if (ret < 0)
-		return ret;
-
-	mutex_lock(&isys->mutex);
-	wait_for_not_resetting(isys, __func__);
-
-	if (isys->ref_count++)
-		goto unlock;
-
-	ret = ipu6_fw_isys_open(isys);
-	if (ret < 0)
-		goto out;
-
-unlock:
-	mutex_unlock(&isys->mutex);
-
-	return 0;
-
-out:
-	isys->ref_count--;
-	mutex_unlock(&isys->mutex);
-	pm_runtime_put(&adev->auxdev.dev);
-
-	return ret;
-}
-
-void ipu6_isys_fw_put(struct ipu6_isys *isys)
-{
-	struct device *dev = &isys->adev->auxdev.dev;
-
-	mutex_lock(&isys->mutex);
-	wait_for_not_resetting(isys, __func__);
-
-	isys->ref_count--;
-	if (!isys->ref_count) {
-		isys->adev->auxdrv_data->fw_ops->close(isys);
-		if (isys->fwctx) {
-			dev_info(dev, "%s: Setting need_reset\n", __func__);
-			isys->need_reset = true;
-			dev_warn(&isys->adev->auxdev.dev,
-				 "failed to close fw isys\n");
-		}
-	}
-
-	mutex_unlock(&isys->mutex);
-
-	if (isys->need_reset)
-		pm_runtime_put_sync(&isys->adev->auxdev.dev);
-	else
-		pm_runtime_put(&isys->adev->auxdev.dev);
-}
 
 /*
  * Do everything that's needed to initialise things related to video
