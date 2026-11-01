@@ -77,6 +77,7 @@ The dashboard is a contract over files already produced elsewhere:
 | `tools/notes/registers.md` | committed | yes |
 | `tools/notes/upstream-watch-state.json` | `tools/upstream/watch.sh` (committed) | yes |
 | `tools/notes/upstream-diff/summary.md` | `tools/upstream/diff.sh` (regenerated each pages run) | optional |
+| `tools/notes/upstream-diff/history.json` | `tools/upstream/divergence_history.py` (regenerated each pages run) | optional (chart renders "no history") |
 | `.github/kernel-pins/*.json` | committed (`bump-kernel-pins.yml`) | optional |
 | GitHub Actions API | `gh api` at build time | optional |
 

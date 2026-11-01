@@ -243,6 +243,17 @@ runs:
         fi
         ./tools/upstream/diff.sh || echo "diff.sh failed; rendering without it" >&2
 
+    - name: Regenerate upstream-divergence history
+      shell: bash
+      run: |
+        # Divergence per mainline release since v6.6 and per sampled driver
+        # commit (needs this repo's full history, hence fetch-depth: 0 in
+        # the callers). Fetches only the tag tips and the ipu6 blobs (~1 min).
+        # Non-fatal: the chart renders "no history" without it.
+        python3 tools/upstream/divergence_history.py --fetch \
+          --linux "$RUNNER_TEMP/linux-tags" \
+          || echo "divergence_history.py failed; rendering without it" >&2
+
     - name: Build dashboard
       shell: bash
       env:

@@ -235,6 +235,9 @@ def main(argv=None):
     registers = parse_registers.parse(registers_md.read_text()) if registers_md.is_file() else {"rows": [], "counts": {"doc": 0, "inferred": 0, "guess": 0}, "total": 0}
 
     upstream_diff = _parse_upstream_diff(root / "tools" / "notes" / "upstream-diff" / "summary.md")
+    # tools/upstream/divergence_history.py: divergence per release tag and
+    # sampled driver commit, for the trend chart.
+    upstream_history = _read_json(root / "tools" / "notes" / "upstream-diff" / "history.json")
     upstream_watch = _read_json(root / "tools" / "notes" / "upstream-watch-state.json") or {
         "last_seen": {}, "processed_patch_ids": [],
     }
@@ -247,7 +250,8 @@ def main(argv=None):
         "mmio": {"report": mmio_report},
         "registers": registers,
         "kernels": _kernels(root, args.repo),
-        "upstream": {"diff": upstream_diff, "watch": upstream_watch},
+        "upstream": {"diff": upstream_diff, "watch": upstream_watch,
+                     "history": upstream_history},
         "ipu6_port": _ipu6_port(root, args.repo, args.ipu6_ladder_dir, args.vm_ipu6_run_id,
                                 args.ipu6_ladder_coverage_dir),
     }
