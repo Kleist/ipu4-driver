@@ -66,9 +66,9 @@ automatically.
 ## TODO
 
 - [ ] (Andreas) Send the two mainline fixes in `patches/ipu6-fixes/` to
-  linux-media (they apply on mainline as is), each with a `Fixes:` tag
-  for the 7.4 commit that introduced it, and drop them once mainline has
-  them:
+  linux-media (they apply on mainline as is and carry their `Fixes:`
+  tags), and drop them once mainline has them (b4 steps:
+  `patches/ipu6-ipu4/README.md`, "Submitting with b4"):
   - `0001-media-ipu6-Don-t-requeue-an-empty-buffer-list-on-str.patch`
     (7.4 stream rework, the failed-start error path);
   - `0002-media-ipu6-Don-t-close-unopened-ISYS-firmware-on-run.patch`
