@@ -78,6 +78,8 @@ struct ipu6_isys_video {
 	struct ipu6_isys_csi2 *csi2;
 	struct ipu6_isys_stream *stream;
 	unsigned int streaming;
+	/* Silent reset: stream on again at the next buf_queue */
+	bool restart_pending;
 	u32 source_stream;
 };
 

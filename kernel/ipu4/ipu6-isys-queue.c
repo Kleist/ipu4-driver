@@ -384,7 +384,7 @@ static void buf_queue(struct vb2_buffer *vb)
 		vb2_buffer_to_ipu6_isys_video_buffer(vvb);
 	struct ipu6_isys_buffer *ib = &ivb->ib;
 	struct device *dev = &adev->auxdev.dev;
-	struct ipu6_isys_stream *stream = av->stream;
+	struct ipu6_isys_stream *stream;
 	struct ipu6_isys_csi2 *csi2;
 	struct ipu6_isys_buffer_list bl;
 	struct isys_fw_msgs *msg;
@@ -407,6 +407,18 @@ static void buf_queue(struct vb2_buffer *vb)
 		return;
 	}
 
+	/* Waits for a silent reset in progress; it may leave the stream on. */
+	scoped_guard(mutex, &av->isys->stream_mutex) {
+		if (av->restart_pending) {
+			av->restart_pending = false;
+			if (ipu6_isys_video_set_streaming(av, 1))
+				dev_err(dev, "restarting %s failed\n",
+					av->vdev.name);
+			return;
+		}
+	}
+
+	stream = av->stream;
 	mutex_lock(&stream->mutex);
 
 	csi2 = ipu6_isys_subdev_to_csi2(stream->asd);
@@ -635,8 +647,6 @@ static int restart_stream(struct ipu6_isys_video *av)
 
 	dev_info(dev, "Restarting %s", av->vdev.name);
 
-	lockdep_assert_held(&av->stream->mutex);
-
 	mutex_lock(&isys->stream_mutex);
 	if (!wait_for_no_active_buffers(av)) {
 		// When stream buffers are lost,
@@ -674,6 +684,12 @@ static int restart_stream(struct ipu6_isys_video *av)
 		goto err_unlock;
 	}
 
+	/* Stream on needs a buffer; without one, the next buf_queue does it. */
+	if (list_empty(&av->aq.incoming)) {
+		av->restart_pending = true;
+		goto err_unlock;
+	}
+
 	ret = ipu6_isys_video_set_streaming(av, 1);
 	if (ret) {
 		dev_err(dev, "ipu6_isys_video_set_streaming(%s, 1) failed: %d\n",
@@ -704,19 +720,16 @@ int ipu6_isys_queue_restart_streams(struct ipu6_isys_video *av)
 		struct ipu6_isys_video *other_av =
 			&isys->csi2[i / NR_OF_CSI2_SRC_PADS].av[i % NR_OF_CSI2_SRC_PADS];
 
-		if (av == other_av || !other_av->stream)
+		/* Stream off frees the stream; stream_mutex serialises it. */
+		if (av == other_av || !other_av->streaming)
 			continue;
 
-		mutex_lock(&other_av->stream->mutex);
-		if (other_av->streaming) {
-			dev_info(&other_av->vdev.dev, "Restarting stream\n");
-			if (!WARN(stream_restarted,
-				  "Restarting > one stream not supported!"))
-				ret = restart_stream(other_av);
+		dev_info(&other_av->vdev.dev, "Restarting stream\n");
+		if (!WARN(stream_restarted,
+			  "Restarting > one stream not supported!"))
+			ret = restart_stream(other_av);
 
-			stream_restarted = true;
-		}
-		mutex_unlock(&other_av->stream->mutex);
+		stream_restarted = true;
 
 		if (ret != 0)
 			break;
@@ -730,7 +743,10 @@ static void stop_streaming(struct vb2_queue *q)
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
 
 	mutex_lock(&av->isys->stream_mutex);
-	ipu6_isys_video_set_streaming(av, 0);
+	if (av->restart_pending)
+		av->restart_pending = false;
+	else
+		ipu6_isys_video_set_streaming(av, 0);
 	mutex_unlock(&av->isys->stream_mutex);
 
 	ipu6_isys_stream_cleanup(av);
