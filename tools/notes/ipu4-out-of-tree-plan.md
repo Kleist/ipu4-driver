@@ -96,8 +96,8 @@ the behaviour guard.
 | O4b | Divergence against the target tree (not just mainline) + allow-list of the permanent delta (`tools/out-of-tree/delta.txt`); "unexplained divergence" as the progress number, with a per-file worklist | merged (#212) |
 | O5 | Bugs and stale code: double `kfree(pdata)`, lost `out_ipu6_rpm_put`, `ERR_PTR` psys in the probe cleanup, `TBL_PHYS_ADDR(…;)`, `ISP_L2PT_PTES`, duplicate defines, copyright years, older-upstream leftovers | merged (#213) |
 | O6 | Compat into `ipu4-compat.h` with floor 6.12: string namespaces, `kzalloc_obj`; drop 6.6/6.10-gated code | merged (#214) |
-| O7 | Harness out of the driver: `tools/virt-sensor/` + `streamon.c` s_fmt instead of the built-in sensor and route install | in review |
-| O7b | Fix the stub firmware instead of skipping empty `pkg_dir`; the ipu6 legs' done signal instead of "IPU4 PCI driver ready" | |
+| O7 | Harness out of the driver: `tools/virt-sensor/` + `streamon.c` s_fmt instead of the built-in sensor and route install | merged (#216) |
+| O7b | Drop the empty `pkg_dir` entry skip in `ipu6_pkg_dir_configure_spc()` | in review |
 | O8 | `ambu-ipu-bridge` as a pre-probe module that installs the fwnode graph (no hook in `ipu6.c`) | |
 | O9 | Upstream video topology (per-CSI2 video nodes, upstream setup/prepare signatures) | |
 | O10 | Streaming behaviour: drop lazy STREAMON, firmware timeout back to 2 s | |
@@ -177,3 +177,7 @@ the behaviour guard.
   `streamon`'s subdev s_fmt replaces the bind-time route install. The
   sensor builds from a copy per kernel tree (6.12 has no `MO=`). Target
   distance 11057 → 10577.
+- (O7b) The skip was dead code: the stub firmware's package directory
+  entries are valid, and the MMIO trace is unchanged without it. "IPU4
+  PCI driver ready" stays, as Ambu logging: an external test uses it as
+  its done signal. Target distance 10577 → 10560.
