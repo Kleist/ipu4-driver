@@ -75,7 +75,11 @@ fi
 # explicit override (kunit.sh passes the kunit build's copy when only
 # .kunit/ has been built, e.g. on the build-and-kunit CI leg that
 # doesn't run build-kernel.sh).
+# Since 7.4 the kernel builds it in scripts/ instead of usr/.
 GEN="${IPU4_GEN_INIT_CPIO:-$LINUX_DIR/usr/gen_init_cpio}"
+if [[ -z "${IPU4_GEN_INIT_CPIO:-}" && ! -x "$GEN" ]]; then
+	GEN="$LINUX_DIR/scripts/gen_init_cpio"
+fi
 if [[ ! -x "$GEN" ]]; then
 	echo "missing $GEN; run tools/build-kernel.sh first" >&2
 	exit 2
