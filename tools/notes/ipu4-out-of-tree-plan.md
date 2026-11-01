@@ -98,8 +98,8 @@ the behaviour guard.
 | O6 | Compat into `ipu4-compat.h` with floor 6.12: string namespaces, `kzalloc_obj`; drop 6.6/6.10-gated code | merged (#214) |
 | O7 | Harness out of the driver: `tools/virt-sensor/` + `streamon.c` s_fmt instead of the built-in sensor and route install | merged (#216) |
 | O7b | Drop the empty `pkg_dir` entry skip in `ipu6_pkg_dir_configure_spc()` | merged (#217) |
-| O8 | `ambu-ipu-bridge` as a pre-probe module that installs the fwnode graph (no hook in `ipu6.c`) | in review |
-| O9 | Upstream video topology (per-CSI2 video nodes, upstream setup/prepare signatures) | |
+| O8 | `ambu-ipu-bridge` as a pre-probe module that installs the fwnode graph (no hook in `ipu6.c`) | merged (#219) |
+| O9 | Upstream video topology (per-CSI2 video nodes, upstream setup/prepare signatures) | in review |
 | O10 | Streaming behaviour: drop lazy STREAMON, firmware timeout back to 2 s | |
 | O11 | Build every file: `ipu7-*.c`, IPU6 PHYs; drop the IPU7 `#ifdef IPU6` guards | |
 | O12–O14 | Upstream commits 46–88: streams/watermark rework, RPM rework (silent reset redesigned on runtime PM, in its own file), fixes + IPU8 | |
@@ -186,3 +186,11 @@ the behaviour guard.
   attaches the graph at load needs no hook in probe. On Ambu products
   `ambu-ipu-bridge` must now load before `intel-ipu4`, with I2C adapters
   0 and 3 present. Target distance 10560 → 10512.
+- (O9) Diff against upstream at the last ported commit (45,
+  `b38d06ad1e1`), not the pin: the topology delta is then ~400 lines
+  instead of ~1300. `isys->csi2` must be allocated once, in probe, as
+  upstream does: the fork's second allocation in
+  `isys_csi2_register_subdevices()` discarded the video nodes now living
+  in it. `NR_OF_CSI2_SRC_PADS` stays 4 on IPU4 for now (24 capture nodes;
+  the target has 8). Ambu userspace: a capture node now has one fixed
+  link, to its own receiver. Target distance 10512 → 10399.
