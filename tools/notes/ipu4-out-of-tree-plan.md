@@ -100,14 +100,14 @@ the behaviour guard.
 | O7b | Drop the empty `pkg_dir` entry skip in `ipu6_pkg_dir_configure_spc()` | merged (#217) |
 | O8 | `ambu-ipu-bridge` as a pre-probe module that installs the fwnode graph (no hook in `ipu6.c`) | merged (#219) |
 | O9 | Upstream video topology (per-CSI2 video nodes, upstream setup/prepare signatures) | merged (#220) |
-| O10 | Streaming behaviour: drop lazy STREAMON, firmware timeout back to 2 s | in review |
-| O11 | Build every file: `ipu7-*.c`, IPU6 PHYs; drop the IPU7 `#ifdef IPU6` guards | |
+| O10 | Streaming behaviour: drop lazy STREAMON, firmware timeout back to 2 s | merged (#222) |
+| O11 | Build the `ipu7-*.c` sources; drop the IPU7 `#ifdef IPU6` guards | in review |
 | O12–O14 | Upstream commits 46–88: streams/watermark rework, RPM rework (silent reset redesigned on runtime PM, in its own file), fixes + IPU8 | |
 | O15 | Ruslan's IPU4P v2 (`patches/ipu6-ipu4p/`) on top, IPU4 code still in place | |
 | O16 | IPU4 identity + buttress → series 0002, 0003, 0005 | |
 | O17 | MMU → series 0004 (check dropped ZLW writes against silicon) | |
 | O18 | Firmware layer → series 0008 + `ipu4p-fw-isys.[ch]` (drops the IPU4 ABI copy) | |
-| O19 | ISR, CSI-2, iWake → series 0006, 0007, 0009, 0010 (`csi2-sof-irq` enabled for `ipu4-patches` first) | |
+| O19 | ISR, CSI-2, iWake → series 0006, 0007, 0009, 0010 (`csi2-sof-irq` enabled for `ipu4-patches` first); upstream `ipu6-platform-isys-csi2-reg.h` back, so the IPU6 PHYs build | |
 | O20 | PCI enable (series 0011), leftovers, KUnit exports; only the allow-listed delta remains | |
 | O21 | Stay converged: `watch.sh` with real 3-way merges; IPU4P refreshes re-applied the same way | |
 
@@ -199,3 +199,10 @@ the behaviour guard.
   comes in with O12. Ambu userspace must queue buffers before STREAMON:
   without them the stream no longer starts later from `buf_queue`.
   Target distance 10399 → 10370.
+- (O11) The `ipu7-*.c` files are upstream's as of commit 45, so the
+  distance to mainline master rises (4021 → 4513: the IPU8 and later
+  changes in them) while the target distance drops (10370 → 7324: the
+  files are no longer missing). The IPU6 PHYs need upstream's
+  `ipu6-platform-isys-csi2-reg.h`, which holds IPU4 registers here; they
+  move to O19. Files without `ipu4-compat.h` export with a quoted
+  namespace on 6.12, so `ipu7-fw-com.c` includes it.
