@@ -12,9 +12,12 @@ intel-ipu4-y := \
 	ipu6-dma.o \
 	ipu6-mmu.o \
 	ipu6-mmu-hw.o \
+	ipu7-mmu-hw.o \
 	ipu6-buttress.o \
 	ipu6-cpd.o \
-	ipu6-fw-com.o
+	ipu6-fw-com.o \
+	ipu7-fw-com.o \
+	ipu7-boot.o
 
 obj-$(CONFIG_VIDEO_INTEL_IPU4) += intel-ipu4.o
 
@@ -26,9 +29,11 @@ intel-ipu4-isys-y := \
 	ipu6-isys.o \
 	ipu6-isys-csi2.o \
 	ipu6-fw-isys.o \
+	ipu7-fw-isys.o \
 	ipu6-isys-video.o \
 	ipu6-isys-queue.o \
-	ipu6-isys-subdev.o
+	ipu6-isys-subdev.o \
+	ipu7-isys-csi-phy.o
 
 obj-$(CONFIG_VIDEO_INTEL_IPU4) += intel-ipu4-isys.o
 
