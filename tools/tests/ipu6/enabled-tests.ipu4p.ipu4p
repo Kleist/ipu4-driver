@@ -1,7 +1,7 @@
 # Gate of the ipu4p / ipu4p leg: the IPU4P baseline, Ruslan's tree
 # (tools/ipu6/pin) without the IPU4 series, under the IPU4P QEMU model.
-# Owned by the IPU4P variant track (tools/notes/ipu4p-variant-plan.md);
-# each of its PRs enables one more test.
+# Owned by the IPU4P variant track (completed, see "Prior work" in
+# README.md).
 #
 # One test name per line; '#' starts a comment. Every known test runs on
 # every PR, but only the tests listed here fail the job; run

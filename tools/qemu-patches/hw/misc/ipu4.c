@@ -8,8 +8,7 @@
  *
  * The "variant" property (ipu4 | ipu4p | ipu6, default ipu4) selects
  * which IPU the device presents, so the upstream ipu6 driver's test
- * ladder can run against other variants of the shared driver
- * (tools/notes/ipu6-variant-plan.md, tools/notes/ipu4p-variant-plan.md).
+ * ladder can run against other variants of the shared driver.
  * Besides the PCI device ID it switches the registers the driver reads
  * differently on that variant through the hooks in its ipu4_variants[]
  * entry; everything else is IPU4's model.

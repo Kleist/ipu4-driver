@@ -56,7 +56,7 @@ Two helpers under `tools/upstream/`, both relying on the same file mapping (`dri
 
 ## ipu6 flavor (upstream ipu6 driver + IPU4 patch series)
 
-A second, parallel flow adds IPU4 to the upstream `drivers/media/pci/intel/ipu6/` driver as mailable patches. It never touches `tools/linux/` or `kernel/ipu4/`. Three tracks work on it in parallel, each with its own plan (re-read it before, and update it at the end of, every step) and its own line of PRs: the IPU4 port (`tools/notes/ipu6-ipu4-plan.md`, which also holds the test table), the IPU6 QEMU variant (`tools/notes/ipu6-variant-plan.md`) and the IPU4P QEMU variant (`tools/notes/ipu4p-variant-plan.md`):
+A second, parallel flow adds IPU4 to the upstream `drivers/media/pci/intel/ipu6/` driver as mailable patches. It never touches `tools/linux/` or `kernel/ipu4/`. Each track working on it has its own plan (re-read it before, and update it at the end of, every step) and its own line of PRs: the IPU4 port (`tools/notes/ipu6-ipu4-plan.md`, which also holds the test table) and the out-of-tree baseline (`tools/notes/ipu4-out-of-tree-plan.md`). The completed IPU6 and IPU4P QEMU variant plans are linked under "Prior work" in `README.md`:
 
 ```bash
 tools/ipu6/bootstrap.sh       # tools/linux-ipu6/ = mainline pin (tools/ipu6/pin) + git am patches/ipu6-ipu4p/, ipu6-fixes/, ipu6-ipu4/
