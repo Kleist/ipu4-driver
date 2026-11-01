@@ -53,3 +53,7 @@ auth-error
 
 # Other sensor formats stream (module-load boot).
 stream-formats
+
+# The silent reset restarts a running stream when another node is opened
+# while the ISYS needs a reset (module-load boot; this driver only).
+silent-reset
