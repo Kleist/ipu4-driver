@@ -94,8 +94,7 @@ at the end of every run (schema 1):
   "generated_at": "2026-10-10T12:14:40Z",
   "commit_sha": "…", "run_id": "…", "run_url": "…",   // null outside CI
   "pin": {"url": "https://github.com/torvalds/linux.git", "sha": "…", "tag": "v7.3-rc4"},
-  "base_series": [{"dir": "patches/ipu6-ipu7", "count": 45},   // applied before `series`
-                  {"dir": "patches/ipu6-ipu4p", "count": 11}],
+  "base_series": [{"dir": "patches/ipu6-ipu4p", "count": 12}],  // applied before `series`
   "series": {"count": 1, "patches": [{"file": "0001-….patch", "subject": "media: ipu6: …"}]},
   "enabled_tests": "tools/tests/ipu6/enabled-tests.ipu4-patches.ipu4",
   "exit_status": 0,

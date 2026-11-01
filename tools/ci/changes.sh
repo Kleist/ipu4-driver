@@ -76,7 +76,7 @@ classify() {
 		HIT[pytest]=true; HIT[vm_smoke]=true; HIT[ipu6]=true ;;
 
 	# ipu6 and out-of-tree flavors (the ladder).
-	patches/ipu6-ipu4/* | patches/ipu6-ipu7/* | patches/ipu6-ipu4p/* | patches/ipu6-fixes/* | tools/ipu6/* | tools/out-of-tree/* | \
+	patches/ipu6-ipu4/* | patches/ipu6-ipu4p/* | patches/ipu6-fixes/* | tools/ipu6/* | tools/out-of-tree/* | \
 	tools/tests/ipu6/* | tools/virt-sensor/*)
 		HIT[ipu6]=true ;;
 	# Line coverage of a ladder leg (IPU4_GCOV=1); the rest of

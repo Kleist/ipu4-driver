@@ -137,7 +137,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ matrix.linux-dir }}
-          key: ${{ matrix.cache }}-${{ hashFiles(matrix.pin) }}-${{ hashFiles('patches/ipu6-ipu7/**', 'patches/ipu6-ipu4p/**', 'patches/ipu6-fixes/**', 'patches/ipu6-ipu4/**', 'tools/ipu6/*.sh', 'tools/out-of-tree/*.sh', 'tools/build-kernel.sh', 'tools/vm-kconfig.sh') }}
+          key: ${{ matrix.cache }}-${{ hashFiles(matrix.pin) }}-${{ hashFiles('patches/ipu6-ipu4p/**', 'patches/ipu6-fixes/**', 'patches/ipu6-ipu4/**', 'tools/ipu6/*.sh', 'tools/out-of-tree/*.sh', 'tools/build-kernel.sh', 'tools/vm-kconfig.sh') }}
           restore-keys: |
             ${{ matrix.cache }}-${{ hashFiles(matrix.pin) }}-
 

@@ -195,8 +195,7 @@ jobs:
           body: |
             Auto-generated weekly bump of `tools/ipu6/pin` to the newest
             mainline tag. vm-ipu6's `series-applies` shows whether
-            `patches/ipu6-ipu7/`, `patches/ipu6-ipu4p/` and `patches/ipu6-ipu4/`
-            still apply.
+            `patches/ipu6-ipu4p/` and `patches/ipu6-ipu4/` still apply.
 
             ```
             ${{ steps.rewrite.outputs.summary }}
