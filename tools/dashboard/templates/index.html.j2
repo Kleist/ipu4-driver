@@ -121,9 +121,70 @@
   {% endif %}
 </section>
 
+<section class="card" id="upstream">
+  <h2>Upstream divergence (kernel/ipu4 vs IPU6)</h2>
+  {% if upstream.diff %}
+  <p>
+    Upstream pin: <code>{{ upstream.diff.upstream_pin }}</code> ·
+    {{ upstream.diff.files_differ }} files differ ·
+    {{ upstream.diff.hunks }} hunks ·
+    +{{ upstream.diff.plus }} / −{{ upstream.diff.minus }} lines
+  </p>
+  {% else %}
+  <p class="empty">Diff not regenerated — run <code>tools/upstream/diff.sh</code>.</p>
+  {% endif %}
+  <h3>Divergence over time</h3>
+  {% if upstream.history and upstream.history.points %}
+  <p class="meta">
+    Lines changed (added + removed) between <code>kernel/ipu4/</code> (and the
+    path the driver had before) and upstream <code>{{ upstream.history.upstream_path }}</code>,
+    local-only files excluded. Big markers are mainline releases, compared with our tree at
+    the release date; dots are up to ten of our commits per release interval, compared with
+    the newest tag (release or -rc) before them. Before v6.10 upstream has no ipu6 driver, so
+    every line counts. Commit dates are author dates raised to the latest earlier driver
+    commit's date (rebases and cherry-picks keep old author dates).
+    {% if upstream.history.master %}Today against upstream master
+    ({{ upstream.history.master.date[:10] }}): <strong>{{ upstream.history.master.divergence }}</strong> lines.{% endif %}
+  </p>
+  <canvas id="upstream-trend" height="90"></canvas>
+  {% if upstream.history.target %}
+  <h3>Distance to the convergence target</h3>
+  <p>
+    <strong>{{ upstream.history.target.divergence }}</strong> lines of unexplained divergence
+    from the target tree: mainline <code>{{ upstream.history.target.pin[:12] }}</code>
+    {% for s, n in upstream.history.target.series.items() %}+ <code>patches/{{ s }}</code> ({{ n }}) {% endfor %}
+    — outside the permanent delta in <code>tools/out-of-tree/delta.txt</code>. The plan is
+    "Convergence" in <code>tools/notes/ipu4-out-of-tree-plan.md</code>; the trend is
+    the orange line above.
+  </p>
+  <details>
+    <summary>{{ upstream.history.target.files|length }} files to converge</summary>
+    <table>
+      <thead><tr><th>File</th><th>Status</th><th>Lines</th></tr></thead>
+      <tbody>
+      {% for f in upstream.history.target.files %}
+        <tr><td><code>{{ f.name }}</code></td><td>{{ f.status }}</td><td>{{ f.lines }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% endif %}
+  <script id="upstream-history-data" type="application/json">{{ upstream.history | json_dump | safe }}</script>
+  {% else %}
+  <p class="empty">No history — run <code>tools/upstream/divergence_history.py --fetch --linux &lt;dir&gt;</code>.</p>
+  {% endif %}
+  <h3>Upstream-watch state</h3>
+  <ul class="watch-state">
+    {% for branch, ref in upstream.watch.last_seen.items() %}
+    <li><code>{{ branch }}</code> {% if ref == "INIT_AT_FIRST_RUN" %}<span class="empty">not set up yet (no watcher run has merged)</span>{% else %}last seen at <code>{{ ref[:12] }}</code>{% endif %}</li>
+    {% endfor %}
+  </ul>
+  <p class="meta">{{ upstream.watch.processed_patch_ids|length }} patch-ids deduped to date</p>
+</section>
+
 <details class="card" id="harness">
   <summary><h2>Out-of-tree QEMU harness (vm-smoke)</h2></summary>
-  <p class="meta">Coverage and silicon-vs-QEMU MMIO divergence of <code>kernel/ipu4/</code> on 6.12, register handlers of the IPU4 model and upstream divergence.</p>
+  <p class="meta">Coverage and silicon-vs-QEMU MMIO divergence of <code>kernel/ipu4/</code> on 6.12, and register handlers of the IPU4 model.</p>
   <section class="sub">
     <h3>Code coverage</h3>
     {% if coverage.summary %}
@@ -203,67 +264,6 @@
         </tbody>
       </table>
     </details>
-  </section>
-  
-  <section class="sub">
-    <h3>Upstream divergence (kernel/ipu4 vs IPU6)</h3>
-    {% if upstream.diff %}
-    <p>
-      Upstream pin: <code>{{ upstream.diff.upstream_pin }}</code> ·
-      {{ upstream.diff.files_differ }} files differ ·
-      {{ upstream.diff.hunks }} hunks ·
-      +{{ upstream.diff.plus }} / −{{ upstream.diff.minus }} lines
-    </p>
-    {% else %}
-    <p class="empty">Diff not regenerated — run <code>tools/upstream/diff.sh</code>.</p>
-    {% endif %}
-    <h4>Divergence over time</h4>
-    {% if upstream.history and upstream.history.points %}
-    <p class="meta">
-      Lines changed (added + removed) between <code>kernel/ipu4/</code> (and the
-      path the driver had before) and upstream <code>{{ upstream.history.upstream_path }}</code>,
-      local-only files excluded. Big markers are mainline releases, compared with our tree at
-      the release date; dots are up to ten of our commits per release interval, compared with
-      the newest tag (release or -rc) before them. Before v6.10 upstream has no ipu6 driver, so
-      every line counts. Commit dates are author dates raised to the latest earlier driver
-      commit's date (rebases and cherry-picks keep old author dates).
-      {% if upstream.history.master %}Today against upstream master
-      ({{ upstream.history.master.date[:10] }}): <strong>{{ upstream.history.master.divergence }}</strong> lines.{% endif %}
-    </p>
-    <canvas id="upstream-trend" height="90"></canvas>
-    {% if upstream.history.target %}
-    <h4>Distance to the convergence target</h4>
-    <p>
-      <strong>{{ upstream.history.target.divergence }}</strong> lines of unexplained divergence
-      from the target tree: mainline <code>{{ upstream.history.target.pin[:12] }}</code>
-      {% for s, n in upstream.history.target.series.items() %}+ <code>patches/{{ s }}</code> ({{ n }}) {% endfor %}
-      — outside the permanent delta in <code>tools/out-of-tree/delta.txt</code>. The plan is
-      "Convergence" in <code>tools/notes/ipu4-out-of-tree-plan.md</code>; the trend is
-      the orange line above.
-    </p>
-    <details>
-      <summary>{{ upstream.history.target.files|length }} files to converge</summary>
-      <table>
-        <thead><tr><th>File</th><th>Status</th><th>Lines</th></tr></thead>
-        <tbody>
-        {% for f in upstream.history.target.files %}
-          <tr><td><code>{{ f.name }}</code></td><td>{{ f.status }}</td><td>{{ f.lines }}</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </details>
-    {% endif %}
-    <script id="upstream-history-data" type="application/json">{{ upstream.history | json_dump | safe }}</script>
-    {% else %}
-    <p class="empty">No history — run <code>tools/upstream/divergence_history.py --fetch --linux &lt;dir&gt;</code>.</p>
-    {% endif %}
-    <h4>Upstream-watch state</h4>
-    <ul class="watch-state">
-      {% for branch, ref in upstream.watch.last_seen.items() %}
-      <li><code>{{ branch }}</code> {% if ref == "INIT_AT_FIRST_RUN" %}<span class="empty">not set up yet (no watcher run has merged)</span>{% else %}last seen at <code>{{ ref[:12] }}</code>{% endif %}</li>
-      {% endfor %}
-    </ul>
-    <p class="meta">{{ upstream.watch.processed_patch_ids|length }} patch-ids deduped to date</p>
   </section>
 </details>
 

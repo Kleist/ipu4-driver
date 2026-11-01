@@ -2,9 +2,9 @@
 
 Renders a single-page GitHub Pages site with the project's current
 state: the test ladder per leg, the supported kernel tracks with their
-latest build + KUnit result and, collapsed, the
-out-of-tree harness's coverage, MMIO divergence, register coverage and
-upstream divergence.
+latest build + KUnit result, the upstream divergence and, collapsed,
+the out-of-tree harness's coverage, MMIO divergence and register
+coverage.
 
 Deployed by `.github/workflows/pages.yml` via `actions/deploy-pages`
 on every push to `main`, every `vm-smoke` / `vm-ipu6` completion, and
