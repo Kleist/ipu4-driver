@@ -187,8 +187,8 @@ the PR is split rather than enabling nothing.
 
 ## Tracks and file ownership
 
-Four tracks work in parallel, each with its own plan and at most one open
-PR at a time, from `main` (`CLAUDE.md`). The ladder (`vm-ipu6.yml`,
+Four tracks, each with its own plan (the two variant tracks are complete)
+and at most one open PR at a time, from `main` (`CLAUDE.md`). The ladder (`vm-ipu6.yml`,
 `ladder.sh`) runs six legs: each QEMU model variant under its baseline
 driver and under `ipu4-patches`. A track owns its driver's gate files,
 `tools/tests/ipu6/enabled-tests.<driver>.<variant>`:
@@ -196,8 +196,8 @@ driver and under `ipu4-patches`. A track owns its driver's gate files,
 | Track | Plan | Driver | Owns |
 |---|---|---|---|
 | IPU4 (out-of-tree baseline) | [`tools/notes/ipu4-out-of-tree-plan.md`](ipu4-out-of-tree-plan.md) | `ipu4-out-of-tree`: `kernel/ipu4/` on v7.3-rc4 | `enabled-tests.ipu4-out-of-tree.*` |
-| IPU4P variant (baseline) | [`tools/notes/ipu4p-variant-plan.md`](ipu4p-variant-plan.md) | `ipu4p`: mainline pin + `patches/ipu6-ipu4p/` | `enabled-tests.ipu4p.*` |
-| IPU6 variant (baseline) | [`tools/notes/ipu6-variant-plan.md`](ipu6-variant-plan.md) | `ipu6`: mainline pin, no series (`tools/ipu6/pin.upstream`) | `enabled-tests.ipu6.*` |
+| IPU4P variant (baseline) | [completed](https://github.com/Kleist/ipu4-driver/blob/b5d863094d9c7e2cb2ce711713a75761c4bdd2ac/tools/notes/ipu4p-variant-plan.md) | `ipu4p`: mainline pin + `patches/ipu6-ipu4p/` | `enabled-tests.ipu4p.*` |
+| IPU6 variant (baseline) | [completed](https://github.com/Kleist/ipu4-driver/blob/b5d863094d9c7e2cb2ce711713a75761c4bdd2ac/tools/notes/ipu6-variant-plan.md) | `ipu6`: mainline pin, no series (`tools/ipu6/pin.upstream`) | `enabled-tests.ipu6.*` |
 | IPU4 port (this plan) | `tools/notes/ipu6-ipu4-plan.md` | `ipu4-patches`: the `ipu4p` tree + the series | `patches/ipu6-ipu4/`, `enabled-tests.ipu4-patches.*` |
 
 The three unmodified drivers are the baselines tests are developed

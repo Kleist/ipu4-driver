@@ -1,7 +1,6 @@
 # Gate of the ipu6 / ipu6 leg: the IPU6 baseline, unmodified mainline
 # (tools/ipu6/pin.upstream), under the IPU6 QEMU model. Owned by the IPU6
-# variant track (tools/notes/ipu6-variant-plan.md); each of its PRs
-# enables one more test.
+# variant track (completed, see "Prior work" in README.md).
 #
 # One test name per line; '#' starts a comment. Every known test runs on
 # every PR, but only the tests listed here fail the job; run

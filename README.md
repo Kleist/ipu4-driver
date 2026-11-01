@@ -35,7 +35,7 @@ tools/tests/ipu6/ladder.sh                                    # default leg
 IPU4_DRIVER=ipu6 IPU4_VARIANT=ipu6 tools/tests/ipu6/ladder.sh  # another leg
 ```
 
-Plans: `tools/notes/ipu6-ipu4-plan.md` (the series), `ipu4-out-of-tree-plan.md`, `ipu4p-variant-plan.md`, `ipu6-variant-plan.md`.
+Plans: `tools/notes/ipu6-ipu4-plan.md` (the series), `ipu4-out-of-tree-plan.md`. Completed plans are under [Prior work](#prior-work).
 
 ### Out-of-tree harness (`ci.yml`, `vm-smoke.yml`)
 
@@ -59,6 +59,13 @@ See [CLAUDE.md](CLAUDE.md) for prerequisites, all commands and CI details, and [
 ## History
 
 Derived from the upstream IPU6 driver and the IPU4 driver in Clear Linux ([linux-iot-lts2018](https://github.com/clearlinux-pkgs/linux-iot-lts2018)). IPU4 support was first hacked onto IPU6 on 6.6 ([lore](https://lore.kernel.org/all/e136389011517dbc65b30f6bf0b1a9c49ab4e599.camel@gmail.com/), [branch](https://github.com/Kleist/linux/tree/kleist-v6.6-ipu4-hacks-1)), then turned into this out-of-tree module.
+
+## Prior work
+
+Completed plans, linked at their final version:
+
+- [IPU4P QEMU variant](https://github.com/Kleist/ipu4-driver/blob/b5d863094d9c7e2cb2ce711713a75761c4bdd2ac/tools/notes/ipu4p-variant-plan.md): the `ipu4p` baseline (Ruslan Bay's IPU4P series) passes the whole ladder under the `variant=ipu4p` model.
+- [IPU6 QEMU variant](https://github.com/Kleist/ipu4-driver/blob/b5d863094d9c7e2cb2ce711713a75761c4bdd2ac/tools/notes/ipu6-variant-plan.md): unmodified mainline passes the whole ladder under the `variant=ipu6` model.
 
 ## License
 
