@@ -158,7 +158,8 @@ def _ipu6_port(root: Path, repo: str, ladder_dirs: list[str], run_id: str | None
     return port
 
 
-def _append_history(out_dir: Path, payload: dict, vm_smoke_run_id: str | None) -> dict:
+def _append_history(out_dir: Path, payload: dict, vm_smoke_run_id: str | None,
+                    vm_ipu6_run_id: str | None = None) -> dict:
     history_path = out_dir / "data" / "history.json"
     history = _read_json(history_path) or {"schema": 1, "points": []}
     points = history.get("points") or []
@@ -172,6 +173,7 @@ def _append_history(out_dir: Path, payload: dict, vm_smoke_run_id: str | None) -
         "ts": payload["generated_at"],
         "sha": payload.get("commit_sha"),
         "vm_smoke_run_id": vm_smoke_run_id,
+        "vm_ipu6_run_id": vm_ipu6_run_id,
         "coverage": {
             "lines_pct": ((cov.get("lines") or {}).get("pct")),
             "functions_pct": ((cov.get("functions") or {}).get("pct")),
@@ -258,7 +260,8 @@ def main(argv=None):
         "ipu6_port": _ipu6_port(root, args.repo, args.ipu6_ladder_dir, args.vm_ipu6_run_id,
                                 args.ipu6_ladder_coverage_dir),
     }
-    payload["history"] = _append_history(out_dir, payload, args.vm_smoke_run_id)
+    payload["history"] = _append_history(out_dir, payload, args.vm_smoke_run_id,
+                                         args.vm_ipu6_run_id)
 
     json.dump(payload, sys.stdout, indent=2)
     return 0

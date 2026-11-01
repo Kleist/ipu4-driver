@@ -368,14 +368,41 @@
   }));
   legs.sort((a, b) => a.split('/')[1].localeCompare(b.split('/')[1]) ||
     a.startsWith('ipu4-patches/') - b.startsWith('ipu4-patches/'));
-  lineCfg('ladder-coverage-trend', legs.map(l => ({
-    label: l,
-    data: points.map(p => (p.ladder_coverage || {})[l] ?? null),
-    borderColor: variantColors[l.split('/')[1]] || '#d8c46a',
-    borderDash: l.startsWith('ipu4-patches/') ? [] : [5, 4],
-    spanGaps: true,
-    tension: 0.2,
-  })));
+  // Every pages run re-reads the newest vm-ipu6 run, so keep one point per
+  // vm-ipu6 run (older points without a run id: per change of values), plus
+  // the newest, and plot them on a time axis.
+  const covKey = p => p.vm_ipu6_run_id || JSON.stringify(p.ladder_coverage);
+  const covPts = points.filter(p => Object.keys(p.ladder_coverage || {}).length)
+    .filter((p, i, a) => i === 0 || i === a.length - 1 || covKey(p) !== covKey(a[i - 1]));
+  const stamp = ts => new Date(ts).toISOString().slice(0, 16).replace('T', ' ');
+  const covEl = document.getElementById('ladder-coverage-trend');
+  if (covEl && covPts.length) new Chart(covEl, {
+    type: 'line',
+    data: { datasets: legs.map(l => ({
+      label: l,
+      data: covPts.filter(p => p.ladder_coverage[l] != null)
+        .map(p => ({ x: Date.parse(p.ts), y: p.ladder_coverage[l], sha: p.sha || '' })),
+      borderColor: variantColors[l.split('/')[1]] || '#d8c46a',
+      backgroundColor: variantColors[l.split('/')[1]] || '#d8c46a',
+      borderDash: l.startsWith('ipu4-patches/') ? [] : [5, 4],
+      pointRadius: 3,
+    })) },
+    options: {
+      responsive: true,
+      parsing: false,
+      plugins: {
+        legend: { position: 'bottom' },
+        tooltip: { callbacks: {
+          title: items => stamp(items[0].raw.x) + ' · ' + items[0].raw.sha.slice(0, 7),
+          label: item => item.dataset.label + ': ' + item.raw.y.toFixed(1) + '%',
+        } },
+      },
+      scales: {
+        x: { type: 'linear', ticks: { callback: v => stamp(v), maxTicksLimit: 8 } },
+        y: { title: { display: true, text: 'driver lines %' } },
+      },
+    },
+  });
   lineCfg('mmio-trend', [
     { label: 'unimplemented', data: points.map(p => (p.mmio || {}).unimplemented ?? null), borderColor: '#e08e6e', tension: 0.2 },
     { label: 'value mismatch', data: points.map(p => (p.mmio || {}).value_mismatch ?? null), borderColor: '#d8c46a', tension: 0.2 },

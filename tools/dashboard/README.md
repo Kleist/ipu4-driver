@@ -28,7 +28,8 @@ history.
 `build.sh` reads `$OUT_DIR/data/history.json` (if present), appends a
 new datapoint with the current SHA / coverage % / MMIO divergence
 counts / driver line coverage per ladder leg (`ladder_coverage`,
-`{"<driver>/<variant>": pct}`), and writes it back into the new
+`{"<driver>/<variant>": pct}`, from vm-ipu6 run `vm_ipu6_run_id`; the
+chart keeps one point per run), and writes it back into the new
 artifact. Multiple triggers
 on the same SHA (push + vm-smoke completion + cron) refresh the same
 point rather than appending duplicates. History is capped at 365
