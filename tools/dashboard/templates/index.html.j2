@@ -217,6 +217,24 @@
     {% else %}
     <p class="empty">Diff not regenerated — run <code>tools/upstream/diff.sh</code>.</p>
     {% endif %}
+    <h4>Divergence over time</h4>
+    {% if upstream.history and upstream.history.points %}
+    <p class="meta">
+      Lines changed (added + removed) between <code>kernel/ipu4/</code> (and the
+      path the driver had before) and upstream <code>{{ upstream.history.upstream_path }}</code>,
+      local-only files excluded. Big markers are mainline releases, compared with our tree at
+      the release date; dots are up to ten of our commits per release interval, compared with
+      the newest tag (release or -rc) before them. Before v6.10 upstream has no ipu6 driver, so
+      every line counts. Commit dates are author dates raised to the latest earlier driver
+      commit's date (rebases and cherry-picks keep old author dates).
+      {% if upstream.history.master %}Today against upstream master
+      ({{ upstream.history.master.date[:10] }}): <strong>{{ upstream.history.master.divergence }}</strong> lines.{% endif %}
+    </p>
+    <canvas id="upstream-trend" height="90"></canvas>
+    <script id="upstream-history-data" type="application/json">{{ upstream.history | json_dump | safe }}</script>
+    {% else %}
+    <p class="empty">No history — run <code>tools/upstream/divergence_history.py --fetch --linux &lt;dir&gt;</code>.</p>
+    {% endif %}
     <h4>Upstream-watch state</h4>
     <ul class="watch-state">
       {% for branch, ref in upstream.watch.last_seen.items() %}
@@ -234,6 +252,58 @@
 <script id="history-data" type="application/json">{{ history | json_dump | safe }}</script>
 <script>
 (function () {
+  const upEl = document.getElementById('upstream-history-data');
+  const upCanvas = document.getElementById('upstream-trend');
+  if (upEl && upCanvas) {
+    const up = JSON.parse(upEl.textContent);
+    const pts = up.points.map(p => ({ x: p.ts, y: p.divergence, p }));
+    const day = ts => new Date(ts).toISOString().slice(0, 10);
+    new Chart(upCanvas, {
+      type: 'line',
+      data: {
+        datasets: [
+          { label: 'kernel/ipu4 vs upstream', data: pts, borderColor: '#74a9ff',
+            pointRadius: c => (c.raw && c.raw.p.kind === 'tag' ? 6 : 2),
+            pointStyle: c => (c.raw && c.raw.p.kind === 'tag' ? 'rectRot' : 'circle'),
+            pointBackgroundColor: c => (c.raw && c.raw.p.kind === 'tag' ? '#d8c46a' : '#74a9ff'),
+            stepped: false, tension: 0 },
+          ...(up.master ? [{ label: 'HEAD vs upstream master', showLine: false,
+            data: [{ x: Date.parse(up.master.date), y: up.master.divergence,
+                     p: Object.assign({ kind: 'master', ref: 'master', ts: Date.parse(up.master.date),
+                                        sha: up.master.sha, subject: '' }, up.master) }],
+            pointStyle: 'star', pointRadius: 9, borderColor: '#e08e6e', backgroundColor: '#e08e6e' }] : []),
+        ],
+      },
+      options: {
+        responsive: true,
+        parsing: false,
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: { callbacks: {
+            title: items => {
+              const p = items[0].raw.p;
+              if (p.kind === 'master') return 'HEAD vs upstream master ' + p.sha.slice(0, 12) + ' (' + day(p.ts) + ')';
+              return p.kind === 'tag' ? p.ref + ' (' + day(p.ts) + ')'
+                : p.sha.slice(0, 12) + ' ' + day(p.ts);
+            },
+            label: item => {
+              const p = item.raw.p;
+              const out = [p.divergence + ' lines vs ' + p.ref,
+                p.files + ' files, ' + p.lines + ' lines; ' + p.files_missing_upstream + ' not upstream'];
+              if (p.upstream_only_files) out.push(p.upstream_only_files + ' upstream-only files (' + p.upstream_only_lines + ' lines)');
+              if (p.subject) out.push(p.kind === 'tag' ? 'tree at ' + p.sha.slice(0, 12) + ': ' + p.subject : p.subject);
+              return out;
+            },
+          } },
+        },
+        scales: {
+          x: { type: 'linear', ticks: { callback: v => day(v), maxTicksLimit: 12 } },
+          y: { beginAtZero: true, title: { display: true, text: 'lines' } },
+        },
+      },
+    });
+  }
+
   const raw = document.getElementById('history-data').textContent;
   const history = JSON.parse(raw);
   const points = (history && history.points) || [];
