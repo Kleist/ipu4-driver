@@ -103,8 +103,8 @@ the behaviour guard.
 | O10 | Streaming behaviour: drop lazy STREAMON, firmware timeout back to 2 s | merged (#222) |
 | O11 | Build the `ipu7-*.c` sources; drop the IPU7 `#ifdef IPU6` guards | merged (#223) |
 | O12 | Upstream commits 46–63: streams/watermark rework | merged (#224) |
-| O12b | `silent-reset` ladder test (out-of-tree leg), so O13 is checked against it | in review |
-| O13 | Upstream commits 64–69: RPM rework | ready, after O12b |
+| O12b | `silent-reset` ladder test (out-of-tree leg), so O13 is checked against it | merged (#225) |
+| O13 | Upstream commits 64–69: RPM rework | in review |
 | O13b | Silent reset redesigned on runtime PM, in its own file (`ambu-silent-reset.c`) | |
 | O14 | Upstream commits 70–88: fixes + IPU8 | |
 | O15 | Ruslan's IPU4P v2 (`patches/ipu6-ipu4p/`) on top, IPU4 code still in place | |
@@ -229,3 +229,14 @@ the behaviour guard.
   mutex it held, and stream on needs a queued buffer, which the
   application holds at that point. Fixed in the same PR (stream_mutex
   only; with no buffer queued, stream on at the next `buf_queue`).
+- (O13) Firmware open/close moves to the runtime-PM callbacks, so the
+  silent reset's `fw_get()`/`fw_put()` wrappers go with upstream's
+  `fw_open()`/`fw_close()`; stream start and the restart already share
+  `stream_mutex`. ipu6-fixes 0002 (close only an opened firmware at
+  suspend) is folded into 65, and the IPU4 ISR uses
+  `pm_runtime_get_if_active()` like upstream's. 67 came with O12.
+  The restart must hold a runtime-PM reference: otherwise stream off
+  lets runtime suspend close the firmware before the restart's own
+  close, a NULL dereference that `silent-reset` hit in 4 of 12 runs
+  (now 15/15). `silent-reset` passes. Target distance 5888 → 5682, mainline
+  3087 → 2895.
