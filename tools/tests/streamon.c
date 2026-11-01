@@ -15,6 +15,10 @@
  * its sink pad is first set to the sensor's 800x800 RGB888 format
  * ("SUBDEV:s_fmt"), which the upstream driver does not default to.
  *
+ * STREAMON_PAUSE=FILE stops after the first frame ("STREAM:paused")
+ * until FILE exists, with the stream still on, so another process can act
+ * on the running stream before the STREAMON_REQUEUE frames.
+ *
  * STREAMON_FMT=CODE:FOURCC streams another format: CODE is the media
  * bus code (hex) set on SUBDEV and, with STREAMON_SENSOR=SUBDEV, on the
  * sensor's pad first; FOURCC the capture pixel format.
@@ -379,6 +383,19 @@ int main(int argc, char **argv)
 			return 1;
 		}
 		printf("STREAM:pattern_ok seq=%u bytes=%zu\n", seq, len);
+	}
+
+	const char *pause_file = getenv("STREAMON_PAUSE");
+
+	if (pause_file) {
+		printf("STREAM:paused\n");
+		fflush(stdout);
+		for (i = 0; i < 300 && access(pause_file, F_OK); i++)
+			usleep(100000);
+		if (i == 300) {
+			printf("STREAM:fail step=pause (no %s)\n", pause_file);
+			return 1;
+		}
 	}
 
 	/* STREAMON_REQUEUE=N: give the buffer back while streaming and take
