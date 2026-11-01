@@ -21,11 +21,9 @@
 #include <linux/types.h>
 #include <linux/vmalloc.h>
 
-#ifdef IPU6
 #include <media/ipu-bridge.h>
+#ifdef IPU6
 #include <media/ipu6-pci-table.h>
-#else
-#include "ambu-ipu-bridge.h"
 #endif
 
 #include "ipu6.h"
@@ -384,22 +382,6 @@ void ipu6_configure_spc(struct ipu6_device *isp,
 }
 EXPORT_SYMBOL_NS_GPL(ipu6_configure_spc, "INTEL_IPU6");
 
-static int ipu6_isys_check_fwnode_graph(struct fwnode_handle *fwnode)
-{
-	struct fwnode_handle *endpoint;
-
-	if (IS_ERR_OR_NULL(fwnode))
-		return -EINVAL;
-
-	endpoint = fwnode_graph_get_next_endpoint(fwnode, NULL);
-	if (endpoint) {
-		fwnode_handle_put(endpoint);
-		return 0;
-	}
-
-	return ipu6_isys_check_fwnode_graph(fwnode->secondary);
-}
-
 #define IPU6_ISYS_CSI2_NPORTS		4
 #define IPU6SE_ISYS_CSI2_NPORTS		4
 #define IPU6_TGL_ISYS_CSI2_NPORTS	8
@@ -494,39 +476,17 @@ ipu6_isys_init(struct pci_dev *pdev, struct device *parent,
 	       const struct ipu6_buttress_ctrl *ctrl, void __iomem *base,
 	       const struct ipu6_isys_internal_pdata *ipdata)
 {
-#ifndef IPU6
-	struct fwnode_handle *fwnode = dev_fwnode(&pdev->dev);
-#endif
 	struct device *dev = &pdev->dev;
 	struct ipu6_bus_device *isys_adev;
 	struct ipu6_buttress_ctrl *devm_ctrl;
 	struct ipu6_isys_pdata *pdata;
 	int ret;
 
-#ifdef IPU6
 	ret = ipu_bridge_init(dev, ipu_bridge_parse_ssdb);
 	if (ret) {
 		dev_err_probe(dev, ret, "IPU6 bridge init failed\n");
 		return ERR_PTR(ret);
 	}
-#else
-	/* check fwnode at first, fallback into bridge if no fwnode graph */
-	ret = ipu6_isys_check_fwnode_graph(fwnode);
-	if (ret) {
-		if (fwnode && !IS_ERR_OR_NULL(fwnode->secondary)) {
-			dev_err(&pdev->dev,
-				"fwnode graph has no endpoints connection\n");
-			return ERR_PTR(-EINVAL);
-		}
-
-		ret = ambu_ipu_bridge_init(dev);
-		if (ret) {
-			if (ret != -EPROBE_DEFER)
-				dev_err_probe(dev, ret, "IPU6 bridge init failed\n");
-			return ERR_PTR(ret);
-		}
-	}
-#endif
 
 	devm_ctrl = devm_kmemdup(dev, ctrl, sizeof(*ctrl), GFP_KERNEL);
 	if (!devm_ctrl)
@@ -894,12 +854,12 @@ static int ipu6_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 				   psys_base, &psys_ipdata);
 	if (IS_ERR(isp->psys)) {
 		ret = PTR_ERR(isp->psys);
-		goto out_ipu_bridge_uninit;
+		goto out_ipu6_bus_del_devices;
 	}
 
 	ret = pm_runtime_resume_and_get(&isp->psys->auxdev.dev);
 	if (ret < 0)
-		goto out_ipu_bridge_uninit;
+		goto out_ipu6_bus_del_devices;
 
 	ret = ipu6_mmu_hw_init(isp->psys->mmu);
 	if (ret) {
@@ -955,8 +915,6 @@ out_free_irq:
 	devm_free_irq(dev, pdev->irq, isp);
 out_ipu6_rpm_put:
 	pm_runtime_put_sync(&isp->psys->auxdev.dev);
-out_ipu_bridge_uninit:
-	ambu_ipu_bridge_uninit(&pdev->dev);
 out_ipu6_bus_del_devices:
 	dir = IS_IPU7(isp) ? DMA_BIDIRECTIONAL : DMA_TO_DEVICE;
 	if (!IS_ERR_OR_NULL(isp->psys)) {
@@ -1018,8 +976,6 @@ static void ipu6_pci_remove(struct pci_dev *pdev)
 
 	ipu6_mmu_cleanup(psys_mmu);
 	ipu6_mmu_cleanup(isys_mmu);
-
-	ambu_ipu_bridge_uninit(&pdev->dev);
 }
 
 static void ipu6_pci_reset_prepare(struct pci_dev *pdev)

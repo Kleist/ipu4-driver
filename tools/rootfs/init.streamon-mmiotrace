@@ -59,7 +59,7 @@ echo "MMIOTRACE: tracer armed (current_tracer=$active)"
 # ---- Driver load (shape from init.streamon) ----
 for m in v4l2-async v4l2-fwnode \
 	videobuf2-common videobuf2-memops videobuf2-v4l2 videobuf2-dma-sg \
-	virt-sensor ambu-ipu-bridge intel-ipu4; do
+	virt-sensor intel-ipu4; do
 	ko=/lib/modules/$m.ko
 	[ -f "$ko" ] || continue
 	insmod "$ko" dyndbg=+p 2>&1 || true

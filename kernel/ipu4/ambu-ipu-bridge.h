@@ -99,7 +99,4 @@ struct ipu_bridge {
 	struct ipu_sensor sensors[IPU_MAX_PORTS];
 };
 
-int ambu_ipu_bridge_init(struct device *dev);
-void ambu_ipu_bridge_uninit(struct device *dev);
-
 #endif
