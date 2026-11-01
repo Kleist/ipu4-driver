@@ -583,14 +583,28 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 		ipu6_isys_get_isys_format(ipu6_isys_get_format(av), 0);
 	struct ipu6_isys_buffer_list __bl, *bl = NULL;
 	struct ipu6_isys_stream *stream;
-	struct media_entity *source_entity = NULL;
+	struct media_pad *source_pad, *remote_pad;
 	int nr_queues, ret;
 
 	dev_dbg(dev, "stream: %s: width %u, height %u, css pixelformat %u\n",
 		av->vdev.name, ipu6_isys_get_frame_width(av),
 		ipu6_isys_get_frame_height(av), pfmt->css_pixelformat);
 
-	ret = ipu6_isys_setup_video(av, &source_entity, &nr_queues);
+	remote_pad = media_pad_remote_pad_unique(&av->pad);
+	if (IS_ERR(remote_pad)) {
+		dev_dbg(dev, "failed to get remote pad\n");
+		ret = PTR_ERR(remote_pad);
+		goto out_return_buffers;
+	}
+
+	source_pad = media_pad_remote_pad_unique(&remote_pad->entity->pads[0]);
+	if (IS_ERR(source_pad)) {
+		dev_dbg(dev, "No external source entity\n");
+		ret = PTR_ERR(source_pad);
+		goto out_return_buffers;
+	}
+
+	ret = ipu6_isys_setup_video(av, remote_pad, source_pad, &nr_queues);
 	if (ret < 0) {
 		dev_dbg(dev, "failed to setup video\n");
 		goto out_return_buffers;
@@ -611,7 +625,7 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 	stream = av->stream;
 	mutex_lock(&stream->mutex);
 	if (!stream->nr_streaming) {
-		ret = ipu6_isys_video_prepare_stream(av, source_entity,
+		ret = ipu6_isys_video_prepare_stream(av, source_pad->entity,
 						     nr_queues);
 		if (ret)
 			goto out_fw_close;
@@ -623,7 +637,7 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 
 	list_add(&aq->node, &stream->queues);
 #ifdef IPU6 // Disabled for IPU4
-	ipu6_isys_configure_stream_watermark(av, true);
+	ipu6_isys_configure_stream_watermark(av, source_pad->entity);
 	ipu6_isys_update_stream_watermark(av, true);
 #endif
 
@@ -743,12 +757,14 @@ err_unlock:
 int ipu6_isys_queue_restart_streams(struct ipu6_isys_video *av)
 {
 	struct ipu6_isys *isys = av->isys;
-	int i;
+	unsigned int i;
 	int ret = 0;
 	bool stream_restarted = false;
 
-	for (i = 0; i < NR_OF_VIDEO_DEVICE; i++) {
-		struct ipu6_isys_video *other_av = &isys->av[i];
+	for (i = 0; i < isys->pdata->ipdata->csi2.nports * NR_OF_CSI2_SRC_PADS;
+	     i++) {
+		struct ipu6_isys_video *other_av =
+			&isys->csi2[i / NR_OF_CSI2_SRC_PADS].av[i % NR_OF_CSI2_SRC_PADS];
 
 		if (av == other_av || !other_av->stream)
 			continue;

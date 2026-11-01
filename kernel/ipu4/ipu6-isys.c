@@ -176,14 +176,8 @@ static int isys_csi2_register_subdevices(struct ipu6_isys *isys)
 {
 	const struct ipu6_isys_internal_csi2_pdata *csi2_pdata =
 		&isys->pdata->ipdata->csi2;
-	struct device *dev = &isys->adev->auxdev.dev;
 	unsigned int i;
 	int ret;
-
-	isys->csi2 = devm_kcalloc(dev, csi2_pdata->nports,
-				  sizeof(*isys->csi2), GFP_KERNEL);
-	if (!isys->csi2)
-		return -ENOMEM;
 
 	for (i = 0; i < csi2_pdata->nports; i++) {
 		void __iomem *base = isys->pdata->base;
@@ -219,23 +213,23 @@ static int isys_csi2_create_media_links(struct ipu6_isys *isys)
 	const struct ipu6_isys_internal_csi2_pdata *csi2_pdata =
 		&isys->pdata->ipdata->csi2;
 	struct device *dev = &isys->adev->auxdev.dev;
-	unsigned int i, j, k;
+	unsigned int i, j;
 	int ret;
 
 	for (i = 0; i < csi2_pdata->nports; i++) {
 		struct media_entity *sd = &isys->csi2[i].asd.sd.entity;
 
-		for (j = 0; j < NR_OF_VIDEO_DEVICE; j++) {
-			struct media_entity *v = &isys->av[j].vdev.entity;
-			u32 flag = MEDIA_LNK_FL_DYNAMIC;
+		for (j = 0; j < NR_OF_CSI2_SRC_PADS; j++) {
+			struct ipu6_isys_video *av = &isys->csi2[i].av[j];
 
-			for (k = CSI2_PAD_SRC; k < NR_OF_CSI2_PADS; k++) {
-				ret = media_create_pad_link(sd, k, v, 0, flag);
-				if (ret) {
-					dev_err(dev, "CSI2 can't create link\n");
-					return ret;
-				}
+			ret = media_create_pad_link(sd, CSI2_PAD_SRC + j,
+						    &av->vdev.entity, 0, 0);
+			if (ret) {
+				dev_err(dev, "CSI2 can't create link\n");
+				return ret;
 			}
+
+			av->csi2 = &isys->csi2[i];
 		}
 	}
 
@@ -244,36 +238,47 @@ static int isys_csi2_create_media_links(struct ipu6_isys *isys)
 
 static void isys_unregister_video_devices(struct ipu6_isys *isys)
 {
-	unsigned int i;
+	const struct ipu6_isys_internal_csi2_pdata *csi2_pdata =
+		&isys->pdata->ipdata->csi2;
+	unsigned int i, j;
 
-	for (i = 0; i < NR_OF_VIDEO_DEVICE; i++)
-		ipu6_isys_video_cleanup(&isys->av[i]);
+	for (i = 0; i < csi2_pdata->nports; i++)
+		for (j = 0; j < NR_OF_CSI2_SRC_PADS; j++)
+			ipu6_isys_video_cleanup(&isys->csi2[i].av[j]);
 }
 
 static int isys_register_video_devices(struct ipu6_isys *isys)
 {
-	unsigned int i;
+	const struct ipu6_isys_internal_csi2_pdata *csi2_pdata =
+		&isys->pdata->ipdata->csi2;
+	unsigned int i, j;
 	int ret;
 
-	for (i = 0; i < NR_OF_VIDEO_DEVICE; i++) {
-		struct ipu6_isys_video *av = &isys->av[i];
+	for (i = 0; i < csi2_pdata->nports; i++) {
+		for (j = 0; j < NR_OF_CSI2_SRC_PADS; j++) {
+			struct ipu6_isys_video *av = &isys->csi2[i].av[j];
 
-		snprintf(av->vdev.name, sizeof(av->vdev.name),
-			 IPU6_ISYS_ENTITY_PREFIX " ISYS Capture %u", i);
-		av->isys = isys;
-		av->aq.vbq.buf_struct_size =
-			sizeof(struct ipu6_isys_video_buffer);
+			snprintf(av->vdev.name, sizeof(av->vdev.name),
+				 IPU6_ISYS_ENTITY_PREFIX " ISYS Capture %u",
+				 i * NR_OF_CSI2_SRC_PADS + j);
+			av->isys = isys;
+			av->aq.vbq.buf_struct_size =
+				sizeof(struct ipu6_isys_video_buffer);
 
-		ret = ipu6_isys_video_init(av);
-		if (ret)
-			goto fail;
+			ret = ipu6_isys_video_init(av);
+			if (ret)
+				goto fail;
+		}
 	}
 
 	return 0;
 
 fail:
-	while (i--)
-		ipu6_isys_video_cleanup(&isys->av[i]);
+	while (i--) {
+		while (j--)
+			ipu6_isys_video_cleanup(&isys->csi2[i].av[j]);
+		j = NR_OF_CSI2_SRC_PADS;
+	}
 
 	return ret;
 }

@@ -162,7 +162,6 @@ struct ipu6_isys {
 			     bool on);
 
 	struct ipu6_isys_csi2 *csi2;
-	struct ipu6_isys_video av[NR_OF_VIDEO_DEVICE];
 
 	struct pm_qos_request pm_qos;
 	spinlock_t listlock;	/* Protect framebuflist */
