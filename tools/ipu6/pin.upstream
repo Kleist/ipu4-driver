@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Base for the ipu6 QEMU model variant (IPU4_VARIANT=ipu6, plan "Parallel
-# track"): the same mainline tag as tools/ipu6/pin, but bootstrapped with
-# no series, so the IPU6 emulation is developed against the upstream
-# driver as released.
+# track"): the same mainline tag as tools/ipu6/pin, bootstrapped with only
+# the pending mainline fixes (patches/ipu6-fixes/), so the IPU6 emulation
+# is developed against the upstream driver as mainline will have it.
 # shellcheck source=pin
 . "$(dirname "${BASH_SOURCE[0]}")/pin"
