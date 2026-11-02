@@ -105,8 +105,8 @@ the behaviour guard.
 | O12 | Upstream commits 46–63: streams/watermark rework | merged (#224) |
 | O12b | `silent-reset` ladder test (out-of-tree leg), so O13 is checked against it | merged (#225) |
 | O13 | Upstream commits 64–69: RPM rework | merged (#226) |
-| O13b | Silent reset redesigned on runtime PM, in its own file (`ambu-silent-reset.c`) | in review |
-| O14 | Upstream commits 70–88: fixes + IPU8 | |
+| O13b | Silent reset redesigned on runtime PM, in its own file (`ambu-silent-reset.c`) | merged (#232) |
+| O14 | Upstream commits 70–88: fixes + IPU8 | in review |
 | O15 | Ruslan's IPU4P v2 (`patches/ipu6-ipu4p/`) on top, IPU4 code still in place | |
 | O16 | IPU4 identity + buttress → series 0002, 0003, 0005 | |
 | O17 | MMU → series 0004 (check dropped ZLW writes against silicon) | |
@@ -246,3 +246,12 @@ the behaviour guard.
   buffer when none is queued), under a runtime-PM reference. The code
   lives in `ambu-silent-reset.c` with hooks in `video_open`, `buf_queue`
   and `stop_streaming`; `delta.txt` lists it as permanent Ambu delta.
+- (O14) IPU8 takes `BIT(6)`, so `IPU_VERSION_4` moves to `BIT(7)`; the
+  IPU8 PCI ID (81) lives outside the module and goes into `ipu6.h`; the
+  MMU keeps `ipu4_mmu_ops` after upstream's IPU7/IPU8 selection, and
+  IPU4 joins the IPU7/IPU8 watermark skip. 80 is Kconfig-only.
+  Entity names follow 81 as IPU7 does: an IPU4 case in
+  `ipu6_isys_entity_version()` ("Intel IPU4"); IPU4P gets "4P" in O15.
+  The series still names both "Intel IPU6", so `patches/ipu6-ipu4p/` /
+  `patches/ipu6-ipu4/` need the same cases (IPU4-port track) to converge.
+  Target distance 5402 → 4472, mainline 2615 → 1679.
