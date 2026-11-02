@@ -5,13 +5,11 @@
 #include <linux/atomic.h>
 #include <linux/cleanup.h>
 #include <linux/bug.h>
-#include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/ktime.h>
 #include <linux/list.h>
 #include <linux/lockdep.h>
 #include <linux/mutex.h>
-#include <linux/pm_runtime.h>
 #include <linux/spinlock.h>
 #include <linux/types.h>
 
@@ -20,6 +18,7 @@
 #include <media/videobuf2-dma-sg.h>
 #include <media/videobuf2-v4l2.h>
 
+#include "ambu-silent-reset.h"
 #include "ipu6-bus.h"
 #include "ipu6-dma.h"
 #include "ipu6-fw-isys.h"
@@ -100,56 +99,6 @@ static int ipu6_isys_buf_prepare(struct vb2_buffer *vb)
 	return 0;
 }
 
-static void _dump_queue_info(struct ipu6_isys_queue *aq, const char *context)
-{
-	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
-	struct ipu6_isys_buffer *ib;
-	char active_buffer[64] = {0};
-	char incoming_buffer[64] = {0};
-	size_t len = 0;
-
-	lockdep_assert_held(&aq->lock);
-
-	list_for_each_entry(ib, &aq->incoming, head) {
-		struct vb2_buffer *vb =
-			ipu6_isys_buffer_to_vb2_buffer(ib);
-		len += snprintf(incoming_buffer + len,
-				sizeof(incoming_buffer) - len,
-				"%d, ",
-				vb->index);
-	}
-
-	if (len > 2)
-		incoming_buffer[len - 2] = '\0';
-
-	len = 0;
-	list_for_each_entry(ib, &aq->active, head) {
-		struct vb2_buffer *vb =
-			ipu6_isys_buffer_to_vb2_buffer(ib);
-		len += snprintf(active_buffer + len,
-				sizeof(active_buffer) - len,
-				"%d, ",
-				vb->index);
-	}
-	if (len > 2)
-		active_buffer[len - 2] = '\0';
-
-	dev_info(&av->isys->adev->auxdev.dev,
-		 "%s: %s: active: [%s], incoming: [%s]",
-		 context,
-		 av->vdev.name,
-		 active_buffer,
-		 incoming_buffer);
-}
-
-#define dump_queue_info(AQ, FMT, ...)					       \
-	do {								       \
-		char _msg_buffer[128];					       \
-									       \
-		snprintf(_msg_buffer, sizeof(_msg_buffer), FMT, ##__VA_ARGS__);\
-		_dump_queue_info(AQ, _msg_buffer);			       \
-	} while (0)
-
 /*
  * Queue a buffer list back to incoming or active queues. The buffers
  * are removed from the buffer list.
@@ -197,39 +146,6 @@ void ipu6_isys_buffer_list_queue(struct ipu6_isys_buffer_list *bl,
 	}
 
 	WARN_ON(bl->nbufs);
-}
-
-/*
- * When we're stopping the stream, wait for all buffers to be returned from
- * the firmware.
- */
-static bool wait_for_no_active_buffers(struct ipu6_isys_video *av)
-{
-	struct ipu6_isys_queue *aq;
-	unsigned long start = jiffies;
-	const unsigned long timeout = msecs_to_jiffies(1000);
-
-	lockdep_assert_held(&av->stream->mutex);
-
-	while (time_is_after_jiffies(start + timeout)) {
-		bool all_empty = true;
-
-		list_for_each_entry(aq, &av->stream->queues, node) {
-			unsigned long flags;
-
-			spin_lock_irqsave(&aq->lock, flags);
-			all_empty &= list_empty(&aq->active);
-			dump_queue_info(aq, __func__);
-			spin_unlock_irqrestore(&aq->lock, flags);
-		}
-
-		if (all_empty)
-			return true;
-
-		msleep_interruptible(10);
-	}
-	dev_err(&av->vdev.dev, "%s timed out\n", __func__);
-	return false;
 }
 
 /*
@@ -408,16 +324,8 @@ static void buf_queue(struct vb2_buffer *vb)
 		return;
 	}
 
-	/* Waits for a silent reset in progress; it may leave the stream on. */
-	scoped_guard(mutex, &av->isys->stream_mutex) {
-		if (av->restart_pending) {
-			av->restart_pending = false;
-			if (ipu6_isys_video_set_streaming(av, 1))
-				dev_err(dev, "restarting %s failed\n",
-					av->vdev.name);
-			return;
-		}
-	}
+	if (ambu_silent_reset_buf_queue(av))
+		return;
 
 	stream = av->stream;
 	mutex_lock(&stream->mutex);
@@ -635,119 +543,13 @@ out_return_buffers:
 	return ret;
 }
 
-static int restart_stream(struct ipu6_isys_video *av)
-{
-	struct device *dev = &av->isys->adev->auxdev.dev;
-	struct ipu6_isys *isys = av->isys;
-	int ret = 0;
-
-	dev_info(dev, "Restarting %s", av->vdev.name);
-
-	/* Stream off must not let runtime suspend close the firmware. */
-	ret = pm_runtime_resume_and_get(dev);
-	if (ret < 0)
-		return ret;
-
-	mutex_lock(&isys->stream_mutex);
-	if (!wait_for_no_active_buffers(av)) {
-		// When stream buffers are lost,
-		// restarting would break the existing stream
-		dev_err(dev, "%s stream buffers lost during restart\n",
-			av->vdev.name);
-		ret = -EIO;
-		goto err_unlock;
-	}
-
-	ret = ipu6_isys_video_set_streaming(av, 0);
-	if (ret) {
-		dev_err(dev, "ipu6_isys_video_set_streaming(%s, 0) failed: %d\n",
-			av->vdev.name,
-			ret);
-		goto err_unlock;
-	}
-
-	ret = isys->adev->auxdrv_data->fw_ops->close(isys);
-	if (ret) {
-		dev_err(dev, "%s: fw close failed: %d", av->vdev.name, ret);
-		goto err_unlock;
-	}
-
-	ret = ipu6_bus_reset_device(isys->adev);
-
-	if (ret) {
-		dev_err(dev, "%s: bus reset failed: %d\n", av->vdev.name, ret);
-		goto err_unlock;
-	}
-
-	ret = ipu6_fw_isys_open(isys);
-	if (ret) {
-		dev_err(dev, "%s: fw re-open failed: %d", av->vdev.name, ret);
-		goto err_unlock;
-	}
-
-	/* Stream on needs a buffer; without one, the next buf_queue does it. */
-	if (list_empty(&av->aq.incoming)) {
-		av->restart_pending = true;
-		goto err_unlock;
-	}
-
-	ret = ipu6_isys_video_set_streaming(av, 1);
-	if (ret) {
-		dev_err(dev, "ipu6_isys_video_set_streaming(%s, 1) failed: %d\n",
-			av->vdev.name,
-			ret);
-		goto err_unlock;
-	}
-
-err_unlock:
-	if (ret)
-		dev_info(dev, "Restarting %s failed: %d\n", av->vdev.name, ret);
-	else
-		dev_info(dev, "Restarting %s done\n", av->vdev.name);
-
-	mutex_unlock(&isys->stream_mutex);
-	pm_runtime_put(dev);
-	return ret;
-}
-
-int ipu6_isys_queue_restart_streams(struct ipu6_isys_video *av)
-{
-	struct ipu6_isys *isys = av->isys;
-	unsigned int i;
-	int ret = 0;
-	bool stream_restarted = false;
-
-	for (i = 0; i < isys->pdata->ipdata->csi2.nports * NR_OF_CSI2_SRC_PADS;
-	     i++) {
-		struct ipu6_isys_video *other_av =
-			&isys->csi2[i / NR_OF_CSI2_SRC_PADS].av[i % NR_OF_CSI2_SRC_PADS];
-
-		/* Stream off frees the stream; stream_mutex serialises it. */
-		if (av == other_av || !other_av->streaming)
-			continue;
-
-		dev_info(&other_av->vdev.dev, "Restarting stream\n");
-		if (!WARN(stream_restarted,
-			  "Restarting > one stream not supported!"))
-			ret = restart_stream(other_av);
-
-		stream_restarted = true;
-
-		if (ret != 0)
-			break;
-	}
-	return ret;
-}
-
 static void stop_streaming(struct vb2_queue *q)
 {
 	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(q);
 	struct ipu6_isys_video *av = ipu6_isys_queue_to_video(aq);
 
 	mutex_lock(&av->isys->stream_mutex);
-	if (av->restart_pending)
-		av->restart_pending = false;
-	else
+	if (!ambu_silent_reset_stop(av))
 		ipu6_isys_video_set_streaming(av, 0);
 	mutex_unlock(&av->isys->stream_mutex);
 

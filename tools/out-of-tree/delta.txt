@@ -5,5 +5,7 @@
 
 # Ambu board support: sensor description for the product hardware.
 ambu-ipu-bridge.[ch]
+# Ambu silent reset: restart a stream when the ISYS needs a power cycle.
+ambu-silent-reset.[ch]
 # Shims for the kernels the out-of-tree build supports (6.12 and later).
 ipu4-compat.h

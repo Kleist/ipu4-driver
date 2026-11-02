@@ -16,7 +16,6 @@
 #include "ipu6-isys-video.h"
 
 struct ipu6_isys_stream;
-struct ipu6_isys_video;
 
 struct ipu6_isys_queue {
 	struct vb2_queue vbq;
@@ -66,7 +65,6 @@ int ipu6_isys_buffer_list_get(struct ipu6_isys_stream *stream,
 void ipu6_isys_queue_buf_ready(struct ipu6_isys_stream *stream,
 			       struct ipu6_fw_isys_resp_info_abi *info);
 int ipu6_isys_queue_init(struct ipu6_isys_queue *aq);
-int ipu6_isys_queue_restart_streams(struct ipu6_isys_video *av);
 void ipu6_stream_buf_ready(struct ipu6_isys_stream *stream, u8 pin_id,
 			   u32 pin_addr, u64 time, bool error_check);
 #endif /* IPU6_ISYS_QUEUE_H */
