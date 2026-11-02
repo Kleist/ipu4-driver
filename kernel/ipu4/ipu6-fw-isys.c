@@ -136,10 +136,6 @@ static int ipu6_fw_isys_close(struct ipu6_isys *isys)
 	void *fwctx;
 	int ret;
 
-	// Ambu specific: for silent_reset feature
-	if (!isys->resetting)
-		lockdep_assert_held(&isys->mutex);
-
 	/*
 	 * Stop the isys fw. Actual close takes
 	 * some time as the FW must stop its actions including code fetch
@@ -356,40 +352,6 @@ static int ipu6_fw_isys_init(struct ipu6_isys *isys, unsigned int num_streams)
 		ipu6_fw_isys_close(isys);
 		ret = -EIO;
 	}
-
-	return ret;
-}
-
-// Refactoring needed for silent_reset - upstream candidate?
-int ipu6_fw_isys_open(struct ipu6_isys *isys)
-{
-	const struct ipu6_isys_internal_pdata *ipdata = isys->pdata->ipdata;
-	struct ipu6_bus_device *adev = isys->adev;
-	int ret = 0;
-
-	if (!isys->resetting)
-		lockdep_assert_held(&isys->mutex);
-
-	ipu6_configure_spc(adev->isp, &ipdata->hw_variant,
-			   IPU6_CPD_PKG_DIR_ISYS_SERVER_IDX, isys->pdata->base,
-			   adev->pkg_dir, adev->pkg_dir_dma_addr);
-
-	/*
-	 * Buffers could have been left to wrong queue at last closure.
-	 * Move them now back to empty buffer queue.
-	 */
-	ipu6_cleanup_fw_msg_bufs(isys);
-
-	if (isys->fwctx) {
-		/*
-		 * Something went wrong in previous shutdown. As we are now
-		 * restarting isys we can safely delete old context.
-		 */
-		dev_info(&adev->auxdev.dev, "Clearing old context\n");
-		ipu6_fw_isys_cleanup(isys);
-	}
-
-	ret = ipu6_fw_isys_init(isys, ipdata->num_parallel_streams);
 
 	return ret;
 }

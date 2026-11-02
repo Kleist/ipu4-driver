@@ -829,7 +829,6 @@ ipu4_fw_isys_dump_frame_buff_set(struct device *dev,
 				 struct ipu4_fw_isys_frame_buff_set_abi *buf,
 				 unsigned int outputs);
 
-int ipu6_fw_isys_open(struct ipu6_isys *isys);
 int ipu6_fw_isys_send_proxy_token(struct ipu6_isys *isys, unsigned int req_id,
 				  unsigned int index, unsigned int offset,
 				  u32 value);

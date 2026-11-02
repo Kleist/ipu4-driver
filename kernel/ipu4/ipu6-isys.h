@@ -205,5 +205,4 @@ int ipu6_isys_jsl_phy_set_power(struct ipu6_isys *isys,
 				const struct ipu6_isys_csi2_timing *timing,
 				bool on);
 
-void ipu6_isys_wait_not_resetting(struct ipu6_isys *isys, const char *context);
 #endif /* IPU6_ISYS_H */

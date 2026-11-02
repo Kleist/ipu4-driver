@@ -16,6 +16,8 @@ LOCAL_REL="kernel/ipu4"
 IPU4_LOCAL_ONLY=(
 	ambu-ipu-bridge.c
 	ambu-ipu-bridge.h
+	ambu-silent-reset.c
+	ambu-silent-reset.h
 	ipu4-compat.h
 	ipu4-platform-buttress-regs.h
 	ipu4-platform-isys-csi2-reg.h

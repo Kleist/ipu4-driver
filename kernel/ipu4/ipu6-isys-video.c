@@ -8,7 +8,6 @@
 #include <linux/bug.h>
 #include <linux/completion.h>
 #include <linux/container_of.h>
-#include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/list.h>
 #include <linux/math64.h>
@@ -32,18 +31,12 @@
 #include "ipu6-cpd.h"
 #include "ipu6-fw-isys.h"
 #include "ipu6-isys.h"
+#include "ambu-silent-reset.h"
 #include "ipu6-isys-csi2.h"
 #include "ipu6-isys-queue.h"
 #include "ipu6-isys-video.h"
 #include "ipu4-compat.h"
 
-bool force_need_reset;
-module_param(force_need_reset, bool, 0644);
-MODULE_PARM_DESC(force_need_reset, "emulate 'isys power cycle required' on next video_open");
-
-bool silent_reset_enable = true;
-module_param(silent_reset_enable, bool, 0644);
-MODULE_PARM_DESC(silent_reset_enable, "perform a silent reset of existing streams when 'isys power cycle required' would otherwise be logged");
 
 const struct ipu6_isys_pixelformat ipu6_isys_pfmts[] = {
 	{ V4L2_PIX_FMT_SBGGR12, 16, 12, MEDIA_BUS_FMT_SBGGR12_1X12,
@@ -120,18 +113,6 @@ const struct ipu6_isys_pixelformat ipu6_isys_pfmts[] = {
 	 IPU6_FW_ISYS_FRAME_FORMAT_RGBA888},
 };
 
-static void wait_for_not_resetting(struct ipu6_isys *isys, const char *context)
-{
-	struct device *dev = &isys->adev->auxdev.dev;
-
-	while (isys->resetting) {
-		mutex_unlock(&isys->mutex);
-		dev_info(dev, "%s: Waiting for isys resetting\n", context);
-		msleep_interruptible(100);
-		mutex_lock(&isys->mutex);
-	}
-}
-
 static int video_open(struct file *file)
 {
 	struct ipu6_isys_video *av = video_drvdata(file);
@@ -140,35 +121,15 @@ static int video_open(struct file *file)
 	struct device *dev = &adev->auxdev.dev;
 	int ret = 0;
 
+	ret = ambu_silent_reset_open(av);
+	if (ret)
+		return ret;
+
 	mutex_lock(&isys->mutex);
-	wait_for_not_resetting(isys, __func__);
-
-	if (isys->need_reset || force_need_reset) {
-		if (silent_reset_enable) {
-			isys->resetting = true;
-			mutex_unlock(&isys->mutex);
-
-			dev_warn(dev, "restarting other streams (need_reset=%d, force_need_reset=%d)\n",
-				 isys->need_reset,
-				 force_need_reset);
-			force_need_reset = false;
-			ret = ipu6_isys_queue_restart_streams(av);
-
-			mutex_lock(&isys->mutex);
-			isys->resetting = false;
-			if (ret)
-				dev_err(dev, "ipu6_isys_queue_restart_streams failed: %d\n",
-					ret);
-		}
-
-		if (ret || !silent_reset_enable) {
-			// Keeping original log message below,
-			// since it is widely known
-			dev_warn(dev, "isys power cycle required\n");
-			mutex_unlock(&isys->mutex);
-			return -EIO;
-		}
-		dev_info(dev, "restarting other streams done: %d\n", ret);
+	if (isys->need_reset) {
+		mutex_unlock(&isys->mutex);
+		dev_warn(&adev->auxdev.dev, "isys power cycle required\n");
+		return -EIO;
 	}
 	mutex_unlock(&isys->mutex);
 
