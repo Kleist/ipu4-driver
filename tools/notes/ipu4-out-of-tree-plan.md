@@ -104,8 +104,8 @@ the behaviour guard.
 | O11 | Build the `ipu7-*.c` sources; drop the IPU7 `#ifdef IPU6` guards | merged (#223) |
 | O12 | Upstream commits 46–63: streams/watermark rework | merged (#224) |
 | O12b | `silent-reset` ladder test (out-of-tree leg), so O13 is checked against it | merged (#225) |
-| O13 | Upstream commits 64–69: RPM rework | in review |
-| O13b | Silent reset redesigned on runtime PM, in its own file (`ambu-silent-reset.c`) | |
+| O13 | Upstream commits 64–69: RPM rework | merged (#226) |
+| O13b | Silent reset redesigned on runtime PM, in its own file (`ambu-silent-reset.c`) | in review |
 | O14 | Upstream commits 70–88: fixes + IPU8 | |
 | O15 | Ruslan's IPU4P v2 (`patches/ipu6-ipu4p/`) on top, IPU4 code still in place | |
 | O16 | IPU4 identity + buttress → series 0002, 0003, 0005 | |
@@ -240,3 +240,9 @@ the behaviour guard.
   close, a NULL dereference that `silent-reset` hit in 4 of 12 runs
   (now 15/15). `silent-reset` passes. Target distance 5888 → 5682, mainline
   3087 → 2895.
+- (O13b) Since O13 the bus reset (`ipu6_bus_reset_device()`, the runtime
+  PM callbacks back to back) closes and reopens the firmware, so the
+  restart is stream off, bus reset, stream on (deferred to the next
+  buffer when none is queued), under a runtime-PM reference. The code
+  lives in `ambu-silent-reset.c` with hooks in `video_open`, `buf_queue`
+  and `stop_streaming`; `delta.txt` lists it as permanent Ambu delta.
