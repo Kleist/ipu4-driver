@@ -106,8 +106,8 @@ the behaviour guard.
 | O12b | `silent-reset` ladder test (out-of-tree leg), so O13 is checked against it | merged (#225) |
 | O13 | Upstream commits 64–69: RPM rework | merged (#226) |
 | O13b | Silent reset redesigned on runtime PM, in its own file (`ambu-silent-reset.c`) | merged (#232) |
-| O14 | Upstream commits 70–88: fixes + IPU8 | in review |
-| O15 | Ruslan's IPU4P v2 (`patches/ipu6-ipu4p/`) on top, IPU4 code still in place | |
+| O14 | Upstream commits 70–88: fixes + IPU8 | merged (#233) |
+| O15 | Ruslan's IPU4P v2 (`patches/ipu6-ipu4p/`) on top, IPU4 code still in place | in review |
 | O16 | IPU4 identity + buttress → series 0002, 0003, 0005 | |
 | O17 | MMU → series 0004 (check dropped ZLW writes against silicon) | |
 | O18 | Firmware layer → series 0008 + `ipu4p-fw-isys.[ch]` (drops the IPU4 ABI copy) | |
@@ -255,3 +255,13 @@ the behaviour guard.
   The series still names both "Intel IPU6", so `patches/ipu6-ipu4p/` /
   `patches/ipu6-ipu4/` need the same cases (IPU4-port track) to converge.
   Target distance 5402 → 4472, mainline 2615 → 1679.
+- (O15) The series goes in as is where the fork still matches upstream;
+  elsewhere IPU4 keeps its code next to IPU4P's: `IPU_VERSION_4` after
+  IPU8 (`BIT(8)`, `hw_ver` u16 as in `patches/ipu6-ipu4/`),
+  `ipu4_mmu_ops` on the shared init helper, the IPU4 SysCom path behind
+  the DMEM one, iWake IPU6-only. IPU4 frees the firmware message at
+  capture ack, so 0006's `release_msg_buf` gates that, and the IPU4
+  response's first field takes upstream's name `buf_id`, which the IPU4P
+  conversion fills. 0012 is Kconfig and PCI table only: the fork's table
+  stays IPU4-only, so the IPU4P paths build but never bind. Target
+  distance 4472 → 2143; mainline 1679 → 4080 (IPU4P is not in mainline).
