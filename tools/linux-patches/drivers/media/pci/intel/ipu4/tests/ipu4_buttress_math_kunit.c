@@ -23,6 +23,7 @@
 #include <kunit/test.h>
 #include <linux/types.h>
 
+#include "ipu4-pci.h"
 #include "ipu4-platform-buttress-regs.h"
 #include "ipu6.h"
 #include "ipu6-buttress.h"
