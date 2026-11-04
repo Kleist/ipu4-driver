@@ -62,33 +62,41 @@ nothing.
 | O2 | Driver names per flavor for the guest inits; built-in virt sensor; tests adapted to the driver | every implemented test | in review |
 | O3 | Fix the W=1 warnings in `kernel/ipu4/`; `build` at W=1 like the ipu6 legs | — | |
 
-## Convergence onto mainline + IPU4P + IPU4 patches
+## Convergence onto mainline
 
-Goal: `kernel/ipu4/<f>` equals `drivers/media/pci/intel/ipu6/<f>` of the
-**target tree** — `tools/linux-ipu6/` as `tools/ipu6/bootstrap.sh` builds
-it: the mainline pin (all of the 7.4 merge window's IPU6 commits) +
-`patches/ipu6-ipu4p/` (Ruslan's RFC v2) + `patches/ipu6-ipu4/` — for every
-file, except a small isolated permanent delta: the Ambu features (silent
-reset, `ambu-ipu-bridge`, extra logging), compat shims for kernels
-6.12–7.3 confined to `ipu4-compat.h`, and the out-of-tree build glue
-(`Makefile`, `intel-ipu4*` module names).
+Goal: `kernel/ipu4/<f>` equals mainline's `drivers/media/pci/intel/ipu6/<f>`
+for every file mainline has, with IPU4 support added the way upstream adds
+a hardware generation (as IPU7 came in): IPU4-only code in `ipu4-*` files
+behind the existing ops (`ipu6_mmu_hw_ops`, `ipu6_fw_isys_ops`, the
+auxdrv `isr`) and small `IS_IPU4()` hooks in the shared files. What stays
+different is the IPU4 support plus a small isolated permanent delta: the
+Ambu features (silent reset, `ambu-ipu-bridge`, extra logging), compat
+shims for kernels 6.12–7.3 confined to `ipu4-compat.h`, and the
+out-of-tree build glue (`Makefile`, `intel-ipu4*` module names).
+
+**Target = mainline only** (the newest mainline tag with all of the 7.4
+merge window's IPU6 commits, `tools/ipu6/pin`). Series that are not
+upstream, Ruslan's IPU4P (`patches/ipu6-ipu4p/`) and the IPU4 port
+(`patches/ipu6-ipu4/`), are not merged into `kernel/ipu4/`; they come in
+as upstream commits once mainline has them (O21).
 
 Decided: switch to upstream's per-CSI2 video topology; kernel floor 6.12;
-carry and build every target file (IPU6 PHYs, `ipu7-*.c`, IPU8,
-`ipu4p-*.c`); lazy STREAMON and the 500 ms firmware timeout converge to
-upstream.
+carry and build every mainline file (IPU6 PHYs, `ipu7-*.c`, IPU8); lazy
+STREAMON and the 500 ms firmware timeout converge to upstream.
 
 Steps run back to back: while a step's PR is in review, the next one is
 prepared on a local branch; as soon as the PR merges, that branch is
 rebased onto the new `main`, re-checked, pushed and its PR opened without
 waiting to be asked (still one open PR at a time, as `CLAUDE.md` says).
 
-Upstream commits and series patches come in with `git am --3way
---directory=kernel/ipu4`, keeping authorship and `(cherry picked from …)`,
-with an `[IPU4: …]` / `[out-of-tree: …]` note only where an edit was
-needed. Each commit builds warning-free on 6.12, 6.18 and 7.3-rc4 and
-keeps KUnit, `vm-smoke` and this leg green; the MMIO-vs-silicon tests are
-the behaviour guard.
+Upstream commits come in with `git am --3way --directory=kernel/ipu4`,
+keeping authorship and `(cherry picked from …)`, with an `[IPU4: …]` note
+only where an edit was needed. A step that moves IPU4 code out of a shared
+file restores that file's upstream text (`#ifdef IPU6` blocks go) rather
+than adding more guards. Each commit builds warning-free on 6.12, 6.18 and
+7.3-rc4 and keeps KUnit, `vm-smoke` and this leg green; the
+MMIO-vs-silicon tests (`probe-mmu`, `isys-irq`, `fw-open`, `stream-on`,
+`csi2-sof-irq`) are the behaviour guard.
 
 | PR | Content | State |
 |---|---|---|
@@ -106,14 +114,15 @@ the behaviour guard.
 | O12b | `silent-reset` ladder test (out-of-tree leg), so O13 is checked against it | merged (#225) |
 | O13 | Upstream commits 64–69: RPM rework | merged (#226) |
 | O13b | Silent reset redesigned on runtime PM, in its own file (`ambu-silent-reset.c`) | merged (#232) |
-| O14 | Upstream commits 70–88: fixes + IPU8 | in review |
-| O15 | Ruslan's IPU4P v2 (`patches/ipu6-ipu4p/`) on top, IPU4 code still in place | |
-| O16 | IPU4 identity + buttress → series 0002, 0003, 0005 | |
-| O17 | MMU → series 0004 (check dropped ZLW writes against silicon) | |
-| O18 | Firmware layer → series 0008 + `ipu4p-fw-isys.[ch]` (drops the IPU4 ABI copy) | |
-| O19 | ISR, CSI-2, iWake → series 0006, 0007, 0009, 0010 (`csi2-sof-irq` enabled for `ipu4-patches` first); upstream `ipu6-platform-isys-csi2-reg.h` back, so the IPU6 PHYs build | |
-| O20 | PCI enable (series 0011), leftovers, KUnit exports; only the allow-listed delta remains | |
-| O21 | Stay converged: `watch.sh` with real 3-way merges; IPU4P refreshes re-applied the same way | |
+| O14 | Upstream commits 70–88: fixes + IPU8 | merged (#233) |
+| — | Ruslan's IPU4P v2 on top (was O15) | dropped (#234 closed): not upstream |
+| O15 | Target = mainline in the tooling: `divergence_history.py --target` and `diff.sh` diff against the mainline pin; `delta.txt` adds the IPU4 support files (`ipu4-*`) as allowed delta, so "unexplained divergence" counts only shared-file differences | |
+| O16 | IPU4 identity + buttress: IPU4 pdata and buttress control as their own variant (`ipu4_*` ctrl/pdata, `ipu4-platform-buttress-regs.h`) instead of `#else` pdata and in-place constant swaps | |
+| O17 | MMU: IPU4 tables, `ipu4_mmu_ops`, ZLW and invalidate code into `ipu4-mmu-hw.c` (as `ipu7-mmu-hw.c`); `ipu6-mmu-hw.c` back to upstream. Check the ZLW writes and invalidate values against silicon (`compare-mmio`, `probe-mmu`) | |
+| O18 | Firmware layer: IPU4 ABI, pin/stream config, buffer set and response handling into `ipu4-fw-isys.[ch]` behind `ipu4_fw_isys_ops` (as `ipu7_fw_isys_ops`); the IPU4 SysCom path out of `ipu6-fw-com.c`; `ipu6-fw-isys.[ch]` back to upstream; silent reset re-points to `fw_ops`. Largest step; split per sub-area if the ladder needs it | |
+| O19 | ISR, CSI-2, iWake: `ipu4_isys_isr`, IPU4 `setup_hw`, CSI-2 stream on/off and error handling into `ipu4-isys*.c` via the auxdrv `isr` hook; the `#ifdef IPU6` iWake and CSI-2 blocks go; upstream `ipu6-platform-isys-csi2-reg.h` back, so the IPU6 PHYs build | |
+| O20 | Leftovers: remaining `#ifdef IPU6` / `IS_IPU4` hooks, KUnit exports re-pointed, logging kept but `dev_dbg` where not Ambu-required; only IPU4 support files and the allow-listed delta remain | |
+| O21 | Stay converged: `watch.sh` with real 3-way merges; when IPU4P (or IPU4) support lands in mainline, take it as upstream commits and fold the IPU4 code onto it | |
 
 ## Learnings
 
@@ -255,3 +264,9 @@ the behaviour guard.
   The series still names both "Intel IPU6", so `patches/ipu6-ipu4p/` /
   `patches/ipu6-ipu4/` need the same cases (IPU4-port track) to converge.
   Target distance 5402 → 4472, mainline 2615 → 1679.
+- (Plan revision) The target was mainline + `patches/ipu6-ipu4p/` +
+  `patches/ipu6-ipu4/`; merging series that are not upstream into the
+  driver makes no sense, so the target is now mainline only. #234 (the
+  IPU4P series as O15) closed unmerged. From it: IPU4 support next to
+  upstream's needs `hw_ver` u16 once a ninth version bit exists, and the
+  IPU4 response's first field can take upstream's name `buf_id`.
