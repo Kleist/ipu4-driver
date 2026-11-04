@@ -31,8 +31,7 @@
 
 #include "ipu4-compat.h"
 
-#define IPU4_BOOTLOADER_STATUS_OFFSET	0x8000
-#define IPU6_BOOTLOADER_STATUS_OFFSET   0x15c
+#define BOOTLOADER_STATUS_OFFSET       0x15c
 
 #define BOOTLOADER_MAGIC_KEY		0xb00710ad
 
@@ -40,7 +39,6 @@
 #define EXIT	BUTTRESS_IU2CSECSR_IPC_PEER_COMP_ACTIONS_RST_PHASE2
 #define QUERY	BUTTRESS_IU2CSECSR_IPC_PEER_QUERIED_IP_COMP_ACTIONS_RST_PHASE
 
-#define IPU4_BUTTRESS_TSC_CLOCK_FREQUENCY	192
 #define BUTTRESS_TSC_SYNC_RESET_TRIAL_MAX	10
 
 #define BUTTRESS_POWER_TIMEOUT_US		(200 * USEC_PER_MSEC)
@@ -607,8 +605,10 @@ static int __ipu6_power(struct device *dev,
 		val = BUTTRESS_FREQ_CTL_START |
 		      FIELD_PREP(BUTTRESS_FREQ_CTL_RATIO_MASK, ctrl->ratio) |
 		      FIELD_PREP(BUTTRESS_FREQ_CTL_QOS_FLOOR_MASK,
-				 ctrl->qos_floor) |
-		      IPU4_BUTTRESS_FREQ_CTL_ICCMAX_LEVEL;
+				 ctrl->qos_floor);
+		/* IPU4 leaves the ICCMAX level at zero */
+		if (!IS_IPU4(isp))
+			val |= BUTTRESS_FREQ_CTL_ICCMAX_LEVEL;
 
 		pwr_sts = ctrl->pwr_sts_on << ctrl->pwr_sts_shift;
 	}
@@ -780,8 +780,6 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 	struct ipu6_psys_pdata *psys_pdata;
 	u32 data, mask, done, fail;
 	int ret;
-	u32 bootloader_status_offset = IS_IPU4(isp) ?
-		IPU4_BOOTLOADER_STATUS_OFFSET : IPU6_BOOTLOADER_STATUS_OFFSET;
 
 	if (!isp->secure_mode) {
 		dev_dbg(&isp->pdev->dev, "Skip auth for non-secure mode\n");
@@ -854,7 +852,9 @@ int ipu6_buttress_authenticate(struct ipu6_device *isp)
 
 	void __iomem *base = (IS_IPU7(isp) || IS_IPU8(isp)) ?
 			     isp->base + IPU7_BUTTRESS_REG_FW_BOOT_PARAMS7 :
-			     psys_pdata->base + bootloader_status_offset;
+			     psys_pdata->base + (IS_IPU4(isp) ?
+						 IPU4_BOOTLOADER_STATUS_OFFSET :
+						 BOOTLOADER_STATUS_OFFSET);
 
 	ret = readl_poll_timeout(base, data, data == BOOTLOADER_MAGIC_KEY, 500,
 				 BUTTRESS_CSE_BOOTLOAD_TIMEOUT_US);
@@ -912,13 +912,14 @@ static int ipu6_buttress_send_tsc_request(struct ipu6_device *isp)
 	u32 val, mask, done;
 	int ret;
 
-	mask = IPU4_BUTTRESS_PWR_STATE_HH_STATUS_MASK;
+	mask = IS_IPU4(isp) ? IPU4_BUTTRESS_PWR_STATE_HH_STATUS_MASK :
+			      BUTTRESS_PWR_STATE_HH_STATUS_MASK;
 
 	writel(BUTTRESS_FABRIC_CMD_START_TSC_SYNC,
 	       isp->base + regs->fabric_cmd);
 
 	val = readl(isp->base + regs->pwr_status);
-	val = FIELD_GET(mask, val);
+	val = field_get(mask, val);
 	if (val == BUTTRESS_PWR_STATE_HH_STATE_ERR) {
 		dev_err(&isp->pdev->dev, "Start tsc sync failed\n");
 		return -EINVAL;
@@ -926,7 +927,7 @@ static int ipu6_buttress_send_tsc_request(struct ipu6_device *isp)
 
 	done = BUTTRESS_PWR_STATE_HH_STATE_DONE;
 	ret = readl_poll_timeout(isp->base + regs->pwr_status,
-				 val, FIELD_GET(mask, val) == done, 500,
+				 val, field_get(mask, val) == done, 500,
 				 BUTTRESS_TSC_SYNC_TIMEOUT_US);
 	if (ret)
 		dev_err(&isp->pdev->dev, "Start tsc sync timeout\n");
@@ -1042,7 +1043,7 @@ u64 ipu6_buttress_tsc_ticks_to_ns(u64 ticks, const struct ipu6_device *isp)
 	 *    = ticks * 1000 000 000 / 19200000Hz
 	 *    = ticks * 10000 / 192 ns
 	 */
-	return div_u64(ns, IPU4_BUTTRESS_TSC_CLOCK_FREQUENCY);
+	return div_u64(ns, isp->buttress.ref_clk);
 }
 EXPORT_SYMBOL_NS_GPL(ipu6_buttress_tsc_ticks_to_ns, "INTEL_IPU6");
 
@@ -1157,6 +1158,7 @@ int ipu6_buttress_init(struct ipu6_device *isp)
 	init_completion(&b->ipc.send_complete);
 	init_completion(&b->ipc.recv_complete);
 
+	INIT_LIST_HEAD(&b->constraints);
 	isp->secure_mode = ipu6_buttress_get_secure_mode(isp);
 
 	dev_dbg(&isp->pdev->dev, "IPU in %s mode\n",
@@ -1193,6 +1195,9 @@ int ipu6_buttress_init(struct ipu6_device *isp)
 			b->ref_clk = 192;
 			break;
 		}
+		/* IPU4 always runs the TSC at 19.2 MHz */
+		if (IS_IPU4(isp))
+			b->ref_clk = IPU4_BUTTRESS_TSC_CLOCK_FREQUENCY;
 	}
 	b->wdt_cached_value = readl(isp->base + b->regs->wdt);
 
