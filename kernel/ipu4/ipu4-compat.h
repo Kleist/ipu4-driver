@@ -13,6 +13,12 @@
 	((typeof(P) *)kmalloc_array(COUNT, sizeof(P), GFP_KERNEL))
 #endif
 
+#include <linux/bitfield.h>
+#ifndef field_get
+// Non-constant mask variant of FIELD_GET() (6.19).
+#define field_get(mask, reg) (((reg) & (mask)) >> __bf_shf(mask))
+#endif
+
 #if KERNEL_VERSION(6, 18, 0) > LINUX_VERSION_CODE
 // https://github.com/torvalds/linux/commit/683342ce3c0dae068bf0ee157ee12c13088193f7
 static __maybe_unused s64 ambu_v4l2_get_link_freq(struct media_pad *src_pad, unsigned int mul,

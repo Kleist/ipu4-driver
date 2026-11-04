@@ -5,7 +5,8 @@
  *
  * Two scopes here:
  *  - ipu6_buttress_tsc_ticks_to_ns(): multiplies by 10000 and divides
- *    by 192 (IPU4 TSC runs at 19.2 MHz; derivation in ipu6-buttress.c).
+ *    by the reference clock, 192 on IPU4 (19.2 MHz; derivation in
+ *    ipu6-buttress.c).
  *    Pinned at one-tick, one-period, near-overflow, and truncation.
  *  - ipu4_isys_buttress_ctrl / ipu4_psys_buttress_ctrl: every field
  *    pinned against the IPU4 platform constants. The struct uses
@@ -28,33 +29,38 @@
 #include "ipu6-platform-buttress-regs.h"
 #include "ipu4-compat.h"
 
+/* The IPU4 TSC reference clock that ipu6_buttress_init() sets. */
+static struct ipu6_device ipu4_isp = {
+	.buttress.ref_clk = IPU4_BUTTRESS_TSC_CLOCK_FREQUENCY,
+};
+
 static void test_zero_ticks_is_zero_ns(struct kunit *test)
 {
-	KUNIT_EXPECT_EQ(test, ipu6_buttress_tsc_ticks_to_ns(0, NULL), 0ull);
+	KUNIT_EXPECT_EQ(test, ipu6_buttress_tsc_ticks_to_ns(0, &ipu4_isp), 0ull);
 }
 
 static void test_one_tick_is_52_ns_truncated(struct kunit *test)
 {
 	/* 1 tick * 10000 / 192 = 52.083... -> 52 ns (div_u64 truncates). */
-	KUNIT_EXPECT_EQ(test, ipu6_buttress_tsc_ticks_to_ns(1, NULL), 52ull);
+	KUNIT_EXPECT_EQ(test, ipu6_buttress_tsc_ticks_to_ns(1, &ipu4_isp), 52ull);
 }
 
 static void test_one_full_period_is_10000_ns(struct kunit *test)
 {
 	/* 192 ticks at 19.2 MHz = exactly 10 microseconds = 10000 ns. */
-	KUNIT_EXPECT_EQ(test, ipu6_buttress_tsc_ticks_to_ns(192, NULL), 10000ull);
+	KUNIT_EXPECT_EQ(test, ipu6_buttress_tsc_ticks_to_ns(192, &ipu4_isp), 10000ull);
 }
 
 static void test_truncation_below_one_period(struct kunit *test)
 {
 	/* 191 ticks * 10000 / 192 = 9947.91... -> 9947 ns. */
-	KUNIT_EXPECT_EQ(test, ipu6_buttress_tsc_ticks_to_ns(191, NULL), 9947ull);
+	KUNIT_EXPECT_EQ(test, ipu6_buttress_tsc_ticks_to_ns(191, &ipu4_isp), 9947ull);
 }
 
 static void test_one_million_ticks(struct kunit *test)
 {
 	/* 1_000_000 * 10000 / 192 = 52083333 ns ≈ 52.08 ms. */
-	KUNIT_EXPECT_EQ(test, ipu6_buttress_tsc_ticks_to_ns(1000000, NULL),
+	KUNIT_EXPECT_EQ(test, ipu6_buttress_tsc_ticks_to_ns(1000000, &ipu4_isp),
 			52083333ull);
 }
 
@@ -67,7 +73,7 @@ static void test_no_overflow_at_192e9_ticks(struct kunit *test)
 	 * exact-multiple case has no fencepost loss.
 	 */
 	KUNIT_EXPECT_EQ(test,
-			ipu6_buttress_tsc_ticks_to_ns(192000000000ull, NULL),
+			ipu6_buttress_tsc_ticks_to_ns(192000000000ull, &ipu4_isp),
 			10000000000000ull);
 }
 
