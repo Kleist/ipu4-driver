@@ -211,7 +211,8 @@ def make_patch(tmp_path, name, before, after):
 
 @pytest.fixture
 def root(tmp_path, linux):
-    """A repo root with the pin on v6.10, the three series and the allow-list."""
+    """A repo root with the pin on v6.10, a series (not part of the target)
+    and the allow-list."""
     r = tmp_path / "root"
     (r / "tools" / "ipu6").mkdir(parents=True)
     (r / "tools" / "out-of-tree").mkdir(parents=True)
@@ -241,8 +242,9 @@ def test_pin_and_allowed_delta(root, linux):
 def test_target_tree(root, linux, tmp_path):
     work = tmp_path / "work"
     files = dh.target_tree(root, linux, work)
-    assert set(files) == {"ipu6-isys.c", "ipu6.c", "ipu4p-fw.c"}
-    assert (work / UP / "ipu6.c").read_text() == "1\n2\n3\n"
+    # The pin only: the series in patches/ are not applied.
+    assert set(files) == {"ipu6-isys.c", "ipu6.c", "ipu7-only.c"}
+    assert (work / UP / "ipu6.c").read_text() == "1\n2\n"
     assert not (work / "Kconfig").exists()
 
 
@@ -250,14 +252,15 @@ def test_build_with_target(ours, linux, root):
     data = dh.build(ours, "HEAD", linux, {"ambu-ipu-bridge.c"}, root)
     t = data["target"]
     assert t["pin"] == run(linux, "rev-parse", "v6.10")
-    assert t["series"] == {"ipu6-ipu4p": 1, "ipu6-fixes": 1, "ipu6-ipu4": 0}
+    assert "series" not in t
     by_name = {f["name"]: f for f in t["files"]}
-    # ipu6.c matches the patched target; ambu-ipu-bridge.c is allowed.
-    assert set(by_name) == {"virt.c", "ipu4p-fw.c"}
+    # ipu6.c has a commit the pin lacks; ambu-ipu-bridge.c is allowed.
+    assert set(by_name) == {"ipu6.c", "virt.c", "ipu7-only.c"}
+    assert by_name["ipu6.c"] == {"name": "ipu6.c", "status": "differs", "lines": 1}
     assert by_name["virt.c"]["status"] == "not in target"
-    assert by_name["ipu4p-fw.c"] == {"name": "ipu4p-fw.c", "status": "missing here",
-                                     "lines": 2}
-    assert t["divergence"] == 3
+    assert by_name["ipu7-only.c"] == {"name": "ipu7-only.c", "status": "missing here",
+                                      "lines": 2}
+    assert t["divergence"] == 4
 
 
 def test_target_divergence_counts_changed_shared_files():

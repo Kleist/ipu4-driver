@@ -71,8 +71,7 @@
   <h3>Distance to the convergence target</h3>
   <p>
     <strong>{{ upstream.history.target.divergence }}</strong> lines of unexplained divergence
-    from the target tree: mainline <code>{{ upstream.history.target.pin[:12] }}</code>
-    {% for s, n in upstream.history.target.series.items() %}+ <code>patches/{{ s }}</code> ({{ n }}) {% endfor %}
+    from the target, mainline <code>{{ upstream.history.target.pin[:12] }}</code>
     — outside the permanent delta in <code>tools/out-of-tree/delta.txt</code>. The plan is
     "Convergence" in <code>tools/notes/ipu4-out-of-tree-plan.md</code>; the trend is
     the orange line above.
