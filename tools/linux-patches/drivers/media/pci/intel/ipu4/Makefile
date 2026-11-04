@@ -8,6 +8,7 @@ GCOV_PROFILE := y
 
 intel-ipu4-y := \
 	ipu6.o \
+	ipu4-pci.o \
 	ipu6-bus.o \
 	ipu6-dma.o \
 	ipu6-mmu.o \

@@ -31,7 +31,7 @@ struct ipu6_bus_device;
 #define IPU7P5_FIRMWARE_NAME		"intel/ipu/ipu7ptl_fw.bin"
 #define IPU8_FIRMWARE_NAME		"intel/ipu/ipu8_fw.bin"
 
-#define IPU4_FIRMWARE_NAME               "ipu4_cpd_b0.bin"
+#define IPU4_FIRMWARE_NAME		"ipu4_cpd_b0.bin"
 
 #define PCI_DEVICE_ID_INTEL_IPU4		0x5a88
 
@@ -223,12 +223,5 @@ void ipu6_configure_spc(struct ipu6_device *isp,
 			const struct ipu6_hw_variants *hw_variant,
 			int pkg_dir_idx, void __iomem *base, u64 *pkg_dir,
 			dma_addr_t pkg_dir_dma_addr);
-
-/* IPU4 buttress control descriptors. Defined in ipu6.c, exposed here
- * so the KUnit suite in tools/linux-patches/.../tests/ can field-test
- * them against the IPU4 register layout.
- */
-extern const struct ipu6_buttress_ctrl ipu4_isys_buttress_ctrl;
-extern const struct ipu6_buttress_ctrl ipu4_psys_buttress_ctrl;
 
 #endif /* IPU6_H */
