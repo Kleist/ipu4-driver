@@ -116,8 +116,8 @@ MMIO-vs-silicon tests (`probe-mmu`, `isys-irq`, `fw-open`, `stream-on`,
 | O13b | Silent reset redesigned on runtime PM, in its own file (`ambu-silent-reset.c`) | merged (#232) |
 | O14 | Upstream commits 70–88: fixes + IPU8 | merged (#233) |
 | — | Ruslan's IPU4P v2 on top (was O15) | dropped (#234 closed): not upstream |
-| O15 | Target = mainline in the tooling: `divergence_history.py --target` and `diff.sh` diff against the mainline pin; `delta.txt` adds the IPU4 support files (`ipu4-*`) as allowed delta, so "unexplained divergence" counts only shared-file differences | in review |
-| O16 | IPU4 identity + buttress: IPU4 pdata and buttress control as their own variant (`ipu4_*` ctrl/pdata, `ipu4-platform-buttress-regs.h`) instead of `#else` pdata and in-place constant swaps | |
+| O15 | Target = mainline in the tooling: `divergence_history.py --target` and `diff.sh` diff against the mainline pin; `delta.txt` adds the IPU4 support files (`ipu4-*`) as allowed delta, so "unexplained divergence" counts only shared-file differences | merged (#236) |
+| O16 | IPU4 identity + buttress: IPU4 pdata and buttress control as their own variant (`ipu4_*` ctrl/pdata, `ipu4-platform-buttress-regs.h`) instead of `#else` pdata and in-place constant swaps | in review |
 | O17 | MMU: IPU4 tables, `ipu4_mmu_ops`, ZLW and invalidate code into `ipu4-mmu-hw.c` (as `ipu7-mmu-hw.c`); `ipu6-mmu-hw.c` back to upstream. Check the ZLW writes and invalidate values against silicon (`compare-mmio`, `probe-mmu`) | |
 | O18 | Firmware layer: IPU4 ABI, pin/stream config, buffer set and response handling into `ipu4-fw-isys.[ch]` behind `ipu4_fw_isys_ops` (as `ipu7_fw_isys_ops`); the IPU4 SysCom path out of `ipu6-fw-com.c`; `ipu6-fw-isys.[ch]` back to upstream; silent reset re-points to `fw_ops`. Largest step; split per sub-area if the ladder needs it | |
 | O19 | ISR, CSI-2, iWake: `ipu4_isys_isr`, IPU4 `setup_hw`, CSI-2 stream on/off and error handling into `ipu4-isys*.c` via the auxdrv `isr` hook; the `#ifdef IPU6` iWake and CSI-2 blocks go; upstream `ipu6-platform-isys-csi2-reg.h` back, so the IPU6 PHYs build | |
@@ -276,3 +276,12 @@ MMIO-vs-silicon tests (`probe-mmu`, `isys-irq`, `fw-open`, `stream-on`,
   distance 4472 (old target) → 1679; the worklist is led by
   `ipu6-mmu-hw.c` (360), `ipu6-fw-isys.[ch]` (569) and
   `ipu6-isys-csi2.c` (189), the O17–O19 files.
+- (O16) `IS_IPU4()` hooks alone do not shrink the distance (they cost
+  about the lines they replace); moving the IPU4 buttress control,
+  registers and pdata to `ipu4-pci.c` does. Mainline's
+  `ipu6_internal_pdata_init()` body stays `#ifdef IPU6` until O19 brings
+  back the IPU6 CSI-2 register header it needs. `field_get()` gets a
+  pre-6.19 shim. Left for later: the fork authenticates from
+  `video_open()` (runtime-PM reference in `ipu6_buttress_authenticate()`),
+  and the "IPU4 PCI driver ready" line stays as Ambu logging. Target
+  distance 1679 → 1589.
