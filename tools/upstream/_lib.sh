@@ -19,6 +19,7 @@ IPU4_LOCAL_ONLY=(
 	ambu-silent-reset.c
 	ambu-silent-reset.h
 	ipu4-compat.h
+	ipu4-mmu-hw.c
 	ipu4-pci.c
 	ipu4-pci.h
 	ipu4-platform-buttress-regs.h
