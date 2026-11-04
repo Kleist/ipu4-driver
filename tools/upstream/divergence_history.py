@@ -21,10 +21,9 @@ Usage:
   tools/upstream/divergence_history.py --linux DIR [--fetch] [--target]
                                        [--repo DIR] [--rev REV] [--out FILE]
 
-With --target it also reports the divergence from the target tree of
-tools/notes/ipu4-out-of-tree-plan.md (the ladder's ipu4-patches driver:
-mainline pin + IPU4P + fixes + IPU4 series), outside the permanent delta
-listed in tools/out-of-tree/delta.txt.
+With --target it also reports the divergence from the convergence target
+of tools/notes/ipu4-out-of-tree-plan.md, the mainline pin (tools/ipu6/pin),
+outside the permanent delta listed in tools/out-of-tree/delta.txt.
 """
 from __future__ import annotations
 
@@ -48,9 +47,6 @@ LINUX_URL = "https://github.com/torvalds/linux.git"
 TAG_RE = re.compile(r"^v(\d+)\.(\d+)(?:-rc(\d+))?$")
 # Paths that hold copies of driver files but are not the driver.
 NOT_DRIVER = ("tools/", "patches/")
-# The target tree: the ipu4-patches driver of the ladder, i.e. the mainline
-# pin (tools/ipu6/pin) with these series applied in order.
-TARGET_SERIES = ("ipu6-ipu4p", "ipu6-fixes", "ipu6-ipu4")
 
 
 def git(repo: Path, *args: str, input: str | None = None) -> str:
@@ -300,8 +296,8 @@ def allowed_delta(root: Path) -> list[str]:
 
 
 def target_tree(root: Path, linux: Path, work: Path) -> dict:
-    """Build the target's ipu6 directory in ``work``: the pin's files with
-    TARGET_SERIES applied. Returns {name: name} of its .c/.h files."""
+    """Write the target's ipu6 directory, the mainline pin's, to ``work``.
+    Returns {name: name} of its .c/.h files."""
     out = work / UPSTREAM_REL
     out.mkdir(parents=True)
     for line in git(linux, "ls-tree", f"{pin_sha(root)}:{UPSTREAM_REL}").splitlines():
@@ -310,11 +306,6 @@ def target_tree(root: Path, linux: Path, work: Path) -> dict:
         data = subprocess.run(["git", "-C", str(linux), "cat-file", "blob", oid],
                               check=True, capture_output=True).stdout
         (out / name).write_bytes(data)
-    for series in TARGET_SERIES:
-        for patch in sorted((root / "patches" / series).glob("*.patch")):
-            subprocess.run(["git", "apply", f"--include={UPSTREAM_REL}/*",
-                            str(patch)], cwd=work, check=True,
-                           capture_output=True)
     return {f.name: f.name for f in out.iterdir()
             if f.name.endswith((".c", ".h"))}
 
@@ -438,8 +429,6 @@ def build(repo: Path, rev: str, linux: Path, skip: set, root: Path | None = None
                                        Files(Path(work) / UPSTREAM_REL),
                                        allowed_delta(root))
         target["pin"] = pin_sha(root)
-        target["series"] = {s: len(list((root / "patches" / s).glob("*.patch")))
-                            for s in TARGET_SERIES}
     return {
         "schema": 2,
         "generated_at": iso(int(_dt.datetime.now(_dt.timezone.utc).timestamp())),
@@ -462,8 +451,8 @@ def main(argv=None) -> int:
     p.add_argument("--fetch", action="store_true",
                    help=f"fetch the tags and ipu6 blobs from {LINUX_URL} first")
     p.add_argument("--target", action="store_true",
-                   help="also diff against the target tree (pin + "
-                        + " + ".join(TARGET_SERIES) + ")")
+                   help="also diff against the target (the mainline pin, "
+                        "outside tools/out-of-tree/delta.txt)")
     p.add_argument("--out", type=Path,
                    default=root / "tools" / "notes" / "upstream-diff" / "history.json")
     args = p.parse_args(argv)

@@ -1,8 +1,10 @@
-# Permanent delta of kernel/ipu4/ against the target tree (mainline pin +
-# patches/ipu6-ipu4p + patches/ipu6-fixes + patches/ipu6-ipu4), see
-# "Convergence" in tools/notes/ipu4-out-of-tree-plan.md. One file name or
-# fnmatch pattern per line; every other difference counts as unexplained.
+# Permanent delta of kernel/ipu4/ against the convergence target, the
+# mainline pin (tools/ipu6/pin), see "Convergence" in
+# tools/notes/ipu4-out-of-tree-plan.md. One file name or fnmatch pattern per
+# line; every other difference counts as unexplained.
 
+# IPU4 support, in its own files the way upstream adds a generation.
+ipu4-*.[ch]
 # Ambu board support: sensor description for the product hardware.
 ambu-ipu-bridge.[ch]
 # Ambu silent reset: restart a stream when the ISYS needs a power cycle.
