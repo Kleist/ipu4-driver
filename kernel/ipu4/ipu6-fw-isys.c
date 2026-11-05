@@ -623,10 +623,8 @@ int ipu6_isys_isr_one(struct ipu6_bus_device *adev)
 			dev_warn(&adev->auxdev.dev,
 				 "%d:No queue for pin id %d\n",
 				 resp->stream_handle, resp->pin_id);
-#ifdef IPU6 // needs the IPU6 CSI-2 register header
 		if (csi2)
 			ipu6_isys_csi2_error(csi2);
-#endif
 
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_CAPTURE_ACK:
@@ -667,7 +665,6 @@ leave:
 	return 0;
 }
 
-#ifdef IPU6 // needs the IPU6 CSI-2 register header
 static void ipu6_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
 {
 	struct ipu6_isys_stream *stream;
@@ -702,7 +699,6 @@ static void ipu6_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
 		}
 	}
 }
-#endif
 
 irqreturn_t ipu6_isys_isr(struct ipu6_bus_device *adev)
 {
@@ -732,7 +728,6 @@ irqreturn_t ipu6_isys_isr(struct ipu6_bus_device *adev)
 		writel(status_sw, isys->pdata->base +
 		       IPU6_REG_ISYS_UNISPART_IRQ_CLEAR);
 
-#ifdef IPU6 // needs the IPU6 CSI-2 register header
 		if (isys->isr_csi2_bits & status_csi) {
 			unsigned int i;
 
@@ -744,7 +739,6 @@ irqreturn_t ipu6_isys_isr(struct ipu6_bus_device *adev)
 					ipu6_isys_csi2_isr(&isys->csi2[i]);
 			}
 		}
-#endif
 
 		writel(0, base + IPU6_REG_ISYS_UNISPART_SW_IRQ_REG);
 

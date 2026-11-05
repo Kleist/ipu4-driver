@@ -25,7 +25,11 @@ intel-ipu4-isys-objs			+= ipu6-isys.o \
 					ipu6-isys-video.o \
 					ipu6-isys-queue.o \
 					ipu6-isys-subdev.o \
+					ipu4-isys.o \
 					ambu-silent-reset.o \
+					ipu6-isys-mcd-phy.o \
+					ipu6-isys-jsl-phy.o \
+					ipu6-isys-dwc-phy.o \
 					ipu7-isys-csi-phy.o
 
 obj-m		+= intel-ipu4-isys.o

@@ -35,6 +35,8 @@
 #include "ipu6-bus.h"
 #include "ipu6-cpd.h"
 #include "ipu6-dma.h"
+#include "ipu4-isys.h"
+#include "ipu4-platform-isys-csi2-reg.h"
 #include "ipu6-isys.h"
 #include "ipu6-isys-csi2.h"
 #include "ipu6-mmu.h"
@@ -193,9 +195,12 @@ static int isys_csi2_register_subdevices(struct ipu6_isys *isys)
 
 			isys->isr_csi2_bits |= mask;
 			isys->csi2[i].legacy_irq_mask = mask;
+		} else if (IS_IPU4(isys->adev->isp)) {
+			base += IPU4_CSI_REG_PORT_BASE(i);
+			isys->isr_csi2_bits |= IPU4_ISYS_UNISPART_IRQ_CSI2(i);
 		} else {
 			base += CSI_REG_PORT_BASE(i);
-			isys->isr_csi2_bits |= IPU4_ISYS_UNISPART_IRQ_CSI2(i);
+			isys->isr_csi2_bits |= IPU6_ISYS_UNISPART_IRQ_CSI2(i);
 		}
 
 		ret = ipu6_isys_csi2_init(&isys->csi2[i], isys, base, i);
@@ -322,8 +327,12 @@ static void ipu6_isys_setup_hw(struct ipu6_isys *isys)
 	void __iomem *base = isys->pdata->base;
 	const u8 *thd = isys->pdata->ipdata->hw_variant.cdc_fifo_threshold;
 	u32 irqs = 0;
-#ifdef IPU6
 	unsigned int i, nports;
+
+	if (IS_IPU4(isys->adev->isp)) {
+		ipu4_isys_setup_hw(isys);
+		return;
+	}
 
 	nports = isys->pdata->ipdata->csi2.nports;
 
@@ -351,30 +360,6 @@ static void ipu6_isys_setup_hw(struct ipu6_isys *isys)
 	/* Write CDC FIFO threshold values for isys */
 	for (i = 0; i < isys->pdata->ipdata->hw_variant.cdc_fifos; i++)
 		writel(thd[i], base + IPU6_REG_ISYS_CDC_THRESHOLD(i));
-#else
-	unsigned int i;
-	/* Enable irqs for all MIPI ports */
-	irqs = IPU4_ISYS_UNISPART_IRQ_CSI2(0) |
-	    IPU4_ISYS_UNISPART_IRQ_CSI2(1) |
-	    IPU4_ISYS_UNISPART_IRQ_CSI2(2) |
-	    IPU4_ISYS_UNISPART_IRQ_CSI2(3) |
-	    IPU4_ISYS_UNISPART_IRQ_CSI2(4) | IPU4_ISYS_UNISPART_IRQ_CSI2(5);
-
-	irqs |= IPU4_ISYS_UNISPART_IRQ_SW;
-
-	writel(irqs, base + IPU4_REG_ISYS_UNISPART_IRQ_EDGE);
-	writel(irqs, base + IPU4_REG_ISYS_UNISPART_IRQ_LEVEL_NOT_PULSE);
-	writel(irqs, base + IPU4_REG_ISYS_UNISPART_IRQ_CLEAR);
-	writel(irqs, base + IPU4_REG_ISYS_UNISPART_IRQ_MASK);
-	writel(irqs, base + IPU4_REG_ISYS_UNISPART_IRQ_ENABLE);
-
-	writel(0, base + IPU4_REG_ISYS_UNISPART_SW_IRQ_REG);
-	writel(0, base + IPU4_REG_ISYS_UNISPART_SW_IRQ_MUX_REG);
-
-	/* Write CDC FIFO threshold values for isys */
-	for (i = 0; i < isys->pdata->ipdata->hw_variant.cdc_fifos; i++)
-		writel(thd[i], base + IPU4_REG_ISYS_CDC_THRESHOLD(i));
-#endif
 }
 
 #ifdef IPU6
@@ -1087,7 +1072,6 @@ static int isys_probe(struct auxiliary_device *auxdev,
 	if (ret < 0)
 		goto out_remove_pkg_dir_shared_buffer;
 
-#ifdef IPU6 // Disabled for IPU4
 	if (IS_IPU7(adev->isp) || IS_IPU8(adev->isp))
 		isys->phy_set_power = ipu7_isys_csi_phy_set_power;
 	else if (IS_IPU6SE(adev->isp))
@@ -1096,7 +1080,6 @@ static int isys_probe(struct auxiliary_device *auxdev,
 		isys->phy_set_power = ipu6_isys_dwc_phy_set_power;
 	else
 		isys->phy_set_power = ipu6_isys_mcd_phy_set_power;
-#endif
 
 	ret = isys_register_devices(isys);
 	if (ret)

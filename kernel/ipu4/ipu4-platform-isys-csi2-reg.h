@@ -13,7 +13,7 @@
 static const unsigned int ipu4_csi_offsets[] = {
 	0x64000, 0x65000, 0x66000, 0x67000, 0x6C000, 0x6C800
 };
-#define CSI_REG_PORT_BASE(id)		ipu4_csi_offsets[id]
+#define IPU4_CSI_REG_PORT_BASE(id)	ipu4_csi_offsets[id]
 
 /* IRQ-related registers specific to each of the four CSI receivers */
 #define CSI2_REG_CSI2PART_IRQ_EDGE			0x400
@@ -39,8 +39,8 @@ static const unsigned int ipu4_csi_offsets[] = {
 #define CSI2_REG_CSI2S2M_IRQ_ENABLE			0x610
 #define CSI2_REG_CSI2S2M_IRQ_LEVEL_NOT_PULSE		0x614
 
-#define IPU_CSI_RX_IRQ_FS_VC(chn)			(1 << ((chn) * 4))
-#define IPU_CSI_RX_IRQ_FE_VC(chn)			(2 << ((chn) * 4))
+#define IPU4_CSI_RX_IRQ_FS_VC(chn)			(1 << ((chn) * 4))
+#define IPU4_CSI_RX_IRQ_FE_VC(chn)			(2 << ((chn) * 4))
 
 #define CSI2_REG_CSI_RX_ENABLE				0x00
 #define CSI2_CSI_RX_ENABLE_ENABLE			0x01
@@ -55,4 +55,4 @@ static const unsigned int ipu4_csi_offsets[] = {
 #define CSI2_REG_CSI_RX_DLY_CNT_TERMEN_DLANE(n)		(0x34 + (n) * 8)
 #define CSI2_REG_CSI_RX_DLY_CNT_SETTLE_DLANE(n)		(0x38 + (n) * 8)
 
-#endif /* IPU6_ISYS_CSI2_REG_H */
+#endif /* IPU4_PLATFORM_ISYS_CSI2_REG_H */
