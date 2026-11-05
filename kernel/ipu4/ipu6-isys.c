@@ -362,8 +362,6 @@ static void ipu6_isys_setup_hw(struct ipu6_isys *isys)
 		writel(thd[i], base + IPU6_REG_ISYS_CDC_THRESHOLD(i));
 }
 
-#ifdef IPU6
-
 static int set_iwake_register(struct ipu6_isys *isys, u32 index, u32 value)
 {
 	struct device *dev = &isys->adev->auxdev.dev;
@@ -401,6 +399,10 @@ static void set_iwake_ltrdid(struct ipu6_isys *isys, u16 ltr, u16 did,
 	u16 did_val, did_scale = DID_SCALE_1US;
 	struct ipu6_device *isp = isys->adev->isp;
 	union fabric_ctrl fc;
+
+	/* IPU4 has no iWake */
+	if (IS_IPU4(isp))
+		return;
 
 	switch (use) {
 	case LTR_IWAKE_ON:
@@ -578,12 +580,6 @@ void ipu6_isys_update_watermark_setting(struct ipu6_isys *isys)
 	       isys->adev->isp->base + REG_PKGC_PMON_CFG);
 }
 
-#else
-/* IPU4 has no iWake; the CSI-2 receiver skips the watermark on IPU4. */
-void ipu6_isys_update_watermark_setting(struct ipu6_isys *isys)
-{
-}
-#endif
 
 /* The .bound() notifier callback when a match is found */
 static int isys_notifier_bound(struct v4l2_async_notifier *notifier,
@@ -799,9 +795,7 @@ static int isys_runtime_pm_resume(struct device *dev)
 		ipu7_isys_setup_hw(isys);
 	} else {
 		ipu6_isys_setup_hw(isys);
-#ifdef IPU6
 		set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_ON);
-#endif
 	}
 
 	ipu6_configure_spc(adev->isp, &ipdata->hw_variant,
@@ -830,10 +824,8 @@ static int isys_runtime_pm_resume(struct device *dev)
 	isys->phy_termcal_val = 0;
 	cpu_latency_qos_update_request(&isys->pm_qos, PM_QOS_DEFAULT_VALUE);
 
-#ifdef IPU6
 	if (!IS_IPU7(isp) && !IS_IPU8(isp))
 		set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_OFF);
-#endif
 
 err_mmu_hw_cleanup:
 	ipu6_mmu_hw_cleanup(adev->mmu);
@@ -845,6 +837,7 @@ static int isys_runtime_pm_suspend(struct device *dev)
 {
 	struct ipu6_bus_device *adev = to_ipu6_bus_device(dev);
 	struct ipu6_isys *isys;
+	struct ipu6_device *isp = adev->isp;
 	int ret = 0;
 
 	isys = dev_get_drvdata(dev);
@@ -867,10 +860,8 @@ static int isys_runtime_pm_suspend(struct device *dev)
 
 	isys->phy_termcal_val = 0;
 	cpu_latency_qos_update_request(&isys->pm_qos, PM_QOS_DEFAULT_VALUE);
-#ifdef IPU6
 	if (!IS_IPU7(isp) && !IS_IPU8(isp))
 		set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_OFF);
-#endif
 
 	ipu6_mmu_hw_cleanup(adev->mmu);
 
