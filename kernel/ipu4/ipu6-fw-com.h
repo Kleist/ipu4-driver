@@ -29,11 +29,11 @@ struct ipu6_fw_com_cfg {
 	void (*cell_start)(struct ipu6_bus_device *adev);
 
 	unsigned int buttress_boot_offset;
+	bool dmem_syscom;
 };
 
-struct ipu6_fw_com_context *
-ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
-		    struct ipu6_bus_device *adev, void __iomem *base);
+void *ipu6_fw_com_prepare(struct ipu6_fw_com_cfg *cfg,
+			  struct ipu6_bus_device *adev, void __iomem *base);
 
 int ipu6_fw_com_open(struct ipu6_fw_com_context *ctx);
 bool ipu6_fw_com_ready(struct ipu6_fw_com_context *ctx);
