@@ -245,6 +245,7 @@ static int ipu4_isys_fwcom_cfg_init(struct ipu6_isys *isys,
 	}
 
 	fwcom_cfg->dmem_addr = isys->pdata->ipdata->hw_variant.dmem_offset;
+	fwcom_cfg->dmem_syscom = true;
 	fwcom_cfg->specific_addr = isys_fw_cfg;
 	fwcom_cfg->specific_size = sizeof(*isys_fw_cfg);
 
