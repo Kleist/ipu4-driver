@@ -18,6 +18,7 @@
 #include <media/v4l2-mediabus.h>
 
 #include "ipu6.h"
+#include "ipu4-fw-isys.h"
 #include "ipu6-fw-isys.h"
 #include "ipu7-fw-isys.h"
 #include "ipu6-isys-csi2.h"
@@ -156,9 +157,13 @@ struct isys_fw_msgs {
 	union {
 		u64 dummy;
 		union {
+			struct ipu6_fw_isys_frame_buff_set_abi frame;
+			struct ipu6_fw_isys_stream_cfg_data_abi stream;
+		} ipu6;
+		union {
 			struct ipu4_fw_isys_frame_buff_set_abi frame;
 			struct ipu4_fw_isys_stream_cfg_data_abi stream;
-		} ipu6;
+		} ipu4;
 		union {
 			struct ipu7_fw_isys_frame_buff_set frame;
 			struct ipu7_fw_isys_stream_cfg stream;
@@ -226,5 +231,4 @@ int ipu6_isys_jsl_phy_set_power(struct ipu6_isys *isys,
 				struct ipu6_isys_csi2_config *cfg,
 				const struct ipu6_isys_csi2_timing *timing,
 				bool on);
-
 #endif /* IPU6_ISYS_H */

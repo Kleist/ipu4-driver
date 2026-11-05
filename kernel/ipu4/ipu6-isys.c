@@ -1022,6 +1022,7 @@ void ipu6_put_fw_msg_buf(struct ipu6_isys *isys, struct isys_fw_msgs *msg)
 	spin_unlock_irqrestore(&isys->listlock, flags);
 }
 
+static const struct ipu6_auxdrv_data ipu4_isys_auxdrv_data;
 static const struct ipu6_auxdrv_data ipu6_isys_auxdrv_data;
 static const struct ipu6_auxdrv_data ipu7_isys_auxdrv_data;
 
@@ -1043,6 +1044,8 @@ static int isys_probe(struct auxiliary_device *auxdev,
 
 	adev->auxdrv_data = (IS_IPU7(isp) || IS_IPU8(isp)) ? &ipu7_isys_auxdrv_data :
 					   &ipu6_isys_auxdrv_data;
+	if (IS_IPU4(isp))
+		adev->auxdrv_data = &ipu4_isys_auxdrv_data;
 	adev->auxdrv = to_auxiliary_drv(auxdev->dev.driver);
 	isys->adev = adev;
 	isys->pdata = adev->pdata;
@@ -1132,6 +1135,13 @@ static void isys_remove(struct auxiliary_device *auxdev)
 	mutex_destroy(&isys->stream_mutex);
 	mutex_destroy(&isys->mutex);
 }
+
+static const struct ipu6_auxdrv_data ipu4_isys_auxdrv_data = {
+	.isr = ipu4_isys_isr,
+	.isr_threaded = NULL,
+	.wake_isr_thread = false,
+	.fw_ops = &ipu4_fw_isys_ops,
+};
 
 static const struct ipu6_auxdrv_data ipu6_isys_auxdrv_data = {
 	.isr = ipu6_isys_isr,

@@ -12,7 +12,6 @@
 #include <linux/types.h>
 
 #include "ipu6-bus.h"
-#include "ipu6-cpd.h"
 #include "ipu6-fw-com.h"
 #include "ipu6-isys.h"
 #include "ipu6-platform-isys-csi2-reg.h"
@@ -35,7 +34,7 @@ static int handle_proxy_response(struct ipu6_isys *isys, unsigned int req_id)
 	struct ipu6_fw_isys_proxy_resp_info_abi *resp;
 	int ret;
 
-	resp = ipu6_recv_get_token(isys->fwctx, IPU4_BASE_PROXY_RECV_QUEUES);
+	resp = ipu6_recv_get_token(isys->fwctx, IPU6_BASE_PROXY_RECV_QUEUES);
 	if (!resp)
 		return 1;
 
@@ -45,7 +44,7 @@ static int handle_proxy_response(struct ipu6_isys *isys, unsigned int req_id)
 
 	ret = req_id == resp->request_id ? 0 : -EIO;
 
-	ipu6_recv_put_token(isys->fwctx, IPU4_BASE_PROXY_RECV_QUEUES);
+	ipu6_recv_put_token(isys->fwctx, IPU6_BASE_PROXY_RECV_QUEUES);
 
 	return ret;
 }
@@ -65,7 +64,7 @@ int ipu6_fw_isys_send_proxy_token(struct ipu6_isys *isys,
 		"proxy send: req_id 0x%x, index %d, offset 0x%x, value 0x%x\n",
 		req_id, index, offset, value);
 
-	token = ipu6_send_get_token(ctx, IPU4_BASE_PROXY_SEND_QUEUES);
+	token = ipu6_send_get_token(ctx, IPU6_BASE_PROXY_SEND_QUEUES);
 	if (!token)
 		return -EBUSY;
 
@@ -73,7 +72,7 @@ int ipu6_fw_isys_send_proxy_token(struct ipu6_isys *isys,
 	token->region_index = index;
 	token->offset = offset;
 	token->value = value;
-	ipu6_send_put_token(ctx, IPU4_BASE_PROXY_SEND_QUEUES);
+	ipu6_send_put_token(ctx, IPU6_BASE_PROXY_SEND_QUEUES);
 
 	do {
 		usleep_range(100, 110);
@@ -116,7 +115,7 @@ static int ipu6_fw_isys_complex_cmd(struct ipu6_isys *isys,
 		clflush_cache_range(cpu_mapped_buf, size);
 
 	token = ipu6_send_get_token(ctx,
-				    stream_handle + IPU4_BASE_MSG_SEND_QUEUES);
+				    stream_handle + IPU6_BASE_MSG_SEND_QUEUES);
 	if (!token)
 		return -EBUSY;
 
@@ -124,7 +123,7 @@ static int ipu6_fw_isys_complex_cmd(struct ipu6_isys *isys,
 	token->buf_handle = (unsigned long)cpu_mapped_buf;
 	token->send_type = send_type;
 
-	ipu6_send_put_token(ctx, stream_handle + IPU4_BASE_MSG_SEND_QUEUES);
+	ipu6_send_put_token(ctx, stream_handle + IPU6_BASE_MSG_SEND_QUEUES);
 
 	return 0;
 }
@@ -212,9 +211,9 @@ static int ipu6_isys_fwcom_cfg_init(struct ipu6_isys *isys,
 	int type_proxy = IPU6_FW_ISYS_QUEUE_TYPE_PROXY;
 	int type_dev = IPU6_FW_ISYS_QUEUE_TYPE_DEV;
 	int type_msg = IPU6_FW_ISYS_QUEUE_TYPE_MSG;
-	int base_dev_send = IPU4_BASE_DEV_SEND_QUEUES;
-	int base_msg_send = IPU4_BASE_MSG_SEND_QUEUES;
-	int base_msg_recv = IPU4_BASE_MSG_RECV_QUEUES;
+	int base_dev_send = IPU6_BASE_DEV_SEND_QUEUES;
+	int base_msg_send = IPU6_BASE_MSG_SEND_QUEUES;
+	int base_msg_recv = IPU6_BASE_MSG_RECV_QUEUES;
 	struct ipu6_fw_isys_fw_config *isys_fw_cfg;
 	u32 num_in_message_queues;
 	unsigned int max_streams;
@@ -229,10 +228,10 @@ static int ipu6_isys_fwcom_cfg_init(struct ipu6_isys *isys,
 	if (!isys_fw_cfg)
 		return -ENOMEM;
 
-	isys_fw_cfg->num_send_queues[type_proxy] = IPU4_N_MAX_PROXY_SEND_QUEUES;
-	isys_fw_cfg->num_send_queues[type_dev] = IPU4_N_MAX_DEV_SEND_QUEUES;
+	isys_fw_cfg->num_send_queues[type_proxy] = IPU6_N_MAX_PROXY_SEND_QUEUES;
+	isys_fw_cfg->num_send_queues[type_dev] = IPU6_N_MAX_DEV_SEND_QUEUES;
 	isys_fw_cfg->num_send_queues[type_msg] = num_in_message_queues;
-	isys_fw_cfg->num_recv_queues[type_proxy] = IPU4_N_MAX_PROXY_RECV_QUEUES;
+	isys_fw_cfg->num_recv_queues[type_proxy] = IPU6_N_MAX_PROXY_RECV_QUEUES;
 	/* Common msg/dev return queue */
 	isys_fw_cfg->num_recv_queues[type_dev] = 0;
 	isys_fw_cfg->num_recv_queues[type_msg] = 1;
@@ -242,7 +241,7 @@ static int ipu6_isys_fwcom_cfg_init(struct ipu6_isys *isys,
 		goto err_free_fw_cfg;
 
 	output_queue_cfg = kzalloc_objs(*output_queue_cfg,
-					IPU4_N_MAX_RECV_QUEUES);
+					IPU6_N_MAX_RECV_QUEUES);
 	if (!output_queue_cfg)
 		goto err_free_input_queue_cfg;
 
@@ -373,123 +372,17 @@ static int ipu6_fw_isys_init(struct ipu6_isys *isys, unsigned int num_streams)
 static struct ipu6_fw_isys_resp_info_abi *
 ipu6_fw_isys_get_resp(struct ipu6_isys *isys)
 {
-	return ipu6_recv_get_token(isys->fwctx, IPU4_BASE_MSG_RECV_QUEUES);
+	return ipu6_recv_get_token(isys->fwctx, IPU6_BASE_MSG_RECV_QUEUES);
 }
 
 static void ipu6_fw_isys_put_resp(struct ipu6_isys *isys)
 {
-	ipu6_recv_put_token(isys->fwctx, IPU4_BASE_MSG_RECV_QUEUES);
-}
-
-void ipu4_fw_isys_dump_stream_cfg(struct device *dev,
-				  struct ipu4_fw_isys_stream_cfg_data_abi *cfg)
-{
-	unsigned int i;
-
-	dev_dbg(dev, "---------------------------\n");
-	dev_dbg(dev, "IPU_FW_ISYS_STREAM_CFG_DATA\n");
-	dev_dbg(dev, "---------------------------\n");
-
-	dev_dbg(dev, "crop[0] offset: %lx",
-		(uintptr_t)&cfg->crop[0] - (uintptr_t)cfg);
-	dev_dbg(dev, "input_pins[0] offset: %lx",
-		(uintptr_t)&cfg->input_pins[0] - (uintptr_t)cfg);
-	dev_dbg(dev, "output_pins[0] offset: %lx",
-		(uintptr_t)&cfg->output_pins[0] - (uintptr_t)cfg);
-	dev_dbg(dev, "compfmt offset: %lx",
-		(uintptr_t)&cfg->compfmt - (uintptr_t)cfg);
-
-	dev_dbg(dev, "Source %d\n", cfg->src);
-	dev_dbg(dev, "VC %d\n", cfg->vc);
-	dev_dbg(dev, "Nof input pins %d\n", cfg->nof_input_pins);
-	dev_dbg(dev, "Nof output pins %d\n", cfg->nof_output_pins);
-
-	for (i = 0; i < cfg->nof_input_pins; i++) {
-		dev_dbg(dev, "Input pin %d\n", i);
-		dev_dbg(dev, "Mipi data type 0x%0x\n",
-			cfg->input_pins[i].dt);
-		dev_dbg(dev, "Mipi store mode %d\n",
-			cfg->input_pins[i].mipi_store_mode);
-		dev_dbg(dev, "Bits per pixel %d\n",
-			cfg->input_pins[i].bits_per_pix);
-		dev_dbg(dev, "Mapped data type 0x%0x\n",
-			cfg->input_pins[i].mapped_dt);
-		dev_dbg(dev, "Input res width %d\n",
-			cfg->input_pins[i].input_res.width);
-		dev_dbg(dev, "Input res height %d\n",
-			cfg->input_pins[i].input_res.height);
-	}
-
-	for (i = 0; i < N_IPU_FW_ISYS_CROPPING_LOCATION; i++) {
-		dev_dbg(dev, "Crop info %d\n", i);
-		dev_dbg(dev, "Crop.top_offset %d\n",
-			cfg->crop[i].top_offset);
-		dev_dbg(dev, "Crop.left_offset %d\n",
-			cfg->crop[i].left_offset);
-		dev_dbg(dev, "Crop.bottom_offset %d\n",
-			cfg->crop[i].bottom_offset);
-		dev_dbg(dev, "Crop.right_offset %d\n",
-			cfg->crop[i].right_offset);
-		dev_dbg(dev, "----------------\n");
-	}
-
-	for (i = 0; i < cfg->nof_output_pins; i++) {
-		dev_dbg(dev, "Output pin %d\n", i);
-		dev_dbg(dev, "Output input pin id %d\n",
-			cfg->output_pins[i].input_pin_id);
-		dev_dbg(dev, "Output res width %d\n",
-			cfg->output_pins[i].output_res.width);
-		dev_dbg(dev, "Output res height %d\n",
-			cfg->output_pins[i].output_res.height);
-		dev_dbg(dev, "Payload buf size: %d\n",
-			cfg->output_pins[i].payload_buf_size);
-		dev_dbg(dev, "Stride %d\n", cfg->output_pins[i].stride);
-		dev_dbg(dev, "Pin type %d\n", cfg->output_pins[i].pt);
-		dev_dbg(dev, "Ft %d\n", cfg->output_pins[i].ft);
-		dev_dbg(dev, "Watermar in lines %d\n",
-			cfg->output_pins[i].watermark_in_lines);
-		dev_dbg(dev, "Send irq %d\n",
-			cfg->output_pins[i].send_irq);
-		dev_dbg(dev, "Reserve compression %d\n",
-			cfg->output_pins[i].reserve_compression);
-		dev_dbg(dev, "----------------\n");
-	}
-}
-
-void
-ipu4_fw_isys_dump_frame_buff_set(struct device *dev,
-				 struct ipu4_fw_isys_frame_buff_set_abi *buf,
-				 unsigned int outputs)
-{
-	unsigned int i;
-
-	dev_dbg(dev, "-----------------------------------------------------\n");
-	dev_dbg(dev, "FRAME_BUFF_SET with %d outputs\n", outputs);
-	for (i = 0; i < outputs; i++) {
-		dev_dbg(dev, "output_pin[%d]:\n", i);
-		dev_dbg(dev, "\t.out_buf_id = %llu\n",
-			buf->output_pins[i].out_buf_id);
-		dev_dbg(dev, "\t.addr = 0x%x\n", buf->output_pins[i].addr);
-		dev_dbg(dev, "\t.compress = %d\n",
-			buf->output_pins[i].compress);
-	}
-
-	dev_dbg(dev, "send_irq_sof = 0x%x\n", buf->send_irq_sof);
-	dev_dbg(dev, "send_irq_eof = 0x%x\n", buf->send_irq_eof);
-	dev_dbg(dev, "send_resp_sof = 0x%x\n", buf->send_resp_sof);
-	dev_dbg(dev, "send_resp_eof = 0x%x\n", buf->send_resp_eof);
-	dev_dbg(dev, "send_irq_capture_ack = 0x%x\n",
-		buf->send_irq_capture_ack);
-	dev_dbg(dev, "send_irq_capture_done = 0x%x\n",
-		buf->send_irq_capture_done);
-
-	dev_dbg(dev, "-----------------------------------------------------\n");
+	ipu6_recv_put_token(isys->fwctx, IPU6_BASE_MSG_RECV_QUEUES);
 }
 
 static void ipu6_fw_isys_dump_stream_cfg(struct device *dev,
 					 struct isys_fw_msgs *msg)
 {
-#ifdef IPU6
 	struct ipu6_fw_isys_stream_cfg_data_abi *cfg = &msg->ipu6.stream;
 	unsigned int i;
 
@@ -563,16 +456,12 @@ static void ipu6_fw_isys_dump_stream_cfg(struct device *dev,
 			cfg->output_pins[i].sensor_type);
 	}
 	dev_dbg(dev, "-----------------------------------------------------\n");
-#else
-	ipu4_fw_isys_dump_stream_cfg(dev, &msg->ipu6.stream);
-#endif
 }
 
 static void
 ipu6_fw_isys_dump_frame_buf_set(struct device *dev, struct isys_fw_msgs *msg,
 				unsigned int outputs)
 {
-#ifdef IPU6
 	struct ipu6_fw_isys_frame_buff_set_abi *buf;
 	unsigned int i;
 
@@ -604,9 +493,6 @@ ipu6_fw_isys_dump_frame_buf_set(struct device *dev, struct isys_fw_msgs *msg,
 		buf->send_resp_capture_done);
 
 	dev_dbg(dev, "-----------------------------------------------------\n");
-#else
-	ipu4_fw_isys_dump_frame_buff_set(dev, &msg->ipu6.frame, outputs);
-#endif
 }
 
 struct fwmsg {
@@ -645,21 +531,13 @@ static u32 resp_type_to_index(int type)
 	return  ARRAY_SIZE(fw_msg) - 1;
 }
 
-static struct isys_fw_msgs *ipu4_fw_msg_from_handle(u64 handle)
-{
-	if (!handle)
-		return NULL;
-
-	return container_of((void *)(uintptr_t)handle, struct isys_fw_msgs,
-			    dummy);
-}
-
 int ipu6_isys_isr_one(struct ipu6_bus_device *adev)
 {
 	struct ipu6_isys *isys = ipu6_bus_get_drvdata(adev);
 	struct ipu6_fw_isys_resp_info_abi *resp;
 	struct ipu6_isys_stream *stream;
 	struct ipu6_isys_csi2 *csi2 = NULL;
+	struct isys_fw_msgs *isys_fw_msg = NULL;
 	u32 index;
 	u64 ts;
 
@@ -687,7 +565,7 @@ int ipu6_isys_isr_one(struct ipu6_bus_device *adev)
 
 	guard(spinlock_irqsave)(&isys->streams_lock);
 
-	if (resp->stream_handle >= IPU4_ISYS_MAX_STREAMS) {
+	if (resp->stream_handle >= IPU6_ISYS_MAX_STREAMS) {
 		dev_err(&adev->auxdev.dev, "bad stream handle %u\n",
 			resp->stream_handle);
 		goto leave;
@@ -715,8 +593,6 @@ int ipu6_isys_isr_one(struct ipu6_bus_device *adev)
 		complete(&stream->stream_start_completion);
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_START_AND_CAPTURE_ACK:
-		ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev),
-				    ipu4_fw_msg_from_handle(resp->buf_handle));
 		complete(&stream->stream_start_completion);
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_STOP_ACK:
@@ -726,6 +602,20 @@ int ipu6_isys_isr_one(struct ipu6_bus_device *adev)
 		complete(&stream->stream_stop_completion);
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_PIN_DATA_READY:
+		/*
+		 * firmware only release the capture message until software
+		 * get pin_data_ready event
+		 */
+		if (!resp->buf_id) {
+			dev_warn(&adev->auxdev.dev, "%d: Invalid buf ID\n",
+				 resp->stream_handle);
+			goto leave;
+		}
+
+		isys_fw_msg = container_of((void *)(uintptr_t)resp->buf_id,
+					   struct isys_fw_msgs, dummy);
+
+		ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev), isys_fw_msg);
 		if (resp->pin_id < IPU6_ISYS_OUTPUT_PINS &&
 		    stream->output_pins_queue[resp->pin_id])
 			ipu6_isys_queue_buf_ready(stream, resp);
@@ -733,13 +623,13 @@ int ipu6_isys_isr_one(struct ipu6_bus_device *adev)
 			dev_warn(&adev->auxdev.dev,
 				 "%d:No queue for pin id %d\n",
 				 resp->stream_handle, resp->pin_id);
+#ifdef IPU6 // needs the IPU6 CSI-2 register header
 		if (csi2)
-			ipu4_isys_csi2_error(csi2);
+			ipu6_isys_csi2_error(csi2);
+#endif
 
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_CAPTURE_ACK:
-		ipu6_put_fw_msg_buf(ipu6_bus_get_drvdata(adev),
-				    ipu4_fw_msg_from_handle(resp->buf_handle));
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_START_AND_CAPTURE_DONE:
 	case IPU6_FW_ISYS_RESP_TYPE_STREAM_CAPTURE_DONE:
@@ -758,9 +648,7 @@ int ipu6_isys_isr_one(struct ipu6_bus_device *adev)
 			% IPU6_ISYS_MAX_PARALLEL_SOF;
 		break;
 	case IPU6_FW_ISYS_RESP_TYPE_FRAME_EOF:
-#ifdef IPU6 // Disabled for IPU4
 		ipu6_isys_csi2_eof_event_by_stream(stream);
-#endif
 		dev_dbg(&adev->auxdev.dev,
 			"eof: handle %d: (index %u), timestamp 0x%16.16llx\n",
 			resp->stream_handle,
@@ -779,13 +667,13 @@ leave:
 	return 0;
 }
 
+#ifdef IPU6 // needs the IPU6 CSI-2 register header
 static void ipu6_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
 {
 	struct ipu6_isys_stream *stream;
 	unsigned int i;
 	u32 status;
 
-#ifdef IPU6
 	ipu6_isys_register_errors(csi2);
 
 	status = readl(csi2->base + CSI_PORT_REG_BASE_IRQ_CSI_SYNC +
@@ -793,15 +681,6 @@ static void ipu6_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
 
 	writel(status, csi2->base + CSI_PORT_REG_BASE_IRQ_CSI_SYNC +
 	       CSI_PORT_REG_BASE_IRQ_CLEAR_OFFSET);
-#else
-	status = readl(csi2->base + CSI2_REG_CSI2PART_IRQ_STATUS);
-	writel(status, csi2->base + CSI2_REG_CSI2PART_IRQ_CLEAR);
-
-	if (status & CSI2_CSI2PART_IRQ_CSIRX)
-		ipu4_isys_register_errors(csi2);
-	/* SOF and EOF come from the firmware responses on IPU4. */
-	return;
-#endif
 
 	scoped_guard(spinlock, &csi2->isys->streams_lock) {
 		for (i = 0; i < NR_OF_CSI2_VC; i++) {
@@ -823,63 +702,10 @@ static void ipu6_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
 		}
 	}
 }
-
-static irqreturn_t ipu4_isys_isr(struct ipu6_bus_device *adev)
-{
-	struct ipu6_isys *isys = ipu6_bus_get_drvdata(adev);
-	void __iomem *base = isys->pdata->base;
-	int pm_status;
-	u32 status;
-
-	pm_status = pm_runtime_get_if_active(&adev->auxdev.dev);
-	if (!pm_status)
-		return IRQ_NONE;
-
-	status = readl(base + IPU4_REG_ISYS_UNISPART_IRQ_STATUS);
-	do {
-		writel(status, base + IPU4_REG_ISYS_UNISPART_IRQ_CLEAR);
-
-		if (isys->isr_csi2_bits & status) {
-			unsigned int i;
-
-			for (i = 0; i < isys->pdata->ipdata->csi2.nports; i++) {
-				if (IPU4_ISYS_UNISPART_IRQ_CSI2(i) & status)
-					ipu6_isys_csi2_isr(&isys->csi2[i]);
-			}
-		}
-
-		writel(0, base + IPU4_REG_ISYS_UNISPART_SW_IRQ_REG);
-
-		/*
-		 * Handle a single FW event per checking the CSI-2
-		 * receiver SOF status. This is done in order to avoid
-		 * the case where events arrive to the event queue and
-		 * one of them is a SOF event which then could be
-		 * handled before the SOF interrupt. This would pose
-		 * issues in sequence numbering which is based on SOF
-		 * interrupts, always assumed to arrive before FW SOF
-		 * events.
-		 */
-		if (status & IPU4_ISYS_UNISPART_IRQ_SW && !ipu6_isys_isr_one(adev))
-			status = IPU4_ISYS_UNISPART_IRQ_SW;
-		else
-			status = 0;
-
-		status |= readl(isys->pdata->base +
-				    IPU4_REG_ISYS_UNISPART_IRQ_STATUS);
-	} while (status & (isys->isr_csi2_bits | IPU4_ISYS_UNISPART_IRQ_SW));
-
-	if (pm_status > 0)
-		pm_runtime_put(&adev->auxdev.dev);
-
-	return IRQ_HANDLED;
-}
+#endif
 
 irqreturn_t ipu6_isys_isr(struct ipu6_bus_device *adev)
 {
-#ifndef IPU6
-	return ipu4_isys_isr(adev);
-#else
 	struct ipu6_isys *isys = ipu6_bus_get_drvdata(adev);
 	void __iomem *base = isys->pdata->base;
 	u32 status_sw, status_csi;
@@ -906,6 +732,7 @@ irqreturn_t ipu6_isys_isr(struct ipu6_bus_device *adev)
 		writel(status_sw, isys->pdata->base +
 		       IPU6_REG_ISYS_UNISPART_IRQ_CLEAR);
 
+#ifdef IPU6 // needs the IPU6 CSI-2 register header
 		if (isys->isr_csi2_bits & status_csi) {
 			unsigned int i;
 
@@ -917,6 +744,7 @@ irqreturn_t ipu6_isys_isr(struct ipu6_bus_device *adev)
 					ipu6_isys_csi2_isr(&isys->csi2[i]);
 			}
 		}
+#endif
 
 		writel(0, base + IPU6_REG_ISYS_UNISPART_SW_IRQ_REG);
 
@@ -937,7 +765,6 @@ irqreturn_t ipu6_isys_isr(struct ipu6_bus_device *adev)
 		pm_runtime_put(&adev->auxdev.dev);
 
 	return IRQ_HANDLED;
-#endif
 }
 
 static int ipu6_isys_fw_pin_cfg(struct ipu6_isys_video *av,
@@ -948,14 +775,15 @@ static int ipu6_isys_fw_pin_cfg(struct ipu6_isys_video *av,
 {
 	struct v4l2_subdev *sd = media_entity_to_v4l2_subdev(src_pad->entity);
 	struct v4l2_subdev_state *state = v4l2_subdev_get_locked_active_state(sd);
-	struct ipu4_fw_isys_stream_cfg_data_abi *cfg = __cfg;
-	struct ipu4_fw_isys_input_pin_info_abi *input_pin;
-	struct ipu4_fw_isys_output_pin_info_abi *output_pin;
+	struct ipu6_fw_isys_stream_cfg_data_abi *cfg = __cfg;
+	struct ipu6_fw_isys_input_pin_info_abi *input_pin;
+	struct ipu6_fw_isys_output_pin_info_abi *output_pin;
 	struct ipu6_isys_queue *aq = &av->aq;
 	struct v4l2_mbus_framefmt *fmt;
 	const struct ipu6_isys_pixelformat *pfmt =
 		ipu6_isys_get_isys_format(ipu6_isys_get_format(av), 0);
 	struct v4l2_rect v4l2_crop;
+	struct ipu6_isys *isys = av->isys;
 	int input_pins = cfg->nof_input_pins++;
 	int output_pins;
 	u32 src_stream;
@@ -970,16 +798,13 @@ static int ipu6_isys_fw_pin_cfg(struct ipu6_isys_video *av,
 	input_pin->dt = entry->bus.csi2.dt;
 	input_pin->bits_per_pix = pfmt->bpp_packed;
 	input_pin->mapped_dt = 0x40; /* invalid mipi data type */
-#ifdef IPU6 // Disabled for IPU4
 	input_pin->mipi_decompression = 0;
 	input_pin->capture_mode = IPU6_FW_ISYS_CAPTURE_MODE_REGULAR;
-#endif
 	input_pin->mipi_store_mode = pfmt->bpp == pfmt->bpp_packed ?
 		IPU6_FW_ISYS_MIPI_STORE_MODE_DISCARD_LONG_HEADER :
 		IPU6_FW_ISYS_MIPI_STORE_MODE_NORMAL;
-#ifdef IPU6 // Disabled for IPU4
 	input_pin->crop_first_and_last_lines = v4l2_crop.top & 1;
-#endif
+
 	output_pins = cfg->nof_output_pins++;
 	aq->fw_output = output_pins;
 	stream->output_pins_queue[output_pins] = aq;
@@ -996,7 +821,6 @@ static int ipu6_isys_fw_pin_cfg(struct ipu6_isys_video *av,
 		output_pin->pt = IPU6_FW_ISYS_PIN_TYPE_MIPI;
 	output_pin->ft = pfmt->css_pixelformat;
 	output_pin->send_irq = 1;
-#ifdef IPU6 // Disabled for IPU4
 	memset(output_pin->ts_offsets, 0, sizeof(output_pin->ts_offsets));
 	output_pin->s2m_pixel_soc_pixel_remapping =
 		S2M_PIXEL_SOC_PIXEL_REMAPPING_FLAG_NO_REMAPPING;
@@ -1008,12 +832,6 @@ static int ipu6_isys_fw_pin_cfg(struct ipu6_isys_video *av,
 	output_pin->sensor_type = isys->sensor_type++;
 	if (isys->sensor_type > isys->pdata->ipdata->sensor_type_end)
 		isys->sensor_type = isys->pdata->ipdata->sensor_type_start;
-#endif
-	/* Though payload_buf_size was added for compression, set sane value for
-	 * payload_buf_size, just in case...
-	 */
-	output_pin->payload_buf_size = output_pin->stride *
-				       output_pin->output_res.height;
 
 	return 0;
 }
@@ -1022,7 +840,7 @@ static int ipu6_fw_isys_prepare_stream_cfg(struct ipu6_isys_stream *stream,
 					   struct v4l2_mbus_frame_desc *desc,
 					   struct isys_fw_msgs *msg)
 {
-	struct ipu4_fw_isys_stream_cfg_data_abi *stream_cfg;
+	struct ipu6_fw_isys_stream_cfg_data_abi *stream_cfg;
 	struct device *dev = &stream->isys->adev->auxdev.dev;
 	int ret;
 
@@ -1030,9 +848,7 @@ static int ipu6_fw_isys_prepare_stream_cfg(struct ipu6_isys_stream *stream,
 	stream_cfg->src = stream->asd->source;
 	stream_cfg->vc = stream->vc;
 	stream_cfg->isl_use = 0;
-#ifdef IPU6 // Disabled for IPU4
 	stream_cfg->sensor_type = IPU6_FW_ISYS_SENSOR_MODE_NORMAL;
-#endif
 
 	ret = ipu6_isys_fw_pins_prepare(stream, desc, ipu6_isys_fw_pin_cfg,
 					stream_cfg);
@@ -1098,7 +914,7 @@ static int ipu6_fw_isys_stream_capture(struct ipu6_isys *isys,
 
 static void
 ipu6_isys_buf_to_fw_frame_buf_pin(struct vb2_buffer *vb,
-				  struct ipu4_fw_isys_frame_buff_set_abi *set)
+				  struct ipu6_fw_isys_frame_buff_set_abi *set)
 {
 	struct ipu6_isys_queue *aq = vb2_queue_to_isys_queue(vb->vb2_queue);
 	struct vb2_v4l2_buffer *vvb = to_vb2_v4l2_buffer(vb);
@@ -1118,18 +934,25 @@ static void ipu6_fw_isys_prepare_buf_set(struct isys_fw_msgs *msg,
 					 struct ipu6_isys_stream *stream,
 					 struct ipu6_isys_buffer_list *bl)
 {
-	struct ipu4_fw_isys_frame_buff_set_abi *set = &msg->ipu6.frame;
+	struct ipu6_fw_isys_frame_buff_set_abi *set = &msg->ipu6.frame;
 	struct ipu6_isys_buffer *ib;
 
 	WARN_ON(!bl->nbufs);
 
 	set->send_irq_sof = 1;
 	set->send_resp_sof = 1;
+	set->send_irq_eof = 0;
+	set->send_resp_eof = 0;
 
 	set->send_irq_capture_ack = 1;
-	set->send_irq_capture_done = 1;
-	set->send_irq_eof = 1;
-	set->send_resp_eof = 1;
+	set->send_irq_capture_done = 0;
+
+	set->send_resp_capture_ack = 1;
+	set->send_resp_capture_done = 1;
+	if (atomic_read(&stream->sequence) >= IPU6_ISYS_FRAME_NUM_THRESHOLD) {
+		set->send_resp_capture_ack = 0;
+		set->send_resp_capture_done = 0;
+	}
 
 	list_for_each_entry(ib, &bl->head, head) {
 		struct vb2_buffer *vb = ipu6_isys_buffer_to_vb2_buffer(ib);

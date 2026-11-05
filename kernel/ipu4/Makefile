@@ -19,6 +19,7 @@ obj-m		+= intel-ipu4.o
 
 intel-ipu4-isys-objs			+= ipu6-isys.o \
 					ipu6-isys-csi2.o \
+					ipu4-fw-isys.o \
 					ipu6-fw-isys.o \
 					ipu7-fw-isys.o \
 					ipu6-isys-video.o \

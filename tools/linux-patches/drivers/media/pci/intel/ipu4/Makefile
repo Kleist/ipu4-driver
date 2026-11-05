@@ -30,6 +30,7 @@ obj-$(CONFIG_VIDEO_INTEL_IPU4) += intel-ipu4.o
 intel-ipu4-isys-y := \
 	ipu6-isys.o \
 	ipu6-isys-csi2.o \
+	ipu4-fw-isys.o \
 	ipu6-fw-isys.o \
 	ipu7-fw-isys.o \
 	ipu6-isys-video.o \
