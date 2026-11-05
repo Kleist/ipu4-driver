@@ -117,8 +117,8 @@ MMIO-vs-silicon tests (`probe-mmu`, `isys-irq`, `fw-open`, `stream-on`,
 | O14 | Upstream commits 70–88: fixes + IPU8 | merged (#233) |
 | — | Ruslan's IPU4P v2 on top (was O15) | dropped (#234 closed): not upstream |
 | O15 | Target = mainline in the tooling: `divergence_history.py --target` and `diff.sh` diff against the mainline pin; `delta.txt` adds the IPU4 support files (`ipu4-*`) as allowed delta, so "unexplained divergence" counts only shared-file differences | merged (#236) |
-| O16 | IPU4 identity + buttress: IPU4 pdata and buttress control as their own variant (`ipu4_*` ctrl/pdata, `ipu4-platform-buttress-regs.h`) instead of `#else` pdata and in-place constant swaps | in review |
-| O17 | MMU: IPU4 tables, `ipu4_mmu_ops`, ZLW and invalidate code into `ipu4-mmu-hw.c` (as `ipu7-mmu-hw.c`); `ipu6-mmu-hw.c` back to upstream. Check the ZLW writes and invalidate values against silicon (`compare-mmio`, `probe-mmu`) | |
+| O16 | IPU4 identity + buttress: IPU4 pdata and buttress control as their own variant (`ipu4_*` ctrl/pdata, `ipu4-platform-buttress-regs.h`) instead of `#else` pdata and in-place constant swaps | merged (#237) |
+| O17 | MMU: IPU4 tables, `ipu4_mmu_ops`, ZLW and invalidate code into `ipu4-mmu-hw.c` (as `ipu7-mmu-hw.c`); `ipu6-mmu-hw.c` back to upstream. Check the ZLW writes and invalidate values against silicon (`compare-mmio`, `probe-mmu`) | in review |
 | O18 | Firmware layer: IPU4 ABI, pin/stream config, buffer set and response handling into `ipu4-fw-isys.[ch]` behind `ipu4_fw_isys_ops` (as `ipu7_fw_isys_ops`); the IPU4 SysCom path out of `ipu6-fw-com.c`; `ipu6-fw-isys.[ch]` back to upstream; silent reset re-points to `fw_ops`. Largest step; split per sub-area if the ladder needs it | |
 | O19 | ISR, CSI-2, iWake: `ipu4_isys_isr`, IPU4 `setup_hw`, CSI-2 stream on/off and error handling into `ipu4-isys*.c` via the auxdrv `isr` hook; the `#ifdef IPU6` iWake and CSI-2 blocks go; upstream `ipu6-platform-isys-csi2-reg.h` back, so the IPU6 PHYs build | |
 | O20 | Leftovers: remaining `#ifdef IPU6` / `IS_IPU4` hooks, KUnit exports re-pointed, logging kept but `dev_dbg` where not Ambu-required; only IPU4 support files and the allow-listed delta remain | |
@@ -285,3 +285,10 @@ MMIO-vs-silicon tests (`probe-mmu`, `isys-irq`, `fw-open`, `stream-on`,
   `video_open()` (runtime-PM reference in `ipu6_buttress_authenticate()`),
   and the "IPU4 PCI driver ready" line stays as Ambu logging. Target
   distance 1679 → 1589.
+- (O17) The IPU4 MMU tables, init and invalidate move to
+  `ipu4-mmu-hw.c` with their own lookup struct (mainline's is private to
+  `ipu6-mmu-hw.c`), which is mainline's again. The ZLW invalidate path
+  went: no IPU4 table set `zlw_invalidate`. The ZLW stream setup writes
+  are unchanged and `compare-mmio` still matches silicon's trace, which
+  is the only check of the ZLW and invalidate values without hardware.
+  Target distance 1589 → 1227.
