@@ -118,8 +118,8 @@ MMIO-vs-silicon tests (`probe-mmu`, `isys-irq`, `fw-open`, `stream-on`,
 | — | Ruslan's IPU4P v2 on top (was O15) | dropped (#234 closed): not upstream |
 | O15 | Target = mainline in the tooling: `divergence_history.py --target` and `diff.sh` diff against the mainline pin; `delta.txt` adds the IPU4 support files (`ipu4-*`) as allowed delta, so "unexplained divergence" counts only shared-file differences | merged (#236) |
 | O16 | IPU4 identity + buttress: IPU4 pdata and buttress control as their own variant (`ipu4_*` ctrl/pdata, `ipu4-platform-buttress-regs.h`) instead of `#else` pdata and in-place constant swaps | merged (#237) |
-| O17 | MMU: IPU4 tables, `ipu4_mmu_ops`, ZLW and invalidate code into `ipu4-mmu-hw.c` (as `ipu7-mmu-hw.c`); `ipu6-mmu-hw.c` back to upstream. Check the ZLW writes and invalidate values against silicon (`compare-mmio`, `probe-mmu`) | in review |
-| O18 | Firmware layer: IPU4 ABI, pin/stream config, buffer set and response handling into `ipu4-fw-isys.[ch]` behind `ipu4_fw_isys_ops` (as `ipu7_fw_isys_ops`); the IPU4 SysCom path out of `ipu6-fw-com.c`; `ipu6-fw-isys.[ch]` back to upstream; silent reset re-points to `fw_ops`. Largest step; split per sub-area if the ladder needs it | |
+| O17 | MMU: IPU4 tables, `ipu4_mmu_ops`, ZLW and invalidate code into `ipu4-mmu-hw.c` (as `ipu7-mmu-hw.c`); `ipu6-mmu-hw.c` back to upstream. Check the ZLW writes and invalidate values against silicon (`compare-mmio`, `probe-mmu`) | merged (#238) |
+| O18 | Firmware layer: IPU4 ABI, pin/stream config, buffer set and response handling into `ipu4-fw-isys.[ch]` behind `ipu4_fw_isys_ops` (as `ipu7_fw_isys_ops`); the IPU4 SysCom path out of `ipu6-fw-com.c`; `ipu6-fw-isys.[ch]` back to upstream; silent reset re-points to `fw_ops`. Largest step; split per sub-area if the ladder needs it | in review |
 | O19 | ISR, CSI-2, iWake: `ipu4_isys_isr`, IPU4 `setup_hw`, CSI-2 stream on/off and error handling into `ipu4-isys*.c` via the auxdrv `isr` hook; the `#ifdef IPU6` iWake and CSI-2 blocks go; upstream `ipu6-platform-isys-csi2-reg.h` back, so the IPU6 PHYs build | |
 | O20 | Leftovers: remaining `#ifdef IPU6` / `IS_IPU4` hooks, KUnit exports re-pointed, logging kept but `dev_dbg` where not Ambu-required; only IPU4 support files and the allow-listed delta remain | |
 | O21 | Stay converged: `watch.sh` with real 3-way merges; when IPU4P (or IPU4) support lands in mainline, take it as upstream commits and fold the IPU4 code onto it | |
@@ -292,3 +292,13 @@ MMIO-vs-silicon tests (`probe-mmu`, `isys-irq`, `fw-open`, `stream-on`,
   are unchanged and `compare-mmio` still matches silicon's trace, which
   is the only check of the ZLW and invalidate values without hardware.
   Target distance 1589 → 1227.
+- (O18) Like IPU7, IPU4 gets its own firmware ops, ISR and response
+  handling (`ipu4-fw-isys.[ch]`, IPU4 auxdrv data), feeding the queue
+  through `ipu6_stream_buf_ready()`; `ipu6-fw-isys.h` is mainline's
+  again. Every struct whose layout IPU4 changed needs an IPU4 copy,
+  including the response queue token: sized from mainline's response,
+  the queue broke stream open. Mainline's CSI-2 interrupt code stays
+  `#ifdef IPU6` until O19. SysCom is mainline's `ipu6-fw-com.c` with a
+  `dmem_syscom` option, as Ruslan's IPU4P series does. A clean build is
+  needed to see modpost's undefined-symbol warnings. Target distance
+  1227 → 642.
