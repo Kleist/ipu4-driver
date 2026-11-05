@@ -9,6 +9,7 @@
 #include "ipu4-platform-regs.h"
 #include "ipu6.h"
 #include "ipu6-buttress.h"
+#include "ipu4-fw-isys.h"
 #include "ipu6-fw-isys.h"
 #include "ipu6-isys.h"
 #include "ipu6-platform-buttress-regs.h"
