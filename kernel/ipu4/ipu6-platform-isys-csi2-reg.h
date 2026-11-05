@@ -6,14 +6,6 @@
 
 #include <linux/bits.h>
 
-#include "ipu4-platform-isys-csi2-reg.h"
-
-enum CSI_FE_INPUT_SELECTOR {
-	CSI_SENSOR_INPUT = 0,
-	CSI_MIPIGEN_INPUT = 1,
-};
-
-#ifdef IPU6
 #define CSI_REG_BASE			0x220000
 #define CSI_REG_PORT_BASE(id)		(CSI_REG_BASE + (id) * 0x1000)
 
@@ -75,6 +67,11 @@ enum CSI_FE_ENABLE_TYPE {
 enum CSI_FE_MODE_TYPE {
 	CSI_FE_DPHY_MODE = 0,
 	CSI_FE_CPHY_MODE = 1,
+};
+
+enum CSI_FE_INPUT_SELECTOR {
+	CSI_SENSOR_INPUT = 0,
+	CSI_MIPIGEN_INPUT = 1,
 };
 
 enum CSI_FE_SYNC_CNTR_SEL_TYPE {
@@ -171,7 +168,5 @@ enum CSI_PORT_CLK_GATING_SWITCH {
 #define CSI2_SIP_TOP_CSI_RX_DLY_CNT_SETTLE_CLANE	0x8
 #define CSI2_SIP_TOP_CSI_RX_DLY_CNT_TERMEN_DLANE(lane)	(0xc + (lane) * 8)
 #define CSI2_SIP_TOP_CSI_RX_DLY_CNT_SETTLE_DLANE(lane)	(0x10 + (lane) * 8)
-
-#endif
 
 #endif /* IPU6_ISYS_CSI2_REG_H */

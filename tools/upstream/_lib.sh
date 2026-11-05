@@ -21,6 +21,8 @@ IPU4_LOCAL_ONLY=(
 	ipu4-compat.h
 	ipu4-fw-isys.c
 	ipu4-fw-isys.h
+	ipu4-isys.c
+	ipu4-isys.h
 	ipu4-mmu-hw.c
 	ipu4-pci.c
 	ipu4-pci.h

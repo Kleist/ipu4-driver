@@ -19,7 +19,8 @@
 #include "ipu6-cpd.h"
 #include "ipu6-fw-com.h"
 #include "ipu6-isys.h"
-#include "ipu6-platform-isys-csi2-reg.h"
+#include "ipu4-isys.h"
+#include "ipu4-platform-isys-csi2-reg.h"
 #include "ipu6-platform-regs.h"
 #include "ipu7-fw-isys.h"
 
@@ -611,8 +612,6 @@ leave:
 
 static void ipu4_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
 {
-	struct ipu6_isys_stream *stream;
-	unsigned int i;
 	u32 status;
 
 	status = readl(csi2->base + CSI2_REG_CSI2PART_IRQ_STATUS);
@@ -621,27 +620,6 @@ static void ipu4_isys_csi2_isr(struct ipu6_isys_csi2 *csi2)
 	if (status & CSI2_CSI2PART_IRQ_CSIRX)
 		ipu4_isys_register_errors(csi2);
 	/* SOF and EOF come from the firmware responses on IPU4. */
-	return;
-
-	scoped_guard(spinlock, &csi2->isys->streams_lock) {
-		for (i = 0; i < NR_OF_CSI2_VC; i++) {
-			if (status & IPU_CSI_RX_IRQ_FS_VC(i)) {
-				stream = csi2->streams_by_vc[i];
-				if (!stream)
-					continue;
-
-				ipu6_isys_csi2_sof_event_by_stream(stream);
-			}
-
-			if (status & IPU_CSI_RX_IRQ_FE_VC(i)) {
-				stream = csi2->streams_by_vc[i];
-				if (!stream)
-					continue;
-
-				ipu6_isys_csi2_eof_event_by_stream(stream);
-			}
-		}
-	}
 }
 
 irqreturn_t ipu4_isys_isr(struct ipu6_bus_device *adev)

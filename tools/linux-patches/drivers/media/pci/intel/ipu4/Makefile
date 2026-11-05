@@ -23,10 +23,6 @@ intel-ipu4-y := \
 
 obj-$(CONFIG_VIDEO_INTEL_IPU4) += intel-ipu4.o
 
-# Phy sources (ipu6-isys-{mcd,jsl,dwc}-phy.c) reference IPU6-only register
-# names that don't exist in the IPU4 register headers; intel-ipu4-isys
-# leaves their function-pointer slots unresolved at modpost time and the
-# real-hardware path will need IPU4-specific phy code wired in later.
 intel-ipu4-isys-y := \
 	ipu6-isys.o \
 	ipu6-isys-csi2.o \
@@ -36,7 +32,11 @@ intel-ipu4-isys-y := \
 	ipu6-isys-video.o \
 	ipu6-isys-queue.o \
 	ipu6-isys-subdev.o \
+	ipu4-isys.o \
 	ambu-silent-reset.o \
+	ipu6-isys-mcd-phy.o \
+	ipu6-isys-jsl-phy.o \
+	ipu6-isys-dwc-phy.o \
 	ipu7-isys-csi-phy.o
 
 obj-$(CONFIG_VIDEO_INTEL_IPU4) += intel-ipu4-isys.o
