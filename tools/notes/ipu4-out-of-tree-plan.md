@@ -120,8 +120,8 @@ MMIO-vs-silicon tests (`probe-mmu`, `isys-irq`, `fw-open`, `stream-on`,
 | O16 | IPU4 identity + buttress: IPU4 pdata and buttress control as their own variant (`ipu4_*` ctrl/pdata, `ipu4-platform-buttress-regs.h`) instead of `#else` pdata and in-place constant swaps | merged (#237) |
 | O17 | MMU: IPU4 tables, `ipu4_mmu_ops`, ZLW and invalidate code into `ipu4-mmu-hw.c` (as `ipu7-mmu-hw.c`); `ipu6-mmu-hw.c` back to upstream. Check the ZLW writes and invalidate values against silicon (`compare-mmio`, `probe-mmu`) | merged (#238) |
 | O18 | Firmware layer: IPU4 ABI, pin/stream config, buffer set and response handling into `ipu4-fw-isys.[ch]` behind `ipu4_fw_isys_ops` (as `ipu7_fw_isys_ops`); the IPU4 SysCom path out of `ipu6-fw-com.c`; `ipu6-fw-isys.[ch]` back to upstream; silent reset re-points to `fw_ops`. Largest step; split per sub-area if the ladder needs it | merged (#239) |
-| O19 | ISR, CSI-2, iWake: `ipu4_isys_isr`, IPU4 `setup_hw`, CSI-2 stream on/off and error handling into `ipu4-isys*.c` via the auxdrv `isr` hook; the `#ifdef IPU6` iWake and CSI-2 blocks go; upstream `ipu6-platform-isys-csi2-reg.h` back, so the IPU6 PHYs build | in review |
-| O20 | Leftovers: remaining `#ifdef IPU6` / `IS_IPU4` hooks, KUnit exports re-pointed, logging kept but `dev_dbg` where not Ambu-required; only IPU4 support files and the allow-listed delta remain | |
+| O19 | ISR, CSI-2, iWake: `ipu4_isys_isr`, IPU4 `setup_hw`, CSI-2 stream on/off and error handling into `ipu4-isys*.c` via the auxdrv `isr` hook; the `#ifdef IPU6` iWake and CSI-2 blocks go; upstream `ipu6-platform-isys-csi2-reg.h` back, so the IPU6 PHYs build | merged (#240) |
+| O20 | Leftovers: remaining `#ifdef IPU6` / `IS_IPU4` hooks, KUnit exports re-pointed, logging kept but `dev_dbg` where not Ambu-required; only IPU4 support files and the allow-listed delta remain | in review |
 | O21 | Stay converged: `watch.sh` with real 3-way merges; when IPU4P (or IPU4) support lands in mainline, take it as upstream commits and fold the IPU4 code onto it | |
 
 ## Learnings
@@ -313,3 +313,14 @@ MMIO-vs-silicon tests (`probe-mmu`, `isys-irq`, `fw-open`, `stream-on`,
   behaviour change. Still open: NR_OF_CSI2_SRC_PADS/VC stay 4 for IPU4
   (8/16 in mainline), which would renumber the capture nodes. Target
   distance 642 → 446.
+- (O20) Decided: IPU4 takes mainline's 8 CSI-2 source pads and 16 VCs
+  per port, so the capture nodes number as mainline's (CSI-2 port 1's
+  first is Capture 8, not 4; Ambu's media-ctl setup follows); the IPU4
+  receiver still enables its four hardware VCs. The VCM instantiation,
+  initial sensor type and the queue's link check are mainline's again.
+  What differs from mainline now, 360 lines, is hooks and delta, not
+  IPU4 code: `IS_IPU4()` hooks and IPU4 constants, the Ambu silent
+  reset and logging, the authenticate-on-open and probe-time ISYS MMU
+  init, compat pad-op shims, module/PCI-table glue, KUnit exports, and
+  fixes not in mainline yet (requeue on an empty list, firmware close at
+  suspend, runtime-PM null checks). Target distance 446 → 360.
