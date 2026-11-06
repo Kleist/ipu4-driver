@@ -18,6 +18,9 @@
 #include "ipu6-isys.h"
 #include "ipu6-isys-csi2.h"
 
+/* The IPU4 CSI-2 receiver has four virtual channels. */
+#define IPU4_CSI2_NR_OF_VC	4
+
 #define DIV_SHIFT	8
 #define CSI2_ACCINV	8
 
@@ -171,7 +174,7 @@ int ipu4_isys_csi2_stream_enable(struct ipu6_isys_csi2 *csi2)
 	       csi2->base + CSI2_REG_CSI_RX_ENABLE);
 
 	/* SOF/EOF of VC0-VC3 enabled from CSI2PART register in B0 */
-	for (i = 0; i < NR_OF_CSI2_VC; i++)
+	for (i = 0; i < IPU4_CSI2_NR_OF_VC; i++)
 		csi2part |= IPU4_CSI_RX_IRQ_FS_VC(i) | IPU4_CSI_RX_IRQ_FE_VC(i);
 
 	/* Enable csi2 receiver error interrupts */
