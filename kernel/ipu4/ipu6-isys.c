@@ -580,7 +580,6 @@ void ipu6_isys_update_watermark_setting(struct ipu6_isys *isys)
 	       isys->adev->isp->base + REG_PKGC_PMON_CFG);
 }
 
-
 /* The .bound() notifier callback when a match is found */
 static int isys_notifier_bound(struct v4l2_async_notifier *notifier,
 			       struct v4l2_subdev *sd,
@@ -598,13 +597,11 @@ static int isys_notifier_bound(struct v4l2_async_notifier *notifier,
 		return -EINVAL;
 	}
 
-#ifdef IPU6
 	ret = ipu_bridge_instantiate_vcm(sd->dev);
 	if (ret) {
 		dev_err(&isys->adev->auxdev.dev, "instantiate vcm failed\n");
 		return ret;
 	}
-#endif
 
 	dev_dbg(&isys->adev->auxdev.dev, "bind %s nlanes is %d port is %d\n",
 		sd->name, s_asd->csi2.nlanes, s_asd->csi2.port);
@@ -860,6 +857,7 @@ static int isys_runtime_pm_suspend(struct device *dev)
 
 	isys->phy_termcal_val = 0;
 	cpu_latency_qos_update_request(&isys->pm_qos, PM_QOS_DEFAULT_VALUE);
+
 	if (!IS_IPU7(isp) && !IS_IPU8(isp))
 		set_iwake_ltrdid(isys, 0, 0, LTR_ISYS_OFF);
 
@@ -1036,10 +1034,8 @@ static int isys_probe(struct auxiliary_device *auxdev,
 	if (ret)
 		return ret;
 
-#ifdef IPU6 // Disabled for IPU4
 	/* initial sensor type */
 	isys->sensor_type = isys->pdata->ipdata->sensor_type_start;
-#endif
 
 	spin_lock_init(&isys->streams_lock);
 	isys->phy_termcal_val = 0;
@@ -1158,7 +1154,7 @@ MODULE_AUTHOR("Sakari Ailus <sakari.ailus@linux.intel.com>");
 MODULE_AUTHOR("Tianshu Qiu <tian.shu.qiu@intel.com>");
 MODULE_AUTHOR("Bingbu Cao <bingbu.cao@intel.com>");
 MODULE_AUTHOR("Yunliang Ding <yunliang.ding@intel.com>");
-MODULE_AUTHOR("Hongju Wang <hongju.wang@intel.com>");
+MODULE_AUTHOR("Hongju Wang");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Intel IPU4 input system driver");
 MODULE_IMPORT_NS("INTEL_IPU6");
