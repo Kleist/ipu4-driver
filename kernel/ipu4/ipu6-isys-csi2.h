@@ -19,20 +19,12 @@ struct ipu6_isys_stream;
 #define PHY_MODE_DPHY		0
 #define PHY_MODE_CPHY		1
 
-#ifdef IPU6
-#define NR_OF_CSI2_VC			16
-#else
-#define NR_OF_CSI2_VC			4 // HACK IPU4
-#endif
-#define INVALID_VC_ID			-1
-#define NR_OF_CSI2_SINK_PADS		1
-#define CSI2_PAD_SINK			0
-#ifdef IPU6
-#define NR_OF_CSI2_SRC_PADS		8
-#else
-#define NR_OF_CSI2_SRC_PADS		4 // HACK IPU4
-#endif
-#define CSI2_PAD_SRC			1
+#define NR_OF_CSI2_VC		16
+#define INVALID_VC_ID		-1
+#define NR_OF_CSI2_SINK_PADS	1
+#define CSI2_PAD_SINK		0
+#define NR_OF_CSI2_SRC_PADS	8
+#define CSI2_PAD_SRC		1
 #define NR_OF_CSI2_PADS		(NR_OF_CSI2_SINK_PADS + NR_OF_CSI2_SRC_PADS)
 
 #define CSI2_CSI_RX_DLY_CNT_TERMEN_CLANE_A		0
