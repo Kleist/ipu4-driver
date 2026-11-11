@@ -1,0 +1,172 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - all.info - ipu4/ipu4-pci.c</title>
+  <link rel="stylesheet" type="text/css" href="../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../index.html">top level</a> - <a href="index.html">ipu4</a> - ipu4-pci.c<span style="font-size: 80%;"> (source / <a href="ipu4-pci.c.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">all.info</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">4</td>
+            <td class="headerCovTableEntry">4</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-11-06 14:19:17</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">1</td>
+            <td class="headerCovTableEntry">1</td>
+          </tr>
+                  <tr><td><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : // SPDX-License-Identifier: GPL-2.0-only</span>
+<span id="L2"><span class="lineNum">       2</span>              : /* IPU4 device data for ipu6.c: buttress control, registers and pdata. */</span>
+<span id="L3"><span class="lineNum">       3</span>              : </span>
+<span id="L4"><span class="lineNum">       4</span>              : #include &lt;linux/kernel.h&gt;</span>
+<span id="L5"><span class="lineNum">       5</span>              : </span>
+<span id="L6"><span class="lineNum">       6</span>              : #include &quot;ipu4-pci.h&quot;</span>
+<span id="L7"><span class="lineNum">       7</span>              : #include &quot;ipu4-platform-buttress-regs.h&quot;</span>
+<span id="L8"><span class="lineNum">       8</span>              : #include &quot;ipu4-platform-isys-csi2-reg.h&quot;</span>
+<span id="L9"><span class="lineNum">       9</span>              : #include &quot;ipu4-platform-regs.h&quot;</span>
+<span id="L10"><span class="lineNum">      10</span>              : #include &quot;ipu6.h&quot;</span>
+<span id="L11"><span class="lineNum">      11</span>              : #include &quot;ipu6-buttress.h&quot;</span>
+<span id="L12"><span class="lineNum">      12</span>              : #include &quot;ipu4-fw-isys.h&quot;</span>
+<span id="L13"><span class="lineNum">      13</span>              : #include &quot;ipu6-fw-isys.h&quot;</span>
+<span id="L14"><span class="lineNum">      14</span>              : #include &quot;ipu6-isys.h&quot;</span>
+<span id="L15"><span class="lineNum">      15</span>              : #include &quot;ipu6-platform-buttress-regs.h&quot;</span>
+<span id="L16"><span class="lineNum">      16</span>              : </span>
+<span id="L17"><span class="lineNum">      17</span>              : const struct ipu6_buttress_ctrl ipu4_isys_buttress_ctrl = {</span>
+<span id="L18"><span class="lineNum">      18</span>              :         .subsys_id = IPU_ISYS,</span>
+<span id="L19"><span class="lineNum">      19</span>              :         .ratio = IPU4_IS_FREQ_CTL_DIVISOR,</span>
+<span id="L20"><span class="lineNum">      20</span>              :         .qos_floor = 0,</span>
+<span id="L21"><span class="lineNum">      21</span>              :         .freq_ctl = IPU6_BUTTRESS_REG_IS_FREQ_CTL,</span>
+<span id="L22"><span class="lineNum">      22</span>              :         .pwr_sts_shift = IPU4_BUTTRESS_PWR_STATE_IS_PWR_FSM_SHIFT,</span>
+<span id="L23"><span class="lineNum">      23</span>              :         .pwr_sts_mask = IPU4_BUTTRESS_PWR_STATE_IS_PWR_FSM_MASK,</span>
+<span id="L24"><span class="lineNum">      24</span>              :         .pwr_sts_on = IPU4_BUTTRESS_PWR_STATE_IS_PWR_FSM_IS_RDY,</span>
+<span id="L25"><span class="lineNum">      25</span>              :         .pwr_sts_off = IPU4_BUTTRESS_PWR_STATE_IS_PWR_FSM_IDLE,</span>
+<span id="L26"><span class="lineNum">      26</span>              : };</span>
+<span id="L27"><span class="lineNum">      27</span>              : </span>
+<span id="L28"><span class="lineNum">      28</span>              : const struct ipu6_buttress_ctrl ipu4_psys_buttress_ctrl = {</span>
+<span id="L29"><span class="lineNum">      29</span>              :         .subsys_id = IPU_PSYS,</span>
+<span id="L30"><span class="lineNum">      30</span>              :         .ratio = IPU4_PS_FREQ_CTL_DEFAULT_RATIO,</span>
+<span id="L31"><span class="lineNum">      31</span>              :         .qos_floor = IPU4_PS_FREQ_CTL_DEFAULT_RATIO,</span>
+<span id="L32"><span class="lineNum">      32</span>              :         .freq_ctl = IPU6_BUTTRESS_REG_PS_FREQ_CTL,</span>
+<span id="L33"><span class="lineNum">      33</span>              :         .pwr_sts_shift = IPU4_BUTTRESS_PWR_STATE_PS_PWR_FSM_SHIFT,</span>
+<span id="L34"><span class="lineNum">      34</span>              :         .pwr_sts_mask = IPU4_BUTTRESS_PWR_STATE_PS_PWR_FSM_MASK,</span>
+<span id="L35"><span class="lineNum">      35</span>              :         .pwr_sts_on = IPU4_BUTTRESS_PWR_STATE_PS_PWR_FSM_PS_PWR_UP,</span>
+<span id="L36"><span class="lineNum">      36</span>              :         .pwr_sts_off = IPU4_BUTTRESS_PWR_STATE_PS_PWR_FSM_IDLE,</span>
+<span id="L37"><span class="lineNum">      37</span>              : };</span>
+<span id="L38"><span class="lineNum">      38</span>              : </span>
+<span id="L39"><span class="lineNum">      39</span>              : const struct ipu6_buttress_registers ipu4_buttress_regs = {</span>
+<span id="L40"><span class="lineNum">      40</span>              :         /* Registers */</span>
+<span id="L41"><span class="lineNum">      41</span>              :         .irq_status     = BUTTRESS_REG_ISR_ENABLED_STATUS,</span>
+<span id="L42"><span class="lineNum">      42</span>              :         .irq_clear      = BUTTRESS_REG_ISR_CLEAR,</span>
+<span id="L43"><span class="lineNum">      43</span>              :         .irq_enable     = BUTTRESS_REG_ISR_ENABLE,</span>
+<span id="L44"><span class="lineNum">      44</span>              :         .pwr_status     = BUTTRESS_REG_PWR_STATE,</span>
+<span id="L45"><span class="lineNum">      45</span>              :         .security_ctl   = BUTTRESS_REG_SECURITY_CTL,</span>
+<span id="L46"><span class="lineNum">      46</span>              :         .fw_reset_ctl   = BUTTRESS_REG_FW_RESET_CTL,</span>
+<span id="L47"><span class="lineNum">      47</span>              :         .fabric_cmd     = BUTTRESS_REG_FABRIC_CMD,</span>
+<span id="L48"><span class="lineNum">      48</span>              :         .tsw_ctl        = BUTTRESS_REG_TSW_CTL,</span>
+<span id="L49"><span class="lineNum">      49</span>              :         .tsc_lo         = BUTTRESS_REG_TSC_LO,</span>
+<span id="L50"><span class="lineNum">      50</span>              :         .wdt            = BUTTRESS_REG_WDT,</span>
+<span id="L51"><span class="lineNum">      51</span>              :         .btrs_ctrl      = BUTTRESS_REG_BTRS_CTRL,</span>
+<span id="L52"><span class="lineNum">      52</span>              :         .csr_in         = BUTTRESS_REG_CSE2IUCSR,</span>
+<span id="L53"><span class="lineNum">      53</span>              :         .csr_out        = BUTTRESS_REG_IU2CSECSR,</span>
+<span id="L54"><span class="lineNum">      54</span>              :         .db0_in         = BUTTRESS_REG_CSE2IUDB0,</span>
+<span id="L55"><span class="lineNum">      55</span>              :         .db0_out        = BUTTRESS_REG_IU2CSEDB0,</span>
+<span id="L56"><span class="lineNum">      56</span>              :         .data0_in       = BUTTRESS_REG_CSE2IUDATA0,</span>
+<span id="L57"><span class="lineNum">      57</span>              :         .data0_out      = BUTTRESS_REG_IU2CSEDATA0,</span>
+<span id="L58"><span class="lineNum">      58</span>              :         .sku_id         = BUTTRESS_REG_SKU,</span>
+<span id="L59"><span class="lineNum">      59</span>              : </span>
+<span id="L60"><span class="lineNum">      60</span>              :         /* Bitmasks */</span>
+<span id="L61"><span class="lineNum">      61</span>              :         .irq_is         = BUTTRESS_ISR_IS_IRQ,</span>
+<span id="L62"><span class="lineNum">      62</span>              :         .irq_ps         = BUTTRESS_ISR_PS_IRQ,</span>
+<span id="L63"><span class="lineNum">      63</span>              :         .irq_all        = BUTTRESS_IRQS,</span>
+<span id="L64"><span class="lineNum">      64</span>              :         .irq_events     = BUTTRESS_EVENT,</span>
+<span id="L65"><span class="lineNum">      65</span>              :         .irq_cse_ipc    = BUTTRESS_ISR_IPC_FROM_CSE_IS_WAITING,</span>
+<span id="L66"><span class="lineNum">      66</span>              :         .irq_exec_done  = BUTTRESS_ISR_IPC_EXEC_DONE_BY_CSE,</span>
+<span id="L67"><span class="lineNum">      67</span>              :         .irq_sai        = BUTTRESS_ISR_SAI_VIOLATION,</span>
+<span id="L68"><span class="lineNum">      68</span>              : };</span>
+<span id="L69"><span class="lineNum">      69</span>              : </span>
+<span id="L70"><span class="lineNum">      70</span>              : /* IPU4 sets every field: ipu6.c's IPU6 defaults do not apply to it. */</span>
+<span id="L71"><span class="lineNum">      71</span> <span class="tlaGNC tlaBgGNC">           6 : void ipu4_internal_pdata_init(struct ipu6_isys_internal_pdata *isys,</span></span>
+<span id="L72"><span class="lineNum">      72</span>              :                               struct ipu6_psys_internal_pdata *psys)</span>
+<span id="L73"><span class="lineNum">      73</span>              : {</span>
+<span id="L74"><span class="lineNum">      74</span> <span class="tlaGNC">           6 :         *isys = (struct ipu6_isys_internal_pdata) {</span></span>
+<span id="L75"><span class="lineNum">      75</span>              :                 .hw_variant = {</span>
+<span id="L76"><span class="lineNum">      76</span>              :                         .offset = IPU4_ISYS_OFFSET,</span>
+<span id="L77"><span class="lineNum">      77</span>              :                         .dmem_offset = IPU4_ISYS_DMEM_OFFSET,</span>
+<span id="L78"><span class="lineNum">      78</span>              :                         .spc_offset = IPU4_ISYS_SPC_OFFSET,</span>
+<span id="L79"><span class="lineNum">      79</span>              :                 },</span>
+<span id="L80"><span class="lineNum">      80</span>              :                 .isys_dma_overshoot = IPU6_ISYS_OVERALLOC_MIN,</span>
+<span id="L81"><span class="lineNum">      81</span>              :                 .num_parallel_streams = IPU4_STREAM_ID_MAX,</span>
+<span id="L82"><span class="lineNum">      82</span>              :                 .csi2.nports = ARRAY_SIZE(ipu4_csi_offsets),</span>
+<span id="L83"><span class="lineNum">      83</span>              :                 .max_streams = IPU4_ISYS_MAX_STREAMS,</span>
+<span id="L84"><span class="lineNum">      84</span>              :                 .max_sram_blocks = IPU4_ISYS_MAX_STREAMS,</span>
+<span id="L85"><span class="lineNum">      85</span>              :                 .max_send_queues = IPU4_N_MAX_SEND_QUEUES,</span>
+<span id="L86"><span class="lineNum">      86</span>              :                 /* One slot per stream: device commands are not pipelined */</span>
+<span id="L87"><span class="lineNum">      87</span>              :                 .max_devq_size = IPU4_ISYS_MAX_STREAMS,</span>
+<span id="L88"><span class="lineNum">      88</span>              :         };</span>
+<span id="L89"><span class="lineNum">      89</span> <span class="tlaGNC">           6 :         *psys = (struct ipu6_psys_internal_pdata) {</span></span>
+<span id="L90"><span class="lineNum">      90</span>              :                 .hw_variant = {</span>
+<span id="L91"><span class="lineNum">      91</span>              :                         .offset = IPU4_PSYS_OFFSET,</span>
+<span id="L92"><span class="lineNum">      92</span>              :                         .dmem_offset = IPU4_PSYS_DMEM_OFFSET,</span>
+<span id="L93"><span class="lineNum">      93</span>              :                         .spc_offset = IPU4_PSYS_SPC_OFFSET,</span>
+<span id="L94"><span class="lineNum">      94</span>              :                 },</span>
+<span id="L95"><span class="lineNum">      95</span>              :         };</span>
+<span id="L96"><span class="lineNum">      96</span> <span class="tlaGNC">           6 : }</span></span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>
