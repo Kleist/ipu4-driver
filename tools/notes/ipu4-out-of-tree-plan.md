@@ -121,8 +121,8 @@ MMIO-vs-silicon tests (`probe-mmu`, `isys-irq`, `fw-open`, `stream-on`,
 | O17 | MMU: IPU4 tables, `ipu4_mmu_ops`, ZLW and invalidate code into `ipu4-mmu-hw.c` (as `ipu7-mmu-hw.c`); `ipu6-mmu-hw.c` back to upstream. Check the ZLW writes and invalidate values against silicon (`compare-mmio`, `probe-mmu`) | merged (#238) |
 | O18 | Firmware layer: IPU4 ABI, pin/stream config, buffer set and response handling into `ipu4-fw-isys.[ch]` behind `ipu4_fw_isys_ops` (as `ipu7_fw_isys_ops`); the IPU4 SysCom path out of `ipu6-fw-com.c`; `ipu6-fw-isys.[ch]` back to upstream; silent reset re-points to `fw_ops`. Largest step; split per sub-area if the ladder needs it | merged (#239) |
 | O19 | ISR, CSI-2, iWake: `ipu4_isys_isr`, IPU4 `setup_hw`, CSI-2 stream on/off and error handling into `ipu4-isys*.c` via the auxdrv `isr` hook; the `#ifdef IPU6` iWake and CSI-2 blocks go; upstream `ipu6-platform-isys-csi2-reg.h` back, so the IPU6 PHYs build | merged (#240) |
-| O20 | Leftovers: remaining `#ifdef IPU6` / `IS_IPU4` hooks, KUnit exports re-pointed, logging kept but `dev_dbg` where not Ambu-required; only IPU4 support files and the allow-listed delta remain | in review |
-| O21 | Stay converged: `watch.sh` with real 3-way merges; when IPU4P (or IPU4) support lands in mainline, take it as upstream commits and fold the IPU4 code onto it | |
+| O20 | Leftovers: remaining `#ifdef IPU6` / `IS_IPU4` hooks, KUnit exports re-pointed, logging kept but `dev_dbg` where not Ambu-required; only IPU4 support files and the allow-listed delta remain | merged (#241) |
+| O21 | Stay converged: `watch.sh` with real 3-way merges; when IPU4P (or IPU4) support lands in mainline, take it as upstream commits and fold the IPU4 code onto it | in review |
 
 ## Learnings
 
@@ -324,3 +324,14 @@ MMIO-vs-silicon tests (`probe-mmu`, `isys-irq`, `fw-open`, `stream-on`,
   init, compat pad-op shims, module/PCI-table glue, KUnit exports, and
   fixes not in mainline yet (requeue on an empty list, firmware close at
   suspend, runtime-PM null checks). Target distance 446 → 360.
+- (O21) `watch.sh` follows master only, from its own blobless clone
+  (`tools/linux-watch/`, 180 days of history) instead of unshallowing the
+  6.12 harness tree. For a real 3-way `git am` it copies the patch's
+  pre- and postimage blobs into this repository: letting `git am` see
+  the clone's objects as alternates instead produced commits pointing at
+  blobs only the clone had. Commits adding files are picked (so IPU4P
+  comes in when mainline has it); Makefile/Kconfig stay the fork's. A dry
+  run picked the one IPU6 commit since v7.4-rc1, the treewide
+  `devm_kzalloc_obj()` conversion, cleanly; it needs a pre-7.4 shim,
+  which the PR's CI would have caught. Target distance (pin v7.4-rc3)
+  378 → 360.
