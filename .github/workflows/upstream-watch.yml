@@ -5,8 +5,8 @@ on:
     - cron: '0 4 * * 1'
   workflow_dispatch:
 
-# Detects new IPU6 commits on linux-6.12.y and Linus master, attempts cherry-
-# picks onto kernel/ipu4/, and opens a PR enumerating applied / conflicting /
+# Detects new IPU6 commits on Linus master, attempts 3-way cherry-picks
+# onto kernel/ipu4/, and opens a PR enumerating applied / conflicting /
 # n-a commits, only when there is something new to triage. State rolls forward in tools/notes/upstream-watch-state.json
 # as the last commit on the bot branch.
 #

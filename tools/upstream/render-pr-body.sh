@@ -7,7 +7,7 @@
 #   $3  na.ndjson        {sha, subject, files: [...]}
 #
 # Plus environment variables describing the picked range:
-#   STABLE_OLD, STABLE_NEW, MASTER_OLD, MASTER_NEW   (any may be empty)
+#   MASTER_OLD, MASTER_NEW   (either may be empty)
 #
 # Output goes to stdout.
 
@@ -28,18 +28,15 @@ today=$(date -u +%Y-%m-%d)
 echo "# Upstream sync — $today"
 echo
 echo "Picked up since previous run:"
-if [[ -n "${STABLE_OLD:-}" || -n "${STABLE_NEW:-}" ]]; then
-	echo "- \`linux-6.12.y\`: \`${STABLE_OLD:-?}..${STABLE_NEW:-?}\`"
-fi
 if [[ -n "${MASTER_OLD:-}" || -n "${MASTER_NEW:-}" ]]; then
-	echo "- \`master\`: \`${MASTER_OLD:-?}..${MASTER_NEW:-?}\` (deduped against 6.12.y by patch-id)"
+	echo "- \`master\`: \`${MASTER_OLD:-?}..${MASTER_NEW:-?}\`"
 fi
 echo
 
 echo "## Applied clean ($n_applied)"
 echo
 if (( n_applied > 0 )); then
-	echo "Each is its own commit on this branch with an \`Upstream-commit:\` trailer."
+	echo "Each is its own commit on this branch with a \`(cherry picked from commit …)\` line. Makefile and Kconfig changes are left out: add new files to both Makefiles by hand."
 	echo
 	echo "| SHA | Subject | Files |"
 	echo "|---|---|---|"
