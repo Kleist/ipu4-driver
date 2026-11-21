@@ -50,23 +50,11 @@ ipu6_to_ipu4_path() {
 
 # Ensure tools/linux/ exists. Calls bootstrap.sh idempotently.
 # Bootstrap does a --depth 1 clone, which is enough for diff.sh (just reads
-# files at the pinned tag). Watch.sh additionally calls deepen_linux_clone
-# below because it needs commit history.
+# files at the pinned tag).
 ensure_linux_clone() {
 	local root="$1"
 	local linux_dir="$root/tools/linux"
 	if [[ ! -d "$linux_dir/.git" ]]; then
 		"$root/tools/bootstrap.sh"
-	fi
-}
-
-# Deepen the linux clone to full history. Idempotent — no-op once the clone
-# is already complete.
-deepen_linux_clone() {
-	local root="$1"
-	local linux_dir="$root/tools/linux"
-	if [[ -f "$linux_dir/.git/shallow" ]]; then
-		echo ">>> deepening tools/linux/ to full history (first run)" >&2
-		git -C "$linux_dir" fetch --unshallow origin
 	fi
 }

@@ -1,8 +1,7 @@
 {
-  "schema": 1,
+  "schema": 2,
   "last_seen": {
-    "linux-6.12.y": "7aba70ab2e8d8ab3cd45abcaa15e1119a00dc42a",
-    "master": "0fcb05b72344f40806cbe810de8872f1698bf053"
+    "master": "6628e7d4c6b25c8d18f1345e3a20d21829aae7e4"
   },
   "processed_patch_ids": []
 }

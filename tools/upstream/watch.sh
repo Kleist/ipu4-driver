@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Weekly upstream IPU6 commit watcher. Detects new commits on linux-6.12.y and
-# Linus master that touch drivers/media/pci/intel/ipu6/, attempts to apply
-# each to kernel/ipu4/ via git am, and (in normal mode) opens a single PR
-# with the clean cherry-picks stacked. Conflicts and N/A commits are
-# enumerated in the PR body for manual triage. Runs with nothing to apply,
+# Weekly upstream IPU6 commit watcher. Detects new commits on Linus master
+# that touch drivers/media/pci/intel/ipu6/ (kernel/ipu4/ follows mainline,
+# see tools/notes/ipu4-out-of-tree-plan.md), applies each to kernel/ipu4/
+# with a real 3-way git am (the patch's mainline blobs are copied in), and
+# (in normal mode) opens a single PR with the clean cherry-picks stacked.
+# Conflicts and N/A commits are enumerated in the PR body for manual triage. Runs with nothing to apply,
 # or whose commits an open PR already lists, stay silent; a new PR closes
 # the older open ones it supersedes.
 #
@@ -19,6 +20,8 @@
 #   IPU4_UPSTREAM_WATCH_DRY_RUN=1    skip git push and gh pr create; print PR body
 #   IPU4_UPSTREAM_WATCH_SINCE=<sha>  override last_seen.master for replay
 #   IPU4_UPSTREAM_WATCH_BASE=<ref>   base branch (default: origin/main)
+#   IPU4_UPSTREAM_WATCH_LINUX=<dir>  mainline clone (default: tools/linux-watch)
+#   IPU4_UPSTREAM_WATCH_DAYS=<n>     history to fetch (default: 180 days)
 
 set -euo pipefail
 
@@ -38,25 +41,22 @@ PATCH_DIR="$OUT/patches"
 rm -rf "$OUT"
 mkdir -p "$PATCH_DIR"
 
-ensure_linux_clone "$ROOT"
-deepen_linux_clone "$ROOT"
-LINUX_DIR="$ROOT/tools/linux"
+LINUX_DIR="${IPU4_UPSTREAM_WATCH_LINUX:-$ROOT/tools/linux-watch}"
+LINUX_URL="${IPU4_UPSTREAM_WATCH_URL:-https://github.com/torvalds/linux.git}"
+DAYS="${IPU4_UPSTREAM_WATCH_DAYS:-180}"
 
-# Stable mirror carries the moving linux-6.12.y branch; bootstrap's default
-# upstream URL (torvalds) only has master. Add a 'stable' remote idempotently.
-if ! git -C "$LINUX_DIR" remote get-url stable >/dev/null 2>&1; then
-	git -C "$LINUX_DIR" remote add stable \
-		https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+# A blobless clone of master: commits and trees for the path-limited
+# rev-list, blobs fetched on demand by format-patch.
+if [[ ! -e "$LINUX_DIR/HEAD" ]]; then
+	git init -q --bare "$LINUX_DIR"
+	git -C "$LINUX_DIR" remote add origin "$LINUX_URL"
+	git -C "$LINUX_DIR" config remote.origin.promisor true
+	git -C "$LINUX_DIR" config remote.origin.partialclonefilter blob:none
 fi
-echo ">>> fetching origin/master and stable/linux-6.12.y"
-# `bootstrap.sh` clones origin with a tag-only refspec
-# (`+refs/tags/v6.12:refs/tags/v6.12`), so a plain `git fetch origin master`
-# lands in FETCH_HEAD only — `refs/remotes/origin/master` is never created
-# and the rev-parse below fails with "unknown revision". Spell the
-# destination explicitly. The stable remote was added with the default
-# refspec, so its plain fetch is fine.
-git -C "$LINUX_DIR" fetch origin master:refs/remotes/origin/master --quiet
-git -C "$LINUX_DIR" fetch stable linux-6.12.y --quiet
+echo ">>> fetching master (last $DAYS days, blobless)"
+git -C "$LINUX_DIR" fetch -q --no-tags --filter=blob:none \
+	--shallow-since="$(date -u -d "-$DAYS days" +%Y-%m-%d)" \
+	origin +refs/heads/master:refs/remotes/origin/master
 
 # --- read state ---------------------------------------------------------------
 
@@ -65,20 +65,22 @@ if [[ ! -f "$STATE_FILE" ]]; then
 	exit 1
 fi
 
-stable_old=$(jq -r '.last_seen["linux-6.12.y"]' "$STATE_FILE")
 master_old="${IPU4_UPSTREAM_WATCH_SINCE:-$(jq -r '.last_seen["master"]' "$STATE_FILE")}"
 processed_ids_file="$OUT/processed_ids.txt"
 jq -r '.processed_patch_ids[]?' "$STATE_FILE" > "$processed_ids_file" || true
 
-stable_new=$(git -C "$LINUX_DIR" rev-parse stable/linux-6.12.y)
 master_new=$(git -C "$LINUX_DIR" rev-parse origin/master)
 
 is_seeding=0
-if [[ "$stable_old" == "$SENTINEL" ]]; then
-	stable_old="$stable_new"; is_seeding=1
-fi
 if [[ "$master_old" == "$SENTINEL" ]]; then
 	master_old="$master_new"; is_seeding=1
+fi
+
+if [[ "$master_old" != "$master_new" ]] &&
+   ! git -C "$LINUX_DIR" merge-base --is-ancestor "$master_old" "$master_new" 2>/dev/null; then
+	echo "error: last_seen.master $master_old is not in the fetched history;" \
+		"raise IPU4_UPSTREAM_WATCH_DAYS" >&2
+	exit 1
 fi
 
 # --- enumerate candidates -----------------------------------------------------
@@ -91,37 +93,25 @@ list_new_commits() {
 	git -C "$LINUX_DIR" rev-list --reverse "$old..$new" -- "$UPSTREAM_REL"
 }
 
-mapfile -t stable_cands < <(list_new_commits "$stable_old" "$stable_new")
 mapfile -t master_cands_raw < <(list_new_commits "$master_old" "$master_new")
 
 patch_id_of() {
 	git -C "$LINUX_DIR" show "$1" | git -C "$LINUX_DIR" patch-id --stable | awk '{print $1}'
 }
 
-# Master commits whose patch-id matches a stable commit picked in this same
-# run, or matches an id we already processed in a previous run, are dropped.
-stable_ids_file="$OUT/stable_ids.txt"
-: > "$stable_ids_file"
-for sha in "${stable_cands[@]:-}"; do
-	[[ -z "$sha" ]] && continue
-	patch_id_of "$sha" >> "$stable_ids_file"
-done
-
+# Commits whose patch-id we already processed (picked by hand or by an
+# earlier run) are dropped.
 master_cands=()
 for sha in "${master_cands_raw[@]:-}"; do
 	[[ -z "$sha" ]] && continue
 	pid=$(patch_id_of "$sha")
-	if grep -qxF "$pid" "$stable_ids_file" 2>/dev/null \
-	   || grep -qxF "$pid" "$processed_ids_file" 2>/dev/null; then
+	if grep -qxF "$pid" "$processed_ids_file" 2>/dev/null; then
 		continue
 	fi
 	master_cands+=("$sha")
 done
-
-candidates=()
-for sha in "${stable_cands[@]:-}" "${master_cands[@]:-}"; do
-	[[ -n "$sha" ]] && candidates+=("$sha")
-done
+candidates=("${master_cands[@]:-}")
+[[ -z "${candidates[0]:-}" ]] && candidates=()
 
 echo ">>> ${#candidates[@]} candidate commit(s) (seeding=$is_seeding)"
 
@@ -154,13 +144,21 @@ emit() {
 for sha in "${candidates[@]}"; do
 	subject=$(git -C "$LINUX_DIR" log -1 --format=%s "$sha")
 	mapfile -t touched < <(git -C "$LINUX_DIR" show --name-only --format= "$sha" | sed '/^$/d')
+	mapfile -t added < <(git -C "$LINUX_DIR" show --diff-filter=A --name-only --format= "$sha" | sed '/^$/d')
 
+	# Files the fork carries, and files the commit adds (new upstream
+	# support, e.g. IPU4P): both are the fork's to take.
 	overlap=()
 	for p in "${touched[@]}"; do
 		[[ "$p" == "$UPSTREAM_REL/"* ]] || continue
 		base="${p#"$UPSTREAM_REL/"}"
 		if is_local_only "$base"; then continue; fi
-		[[ -e "$ROOT/$LOCAL_REL/$base" ]] || continue
+		# The fork's build files are its own.
+		[[ "$base" == Makefile || "$base" == Kconfig ]] && continue
+		if [[ ! -e "$ROOT/$LOCAL_REL/$base" ]] &&
+		   ! printf '%s\n' "${added[@]:-}" | grep -qxF "$p"; then
+			continue
+		fi
 		overlap+=("$base")
 	done
 
@@ -173,14 +171,28 @@ for sha in "${candidates[@]}"; do
 	fi
 
 	rm -f "$PATCH_DIR"/*.patch
-	git -C "$LINUX_DIR" format-patch -1 "$sha" \
+	git -C "$LINUX_DIR" format-patch -1 "$sha" --full-index \
 		--relative="$UPSTREAM_REL/" \
-		-o "$PATCH_DIR" >/dev/null
+		-o "$PATCH_DIR" -- "$UPSTREAM_REL/" \
+		":(exclude)$UPSTREAM_REL/Makefile" \
+		":(exclude)$UPSTREAM_REL/Kconfig" >/dev/null
 	patch_file=$(ls "$PATCH_DIR"/*.patch | head -n1)
 
-	if git -C "$ROOT" am --3way --directory="$LOCAL_REL" "$patch_file" >/dev/null 2>&1; then
-		git -C "$ROOT" commit --amend --no-edit \
-			--trailer "Upstream-commit: $sha" >/dev/null
+	# Copy the patch's pre- and postimage blobs in, so git am --3way can
+	# merge (and the result never points at objects only mainline has).
+	grep -oE '^index [0-9a-f]+\.\.[0-9a-f]+' "$patch_file" \
+		| awk '{print $2}' | tr '.' '\n' | awk 'NF' | sort -u \
+		| while read -r oid; do
+			[[ "$oid" =~ ^0+$ ]] && continue
+			git -C "$ROOT" cat-file -e "$oid" 2>/dev/null && continue
+			git -C "$LINUX_DIR" cat-file blob "$oid" \
+				| git -C "$ROOT" hash-object -w --stdin >/dev/null
+		done
+	if git -C "$ROOT" am --3way --directory="$LOCAL_REL" \
+		"$patch_file" >/dev/null 2>&1; then
+		msg=$(git -C "$ROOT" log -1 --format=%B)
+		git -C "$ROOT" commit -q --amend \
+			-m "$msg" -m "(cherry picked from commit $sha)"
 		echo "  $sha  applied   $subject"
 		emit "$applied_nd" "$sha" "$subject" "$(IFS=,; echo "${overlap[*]}")"
 	else
@@ -209,10 +221,10 @@ new_processed_ids=$(mktemp)
 } | awk 'NF' | sort -u > "$new_processed_ids"
 
 jq \
-	--arg s "$stable_new" --arg m "$master_new" \
+	--arg m "$master_new" \
 	--rawfile ids "$new_processed_ids" \
-	'.last_seen["linux-6.12.y"] = $s
-	 | .last_seen["master"] = $m
+	'.schema = 2
+	 | .last_seen = {master: $m}
 	 | .processed_patch_ids = ($ids | split("\n") | map(select(length>0)))' \
 	"$STATE_FILE" > "$STATE_FILE.tmp"
 mv "$STATE_FILE.tmp" "$STATE_FILE"
@@ -247,8 +259,7 @@ marker="<!-- upstream-watch-commits: ${key:-seed} -->"
 # --- render PR body -----------------------------------------------------------
 
 pr_body="$OUT/pr-body.md"
-STABLE_OLD="$stable_old" STABLE_NEW="$stable_new" \
-	MASTER_OLD="$master_old" MASTER_NEW="$master_new" \
+MASTER_OLD="$master_old" MASTER_NEW="$master_new" \
 	"$HERE/render-pr-body.sh" "$applied_nd" "$conflict_nd" "$na_nd" > "$pr_body"
 printf '\n%s\n' "$marker" >> "$pr_body"
 
