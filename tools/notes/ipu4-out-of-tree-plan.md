@@ -122,7 +122,7 @@ MMIO-vs-silicon tests (`probe-mmu`, `isys-irq`, `fw-open`, `stream-on`,
 | O18 | Firmware layer: IPU4 ABI, pin/stream config, buffer set and response handling into `ipu4-fw-isys.[ch]` behind `ipu4_fw_isys_ops` (as `ipu7_fw_isys_ops`); the IPU4 SysCom path out of `ipu6-fw-com.c`; `ipu6-fw-isys.[ch]` back to upstream; silent reset re-points to `fw_ops`. Largest step; split per sub-area if the ladder needs it | merged (#239) |
 | O19 | ISR, CSI-2, iWake: `ipu4_isys_isr`, IPU4 `setup_hw`, CSI-2 stream on/off and error handling into `ipu4-isys*.c` via the auxdrv `isr` hook; the `#ifdef IPU6` iWake and CSI-2 blocks go; upstream `ipu6-platform-isys-csi2-reg.h` back, so the IPU6 PHYs build | merged (#240) |
 | O20 | Leftovers: remaining `#ifdef IPU6` / `IS_IPU4` hooks, KUnit exports re-pointed, logging kept but `dev_dbg` where not Ambu-required; only IPU4 support files and the allow-listed delta remain | merged (#241) |
-| O21 | Stay converged: `watch.sh` with real 3-way merges; when IPU4P (or IPU4) support lands in mainline, take it as upstream commits and fold the IPU4 code onto it | in review |
+| O21 | Stay converged: `watch.sh` with real 3-way merges; when IPU4P (or IPU4) support lands in mainline, take it as upstream commits and fold the IPU4 code onto it | merged (#252) |
 
 ## Learnings
 
