@@ -1,0 +1,1 @@
+genhtml --quiet --output-directory /home/runner/work/ipu4-driver/ipu4-driver/tools/tests/out/ipu6-ladder/coverage/html /tmp/tmp.W2r1t5J4I1/all.info

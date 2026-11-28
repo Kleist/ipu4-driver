@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "points": [
+    {
+      "ts": "2026-11-15T14:13:24Z",
+      "sha": "b9c1b37c1125068be2f5cc629329eca5e06875a5",
+      "vm_smoke_run_id": "42969841365",
+      "vm_ipu6_run_id": "42969841441",
+      "coverage": {
+        "lines_pct": 37.9,
+        "functions_pct": 49.0
+      },
+      "mmio": {
+        "unimplemented": 0,
+        "value_mismatch": 11,
+        "extra_in_qemu": 8
+      },
+      "registers": {
+        "doc": 0,
+        "inferred": 36,
+        "guess": 18
+      },
+      "upstream_diff": {
+        "files_differ": 29,
+        "hunks": 271
+      },
+      "target_divergence": 378,
+      "ladder_coverage": {
+        "ipu4-out-of-tree/ipu4": 45.5,
+        "ipu4p/ipu4p": 47.4,
+        "ipu6/ipu6": 53.2,
+        "ipu4-patches/ipu4": 43.9,
+        "ipu4-patches/ipu4p": 46.7,
+        "ipu4-patches/ipu6": 47.5
+      }
+    },
+    {
+      "ts": "2026-11-15T20:42:00Z",
+      "sha": "40b17d231fad903d3842fdbc36b7ba46834974d0",
+      "vm_smoke_run_id": "43758800702",
+      "vm_ipu6_run_id": "43758800715",
+      "coverage": {
+        "lines_pct": 37.9,
+        "functions_pct": 49.0
+      },
+      "mmio": {
+        "unimplemented": 0,
+        "value_mismatch": 11,
+        "extra_in_qemu": 8
+      },
+      "registers": {
+        "doc": 0,
+        "inferred": 36,
+        "guess": 18
+      },
+      "upstream_diff": {
+        "files_differ": 29,
+        "hunks": 271
+      },
+      "target_divergence": 378,
+      "ladder_coverage": {
+        "ipu4-out-of-tree/ipu4": 45.5,
+        "ipu4p/ipu4p": 47.4,
+        "ipu6/ipu6": 53.2,
+        "ipu4-patches/ipu4": 43.9,
+        "ipu4-patches/ipu4p": 46.7,
+        "ipu4-patches/ipu6": 47.5
+      }
+    },
+    {
+      "ts": "2026-11-16T12:27:09Z",
+      "sha": "0643504e8cda1480aab3e06f19eb0ba99374b815",
+      "vm_smoke_run_id": "43758800702",
+      "vm_ipu6_run_id": "43758800715",
+      "coverage": {
+        "lines_pct": 37.9,
+        "functions_pct": 49.0
+      },
+      "mmio": {
+        "unimplemented": 0,
+        "value_mismatch": 11,
+        "extra_in_qemu": 8
+      },
+      "registers": {
+        "doc": 0,
+        "inferred": 36,
+        "guess": 18
+      },
+      "upstream_diff": {
+        "files_differ": 29,
+        "hunks": 271
+      },
+      "target_divergence": 360,
+      "ladder_coverage": {
+        "ipu4-out-of-tree/ipu4": 45.5,
+        "ipu4p/ipu4p": 47.4,
+        "ipu6/ipu6": 53.2,
+        "ipu4-patches/ipu4": 43.9,
+        "ipu4-patches/ipu4p": 46.7,
+        "ipu4-patches/ipu6": 47.5
+      }
+    }
+  ]
+}
